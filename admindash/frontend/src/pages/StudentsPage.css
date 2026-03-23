@@ -1,0 +1,77 @@
+.students-page {
+  animation: fadeIn 0.3s ease;
+}
+
+.students-page h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.students-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.students-toolbar button {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.45rem 0.85rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #667EEA, #764BA2);
+  color: var(--text-inverse);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.students-toolbar button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+}
+
+.student-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.student-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--info-muted);
+  color: var(--info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.student-name-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.student-display-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.student-preferred-name {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.student-error {
+  text-align: center;
+  padding: 2rem;
+  color: var(--danger);
+  background: var(--danger-muted);
+  border-radius: var(--radius-md);
+  margin-top: 1rem;
+}

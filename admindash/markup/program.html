@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title data-i18n="program.title">成长学苑课程管理</title>
+<!-- Bootstrap 5 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<!-- Custom CSS -->
+<link rel="stylesheet" href="navbar.css">
+<link rel="stylesheet" href="footer.css">
+<link rel="stylesheet" href="student-modal.css">
+<style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f3f4f6;
+    }
+
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 400;
+      src: url(https://fonts.gstatic.com/s/inter/v12/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7W0Q5nw.woff2) format('woff2');
+    }
+
+    /* 树状导航样式 */
+    .tree-container {
+      background: #f8f9fa;
+      border-right: 1px solid #e5e7eb;
+      height: auto;
+      max-height: calc(100vh - 56px);
+      overflow-y: auto;
+      flex-shrink: 0;
+      width: 280px;
+    }
+
+    .tree-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 15px;
+      font-weight: 600;
+      color: #374151;
+    }
+    
+    .tree-node {
+      padding: 10px 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    
+    .tree-node:hover {
+      background: #e5e7eb;
+    }
+    
+    .tree-node.active {
+      background: #ff6b00;
+      color: white;
+    }
+    
+    .tree-node.active * {
+      color: white !important;
+    }
+    
+    .node-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .node-icon {
+      width: 20px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .level-1 {
+      padding-left: 24px;
+      font-weight: 600;
+      font-size: 14px;
+      color: #374151;
+    }
+    
+    .level-2 {
+      padding-left: 44px;
+      font-weight: 500;
+      font-size: 13px;
+      color: #4b5563;
+      border-left: 1px dashed #d1d5db;
+    }
+    
+    .level-3 {
+      padding-left: 64px;
+      font-size: 12px;
+      color: #6b7280;
+      border-left: 1px dashed #d1d5db;
+    }
+    
+    .toggle-btn {
+      margin-left: -20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+    }
+    
+    .toggle-btn:hover {
+      background: rgba(0,0,0,0.05);
+    }
+    
+    .children-count {
+      background: #e5e7eb;
+      color: #4b5563;
+      padding: 0 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+    
+    /* 主内容区布局 */
+    .main-content {
+      height: auto;
+      max-height: calc(100vh - 56px - 60px);
+      overflow-y: auto;
+      min-width: 0;
+      flex: 1;
+      padding: 24px;
+    }
+    
+    /* Content area wrapper */
+    .content-area-wrapper {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    
+    /* Main flex container for tree and content */
+    .content-area-wrapper > .d-flex {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+      align-items: flex-start;
+    }
+    
+    /* Footer styling */
+    footer {
+      margin-top: auto;
+    }
+    
+    /* Highlighted row styling */
+    .highlighted-row {
+      background-color: #fff3e0 !important;
+      border-left: 3px solid #ff6b00;
+    }
+    
+    .highlighted-row:hover {
+      background-color: #ffe0b2 !important;
+    }
+    
+    /* Clickable student row */
+    #student-list-tbody tr {
+      cursor: pointer;
+    }
+    
+    #student-list-tbody tr:hover {
+      background-color: #f8f9fa;
+    }
+    
+    /* Custom primary button color */
+    .btn-primary-custom {
+      background-color: #ff6b00;
+      border-color: #ff6b00;
+      color: white;
+    }
+    
+    .btn-primary-custom:hover {
+      background-color: #e05f00;
+      border-color: #e05f00;
+      color: white;
+    }
+    
+    /* Course schedule card styles */
+    .course-card-item {
+      border-radius: 8px;
+      overflow: hidden;
+      transition: all 0.3s;
+      border: 1px solid #e5e7eb;
+      padding: 8px;
+    }
+    
+    .course-card-item:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    
+    /* Schedule table styles */
+    .schedule-table th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: #f8f9fa;
+    }
+    
+    .schedule-table td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 5;
+      background-color: #f8f9fa;
+    }
+    
+    /* Avatar colors - using Bootstrap opacity classes (matching students.html) */
+  </style>
+</head>
+<body>
+<!-- Navbar will be inserted here by navbar.js -->
+<!-- 主体内容区 -->
+<div class="content-area-wrapper">
+<div class="d-flex">
+<!-- 左侧树状导航 -->
+<div class="tree-container">
+<div class="tree-list py-2">
+<!-- 学科类课程 -->
+<div class="tree-node level-1">
+<button class="toggle-btn">
+<i class="bi bi-chevron-down" style="font-size: 16px;"></i>
+</button>
+<div class="node-content">
+<i class="bi bi-folder me-2" style="font-size: 20px;"></i>
+<span>学科类课程</span>
+<span class="children-count">4</span>
+</div>
+<!-- 二级：数学课程 -->
+<div class="level-2 tree-node">
+<button class="toggle-btn">
+<i class="bi bi-chevron-down" style="font-size: 16px;"></i>
+</button>
+<div class="node-content">
+<i class="bi bi-folder2 me-2" style="font-size: 16px;"></i>
+<span>数学课程</span>
+<span class="children-count">3</span>
+</div>
+<!-- 三级课程 -->
+<div class="level-3 tree-node" data-program-id="math-elementary">
+<div class="node-content">
+<i class="bi bi-file-earmark-text me-2" style="font-size: 14px;"></i>
+<span>小学数学思维训练</span>
+</div>
+</div>
+<div class="level-3 tree-node" data-program-id="math-middle">
+<div class="node-content">
+<i class="bi bi-file-earmark-text me-2" style="font-size: 14px;"></i>
+<span>初中数学强化班</span>
+</div>
+</div>
+<div class="level-3 tree-node" data-program-id="math-high">
+<div class="node-content">
+<i class="bi bi-file-earmark-text me-2" style="font-size: 14px;"></i>
+<span>高中数学强化训练</span>
+</div>
+</div>
+</div>
+<!-- 二级：英语课程 -->
+<div class="level-2 tree-node">
+<button class="toggle-btn">
+<i class="bi bi-chevron-down" style="font-size: 16px;"></i>
+</button>
+<div class="node-content">
+<i class="bi bi-folder2 me-2" style="font-size: 16px;"></i>
+<span>英语课程</span>
+<span class="children-count">2</span>
+</div>
+<!-- 三级课程 -->
+<div class="level-3 tree-node" data-program-id="english-speaking">
+<div class="node-content">
+<i class="bi bi-file-earmark-text me-2" style="font-size: 14px;"></i>
+<span>英语口语班</span>
+</div>
+</div>
+<div class="level-3 tree-node active" data-program-id="english-gaokao">
+<div class="node-content">
+<i class="bi bi-file-earmark-text me-2" style="font-size: 14px;"></i>
+<span>高考英语特训营</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 艺术类课程 -->
+<div class="tree-node level-1">
+<button class="toggle-btn">
+<i class="bi bi-chevron-right" style="font-size: 16px;"></i>
+</button>
+<div class="node-content">
+<i class="bi bi-folder me-2" style="font-size: 20px;"></i>
+<span>艺术类课程</span>
+<span class="children-count">5</span>
+</div>
+</div>
+<!-- 科学实验类 -->
+<div class="tree-node level-1">
+<button class="toggle-btn">
+<i class="bi bi-chevron-right" style="font-size: 16px;"></i>
+</button>
+<div class="node-content">
+<i class="bi bi-folder me-2" style="font-size: 20px;"></i>
+<span>科学实验类</span>
+<span class="children-count">4</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 右侧主内容区 -->
+<div class="main-content">
+<div class="container-fluid px-4 pb-4 pt-0">
+<div class="d-flex justify-content-between align-items-center mb-4">
+<div>
+<h2 class="fs-2 fw-bold text-dark mb-1" data-i18n="program.studentManagement">课程学生管理</h2>
+<p class="text-muted mb-0" id="current-course-subtitle">当前课程：高考英语特训营 | 2025年秋季学期 (9月-12月)</p>
+</div>
+<div class="d-flex gap-3">
+<button class="btn btn-outline-secondary d-flex align-items-center">
+<i class="bi bi-funnel me-2" style="font-size: 18px;"></i>
+              <span data-i18n="program.filter">筛选学生</span>
+            </button>
+<button class="btn btn-primary-custom">
+              <span data-i18n="program.batchActions">批量操作</span>
+            </button>
+</div>
+</div>
+<!-- 课程学生花名册 -->
+<div class="card shadow-sm mb-4">
+<div class="card-header border-bottom">
+<div class="d-flex justify-content-between align-items-center">
+<div>
+<h3 class="fw-bold text-dark mb-1" id="roster-title">高考英语特训营 - 学生花名册</h3>
+<p class="small text-muted mb-0">2025-2026学年度秋季学期 | 共16名学生 | 最后更新: 2025年10月29日</p>
+</div>
+<div>
+<button class="btn btn-outline-secondary btn-sm me-2">
+<i class="bi bi-download text-muted me-1" style="font-size: 16px;"></i>
+                  <span data-i18n="program.export">导出名单</span>
+                </button>
+<button class="btn btn-primary-custom btn-sm">
+<i class="bi bi-person-plus me-1" style="font-size: 16px;"></i>
+                  <span data-i18n="program.addStudent">添加学生</span>
+                </button>
+</div>
+</div>
+</div>
+<div class="card-body p-0">
+<div class="table-responsive">
+<table class="table table-hover table-light mb-0">
+<thead>
+<tr>
+<th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.name">学生姓名</th>
+<th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="program.studentId">学生ID</th>
+<th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.grade">年级/班级</th>
+<th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.school">在读学校</th>
+<th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.parent">家长姓名</th>
+<th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.phone">联系电话</th>
+<th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.status">状态</th>
+<th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.actions">操作</th>
+</tr>
+</thead>
+<tbody id="student-list-tbody">
+<tr>
+<td class="px-4 py-2 text-nowrap">
+<div class="d-flex align-items-center">
+<div class="rounded-circle avatar-indigo d-flex align-items-center justify-content-center fw-medium small me-3" style="width: 32px; height: 32px;">李</div>
+<div class="small fw-medium">李明</div>
+</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">S2025103001</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">高三(2)班</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">北苑中学</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">李先生</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">139****4321</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<span class="badge bg-success">正常上课中</span>
+</td>
+<td class="px-4 py-2 text-nowrap small fw-medium">
+<a class="text-primary text-decoration-none me-3" href="#"><span data-i18n="students.view">查看</span></a>
+<a class="text-secondary text-decoration-none" href="#"><span data-i18n="students.edit">编辑</span></a>
+</td>
+</tr>
+<tr>
+<td class="px-4 py-2 text-nowrap">
+<div class="d-flex align-items-center">
+<div class="rounded-circle avatar-blue d-flex align-items-center justify-content-center fw-medium small me-3" style="width: 32px; height: 32px;">张</div>
+<div class="small fw-medium">张雨</div>
+</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">S2025103002</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">高三(1)班</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">北苑中学</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">张女士</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">138****5566</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<span class="badge bg-success">正常上课中</span>
+</td>
+<td class="px-4 py-2 text-nowrap small fw-medium">
+<a class="text-primary text-decoration-none me-3" href="#"><span data-i18n="students.view">查看</span></a>
+<a class="text-secondary text-decoration-none" href="#"><span data-i18n="students.edit">编辑</span></a>
+</td>
+</tr>
+<tr>
+<td class="px-4 py-2 text-nowrap">
+<div class="d-flex align-items-center">
+<div class="rounded-circle avatar-red d-flex align-items-center justify-content-center fw-medium small me-3" style="width: 32px; height: 32px;">王</div>
+<div class="small fw-medium">王浩</div>
+</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">S2025103003</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">高三(3)班</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">北苑中学</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">王先生</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">135****7788</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<span class="badge bg-warning text-dark">请假中</span>
+</td>
+<td class="px-4 py-2 text-nowrap small fw-medium">
+<a class="text-primary text-decoration-none me-3" href="#"><span data-i18n="students.view">查看</span></a>
+<a class="text-secondary text-decoration-none" href="#"><span data-i18n="students.edit">编辑</span></a>
+</td>
+</tr>
+<tr>
+<td class="px-4 py-2 text-nowrap">
+<div class="d-flex align-items-center">
+<div class="rounded-circle avatar-green d-flex align-items-center justify-content-center fw-medium small me-3" style="width: 32px; height: 32px;">陈</div>
+<div class="small fw-medium">陈晓</div>
+</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">S2025103004</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">高三(4)班</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">城东中学</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">陈先生</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">137****2233</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<span class="badge bg-success">正常上课中</span>
+</td>
+<td class="px-4 py-2 text-nowrap small fw-medium">
+<a class="text-primary text-decoration-none me-3" href="#"><span data-i18n="students.view">查看</span></a>
+<a class="text-secondary text-decoration-none" href="#"><span data-i18n="students.edit">编辑</span></a>
+</td>
+</tr>
+<tr>
+<td class="px-4 py-2 text-nowrap">
+<div class="d-flex align-items-center">
+<div class="rounded-circle avatar-purple d-flex align-items-center justify-content-center fw-medium small me-3" style="width: 32px; height: 32px;">赵</div>
+<div class="small fw-medium">赵婷</div>
+</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">S2025103005</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">高三(2)班</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">北苑中学</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">赵女士</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">136****4455</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<span class="badge bg-danger">缺勤</span>
+</td>
+<td class="px-4 py-2 text-nowrap small fw-medium">
+<a class="text-primary text-decoration-none me-3" href="#"><span data-i18n="students.view">查看</span></a>
+<a class="text-secondary text-decoration-none" href="#"><span data-i18n="students.edit">编辑</span></a>
+</td>
+</tr>
+<tr>
+<td class="px-4 py-2 text-nowrap">
+<div class="d-flex align-items-center">
+<div class="rounded-circle avatar-yellow d-flex align-items-center justify-content-center fw-medium small me-3" style="width: 32px; height: 32px;">刘</div>
+<div class="small fw-medium">刘强</div>
+</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">S2025103006</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">高三(5)班</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">城西中学</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">刘先生</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<div class="small">139****8899</div>
+</td>
+<td class="px-4 py-2 text-nowrap">
+<span class="badge bg-success">正常上课中</span>
+</td>
+<td class="px-4 py-2 text-nowrap small fw-medium">
+<a class="text-primary text-decoration-none me-3" href="#"><span data-i18n="students.view">查看</span></a>
+<a class="text-secondary text-decoration-none" href="#"><span data-i18n="students.edit">编辑</span></a>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="card-footer d-flex justify-content-between align-items-center">
+<div>
+<span class="small text-muted">显示 <span class="fw-medium">1</span> 到 <span class="fw-medium">6</span> 条，共 <span class="fw-medium">16</span> 条记录</span>
+</div>
+<div class="btn-group" role="group">
+<button class="btn btn-outline-secondary btn-sm" disabled="">上一页</button>
+<button class="btn btn-primary-custom btn-sm">1</button>
+<button class="btn btn-outline-secondary btn-sm">2</button>
+<button class="btn btn-outline-secondary btn-sm">3</button>
+<button class="btn btn-outline-secondary btn-sm">下一页</button>
+</div>
+</div>
+</div>
+<!-- 课程周课表 -->
+<div class="card shadow-sm mb-4">
+<div class="card-header border-bottom">
+<div class="d-flex justify-content-between align-items-center">
+<div>
+<h3 class="fw-bold text-dark mb-1" id="schedule-title">李明 - 个人课程安排表</h3>
+<p class="small text-muted mb-0" id="schedule-subtitle">2025年10月27日 - 2025年11月2日 | 学生ID: S2025103001</p>
+</div>
+<div>
+<button class="btn btn-outline-secondary btn-sm me-2">
+<i class="bi bi-printer text-muted me-1" style="font-size: 16px;"></i>
+                  <span data-i18n="program.print">打印</span>
+                </button>
+<button class="btn btn-outline-secondary btn-sm">
+<i class="bi bi-calendar-month text-muted me-1" style="font-size: 16px;"></i>
+                  <span data-i18n="program.switchWeek">切换周次</span>
+                </button>
+</div>
+</div>
+</div>
+<div class="card-body p-0">
+<div class="table-responsive">
+<table class="table table-bordered mb-0 schedule-table">
+<thead>
+<tr>
+<th class="w-20 py-3 px-3 bg-light text-start small fw-medium text-muted text-uppercase">时段</th>
+<th class="py-3 px-3 bg-light text-start small fw-medium text-muted text-uppercase">周一</th>
+<th class="py-3 px-3 bg-light text-start small fw-medium text-muted text-uppercase">周二</th>
+<th class="py-3 px-3 bg-light text-start small fw-medium text-muted text-uppercase">周三</th>
+<th class="py-3 px-3 bg-light text-start small fw-medium text-muted text-uppercase">周四</th>
+<th class="py-3 px-3 bg-light text-start small fw-medium text-muted text-uppercase">周五</th>
+<th class="py-3 px-3 bg-light text-start small fw-medium text-muted text-uppercase">周六</th>
+<th class="py-3 px-3 bg-light text-start small fw-medium text-muted text-uppercase">周日</th>
+</tr>
+</thead>
+<tbody id="schedule-tbody">
+<!-- 上午时段 -->
+<tr>
+<td class="px-3 py-4 text-nowrap small fw-medium bg-light">
+                    上午<br/>08:30-12:00
+                  </td>
+<td class="px-3 py-4 text-nowrap">
+<div class="bg-warning bg-opacity-10 border-start border-4 border-warning p-2 rounded">
+<p class="fw-medium text-warning-emphasis small mb-1">高考化学冲刺班</p>
+<p class="small text-muted mb-1">09:30-11:30</p>
+<p class="small text-secondary mb-0">陈老师 | C103</p>
+</div>
+</td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap">
+<div class="bg-info bg-opacity-10 border-start border-4 border-info p-2 rounded">
+<p class="fw-medium text-info-emphasis small mb-1">高考英语特训营</p>
+<p class="small text-muted mb-1">09:00-12:00</p>
+<p class="small text-secondary mb-1">张老师 | A302</p>
+<p class="badge bg-secondary small mb-0" data-i18n-status="已签到">已签到</p>
+</div>
+</td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+</tr>
+<!-- 下午时段 -->
+<tr>
+<td class="px-3 py-4 text-nowrap small fw-medium bg-light">
+                    下午<br/>14:00-17:30
+                  </td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap">
+<div class="bg-primary bg-opacity-10 border-start border-4 border-primary p-2 rounded">
+<p class="fw-medium text-primary-emphasis small mb-1">高考英语特训营</p>
+<p class="small text-muted mb-1">14:00-17:00</p>
+<p class="small text-secondary mb-1">张老师 | A302</p>
+<p class="badge bg-secondary small mb-0" data-i18n-status="已签到">已签到</p>
+</div>
+</td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+</tr>
+<!-- 晚上时段 -->
+<tr>
+<td class="px-3 py-4 text-nowrap small fw-medium bg-light">
+                    晚上<br/>18:30-21:00
+                  </td>
+<td class="px-3 py-4 text-nowrap">
+<div class="bg-danger bg-opacity-10 border-start border-4 border-danger p-2 rounded">
+<p class="fw-medium text-danger-emphasis small mb-1">高中数学强化训练</p>
+<p class="small text-muted mb-1">18:30-20:30</p>
+<p class="small text-secondary mb-1">刘老师 | B201</p>
+<p class="badge bg-secondary small mb-0" data-i18n-status="已签到">已签到</p>
+</div>
+</td>
+<td class="px-3 py-4 text-nowrap">
+<div class="bg-success bg-opacity-10 border-start border-4 border-success p-2 rounded">
+<p class="fw-medium text-success-emphasis small mb-1">高中物理精讲班</p>
+<p class="small text-muted mb-1">19:00-21:00</p>
+<p class="small text-secondary mb-1">王老师 | B105</p>
+<p class="badge bg-warning text-dark small mb-0" data-i18n-status="待签到">待签到</p>
+</div>
+</td>
+<td class="px-3 py-4 text-nowrap">
+<div class="bg-danger bg-opacity-10 border-start border-4 border-danger p-2 rounded">
+<p class="fw-medium text-danger-emphasis small mb-1">高中数学强化训练</p>
+<p class="small text-muted mb-1">18:30-20:30</p>
+<p class="small text-secondary mb-1">刘老师 | B201</p>
+<p class="badge bg-secondary small mb-0" data-i18n-status="已签到">已签到</p>
+</div>
+</td>
+<td class="px-3 py-4 text-nowrap">
+<div class="bg-success bg-opacity-10 border-start border-4 border-success p-2 rounded">
+<p class="fw-medium text-success-emphasis small mb-1">高中物理精讲班</p>
+<p class="small text-muted mb-1">19:00-21:00</p>
+<p class="small text-secondary mb-1">王老师 | B105</p>
+<p class="badge bg-secondary small mb-0" data-i18n-status="已签到">已签到</p>
+</div>
+</td>
+<td class="px-3 py-4 text-nowrap">
+<div class="bg-danger bg-opacity-10 border-start border-4 border-danger p-2 rounded">
+<p class="fw-medium text-danger-emphasis small mb-1">高中数学强化训练</p>
+<p class="small text-muted mb-1">18:30-20:30</p>
+<p class="small text-secondary mb-1">刘老师 | B201</p>
+<p class="badge bg-warning text-dark small mb-0" data-i18n-status="待签到">待签到</p>
+</div>
+</td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+<td class="px-3 py-4 text-nowrap small text-muted"></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+      </div>
+</div>
+</div>
+</div>
+<!-- Footer will be inserted here by footer.js -->
+<!-- ECharts (for student modal) -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<!-- Bootstrap 5 JavaScript (load before custom scripts) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+<!-- Custom Scripts -->
+<script src="i18n.js"></script>
+<script src="navbar.js"></script>
+<script src="common.js"></script>
+<script src="footer.js"></script>
+<script src="student-modal.js"></script>
+<script>
+    // Inline static program data (use let to allow student-data.js to override)
+    let programData = {
+        'math-elementary': {
+            name: '小学数学思维训练',
+            students: [
+                { name: '陈小华', studentId: 'S2024101001', grade: '三年级(1)班', school: '北苑小学', parent: '陈先生', phone: '13800138001', status: '正常上课中' },
+                { name: '王小敏', studentId: 'S2024101002', grade: '三年级(2)班', school: '北苑小学', parent: '王女士', phone: '13800138002', status: '正常上课中' },
+                { name: '张小强', studentId: 'S2024101003', grade: '四年级(1)班', school: '城东小学', parent: '张先生', phone: '13800138003', status: '正常上课中' },
+                { name: '李小红', studentId: 'S2024101004', grade: '四年级(2)班', school: '北苑小学', parent: '李女士', phone: '13800138004', status: '正常上课中' },
+                { name: '刘小刚', studentId: 'S2024101005', grade: '五年级(1)班', school: '城西小学', parent: '刘先生', phone: '13800138005', status: '正常上课中' }
+            ]
+        },
+        'math-middle': {
+            name: '初中数学强化班',
+            students: [
+                { name: '赵小明', studentId: 'S2024102001', grade: '初一(1)班', school: '北苑中学', parent: '赵先生', phone: '13800138006', status: '正常上课中' },
+                { name: '钱小芳', studentId: 'S2024102002', grade: '初一(2)班', school: '北苑中学', parent: '钱女士', phone: '13800138007', status: '正常上课中' },
+                { name: '孙小亮', studentId: 'S2024102003', grade: '初二(1)班', school: '城东中学', parent: '孙先生', phone: '13800138008', status: '正常上课中' },
+                { name: '周小丽', studentId: 'S2024102004', grade: '初二(2)班', school: '北苑中学', parent: '周女士', phone: '13800138009', status: '请假中' },
+                { name: '吴小军', studentId: 'S2024102005', grade: '初三(1)班', school: '城西中学', parent: '吴先生', phone: '13800138010', status: '正常上课中' }
+            ]
+        },
+        'math-high': {
+            name: '高中数学强化训练',
+            students: [
+                { name: '郑小波', studentId: 'S2024103001', grade: '高一(1)班', school: '北苑中学', parent: '郑先生', phone: '13800138011', status: '正常上课中' },
+                { name: '王小明', studentId: 'S2024103002', grade: '高一(2)班', school: '北苑中学', parent: '王先生', phone: '13800138012', status: '正常上课中' },
+                { name: '冯小霞', studentId: 'S2024103003', grade: '高二(1)班', school: '城东中学', parent: '冯女士', phone: '13800138013', status: '正常上课中' },
+                { name: '陈小勇', studentId: 'S2024103004', grade: '高二(2)班', school: '北苑中学', parent: '陈先生', phone: '13800138014', status: '正常上课中' },
+                { name: '楚小云', studentId: 'S2024103005', grade: '高三(1)班', school: '城西中学', parent: '楚女士', phone: '13800138015', status: '正常上课中' }
+            ]
+        },
+        'english-speaking': {
+            name: '英语口语班',
+            students: [
+                { name: '魏小涛', studentId: 'S2024104001', grade: '初一(3)班', school: '北苑中学', parent: '魏先生', phone: '13800138016', status: '正常上课中' },
+                { name: '蒋小静', studentId: 'S2024104002', grade: '初二(3)班', school: '北苑中学', parent: '蒋女士', phone: '13800138017', status: '正常上课中' },
+                { name: '沈小浩', studentId: 'S2024104003', grade: '初三(2)班', school: '城东中学', parent: '沈先生', phone: '13800138018', status: '正常上课中' },
+                { name: '韩小雪', studentId: 'S2024104004', grade: '高一(3)班', school: '北苑中学', parent: '韩女士', phone: '13800138019', status: '正常上课中' },
+                { name: '杨小杰', studentId: 'S2024104005', grade: '高二(3)班', school: '城西中学', parent: '杨先生', phone: '13800138020', status: '正常上课中' }
+            ]
+        },
+        'english-gaokao': {
+            name: '高考英语特训营',
+            students: [
+                { name: '李明轩', studentId: 'S20231205', grade: '高三(3)班', school: '北苑中学', parent: '李先生', phone: '13800138000', status: '正常上课中' },
+                { name: '张雨', studentId: 'S20231206', grade: '高三(1)班', school: '北苑中学', parent: '张女士', phone: '13900139000', status: '正常上课中' },
+                { name: '王浩', studentId: 'S20231207', grade: '高三(3)班', school: '北苑中学', parent: '王先生', phone: '13700137000', status: '请假中' },
+                { name: '陈晓', studentId: 'S20231208', grade: '高三(4)班', school: '城东中学', parent: '陈先生', phone: '13600136000', status: '正常上课中' },
+                { name: '赵婷', studentId: 'S20231209', grade: '高三(2)班', school: '北苑中学', parent: '赵女士', phone: '13500135000', status: '正常上课中' },
+                { name: '刘强', studentId: 'S20231210', grade: '高三(5)班', school: '城西中学', parent: '刘先生', phone: '13400134000', status: '正常上课中' }
+            ]
+        }
+    };
+    
+    // Expose programData to window so student-data.js can access it
+    window.programData = programData;
+    
+    // Get node name from tree node
+    function getNodeName(node) {
+        const nodeContent = node.querySelector('.node-content span');
+        return nodeContent ? nodeContent.textContent.trim() : 'Unknown';
+    }
+    
+    // Collect program IDs from a node (handles level-1, level-2, level-3)
+    function collectProgramIdsFromNode(node) {
+        const programIds = [];
+        
+        if (node.classList.contains('level-3')) {
+            const programId = node.dataset.programId;
+            if (programId && programData[programId]) {
+                programIds.push(programId);
+            }
+        } else if (node.classList.contains('level-2')) {
+            const level3Nodes = node.querySelectorAll('.level-3.tree-node');
+            level3Nodes.forEach(level3Node => {
+                const programId = level3Node.dataset.programId;
+                if (programId && programData[programId]) {
+                    programIds.push(programId);
+                }
+            });
+        } else if (node.classList.contains('level-1')) {
+            const level2Nodes = node.querySelectorAll('.level-2.tree-node');
+            level2Nodes.forEach(level2Node => {
+                const level3Nodes = level2Node.querySelectorAll('.level-3.tree-node');
+                level3Nodes.forEach(level3Node => {
+                    const programId = level3Node.dataset.programId;
+                    if (programId && programData[programId]) {
+                        programIds.push(programId);
+                    }
+                });
+            });
+        }
+        
+        return programIds;
+    }
+    
+    // Collect all students from multiple programs (deduplicate)
+    function collectAllStudents(programIds) {
+        const studentMap = new Map();
+        programIds.forEach(programId => {
+            const program = programData[programId];
+            if (program && program.students) {
+                program.students.forEach(student => {
+                    if (!studentMap.has(student.studentId)) {
+                        studentMap.set(student.studentId, student);
+                    }
+                });
+            }
+        });
+        return Array.from(studentMap.values());
+    }
+    
+    // Store currently selected student name to update schedule after data loads
+    let selectedStudentName = null;
+    
+    // Render student list
+    function renderStudentList(students) {
+        const tbody = document.getElementById('student-list-tbody');
+        if (!tbody) return;
+        
+        if (!students || students.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-muted">暂无学生</td></tr>';
+            
+            // Clear the schedule when there are no students
+            const scheduleTitle = document.getElementById('schedule-title');
+            if (scheduleTitle) {
+                scheduleTitle.textContent = '个人课程安排表';
+            }
+            
+            const scheduleSubtitle = document.getElementById('schedule-subtitle');
+            if (scheduleSubtitle) {
+                scheduleSubtitle.textContent = '';
+            }
+            
+            const scheduleTbody = document.getElementById('schedule-tbody');
+            if (scheduleTbody) {
+                // Clear the schedule table - show empty schedule
+                const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                const timeSlots = ['morning', 'afternoon', 'evening'];
+                const timeSlotLabels = ['上午<br/>08:30-12:00', '下午<br/>14:00-17:30', '晚上<br/>18:30-21:00'];
+                
+                let emptyScheduleHTML = '';
+                timeSlots.forEach((slot, slotIndex) => {
+                    emptyScheduleHTML += '<tr>';
+                    emptyScheduleHTML += `<td class="px-3 py-4 text-nowrap small fw-medium bg-light">${timeSlotLabels[slotIndex]}</td>`;
+                    days.forEach(() => {
+                        emptyScheduleHTML += '<td class="px-3 py-4 text-nowrap small text-muted"></td>';
+                    });
+                    emptyScheduleHTML += '</tr>';
+                });
+                scheduleTbody.innerHTML = emptyScheduleHTML;
+            }
+            
+            // Clear selected student name
+            selectedStudentName = null;
+            
+            return;
+        }
+        
+        function getFirstNameChar(name) {
+            return name ? name.charAt(0) : '';
+        }
+        
+        function getFirstNameColor(name) {
+            // Use Bootstrap opacity classes (matching students.html)
+            const colors = [
+                'bg-info bg-opacity-25 text-info',
+                'bg-primary bg-opacity-25 text-primary',
+                'bg-danger bg-opacity-25 text-danger',
+                'bg-success bg-opacity-25 text-success',
+                'bg-warning bg-opacity-25 text-warning',
+                'bg-secondary bg-opacity-25 text-secondary'
+            ];
+            const index = name ? name.charCodeAt(0) % colors.length : 0;
+            return colors[index];
+        }
+        
+        const statusColors = {
+            '正常上课中': 'bg-success',
+            '请假中': 'bg-warning text-dark',
+            '缺勤': 'bg-danger',
+            '休学': 'bg-warning text-dark',
+            '已毕业': 'bg-info',
+            '已退学': 'bg-secondary'
+        };
+        
+        function escapeHtml(str) {
+            return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        
+        const html = students.map((student) => {
+            const nameColor = getFirstNameColor(student.name);
+            const firstNameChar = getFirstNameChar(student.name);
+            const statusColor = statusColors[student.status] || 'bg-secondary';
+            
+            return `<tr data-student-name="${escapeHtml(student.name)}">
+                <td class="px-4 py-2 text-nowrap">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle ${nameColor} d-flex align-items-center justify-content-center fw-medium small me-3" style="width: 32px; height: 32px;">${escapeHtml(firstNameChar)}</div>
+                        <a href="#" class="student-name-link small fw-medium text-primary text-decoration-none" 
+                           data-student-name="${escapeHtml(student.name)}" 
+                           data-student-id="${escapeHtml(student.studentId || '')}" 
+                           data-grade="${escapeHtml(student.grade || '')}" 
+                           data-school="${escapeHtml(student.school || '')}" 
+                           data-parent="${escapeHtml(student.parent || '')}" 
+                           data-phone="${escapeHtml(student.phone || '')}" 
+                           data-status="${escapeHtml(student.status || '正常上课中')}"
+                           data-gender="${escapeHtml(student.gender || '')}">${escapeHtml(student.name)}</a>
+                    </div>
+                </td>
+                <td class="px-4 py-2 text-nowrap">
+                    <div class="small">${escapeHtml(student.studentId || '')}</div>
+                </td>
+                <td class="px-4 py-2 text-nowrap">
+                    <div class="small">${escapeHtml(student.grade || '')}</div>
+                </td>
+                <td class="px-4 py-2 text-nowrap">
+                    <div class="small">${escapeHtml(student.school || '')}</div>
+                </td>
+                <td class="px-4 py-2 text-nowrap">
+                    <div class="small">${escapeHtml(student.parent || '')}</div>
+                </td>
+                <td class="px-4 py-2 text-nowrap">
+                    <div class="small">${escapeHtml(student.phone || '')}</div>
+                </td>
+                <td class="px-4 py-2 text-nowrap">
+                    <span class="badge ${statusColor}">${escapeHtml(student.status || '正常上课中')}</span>
+                </td>
+                <td class="px-4 py-2 text-nowrap small fw-medium">
+                    <a href="#" class="view-student-link text-primary text-decoration-none me-3" 
+                       data-student-name="${escapeHtml(student.name)}" 
+                       data-student-id="${escapeHtml(student.studentId || '')}" 
+                       data-grade="${escapeHtml(student.grade || '')}" 
+                       data-school="${escapeHtml(student.school || '')}" 
+                       data-parent="${escapeHtml(student.parent || '')}" 
+                       data-phone="${escapeHtml(student.phone || '')}" 
+                       data-status="${escapeHtml(student.status || '正常上课中')}"
+                       data-gender="${escapeHtml(student.gender || '')}"><span data-i18n="students.view">查看</span></a>
+                    <a class="text-secondary text-decoration-none" href="#"><span data-i18n="students.edit">编辑</span></a>
+                </td>
+            </tr>`;
+        }).join('');
+        
+        tbody.innerHTML = html;
+        
+        // Update translations for dynamically generated content
+        if (window.i18n && window.i18n.updatePageTranslations) {
+            window.i18n.updatePageTranslations();
+        }
+        
+        // Bind click handlers to student rows
+        bindStudentRowClicks();
+        
+        // Auto-select first row if available
+        const firstRow = tbody.querySelector('tr');
+        if (firstRow) {
+            const studentName = firstRow.dataset.studentName;
+            if (studentName) {
+                firstRow.classList.add('highlighted-row');
+                // Store selected student name globally to update schedule after data loads
+                selectedStudentName = studentName;
+                // Try to update schedule immediately, will retry after data loads if needed
+                updateSchedule(studentName);
+            }
+        }
+    }
+    
+    // Update schedule based on student name
+    // Track retry attempts to prevent infinite loops
+    const scheduleUpdateRetries = new Map();
+    const MAX_RETRIES = 10;
+    
+    function updateSchedule(studentName, retryCount = 0) {
+        if (!studentName) {
+            console.warn('updateSchedule called with no student name');
+            return;
+        }
+        
+        console.log('updateSchedule called for:', studentName, 'retry:', retryCount);
+        
+        // Check if student-data.js has loaded - if not, wait and retry (with limit)
+        if (!window.studentSchedules && !window.getStudentSchedule) {
+            if (retryCount >= MAX_RETRIES) {
+                console.error('student-data.js failed to load after', MAX_RETRIES, 'retries. Showing empty schedule.');
+                // Show empty schedule instead of infinite retry
+          } else {
+                console.log('student-data.js not loaded yet, waiting... (attempt', retryCount + 1, 'of', MAX_RETRIES + ')');
+                setTimeout(() => {
+                    updateSchedule(studentName, retryCount + 1);
+                }, 200);
+                return;
+            }
+        }
+        
+        // Get student data
+        const student = window.allStudentsData && window.allStudentsData[studentName];
+        const studentId = student ? student.studentId : '-';
+        
+        console.log('Student data:', student);
+        console.log('window.studentSchedules available:', !!window.studentSchedules);
+        console.log('window.getStudentSchedule available:', typeof window.getStudentSchedule === 'function');
+        
+        // Get schedule data from window.studentSchedules or use helper function
+        let schedule = null;
+        if (window.studentSchedules && window.studentSchedules[studentName]) {
+            schedule = window.studentSchedules[studentName];
+            console.log('Found schedule in window.studentSchedules:', schedule);
+        } else if (window.getStudentSchedule && typeof window.getStudentSchedule === 'function') {
+            // Use helper function which can generate schedule if not available
+            schedule = window.getStudentSchedule(studentName);
+            console.log('Got schedule from getStudentSchedule:', schedule);
+        } else {
+            console.warn('No schedule data available. window.studentSchedules:', window.studentSchedules);
+        }
+        
+        // If schedule is still not found, show empty schedule
+        if (!schedule) {
+            console.warn('Schedule not found for student:', studentName);
+            // Still update the title and subtitle, but show empty schedule
+        }
+        
+        // Update schedule title
+        const scheduleTitle = document.getElementById('schedule-title');
+        if (scheduleTitle) {
+            scheduleTitle.textContent = studentName + ' - 个人课程安排表';
+        }
+        
+        // Update schedule subtitle
+        const scheduleSubtitle = document.getElementById('schedule-subtitle');
+        if (scheduleSubtitle) {
+            const currentDate = new Date();
+            const weekStart = new Date(currentDate);
+            weekStart.setDate(currentDate.getDate() - currentDate.getDay() + 1);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            
+            const formatDate = (date) => {
+                return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+            };
+            
+            scheduleSubtitle.textContent = `${formatDate(weekStart)} - ${formatDate(weekEnd)} | 学生ID: ${studentId}`;
+        }
+        
+        // Update schedule table
+        const scheduleTbody = document.getElementById('schedule-tbody');
+        if (!scheduleTbody) {
+            console.error('schedule-tbody element not found!');
+            return;
+        }
+        
+        console.log('Updating schedule tbody, schedule data:', schedule);
+        
+        // Color mapping for Bootstrap classes
+        const colorClasses = {
+            'blue': 'bg-info bg-opacity-10 border-start border-4 border-info',
+            'green': 'bg-success bg-opacity-10 border-start border-4 border-success',
+            'red': 'bg-danger bg-opacity-10 border-start border-4 border-danger',
+            'purple': 'bg-primary bg-opacity-10 border-start border-4 border-primary',
+            'amber': 'bg-warning bg-opacity-10 border-start border-4 border-warning',
+            'orange': 'bg-warning bg-opacity-10 border-start border-4 border-warning',
+            'teal': 'bg-info bg-opacity-10 border-start border-4 border-info'
+        };
+        
+        const textColorClasses = {
+            'blue': 'text-info-emphasis',
+            'green': 'text-success-emphasis',
+            'red': 'text-danger-emphasis',
+            'purple': 'text-primary-emphasis',
+            'amber': 'text-warning-emphasis',
+            'orange': 'text-warning-emphasis',
+            'teal': 'text-info-emphasis'
+        };
+        
+        const statusClasses = {
+            '已签到': 'badge bg-secondary',
+            '待签到': 'badge bg-warning text-dark'
+        };
+        
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        const timeSlots = ['morning', 'afternoon', 'evening'];
+        const timeSlotLabels = ['上午<br/>08:30-12:00', '下午<br/>14:00-17:30', '晚上<br/>18:30-21:00'];
+        
+        let scheduleHTML = '';
+        
+        timeSlots.forEach((slot, slotIndex) => {
+            scheduleHTML += '<tr>';
+            scheduleHTML += `<td class="px-3 py-4 text-nowrap small fw-medium bg-light">${timeSlotLabels[slotIndex]}</td>`;
+            
+            days.forEach((day) => {
+                if (schedule && schedule[day] && schedule[day][slot]) {
+                    const course = schedule[day][slot];
+                    const colorClass = colorClasses[course.color] || colorClasses['blue'];
+                    const textColorClass = textColorClasses[course.color] || textColorClasses['blue'];
+                    const statusClass = statusClasses[course.status] || statusClasses['已签到'];
+                    
+                    scheduleHTML += `<td class="px-3 py-4 text-nowrap">`;
+                    scheduleHTML += `<div class="${colorClass} p-2 rounded">`;
+                    scheduleHTML += `<p class="fw-medium ${textColorClass} small mb-1">${course.course || ''}</p>`;
+                    scheduleHTML += `<p class="small text-muted mb-1">${course.time || ''}</p>`;
+                    scheduleHTML += `<p class="small text-secondary mb-1">${course.teacher || ''} | ${course.room || ''}</p>`;
+                    const statusText = course.status || '已签到';
+                    scheduleHTML += `<p class="${statusClass} small mb-0" data-i18n-status="${statusText}">${statusText}</p>`;
+                    scheduleHTML += `</div>`;
+                    scheduleHTML += `</td>`;
+                } else {
+                    scheduleHTML += `<td class="px-3 py-4 text-nowrap small text-muted"></td>`;
+                }
+            });
+            
+            scheduleHTML += '</tr>';
+        });
+        
+        scheduleTbody.innerHTML = scheduleHTML;
+        
+        // Update translations for dynamically generated content
+        if (window.i18n && window.i18n.updatePageTranslations) {
+            window.i18n.updatePageTranslations();
+        }
+    }
+    
+    // Bind click handlers to student rows (using event delegation, only bind once)
+    let studentRowClicksBound = false;
+    function bindStudentRowClicks() {
+        if (studentRowClicksBound) return;
+        
+        const tbody = document.getElementById('student-list-tbody');
+        if (!tbody) return;
+        
+        // Use event delegation for dynamically added rows (bind once)
+        tbody.addEventListener('click', function(e) {
+            const row = e.target.closest('tr');
+            if (!row) return;
+            
+            // Don't trigger on action links or student name links (they open modal)
+            if (e.target.closest('a')) return;
+            
+            const studentName = row.dataset.studentName;
+            if (!studentName) {
+                console.warn('No student name found in row');
+                return;
+            }
+            
+            console.log('Student row clicked:', studentName);
+            
+            // Remove highlight from all rows
+            tbody.querySelectorAll('tr').forEach(r => r.classList.remove('highlighted-row'));
+            
+            // Add highlight to clicked row
+            row.classList.add('highlighted-row');
+            
+            // Store selected student name
+            selectedStudentName = studentName;
+            
+            // Update schedule
+            updateSchedule(studentName);
+        });
+        
+        studentRowClicksBound = true;
+    }
+    
+    // Bind student modal clicks (similar to students.html)
+    // Use event delegation on document, so it works with dynamically added content
+    // Only bind once, not inside renderStudentList
+    function bindStudentModalClicks() {
+        // Use event delegation, as table content is dynamically generated
+        document.addEventListener('click', function(e) {
+            const studentLink = e.target.closest('.student-name-link, .view-student-link');
+            if (studentLink) {
+                e.preventDefault();
+                e.stopPropagation(); // Prevent row click from firing
+                
+                // Get student name from data attribute or text content
+                const studentName = studentLink.dataset.studentName || studentLink.textContent.trim();
+                
+                // Get full student data from shared data
+                let studentData = window.getStudentByName ? window.getStudentByName(studentName) : null;
+                
+                if (!studentData) {
+                    // If shared data doesn't have it, use data attributes as fallback
+                    studentData = {
+                        name: studentName,
+                        studentId: studentLink.dataset.studentId || '',
+                        grade: studentLink.dataset.grade || '',
+                        school: studentLink.dataset.school || '',
+                        parent: studentLink.dataset.parent || '',
+                        phone: studentLink.dataset.phone || '',
+                        status: studentLink.dataset.status || '正常上课中',
+                        gender: studentLink.dataset.gender || '男',
+                        email: '',
+                        birthDate: '2007-03-18',
+                        address: '北京市海淀区中关村大街123号',
+                        householdAddress: '北京市朝阳区建国路88号',
+                        family: [
+                            { name: studentLink.dataset.parent || '', relation: '家长', phone: studentLink.dataset.phone || '', occupation: '-' }
+                        ]
+                    };
+                }
+                
+                // Show student modal
+                if (typeof showStudentModal === 'function') {
+                    showStudentModal(studentData);
+                } else {
+                    console.error('showStudentModal function not available. Make sure student-modal.js is loaded.');
+                }
+            }
+        });
+    }
+    
+    // Handle tree node selection
+    function handleTreeNodeSelect(node) {
+        const nodeName = getNodeName(node);
+        const programIds = collectProgramIdsFromNode(node);
+        
+        // Update the roster title based on selected node
+        const rosterTitle = document.getElementById('roster-title');
+        if (rosterTitle) {
+            if (programIds.length === 0) {
+                rosterTitle.textContent = '学生花名册';
+            } else if (node.classList.contains('level-3') && programIds.length === 1) {
+                // Single program (leaf node) - use program name
+                const programId = programIds[0];
+                const program = programData[programId];
+                if (program) {
+                    rosterTitle.textContent = program.name + ' - 学生花名册';
+                } else {
+                    rosterTitle.textContent = nodeName + ' - 学生花名册';
+                }
+            } else {
+                // Multiple programs (non-leaf node) - use node name
+                rosterTitle.textContent = nodeName + ' - 学生花名册';
+            }
+        }
+        
+        // Update the current course subtitle based on selected node
+        const currentCourseSubtitle = document.getElementById('current-course-subtitle');
+        if (currentCourseSubtitle) {
+            let courseName = '';
+            if (programIds.length === 0) {
+                courseName = '未选择';
+            } else if (node.classList.contains('level-3') && programIds.length === 1) {
+                // Single program (leaf node) - use program name
+                const programId = programIds[0];
+                const program = programData[programId];
+                if (program) {
+                    courseName = program.name;
+                } else {
+                    courseName = nodeName;
+                }
+            } else {
+                // Multiple programs (non-leaf node) - use node name
+                courseName = nodeName;
+            }
+            currentCourseSubtitle.textContent = '当前课程：' + courseName + ' | 2025年秋季学期 (9月-12月)';
+        }
+        
+        if (programIds.length === 0) {
+            renderStudentList([]);
+            return;
+        }
+        
+        if (node.classList.contains('level-3') && programIds.length === 1) {
+            // Single program (leaf node)
+            const programId = programIds[0];
+            const program = programData[programId];
+            if (program) {
+                renderStudentList(program.students || []);
+            }
+        } else {
+            // Multiple programs (non-leaf node)
+            const allStudents = collectAllStudents(programIds);
+            renderStudentList(allStudents);
+        }
+    }
+    
+    // Initialize navbar and footer
+    document.addEventListener('DOMContentLoaded', async function() {
+        // Initialize navbar FIRST (before any other scripts)
+        if (!document.querySelector('.navbar')) {
+            await initNavbar({}, 'body');
+        }
+        
+        // Initialize footer
+        initFooter({}, 'body');
+        
+        // Bind student modal clicks (once, using event delegation)
+        bindStudentModalClicks();
+        
+        // Load student-data.js dynamically AFTER navbar/footer are initialized
+        const script = document.createElement('script');
+        script.src = 'student-data.js';
+        script.onload = function() {
+            console.log('student-data.js script.onload fired');
+            // Wait a bit longer to ensure all data is fully loaded and executed
+            setTimeout(() => {
+                console.log('Checking for data after timeout...');
+                console.log('window.programData:', !!window.programData, window.programData);
+                console.log('window.studentSchedules:', !!window.studentSchedules, window.studentSchedules);
+                console.log('window.allStudentsData:', !!window.allStudentsData, window.allStudentsData);
+                console.log('window.getStudentSchedule:', typeof window.getStudentSchedule, window.getStudentSchedule);
+                
+                // Check for any errors in the script
+                if (!window.studentSchedules && !window.allStudentsData) {
+                    console.error('student-data.js loaded but data not available. Check for JavaScript errors in student-data.js');
+                }
+                
+                // Update programData from student-data.js if available
+                // Note: programData and window.programData are the same object reference,
+                // so student-data.js has already merged its data into window.programData
+                // We just need to ensure our local programData variable points to it
+                if (window.programData && typeof window.programData === 'object' && Object.keys(window.programData).length > 0) {
+                    // Since window.programData already has the merged data, just update our reference
+                    programData = window.programData;
+                    console.log('Updated programData reference from student-data.js, keys:', Object.keys(programData));
+                } else {
+                    console.warn('window.programData not available after student-data.js loaded');
+                }
+                
+                console.log('student-data.js loaded. window.studentSchedules available:', !!window.studentSchedules);
+                console.log('window.allStudentsData available:', !!window.allStudentsData);
+                console.log('window.getStudentSchedule available:', typeof window.getStudentSchedule === 'function');
+                
+                // Initialize tree navigation AFTER data is loaded
+                initTreeNavigation({
+                    onNodeSelect: handleTreeNodeSelect
+                });
+                
+                // Load default program (高考英语特训营) on page load
+                setTimeout(() => {
+                    const defaultNode = document.querySelector('[data-program-id="english-gaokao"]');
+                    if (defaultNode) {
+                        handleTreeNodeSelect(defaultNode);
+                    }
+                    
+                    // If a student was already selected, update their schedule now that data is loaded
+                    if (selectedStudentName) {
+                        console.log('Updating schedule for pre-selected student:', selectedStudentName);
+                        updateSchedule(selectedStudentName);
+                    }
+                }, 100);
+            }, 50);
+        };
+        script.onerror = function() {
+            console.error('Failed to load student-data.js!');
+            // If student-data.js fails to load, use inline data and continue
+            initTreeNavigation({
+                onNodeSelect: handleTreeNodeSelect
+            });
+            
+            setTimeout(() => {
+                const defaultNode = document.querySelector('[data-program-id="english-gaokao"]');
+                if (defaultNode) {
+                    handleTreeNodeSelect(defaultNode);
+        }
+            }, 100);
+        };
+        document.head.appendChild(script);
+    });
+  </script>
+</body>
+</html>

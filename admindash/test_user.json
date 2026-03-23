@@ -1,0 +1,10 @@
+{
+  "user_id": "u-001",
+  "username": "jane",
+  "password": "admin123",
+  "name": "Jane Admin",
+  "email": "jane@acme.edu",
+  "tenant_id": "acmechildcenter",
+  "tenant_name": "Acme Afterschool",
+  "role": "tenant_admin"
+}
