@@ -1,6 +1,6 @@
 # Papermite
 
-Papermite is the data ingestion gateway for the [NeoApex](https://github.com/NeoApex) platform. It transforms afterschool program documents (policies, application templates, handbooks) into structured, tenant-scoped data models using AI-powered extraction.
+Papermite is the data ingestion gateway for apex platform. It transforms afterschool program documents (policies, application templates, handbooks) into structured, tenant-scoped data models using AI-powered extraction.
 
 ## What It Does
 
