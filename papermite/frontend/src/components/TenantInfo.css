@@ -1,0 +1,82 @@
+.tenant-info__marker {
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.tenant-info__marker--lg {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.tenant-info--compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tenant-info--compact .tenant-info__name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-right: 8px;
+}
+
+.tenant-info--compact .tenant-info__id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.tenant-info__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.tenant-info__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+
+.tenant-info__name--lg {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.tenant-info__details {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tenant-info__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tenant-info__detail-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.tenant-info__detail-value {
+  font-size: 14px;
+  color: var(--text-secondary);
+}

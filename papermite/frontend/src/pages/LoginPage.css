@@ -1,0 +1,213 @@
+/* Login page — Floatify-inspired dark glassmorphism */
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0F0A1A;
+  position: relative;
+  overflow: hidden;
+  font-family: 'DM Sans', -apple-system, sans-serif;
+}
+
+/* Radial gradient glows */
+.login__glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+}
+
+.login__glow--1 {
+  width: 500px;
+  height: 500px;
+  top: -120px;
+  right: -100px;
+  background: radial-gradient(circle, rgba(102, 126, 234, 0.25) 0%, transparent 70%);
+}
+
+.login__glow--2 {
+  width: 400px;
+  height: 400px;
+  bottom: -80px;
+  left: -60px;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.2) 0%, transparent 70%);
+}
+
+/* Glass card */
+.login__card {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  padding: 48px 40px 36px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  animation: loginCardIn 0.5s ease-out;
+}
+
+@keyframes loginCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header */
+.login__header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.login__brand {
+  font-family: 'DM Mono', 'Menlo', monospace;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #667EEA, #A78BFA, #F472B6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+
+.login__subtitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.5px;
+}
+
+/* Form */
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login__label {
+  font-family: 'DM Mono', 'Menlo', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.login__input {
+  font-family: 'DM Sans', -apple-system, sans-serif;
+  font-size: 14px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #FFFFFF;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.login__input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.login__input:focus {
+  border-color: rgba(102, 126, 234, 0.6);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.login__input--error {
+  border-color: rgba(244, 114, 182, 0.6);
+}
+
+.login__field-error {
+  font-size: 11px;
+  color: #F472B6;
+  letter-spacing: 0.3px;
+}
+
+/* Error banner */
+.login__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #F472B6;
+  padding: 10px 14px;
+  background: rgba(244, 114, 182, 0.08);
+  border: 1px solid rgba(244, 114, 182, 0.2);
+  border-radius: 8px;
+}
+
+/* Submit button — gradient */
+.login__submit {
+  margin-top: 4px;
+  padding: 13px 24px;
+  font-family: 'DM Mono', 'Menlo', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #667EEA, #7C3AED);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+
+.login__submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.35);
+}
+
+.login__submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.login__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Spinner */
+.login__spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Footer */
+.login__footer {
+  text-align: center;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.login__footer span {
+  font-family: 'DM Mono', 'Menlo', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.2);
+}

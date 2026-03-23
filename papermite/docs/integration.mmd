@@ -1,0 +1,19 @@
+flowchart LR
+    Doc[Policy / Application\nDocument] --> PM[Papermite\nIngestion Gateway]
+    PM --> LDB[(LanceDB\nModel Definitions)]
+    LDB --> API[ApexAPI\nCentralized API]
+    API --> AD[AdminDash]
+    API --> FH[FamilyHub]
+    API --> EX[EnrollX]
+    API --> DC[DataCore]
+    API --> AF[ApexFlow]
+
+    style PM fill:#CF8A2E,color:#fff,stroke:none
+    style LDB fill:#0969DA,color:#fff,stroke:none
+    style API fill:#1A7F37,color:#fff,stroke:none
+    style Doc fill:#6e7781,color:#fff,stroke:none
+    style AD fill:#8250DF,color:#fff,stroke:none
+    style FH fill:#8250DF,color:#fff,stroke:none
+    style EX fill:#8250DF,color:#fff,stroke:none
+    style DC fill:#8250DF,color:#fff,stroke:none
+    style AF fill:#8250DF,color:#fff,stroke:none

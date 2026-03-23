@@ -1,0 +1,49 @@
+flowchart TD
+    Start([Tenant Admin opens Papermite]) --> HasModel{Active model\nexists?}
+
+    %% No model path
+    HasModel -- No --> Upload[Upload Document\nPDF / DOCX / TXT]
+    Upload --> Parse[Docling parses document\nto structured text]
+    Parse --> Extract[AI extracts entities\nStudent, Guardian, Program, etc.]
+    Extract --> Consolidate[Consolidate duplicate\nentity types]
+    Consolidate --> InferType[Infer field types\ndate, email, phone, selection, etc.]
+    InferType --> Review
+
+    %% Has model path
+    HasModel -- Yes --> ModelCard[View Active Model\nversion, timestamp, updated-by]
+    ModelCard --> EditOrUpload{User action}
+    EditOrUpload -- Edit Model --> LoadModel[Load model into\nReview page]
+    LoadModel --> Review
+    EditOrUpload -- Upload New Doc --> Upload
+
+    %% Review
+    Review[Review & Customize\nEdit values, types, required flags\nAdd/remove fields, define selection options]
+    Review --> Changed{Changes\ndetected?}
+    Changed -- No --> StayReview[Finalize button disabled\nModify fields to continue]
+    StayReview --> Review
+    Changed -- Yes --> Finalize[Finalize Model]
+
+    %% Finalize
+    Finalize --> Preview[Preview\nDry run — no DB write]
+    Preview --> Unchanged{Model unchanged\nfrom active?}
+    Unchanged -- Yes --> NoChange[No Changes Detected\nNo new version created]
+    NoChange --> Landing
+    Unchanged -- No --> ConfirmPage[Show entity summary\nwith sample data + JSON preview]
+    ConfirmPage --> Decision{User decision}
+    Decision -- Cancel --> Landing
+    Decision -- Confirm & Save --> Commit[Store in LanceDB\nArchive previous version\nIncrement version number\nTrim if > 50 versions]
+    Commit --> Landing([Landing Page\nwith updated model])
+
+    style Start fill:#CF8A2E,color:#fff,stroke:none
+    style Landing fill:#CF8A2E,color:#fff,stroke:none
+    style Upload fill:#0969DA,color:#fff,stroke:none
+    style Parse fill:#0969DA,color:#fff,stroke:none
+    style Extract fill:#0969DA,color:#fff,stroke:none
+    style Consolidate fill:#0969DA,color:#fff,stroke:none
+    style InferType fill:#0969DA,color:#fff,stroke:none
+    style Review fill:#1A7F37,color:#fff,stroke:none
+    style ConfirmPage fill:#8250DF,color:#fff,stroke:none
+    style Commit fill:#1A7F37,color:#fff,stroke:none
+    style NoChange fill:#6e7781,color:#fff,stroke:none
+    style StayReview fill:#6e7781,color:#fff,stroke:none
+    style ModelCard fill:#CF8A2E,color:#fff,stroke:none

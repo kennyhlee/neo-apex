@@ -1,0 +1,85 @@
+"""Auth endpoints and dependencies — JWT-based login with test user config."""
+from datetime import datetime, timedelta, timezone
+
+import jwt
+from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel
+
+from app.config import TestUser, settings
+
+router = APIRouter()
+
+# ─── JWT helpers ───────────────────────────────────────────────
+
+def _create_token(user: TestUser) -> str:
+    payload = {
+        "user_id": user.user_id,
+        "email": user.email,
+        "tenant_id": user.tenant_id,
+        "role": user.role,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiry_hours),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def _decode_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+# ─── FastAPI dependencies ──────────────────────────────────────
+
+def get_current_user(authorization: str = Header(...)) -> TestUser:
+    """Decode JWT from Authorization header and return the matching user."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    token = authorization[7:]
+    payload = _decode_token(token)
+    user = settings.find_user_by_email(payload["email"])
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+def require_admin(user: TestUser = Depends(get_current_user)) -> TestUser:
+    """Verify the current user has tenant_admin role."""
+    if user.role != "tenant_admin":
+        raise HTTPException(status_code=403, detail="Requires tenant_admin role")
+    return user
+
+
+# ─── Routes ────────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    user: dict
+
+
+@router.post("/login")
+def login(req: LoginRequest):
+    """Authenticate with email + password, return JWT."""
+    user = settings.find_user_by_email(req.email)
+    if not user or user.password != req.password:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = _create_token(user)
+    # Exclude password from response
+    user_data = user.model_dump()
+    del user_data["password"]
+    return {"token": token, "user": user_data}
+
+
+@router.get("/me")
+def get_me(user: TestUser = Depends(get_current_user)):
+    """Return the authenticated user's profile."""
+    user_data = user.model_dump()
+    del user_data["password"]
+    return user_data

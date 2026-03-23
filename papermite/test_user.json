@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "user_id": "u-001",
+      "name": "Jane Admin",
+      "email": "jane@acme.edu",
+      "password": "admin123",
+      "tenant_id": "acme",
+      "tenant_name": "Acme Afterschool",
+      "role": "tenant_admin"
+    },
+    {
+      "user_id": "u-002",
+      "name": "Bob Viewer",
+      "email": "bob@acme.edu",
+      "password": "viewer123",
+      "tenant_id": "acme",
+      "tenant_name": "Acme Afterschool",
+      "role": "viewer"
+    }
+  ]
+}

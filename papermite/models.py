@@ -1,0 +1,113 @@
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, List, Dict, Any
+from datetime import date
+
+
+class BaseEntity(BaseModel):
+    tenant_id: str
+    entity_type: str = Field(...)
+    # Arbitrary key/value pairs for extensibility across all entities
+    custom_fields: Dict[str, Any] = Field(default_factory=dict)
+
+
+class Guardian(BaseEntity):
+    entity_type: str = "GUARDIAN"
+    guardian_id: str
+    first_name: str
+    last_name: str
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    relationship: Optional[str] = None
+
+
+class Address(BaseModel):
+    type: Optional[str] = None
+    line1: Optional[str] = None
+    line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postalCode: Optional[str] = None
+    country: Optional[str] = None
+
+
+class Student(BaseEntity):
+    entity_type: str = "STUDENT"
+    student_id: str
+    first_name: str
+    last_name: str
+    middle_name: Optional[str] = None
+    preferred_name: Optional[str] = None
+    dob: Optional[date] = None
+    grade_level: Optional[str] = None
+    email: Optional[EmailStr] = None
+    gender: Optional[str] = None
+    addresses: List[Address] = Field(default_factory=list)
+    guardian_ids: List[str] = Field(default_factory=list)
+
+
+class Program(BaseEntity):
+    entity_type: str = "PROGRAM"
+    program_id: str
+    name: str
+    school_year: str
+
+
+class Enrollment(BaseEntity):
+    entity_type: str = "ENROLLMENT"
+    student_id: str
+    program_id: str
+    class_id: Optional[str] = None
+    status: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class Attendance(BaseEntity):
+    entity_type: str = "ATTENDANCE"
+    student_id: str
+    date: date
+    program_id: str
+    class_id: Optional[str] = None
+    status: str
+
+
+class RegistrationApplication(BaseEntity):
+    entity_type: str = "REGAPP"
+    application_id: str
+    school_year: str
+    program_id: Optional[str] = None
+    program_name: Optional[str] = None
+    school_id: Optional[str] = None
+    student: Student
+    guardians: List[Guardian] = Field(default_factory=list)
+    emergency_contacts: List['EmergencyContact'] = Field(default_factory=list)
+    medical_contacts: List['MedicalContact'] = Field(default_factory=list)
+
+
+class Tenant(BaseEntity):
+    entity_type: str = "TENANT"
+    name: Optional[str] = None
+    display_name: Optional[str] = None
+    contact_email: Optional[EmailStr] = None
+    contact_phone: Optional[str] = None
+    address: Optional[Address] = None
+
+
+class EmergencyContact(BaseModel):
+    name: str
+    relationship: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    custom_fields: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MedicalContact(BaseModel):
+    physician: Optional[str] = None
+    clinic: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    custom_fields: Dict[str, Any] = Field(default_factory=dict)
+
+
+# Pydantic forward refs resolution
+RegistrationApplication.update_forward_refs()
