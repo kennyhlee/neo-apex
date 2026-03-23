@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>线索管理系统</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Iconify for additional icons -->
+    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="navbar.css">
+    <link rel="stylesheet" href="footer.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        :root {
+            --primary-color: #ff6b00;
+        }
+        .btn-primary-custom {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+        .btn-primary-custom:hover {
+            background-color: #e55a00;
+            border-color: #e55a00;
+            color: white;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(255, 107, 0, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid px-4 py-4">
+        <div class="row g-4">
+            <!-- 筛选区域卡片 -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium">姓名</label>
+                                <input class="form-control" placeholder="输入姓名" type="text"/>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium">手机号</label>
+                                <input class="form-control" placeholder="输入手机号" type="text"/>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium">状态</label>
+                                <select class="form-select">
+                                    <option>全部状态</option>
+                                    <option>待联系</option>
+                                    <option>已联系</option>
+                                    <option>有意向</option>
+                                    <option>已报名</option>
+                                    <option>无效线索</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium">来源渠道</label>
+                                <select class="form-select">
+                                    <option>全部来源</option>
+                                    <option>官网咨询</option>
+                                    <option>电话咨询</option>
+                                    <option>线下活动</option>
+                                    <option>微信推广</option>
+                                    <option>老生推荐</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium">跟进人</label>
+                                <select class="form-select">
+                                    <option>全部跟进人</option>
+                                    <option>张老师</option>
+                                    <option>李老师</option>
+                                    <option>王老师</option>
+                                    <option>赵老师</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium">创建时间</label>
+                                <input class="form-control" type="date"/>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium">最后跟进时间</label>
+                                <input class="form-control" type="date"/>
+                            </div>
+                        </div>
+                        <!-- 搜索按钮区域 -->
+                        <div class="d-flex justify-content-end mt-3 pt-3 border-top">
+                            <button class="btn btn-primary-custom btn-sm d-flex align-items-center gap-2">
+                                <span class="iconify" data-icon="mdi:magnify" style="font-size: 18px;"></span>
+                                搜索
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 功能按钮区域 -->
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary-custom btn-sm">
+                            批量删除
+                        </button>
+                        <button class="btn btn-primary-custom btn-sm">
+                            更改跟进人
+                        </button>
+                        <button class="btn btn-primary-custom btn-sm">
+                            添加潜客
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- 数据表格区域 -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox"/></th>
+                                        <th>姓名</th>
+                                        <th>性别</th>
+                                        <th>联系方式</th>
+                                        <th>年级</th>
+                                        <th>来源</th>
+                                        <th>状态</th>
+                                        <th>年龄</th>
+                                        <th>意向课程</th>
+                                        <th>意向级别</th>
+                                        <th>创建时间</th>
+                                        <th>创建人</th>
+                                        <th>跟进人</th>
+                                        <th>最后跟进时间</th>
+                                        <th>跟进内容</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lead-table-body">
+                                    <!-- 表格数据将通过JavaScript动态加载 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 分页控件 -->
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center py-3">
+                    <div class="text-muted small" id="pagination-info">
+                        显示第 1 到 5 条，共 56 条记录
+                    </div>
+                    <div class="d-flex align-items-center gap-2" id="pagination-controls">
+                        <button class="btn btn-outline-secondary btn-sm" id="prev-page-btn" disabled>
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <div id="page-buttons" class="d-flex gap-1"></div>
+                        <button class="btn btn-outline-secondary btn-sm" id="next-page-btn">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Bootstrap 5 JS Bundle (includes Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <!-- Custom Scripts -->
+    <script src="i18n.js"></script>
+    <script src="navbar.js"></script>
+    <script src="common.js"></script>
+    <script src="footer.js"></script>
+    <script>
+    // 假数据 - 56条记录
+    const fakeLeadData = [
+        // Page 1
+        { name: '张明', gender: '男', phone: '13800138000', grade: '三年级', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 9, course: '英语', level: '初级', createDate: '2025-10-15', creator: '管理员', follower: '李老师', lastFollowDate: '2025-10-20', followContent: '了解课程详情' },
+        { name: '王丽', gender: '女', phone: '13900139000', grade: '五年级', source: '电话咨询', status: '有意向', statusColor: 'green', age: 11, course: '数学', level: '高级', createDate: '2025-10-16', creator: '管理员', follower: '张老师', lastFollowDate: '2025-10-21', followContent: '预约试听课' },
+        { name: '陈强', gender: '男', phone: '13700137000', grade: '初一', source: '微信推广', status: '待联系', statusColor: 'yellow', age: 13, course: '编程', level: '中级', createDate: '2025-10-17', creator: '管理员', follower: '王老师', lastFollowDate: '2025-10-18', followContent: '初步沟通' },
+        { name: '李芳', gender: '女', phone: '13600136000', grade: '四年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 10, course: '美术', level: '初级', createDate: '2025-10-18', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-10-22', followContent: '完成缴费' },
+        { name: '刘洋', gender: '男', phone: '13500135000', grade: '六年级', source: '老生推荐', status: '无效线索', statusColor: 'gray', age: 12, course: '英语', level: '中级', createDate: '2025-10-19', creator: '管理员', follower: '李老师', lastFollowDate: '2025-10-20', followContent: '无意愿' },
+        // Page 2
+        { name: '赵敏', gender: '女', phone: '13400134000', grade: '二年级', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 8, course: '数学', level: '初级', createDate: '2025-10-20', creator: '管理员', follower: '张老师', lastFollowDate: '2025-10-23', followContent: '询问价格' },
+        { name: '孙磊', gender: '男', phone: '13300133000', grade: '初三', source: '电话咨询', status: '有意向', statusColor: 'green', age: 15, course: '物理', level: '高级', createDate: '2025-10-21', creator: '管理员', follower: '王老师', lastFollowDate: '2025-10-24', followContent: '了解课程安排' },
+        { name: '周静', gender: '女', phone: '13200132000', grade: '五年级', source: '微信推广', status: '待联系', statusColor: 'yellow', age: 11, course: '英语', level: '中级', createDate: '2025-10-22', creator: '管理员', follower: '李老师', lastFollowDate: '2025-10-22', followContent: '等待回复' },
+        { name: '吴刚', gender: '男', phone: '13100131000', grade: '初一', source: '线下活动', status: '已报名', statusColor: 'purple', age: 13, course: '编程', level: '中级', createDate: '2025-10-23', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-10-25', followContent: '完成报名' },
+        { name: '郑秀', gender: '女', phone: '13000130000', grade: '三年级', source: '老生推荐', status: '有意向', statusColor: 'green', age: 9, course: '美术', level: '初级', createDate: '2025-10-24', creator: '管理员', follower: '张老师', lastFollowDate: '2025-10-26', followContent: '预约试听' },
+        // Page 3
+        { name: '钱伟', gender: '男', phone: '15900159000', grade: '四年级', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 10, course: '数学', level: '中级', createDate: '2025-10-25', creator: '管理员', follower: '王老师', lastFollowDate: '2025-10-27', followContent: '咨询课程内容' },
+        { name: '冯丽', gender: '女', phone: '15800158000', grade: '六年级', source: '电话咨询', status: '待联系', statusColor: 'yellow', age: 12, course: '英语', level: '高级', createDate: '2025-10-26', creator: '管理员', follower: '李老师', lastFollowDate: '2025-10-26', followContent: '初步了解' },
+        { name: '陈明', gender: '男', phone: '15700157000', grade: '初二', source: '微信推广', status: '有意向', statusColor: 'green', age: 14, course: '物理', level: '中级', createDate: '2025-10-27', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-10-28', followContent: '考虑报名' },
+        { name: '楚云', gender: '女', phone: '15600156000', grade: '五年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 11, course: '美术', level: '中级', createDate: '2025-10-28', creator: '管理员', follower: '张老师', lastFollowDate: '2025-10-29', followContent: '已缴费' },
+        { name: '魏强', gender: '男', phone: '15500155000', grade: '一年级', source: '老生推荐', status: '无效线索', statusColor: 'gray', age: 7, course: '数学', level: '初级', createDate: '2025-10-29', creator: '管理员', follower: '王老师', lastFollowDate: '2025-10-30', followContent: '暂时不考虑' },
+        // Page 4
+        { name: '蒋芳', gender: '女', phone: '15400154000', grade: '三年级', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 9, course: '英语', level: '初级', createDate: '2025-10-30', creator: '管理员', follower: '李老师', lastFollowDate: '2025-11-01', followContent: '了解详情' },
+        { name: '沈浩', gender: '男', phone: '15300153000', grade: '初一', source: '电话咨询', status: '有意向', statusColor: 'green', age: 13, course: '编程', level: '高级', createDate: '2025-10-31', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-11-02', followContent: '询问课程时间' },
+        { name: '韩雪', gender: '女', phone: '15200152000', grade: '四年级', source: '微信推广', status: '待联系', statusColor: 'yellow', age: 10, course: '数学', level: '中级', createDate: '2025-11-01', creator: '管理员', follower: '张老师', lastFollowDate: '2025-11-01', followContent: '等待联系' },
+        { name: '杨杰', gender: '男', phone: '15100151000', grade: '六年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 12, course: '英语', level: '高级', createDate: '2025-11-02', creator: '管理员', follower: '王老师', lastFollowDate: '2025-11-03', followContent: '报名成功' },
+        { name: '朱琳', gender: '女', phone: '15000150000', grade: '二年级', source: '老生推荐', status: '有意向', statusColor: 'green', age: 8, course: '美术', level: '初级', createDate: '2025-11-03', creator: '管理员', follower: '李老师', lastFollowDate: '2025-11-04', followContent: '感兴趣' },
+        // 继续添加更多数据以达到56条
+        { name: '秦涛', gender: '男', phone: '14900149000', grade: '初三', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 15, course: '物理', level: '高级', createDate: '2025-11-04', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-11-05', followContent: '了解课程' },
+        { name: '尤静', gender: '女', phone: '14800148000', grade: '五年级', source: '电话咨询', status: '待联系', statusColor: 'yellow', age: 11, course: '英语', level: '中级', createDate: '2025-11-05', creator: '管理员', follower: '张老师', lastFollowDate: '2025-11-05', followContent: '初步沟通' },
+        { name: '许强', gender: '男', phone: '14700147000', grade: '初一', source: '微信推广', status: '有意向', statusColor: 'green', age: 13, course: '编程', level: '中级', createDate: '2025-11-06', creator: '管理员', follower: '王老师', lastFollowDate: '2025-11-07', followContent: '考虑中' },
+        { name: '何芳', gender: '女', phone: '14600146000', grade: '四年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 10, course: '数学', level: '初级', createDate: '2025-11-07', creator: '管理员', follower: '李老师', lastFollowDate: '2025-11-08', followContent: '完成报名' },
+        { name: '吕伟', gender: '男', phone: '14500145000', grade: '六年级', source: '老生推荐', status: '无效线索', statusColor: 'gray', age: 12, course: '英语', level: '中级', createDate: '2025-11-08', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-11-09', followContent: '无需求' },
+        { name: '施丽', gender: '女', phone: '14400144000', grade: '三年级', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 9, course: '美术', level: '初级', createDate: '2025-11-09', creator: '管理员', follower: '张老师', lastFollowDate: '2025-11-10', followContent: '咨询课程' },
+        { name: '张浩', gender: '男', phone: '14300143000', grade: '初二', source: '电话咨询', status: '有意向', statusColor: 'green', age: 14, course: '物理', level: '高级', createDate: '2025-11-10', creator: '管理员', follower: '王老师', lastFollowDate: '2025-11-11', followContent: '询问价格' },
+        { name: '孔云', gender: '女', phone: '14200142000', grade: '五年级', source: '微信推广', status: '待联系', statusColor: 'yellow', age: 11, course: '英语', level: '中级', createDate: '2025-11-11', creator: '管理员', follower: '李老师', lastFollowDate: '2025-11-11', followContent: '等待回复' },
+        { name: '曹杰', gender: '男', phone: '14100141000', grade: '一年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 7, course: '数学', level: '初级', createDate: '2025-11-12', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-11-13', followContent: '报名完成' },
+        { name: '严琳', gender: '女', phone: '14000140000', grade: '四年级', source: '老生推荐', status: '有意向', statusColor: 'green', age: 10, course: '编程', level: '中级', createDate: '2025-11-13', creator: '管理员', follower: '张老师', lastFollowDate: '2025-11-14', followContent: '感兴趣' },
+        { name: '华涛', gender: '男', phone: '13900139001', grade: '初三', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 15, course: '物理', level: '高级', createDate: '2025-11-14', creator: '管理员', follower: '王老师', lastFollowDate: '2025-11-15', followContent: '了解详情' },
+        { name: '金静', gender: '女', phone: '13800138001', grade: '六年级', source: '电话咨询', status: '待联系', statusColor: 'yellow', age: 12, course: '英语', level: '高级', createDate: '2025-11-15', creator: '管理员', follower: '李老师', lastFollowDate: '2025-11-15', followContent: '初步沟通' },
+        { name: '魏强2', gender: '男', phone: '13700137001', grade: '初一', source: '微信推广', status: '有意向', statusColor: 'green', age: 13, course: '美术', level: '中级', createDate: '2025-11-16', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-11-17', followContent: '考虑报名' },
+        { name: '陶芳', gender: '女', phone: '13600136001', grade: '二年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 8, course: '数学', level: '初级', createDate: '2025-11-17', creator: '管理员', follower: '张老师', lastFollowDate: '2025-11-18', followContent: '已缴费' },
+        { name: '姜伟', gender: '男', phone: '13500135001', grade: '五年级', source: '老生推荐', status: '无效线索', statusColor: 'gray', age: 11, course: '英语', level: '中级', createDate: '2025-11-18', creator: '管理员', follower: '王老师', lastFollowDate: '2025-11-19', followContent: '无意愿' },
+        { name: '戚丽', gender: '女', phone: '13400134001', grade: '三年级', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 9, course: '编程', level: '初级', createDate: '2025-11-19', creator: '管理员', follower: '李老师', lastFollowDate: '2025-11-20', followContent: '咨询课程' },
+        { name: '谢浩', gender: '男', phone: '13300133001', grade: '初二', source: '电话咨询', status: '有意向', statusColor: 'green', age: 14, course: '物理', level: '高级', createDate: '2025-11-20', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-11-21', followContent: '询问安排' },
+        { name: '邹云', gender: '女', phone: '13200132001', grade: '四年级', source: '微信推广', status: '待联系', statusColor: 'yellow', age: 10, course: '英语', level: '中级', createDate: '2025-11-21', creator: '管理员', follower: '张老师', lastFollowDate: '2025-11-21', followContent: '等待联系' },
+        { name: '喻杰', gender: '男', phone: '13100131001', grade: '六年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 12, course: '数学', level: '高级', createDate: '2025-11-22', creator: '管理员', follower: '王老师', lastFollowDate: '2025-11-23', followContent: '报名成功' },
+        { name: '柏琳', gender: '女', phone: '13000130001', grade: '一年级', source: '老生推荐', status: '有意向', statusColor: 'green', age: 7, course: '美术', level: '初级', createDate: '2025-11-23', creator: '管理员', follower: '李老师', lastFollowDate: '2025-11-24', followContent: '感兴趣' },
+        { name: '水涛', gender: '男', phone: '15900159001', grade: '初三', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 15, course: '物理', level: '高级', createDate: '2025-11-24', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-11-25', followContent: '了解课程' },
+        { name: '窦静', gender: '女', phone: '15800158001', grade: '五年级', source: '电话咨询', status: '待联系', statusColor: 'yellow', age: 11, course: '英语', level: '中级', createDate: '2025-11-25', creator: '管理员', follower: '张老师', lastFollowDate: '2025-11-25', followContent: '初步了解' },
+        { name: '章强', gender: '男', phone: '15700157001', grade: '初一', source: '微信推广', status: '有意向', statusColor: 'green', age: 13, course: '编程', level: '中级', createDate: '2025-11-26', creator: '管理员', follower: '王老师', lastFollowDate: '2025-11-27', followContent: '考虑中' },
+        { name: '云芳', gender: '女', phone: '15600156001', grade: '四年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 10, course: '数学', level: '初级', createDate: '2025-11-27', creator: '管理员', follower: '李老师', lastFollowDate: '2025-11-28', followContent: '完成报名' },
+        { name: '苏伟', gender: '男', phone: '15500155001', grade: '六年级', source: '老生推荐', status: '无效线索', statusColor: 'gray', age: 12, course: '英语', level: '中级', createDate: '2025-11-28', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-11-29', followContent: '无需求' },
+        { name: '潘丽', gender: '女', phone: '15400154001', grade: '三年级', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 9, course: '美术', level: '初级', createDate: '2025-11-29', creator: '管理员', follower: '张老师', lastFollowDate: '2025-11-30', followContent: '咨询课程' },
+        { name: '葛浩', gender: '男', phone: '15300153001', grade: '初二', source: '电话咨询', status: '有意向', statusColor: 'green', age: 14, course: '物理', level: '高级', createDate: '2025-11-30', creator: '管理员', follower: '王老师', lastFollowDate: '2025-12-01', followContent: '询问价格' },
+        { name: '奚云', gender: '女', phone: '15200152001', grade: '五年级', source: '微信推广', status: '待联系', statusColor: 'yellow', age: 11, course: '英语', level: '中级', createDate: '2025-12-01', creator: '管理员', follower: '李老师', lastFollowDate: '2025-12-01', followContent: '等待回复' },
+        { name: '范杰', gender: '男', phone: '15100151001', grade: '一年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 7, course: '数学', level: '初级', createDate: '2025-12-02', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-12-03', followContent: '报名完成' },
+        { name: '彭琳', gender: '女', phone: '15000150001', grade: '四年级', source: '老生推荐', status: '有意向', statusColor: 'green', age: 10, course: '编程', level: '中级', createDate: '2025-12-03', creator: '管理员', follower: '张老师', lastFollowDate: '2025-12-04', followContent: '感兴趣' },
+        { name: '郎涛', gender: '男', phone: '14900149001', grade: '初三', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 15, course: '物理', level: '高级', createDate: '2025-12-04', creator: '管理员', follower: '王老师', lastFollowDate: '2025-12-05', followContent: '了解详情' },
+        { name: '鲁静', gender: '女', phone: '14800148001', grade: '六年级', source: '电话咨询', status: '待联系', statusColor: 'yellow', age: 12, course: '英语', level: '高级', createDate: '2025-12-05', creator: '管理员', follower: '李老师', lastFollowDate: '2025-12-05', followContent: '初步沟通' },
+        { name: '韦强', gender: '男', phone: '14700147001', grade: '初一', source: '微信推广', status: '有意向', statusColor: 'green', age: 13, course: '美术', level: '中级', createDate: '2025-12-06', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-12-07', followContent: '考虑报名' },
+        { name: '昌芳', gender: '女', phone: '14600146001', grade: '二年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 8, course: '数学', level: '初级', createDate: '2025-12-07', creator: '管理员', follower: '张老师', lastFollowDate: '2025-12-08', followContent: '已缴费' },
+        { name: '马伟', gender: '男', phone: '14500145001', grade: '五年级', source: '老生推荐', status: '无效线索', statusColor: 'gray', age: 11, course: '英语', level: '中级', createDate: '2025-12-08', creator: '管理员', follower: '王老师', lastFollowDate: '2025-12-09', followContent: '无意愿' },
+        { name: '苗丽', gender: '女', phone: '14400144001', grade: '三年级', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 9, course: '编程', level: '初级', createDate: '2025-12-09', creator: '管理员', follower: '李老师', lastFollowDate: '2025-12-10', followContent: '咨询课程' },
+        { name: '凤浩', gender: '男', phone: '14300143001', grade: '初二', source: '电话咨询', status: '有意向', statusColor: 'green', age: 14, course: '物理', level: '高级', createDate: '2025-12-10', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-12-11', followContent: '询问安排' },
+        { name: '花云', gender: '女', phone: '14200142001', grade: '四年级', source: '微信推广', status: '待联系', statusColor: 'yellow', age: 10, course: '英语', level: '中级', createDate: '2025-12-11', creator: '管理员', follower: '张老师', lastFollowDate: '2025-12-11', followContent: '等待联系' },
+        { name: '方杰', gender: '男', phone: '14100141001', grade: '六年级', source: '线下活动', status: '已报名', statusColor: 'purple', age: 12, course: '数学', level: '高级', createDate: '2025-12-12', creator: '管理员', follower: '王老师', lastFollowDate: '2025-12-13', followContent: '报名成功' },
+        { name: '俞琳', gender: '女', phone: '14000140001', grade: '一年级', source: '老生推荐', status: '有意向', statusColor: 'green', age: 7, course: '美术', level: '初级', createDate: '2025-12-13', creator: '管理员', follower: '李老师', lastFollowDate: '2025-12-14', followContent: '感兴趣' },
+        { name: '任涛', gender: '男', phone: '13900139002', grade: '初三', source: '官网咨询', status: '已联系', statusColor: 'blue', age: 15, course: '物理', level: '高级', createDate: '2025-12-14', creator: '管理员', follower: '赵老师', lastFollowDate: '2025-12-15', followContent: '了解课程' }
+    ];
+
+    // 分页配置
+    const itemsPerPage = 5;
+    const totalItems = fakeLeadData.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    let currentPage = 1;
+
+    // 状态颜色映射 - Bootstrap badges
+    const statusColors = {
+        '已联系': 'badge bg-primary',
+        '有意向': 'badge bg-success',
+        '待联系': 'badge bg-warning text-dark',
+        '已报名': 'badge bg-info text-dark',
+        '无效线索': 'badge bg-secondary'
+    };
+
+    // 渲染表格行
+    function renderTableRows(page) {
+        const tbody = document.getElementById('lead-table-body');
+        const start = (page - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageData = fakeLeadData.slice(start, end);
+
+        tbody.innerHTML = pageData.map(item => `
+            <tr>
+                <td><input type="checkbox" class="form-check-input"/></td>
+                <td>${item.name}</td>
+                <td>${item.gender}</td>
+                <td>${item.phone}</td>
+                <td>${item.grade}</td>
+                <td>${item.source}</td>
+                <td><span class="${statusColors[item.status] || 'badge bg-secondary'}">${item.status}</span></td>
+                <td>${item.age}</td>
+                <td>${item.course}</td>
+                <td>${item.level}</td>
+                <td>${item.createDate}</td>
+                <td>${item.creator}</td>
+                <td>${item.follower}</td>
+                <td>${item.lastFollowDate}</td>
+                <td>${item.followContent}</td>
+                <td>
+                    <button class="btn btn-link btn-sm text-primary p-0 me-2">编辑</button>
+                    <button class="btn btn-link btn-sm text-danger p-0">删除</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // 渲染分页按钮
+    function renderPaginationButtons() {
+        const pageButtons = document.getElementById('page-buttons');
+        let buttonsHTML = '';
+
+        if (totalPages <= 7) {
+            // 如果总页数小于等于7，显示所有页码
+            for (let i = 1; i <= totalPages; i++) {
+                buttonsHTML += `<button class="btn btn-sm ${i === currentPage ? 'btn-primary-custom' : 'btn-outline-secondary'}" data-page="${i}">${i}</button>`;
+            }
+        } else {
+            // 显示第一页
+            buttonsHTML += `<button class="btn btn-sm ${currentPage === 1 ? 'btn-primary-custom' : 'btn-outline-secondary'}" data-page="1">1</button>`;
+
+            if (currentPage > 3) {
+                buttonsHTML += '<span class="px-2 align-self-center">...</span>';
+            }
+
+            // 显示当前页前后的页码
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+
+            for (let i = start; i <= end; i++) {
+                if (i !== 1 && i !== totalPages) {
+                    buttonsHTML += `<button class="btn btn-sm ${i === currentPage ? 'btn-primary-custom' : 'btn-outline-secondary'}" data-page="${i}">${i}</button>`;
+                }
+            }
+
+            if (currentPage < totalPages - 2) {
+                buttonsHTML += '<span class="px-2 align-self-center">...</span>';
+            }
+
+            // 显示最后一页
+            buttonsHTML += `<button class="btn btn-sm ${currentPage === totalPages ? 'btn-primary-custom' : 'btn-outline-secondary'}" data-page="${totalPages}">${totalPages}</button>`;
+        }
+
+        pageButtons.innerHTML = buttonsHTML;
+
+        // 添加页码按钮点击事件
+        pageButtons.querySelectorAll('button[data-page]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                goToPage(parseInt(this.dataset.page));
+            });
+        });
+    }
+
+    // 更新分页信息
+    function updatePaginationInfo() {
+        const start = (currentPage - 1) * itemsPerPage + 1;
+        const end = Math.min(currentPage * itemsPerPage, totalItems);
+        const infoElement = document.getElementById('pagination-info');
+        infoElement.textContent = `显示第 ${start} 到 ${end} 条，共 ${totalItems} 条记录`;
+    }
+
+    // 更新分页按钮状态
+    function updatePaginationButtons() {
+        const prevBtn = document.getElementById('prev-page-btn');
+        const nextBtn = document.getElementById('next-page-btn');
+
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage === totalPages;
+
+        // Bootstrap buttons handle disabled state automatically via disabled attribute
+    }
+
+    // 跳转到指定页面
+    function goToPage(page) {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        renderTableRows(currentPage);
+        renderPaginationButtons();
+        updatePaginationInfo();
+        updatePaginationButtons();
+    }
+
+    // 初始化导航栏
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (!document.querySelector('.navbar')) {
+            await initNavbar({}, 'body');
+        }
+        
+        // 初始化底部栏
+        initFooter({}, 'body');
+
+        // 初始化分页
+        renderTableRows(currentPage);
+        renderPaginationButtons();
+        updatePaginationInfo();
+        updatePaginationButtons();
+
+        // 上一页按钮
+        document.getElementById('prev-page-btn').addEventListener('click', function() {
+            if (currentPage > 1) {
+                goToPage(currentPage - 1);
+            }
+        });
+
+        // 下一页按钮
+        document.getElementById('next-page-btn').addEventListener('click', function() {
+            if (currentPage < totalPages) {
+                goToPage(currentPage + 1);
+            }
+        });
+    });
+</script>
+</body>
+</html>

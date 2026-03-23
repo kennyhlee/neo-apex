@@ -1,0 +1,19 @@
+/* Bootstrap Footer Customizations */
+footer.bg-light {
+    margin-top: auto;
+}
+
+/* Ensure footer is at bottom on pages with flex layout */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    footer.bg-light {
+        padding: 0.75rem 0 !important;
+        font-size: 0.75rem;
+    }
+}

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title data-i18n="homepage.title">员工仪表盘</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Iconify for additional icons -->
+    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="navbar.css">
+    <link rel="stylesheet" href="footer.css">
+    <style>
+        /* Bootstrap Homepage Customizations */
+        body {
+            background-color: #F5F7FA !important;
+            min-height: 100vh;
+        }
+        
+        /* Card hover effects */
+        .card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #dee2e6;
+        }
+        
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+        }
+        
+        /* Shortcut item hover */
+        .shortcut-item {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .shortcut-item:hover {
+            background-color: #f5f5f5;
+            transform: scale(1.05);
+        }
+        
+        /* Event hover effects */
+        .event {
+            transition: all 0.2s;
+        }
+        
+        .event:hover {
+            transform: translateX(4px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Calendar day columns - remove fixed min-height, let content determine height */
+        .col.border.rounded {
+            min-height: auto;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .col.border.rounded {
+                min-height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid px-3 py-4">
+        <!-- 数据卡片行 -->
+        <div class="row g-3 mb-4">
+             <!-- Clickable tile to fetch total students -->
+            <div class="col-md-4 js-count-tile" role="button" title="点击查询该租户学生总数">
+                <div class="card h-100 text-center p-4">
+                    <div class="data-title text-muted small mb-3">在校学生总数</div>
+                    <div id="student-count-value" class="data-value bg-primary text-white rounded d-inline-flex align-items-center justify-content-center" style="width: 90px; height: 50px; font-size: 28px; font-weight: bold; box-shadow: 0 3px 6px rgba(156, 106, 222, 0.2);">—</div>
+                    <div class="small text-muted mt-2">点击卡片以查询</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 text-center p-4">
+                    <div class="data-title text-muted small mb-3" data-i18n="homepage.attendanceRate">今日学生出勤率</div>
+                    <div class="data-value text-white rounded d-inline-flex align-items-center justify-content-center" style="background-color:#40A9FF; width: 90px; height: 50px; font-size: 28px; font-weight: bold; box-shadow: 0 3px 6px rgba(64, 169, 255, 0.2);">98%</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 text-center p-4">
+                    <div class="data-title text-muted small mb-3" data-i18n="homepage.totalCourses">今日课程总数</div>
+                    <div class="data-value text-white rounded d-inline-flex align-items-center justify-content-center" style="background-color:#52C41A; width: 90px; height: 50px; font-size: 28px; font-weight: bold; box-shadow: 0 3px 6px rgba(82, 196, 26, 0.2);">22</div>
+                </div>
+            </div>
+        </div>
+        <!-- 功能区行 -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex align-items-center border-bottom">
+                        <span class="iconify me-2" data-icon="mdi:lightning-bolt" style="color: #9C6ADE;"></span>
+                        <h6 class="mb-0 fw-bold" data-i18n="homepage.quickActions">快捷功能</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-4 text-center">
+                                <div class="shortcut-item p-3 rounded cursor-pointer">
+                                    <span class="iconify shortcut-icon d-block mb-2" data-icon="mdi:account-group" style="font-size: 32px; color: #9C6ADE;"></span>
+                                    <div class="shortcut-text small">学生管理</div>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="shortcut-item p-3 rounded cursor-pointer">
+                                    <span class="iconify shortcut-icon d-block mb-2" data-icon="mdi:calendar-edit" style="font-size: 32px; color: #9C6ADE;"></span>
+                                    <div class="shortcut-text small">课程安排</div>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="shortcut-item p-3 rounded cursor-pointer">
+                                    <span class="iconify shortcut-icon d-block mb-2" data-icon="mdi:clipboard-text" style="font-size: 32px; color: #9C6ADE;"></span>
+                                    <div class="shortcut-text small">考勤记录</div>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="shortcut-item p-3 rounded cursor-pointer">
+                                    <span class="iconify shortcut-icon d-block mb-2" data-icon="mdi:finance" style="font-size: 32px; color: #9C6ADE;"></span>
+                                    <div class="shortcut-text small">财务管理</div>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="shortcut-item p-3 rounded cursor-pointer">
+                                    <span class="iconify shortcut-icon d-block mb-2" data-icon="mdi:file-document" style="font-size: 32px; color: #9C6ADE;"></span>
+                                    <div class="shortcut-text small">成绩报表</div>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="shortcut-item p-3 rounded cursor-pointer">
+                                    <span class="iconify shortcut-icon d-block mb-2" data-icon="mdi:account-cog" style="font-size: 32px; color: #9C6ADE;"></span>
+                                    <div class="shortcut-text small">员工设置</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex align-items-center border-bottom">
+                        <span class="iconify me-2" data-icon="mdi:check-circle" style="color: #9C6ADE;"></span>
+                        <h6 class="mb-0 fw-bold">待办事项</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="todo-list">
+                            <div class="todo-item mb-3">
+                                <div class="progress mb-2" style="height: 8px;">
+                                    <div class="progress-bar" role="progressbar" style="width: 70%; background-color: #52C41A;" aria-valuenow="70" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <div class="todo-text small fw-medium mb-1">准备新学期课程计划</div>
+                                <div class="todo-date text-muted small d-flex align-items-center">
+                                    <i class="bi bi-clock me-1"></i>
+                                    截止：2023-10-30
+                                </div>
+                            </div>
+                            <div class="todo-item">
+                                <div class="progress mb-2" style="height: 8px;">
+                                    <div class="progress-bar" role="progressbar" style="width: 40%; background-color: #FF9A3C;" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <div class="todo-text small fw-medium mb-1">更新学生成绩系统</div>
+                                <div class="todo-date text-muted small d-flex align-items-center">
+                                    <i class="bi bi-clock me-1"></i>
+                                    截止：2023-10-28
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex align-items-center border-bottom">
+                        <span class="iconify me-2" data-icon="mdi:bell" style="color: #9C6ADE;"></span>
+                        <h6 class="mb-0 fw-bold">通知公告</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="announce-list">
+                            <div class="announcement-item mb-3 pb-3 border-bottom">
+                                <div class="announce-date text-muted small mb-2 d-flex align-items-center">
+                                    <i class="bi bi-calendar me-1"></i>
+                                    2023-10-20
+                                </div>
+                                <div class="announce-text small">关于开展教师培训会议的通知：定于10月25日下午2点在会议室召开...</div>
+                            </div>
+                            <div class="announcement-item">
+                                <div class="announce-date text-muted small mb-2 d-flex align-items-center">
+                                    <i class="bi bi-calendar me-1"></i>
+                                    2023-10-18
+                                </div>
+                                <div class="announce-text small">关于假期安排调整的通知：11月将适当延长假期，详细方案请关注邮件...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 周历区 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <span class="iconify me-2" data-icon="mdi:calendar-month" style="color: #9C6ADE; font-size: 20px;"></span>
+                    <h6 class="mb-0 fw-bold">周课表安排</h6>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="dateSelector" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="date-display">2023年10月23日 - 2023年10月29日</span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="dateSelector">
+                        <li><a class="dropdown-item date-option" href="#">2023年10月23日 - 2023年10月29日</a></li>
+                        <li><a class="dropdown-item date-option" href="#">2023年10月30日 - 2023年11月5日</a></li>
+                        <li><a class="dropdown-item date-option" href="#">2023年11月6日 - 2023年11月12日</a></li>
+                        <li><a class="dropdown-item date-option" href="#">2023年11月13日 - 2023年11月19日</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 mb-3">
+                    <div class="col text-center fw-bold py-2 bg-light border rounded">星期一</div>
+                    <div class="col text-center fw-bold py-2 bg-light border rounded">星期二</div>
+                    <div class="col text-center fw-bold py-2 bg-light border rounded">星期三</div>
+                    <div class="col text-center fw-bold py-2 bg-light border rounded">星期四</div>
+                    <div class="col text-center fw-bold py-2 bg-light border rounded">星期五</div>
+                    <div class="col text-center fw-bold py-2 bg-light border rounded">星期六</div>
+                    <div class="col text-center fw-bold py-2 bg-light border rounded">星期日</div>
+                </div>
+                <div class="row g-2">
+                    <div class="col border rounded p-2">
+                        <div class="event mb-2 p-2 rounded" style="background-color: #E6F7FF; border-left: 4px solid #40A9FF; cursor: pointer;">
+                            <div class="event-time small fw-medium text-primary">09:00-10:30</div>
+                            <div class="event-title small fw-bold">数学课程</div>
+                            <div class="event-location small text-muted">三年级2班</div>
+                        </div>
+                        <div class="event mb-2 p-2 rounded event-meeting" style="background-color: #FFF7E6; border-left: 4px solid #FF9A3C; cursor: pointer;">
+                            <div class="event-time small fw-medium" style="color: #FF9A3C;">14:00-15:30</div>
+                            <div class="event-title small fw-bold" style="color: #FF9A3C;">教研会议</div>
+                            <div class="event-location small text-muted">全体教师</div>
+                        </div>
+                    </div>
+                    <div class="col border rounded p-2">
+                        <div class="event mb-2 p-2 rounded" style="background-color: #E6F7FF; border-left: 4px solid #40A9FF; cursor: pointer;">
+                            <div class="event-time small fw-medium text-primary">10:00-11:30</div>
+                            <div class="event-title small fw-bold">英语课程</div>
+                            <div class="event-location small text-muted">四年级1班</div>
+                        </div>
+                        <div class="event mb-2 p-2 rounded event-activity" style="background-color: #F6FFED; border-left: 4px solid #52C41A; cursor: pointer;">
+                            <div class="event-time small fw-medium text-success">16:00-17:00</div>
+                            <div class="event-title small fw-bold text-success">社团活动</div>
+                            <div class="event-location small text-muted">艺术教室</div>
+                        </div>
+                    </div>
+                    <div class="col border rounded p-2">
+                        <div class="event mb-2 p-2 rounded event-activity" style="background-color: #F6FFED; border-left: 4px solid #52C41A; cursor: pointer;">
+                            <div class="event-time small fw-medium text-success">08:30-10:00</div>
+                            <div class="event-title small fw-bold text-success">科学实验</div>
+                            <div class="event-location small text-muted">实验室</div>
+                        </div>
+                    </div>
+                    <div class="col border rounded p-2">
+                        <div class="event mb-2 p-2 rounded" style="background-color: #E6F7FF; border-left: 4px solid #40A9FF; cursor: pointer;">
+                            <div class="event-time small fw-medium text-primary">09:30-11:00</div>
+                            <div class="event-title small fw-bold">语文课程</div>
+                            <div class="event-location small text-muted">三年级3班</div>
+                        </div>
+                        <div class="event mb-2 p-2 rounded event-meeting" style="background-color: #FFF7E6; border-left: 4px solid #FF9A3C; cursor: pointer;">
+                            <div class="event-time small fw-medium" style="color: #FF9A3C;">13:30-15:00</div>
+                            <div class="event-title small fw-bold" style="color: #FF9A3C;">班主任会议</div>
+                            <div class="event-location small text-muted">201会议室</div>
+                        </div>
+                    </div>
+                    <div class="col border rounded p-2">
+                        <div class="event mb-2 p-2 rounded" style="background-color: #E6F7FF; border-left: 4px solid #40A9FF; cursor: pointer;">
+                            <div class="event-time small fw-medium text-primary">08:30-10:00</div>
+                            <div class="event-title small fw-bold">物理课程</div>
+                            <div class="event-location small text-muted">五年级2班</div>
+                        </div>
+                        <div class="event mb-2 p-2 rounded event-activity" style="background-color: #F6FFED; border-left: 4px solid #52C41A; cursor: pointer;">
+                            <div class="event-time small fw-medium text-success">15:00-16:30</div>
+                            <div class="event-title small fw-bold text-success">运动会筹备</div>
+                            <div class="event-location small text-muted">体育场</div>
+                        </div>
+                    </div>
+                    <div class="col border rounded p-2">
+                        <div class="event mb-2 p-2 rounded event-activity" style="background-color: #F6FFED; border-left: 4px solid #52C41A; cursor: pointer;">
+                            <div class="event-time small fw-medium text-success">全天</div>
+                            <div class="event-title small fw-bold text-success">家长开放日</div>
+                            <div class="event-location small text-muted">校园开放</div>
+                        </div>
+                    </div>
+                    <div class="col border rounded p-2">
+                        <div class="event mb-2 p-2 rounded event-activity" style="background-color: #F6FFED; border-left: 4px solid #52C41A; cursor: pointer;">
+                            <div class="event-time small fw-medium text-success">10:00-12:00</div>
+                            <div class="event-title small fw-bold text-success">成果展示</div>
+                            <div class="event-location small text-muted">体育馆</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="event-legend d-flex justify-content-center gap-4 mt-3">
+                    <div class="legend-item d-flex align-items-center">
+                        <div class="legend-color rounded me-2" style="width: 12px; height: 12px; background-color: #40A9FF;"></div>
+                        <span class="small">课程</span>
+                    </div>
+                    <div class="legend-item d-flex align-items-center">
+                        <div class="legend-color rounded me-2" style="width: 12px; height: 12px; background-color: #FF9A3C;"></div>
+                        <span class="small">会议</span>
+                    </div>
+                    <div class="legend-item d-flex align-items-center">
+                        <div class="legend-color rounded me-2" style="width: 12px; height: 12px; background-color: #52C41A;"></div>
+                        <span class="small">活动</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Bootstrap 5 JS Bundle (includes Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <!-- Custom Scripts -->
+    <script src="i18n.js"></script>
+    <script src="navbar.js"></script>
+    <script src="common.js"></script>
+    <script src="footer.js"></script>
+    <script>
+        async function queryStudentTotal(tenant) {
+            const payload = { prompt: "How many students in total?", tenant };
+            const res = await fetch("http://localhost:8080/query", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error("请求失败: " + res.status);
+            const data = await res.json();
+            const rows = Array.isArray(data.data) ? data.data : [];
+            const total = rows.length && typeof rows[0].total_students !== "undefined" ? rows[0].total_students : null;
+            if (total === null) throw new Error("响应中未找到 total_students");
+            return total;
+        }
+
+        // 页面特定的JavaScript
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 初始化导航栏（插入到body开始处）
+            if (!document.querySelector('.navbar')) {
+                await initNavbar({}, 'body');
+            }
+            
+            // 日历事件点击效果
+            const events = document.querySelectorAll('.event');
+            events.forEach(event => {
+                event.addEventListener('click', function() {
+                    alert('您点击了一个日程事件');
+                    // 这里可以添加查看详情或编辑事件的功能
+                });
+            });
+            
+            // 日期选择器功能
+            const dateOptions = document.querySelectorAll('.date-option');
+            const dateDisplay = document.querySelector('.date-display');
+            dateOptions.forEach(option => {
+                option.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (dateDisplay) {
+                        dateDisplay.textContent = this.textContent;
+                    }
+                    // Close dropdown
+                    const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('dateSelector'));
+                    if (dropdown) {
+                        dropdown.hide();
+                    }
+                });
+            });
+            
+            // 快捷功能点击效果
+            const shortcutItems = document.querySelectorAll('.shortcut-item');
+            shortcutItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const text = this.querySelector('.shortcut-text').textContent;
+                    alert('您点击了：' + text);
+                    // 这里可以添加导航到相应页面的功能
+                });
+                item.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#f5f5f5';
+                    this.style.transform = 'scale(1.05)';
+                });
+                item.addEventListener('mouseleave', function() {
+                    this.style.backgroundColor = '';
+                    this.style.transform = '';
+                });
+            });
+            
+            // total student count
+            const tile = document.querySelector(".js-count-tile");
+            const valueEl = document.getElementById("student-count-value");
+
+            const getCurrentTenantId = () => {
+                const navbarCurrent = document.querySelector('.current-site-text');
+                const fromNavbar = navbarCurrent?.getAttribute('data-site-id') || navbarCurrent?.textContent?.trim();
+                return (fromNavbar && fromNavbar.trim()) || "acmechildcenter";
+            };
+
+            const loadStudentTotal = async () => {
+                const tenant = getCurrentTenantId();
+                const original = valueEl.textContent;
+                valueEl.textContent = "…";
+                tile?.classList.add("disabled");
+                try {
+                    const total = await queryStudentTotal(tenant);
+                    valueEl.textContent = String(total);
+                } catch (err) {
+                    console.error("Failed to fetch student total", err);
+                    valueEl.textContent = original;
+                } finally {
+                    tile?.classList.remove("disabled");
+                }
+            };
+
+            tile?.addEventListener("click", async () => {
+                await loadStudentTotal();
+            });
+
+            // Load on page ready
+            await loadStudentTotal();
+
+            // 初始化底部栏
+            initFooter({}, 'body');
+        });
+    </script>
+</body>
+</html>

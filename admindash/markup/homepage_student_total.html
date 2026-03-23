@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>学生总数查询</title>
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <!-- Iconify for additional icons -->
+  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+
+  <!-- Reuse same shared styles if present -->
+  <link rel="stylesheet" href="navbar.css">
+  <link rel="stylesheet" href="footer.css">
+
+  <style>
+    body { background-color: #F5F7FA !important; min-height: 100vh; }
+    .card { transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #dee2e6; }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important; }
+    .shortcut-item { transition: all 0.2s; cursor: pointer; }
+    .shortcut-item:hover { background-color: #f5f5f5; transform: scale(1.05); }
+    .col-md-4[role="button"] { cursor: pointer; }
+  </style>
+
+  <script>
+    async function queryStudentTotal(tenant) {
+      const payload = { prompt: "How many students in total?", tenant };
+      const res = await fetch("http://localhost:8080/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error("请求失败: " + res.status);
+      const data = await res.json();
+      const rows = Array.isArray(data.data) ? data.data : [];
+      const total = rows.length && typeof rows[0].total_students !== "undefined" ? rows[0].total_students : null;
+      if (total === null) throw new Error("响应中未找到 total_students");
+      return total;
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      try { if (!document.querySelector(".navbar")) { await initNavbar?.({}, "body"); } } catch (e) {}
+      try { initFooter?.({}, "body"); } catch (e) {}
+
+      const tile = document.querySelector(".js-count-tile");
+      const valueEl = document.getElementById("student-count-value");
+      const tenantInput = document.getElementById("tenant-input");
+
+      tile?.addEventListener("click", async () => {
+        const tenant = (tenantInput.value || "").trim() || "acme";
+        const original = valueEl.textContent;
+        valueEl.textContent = "…";
+        tile.classList.add("disabled");
+        try {
+          const total = await queryStudentTotal(tenant);
+          valueEl.textContent = String(total);
+        } catch (err) {
+          console.error(err);
+          alert("获取学生总数失败，请检查后端是否运行在 http://localhost:8080 以及租户是否正确。");
+          valueEl.textContent = original;
+        } finally {
+          tile.classList.remove("disabled");
+        }
+      });
+    });
+  </script>
+</head>
+<body>
+  <div class="container-fluid px-3 py-4">
+    <!-- Tenant input -->
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-lg-6">
+        <label for="tenant-input" class="form-label">租户ID（即 LanceDB 表名）</label>
+        <input type="text" id="tenant-input" class="form-control" placeholder="例如：acme" value="acme">
+        <div class="form-text">点击下方卡片将根据此租户ID查询学生总数</div>
+      </div>
+    </div>
+
+    <!-- 数据卡片行 -->
+    <div class="row g-3 mb-4">
+      <!-- Clickable tile to fetch total students -->
+      <div class="col-md-4 js-count-tile" role="button" title="点击查询该租户学生总数">
+        <div class="card h-100 text-center p-4">
+          <div class="data-title text-muted small mb-3">在校学生总数</div>
+          <div id="student-count-value" class="data-value bg-primary text-white rounded d-inline-flex align-items-center justify-content-center" style="width: 90px; height: 50px; font-size: 28px; font-weight: bold; box-shadow: 0 3px 6px rgba(156, 106, 222, 0.2);">—</div>
+          <div class="small text-muted mt-2">点击卡片以查询</div>
+        </div>
+      </div>
+
+      <!-- Keep visual parity with original homepage three-column layout -->
+      <div class="col-md-4">
+        <div class="card h-100 text-center p-4">
+          <div class="data-title text-muted small mb-3">今日学生出勤率</div>
+          <div class="data-value text-white rounded d-inline-flex align-items-center justify-content-center" style="background-color:#40A9FF; width: 90px; height: 50px; font-size: 28px; font-weight: bold; box-shadow: 0 3px 6px rgba(64, 169, 255, 0.2);">98%</div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card h-100 text-center p-4">
+          <div class="data-title text-muted small mb-3">今日课程总数</div>
+          <div class="data-value text-white rounded d-inline-flex align-items-center justify-content-center" style="background-color:#52C41A; width: 90px; height: 50px; font-size: 28px; font-weight: bold; box-shadow: 0 3px 6px rgba(82, 196, 26, 0.2);">22</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 JS Bundle (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+  <!-- Optional shared JS (no-ops if not present) -->
+  <script src="i18n.js"></script>
+  <script src="navbar.js"></script>
+  <script src="common.js"></script>
+  <script src="footer.js"></script>
+</body>
+</html>

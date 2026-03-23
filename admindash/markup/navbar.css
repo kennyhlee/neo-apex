@@ -1,0 +1,117 @@
+/* Bootstrap Navbar Customizations */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Add padding to right side to ensure nested dropdowns have space */
+.navbar .container-fluid {
+    padding-right: 2rem;
+}
+
+@media (min-width: 992px) {
+    .navbar .container-fluid {
+        padding-right: 3rem;
+    }
+}
+
+/* Add margin to right-side components to create space for nested dropdowns */
+.navbar .d-flex.align-items-center.gap-3 {
+    margin-right: 1rem;
+}
+
+@media (min-width: 992px) {
+    .navbar .d-flex.align-items-center.gap-3 {
+        margin-right: 1.5rem;
+    }
+}
+
+.navbar-brand img {
+    height: 32px;
+    width: auto;
+    object-fit: contain;
+}
+
+/* Active nav link styling */
+.navbar-nav .nav-link.active {
+    background-color: #eff6ff;
+    color: #2563eb !important;
+    font-weight: 600;
+}
+
+.navbar-nav .nav-link:hover {
+    background-color: #f3f4f6;
+}
+
+/* Avatar styling */
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #9C6ADE;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+/* Selected site display */
+.selected-site-display {
+    font-size: 14px;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+/* User menu dropdown */
+.user-menu {
+    cursor: pointer;
+}
+
+/* Nested dropdown (site selector) - Bootstrap 5 support */
+.dropend .dropdown-menu {
+    top: 0;
+    left: 100%;
+    margin-top: 0;
+    margin-left: 0.125rem;
+}
+
+/* Site dropdown items */
+.site-dropdown .dropdown-item:hover {
+    background-color: #f5f7fa;
+}
+
+/* Language dropdown items */
+.lang-dropdown .dropdown-item:hover {
+    background-color: #f5f7fa;
+}
+
+/* Active language option */
+.lang-option.active {
+    background-color: #eff6ff;
+    color: #2563eb;
+    font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 991.98px) {
+    .selected-site-display {
+        display: none;
+    }
+    
+    .navbar-nav {
+        margin-top: 1rem;
+    }
+    
+    .navbar-nav .nav-link {
+        padding: 0.5rem 1rem;
+    }
+}
+
+/* Ensure dropdowns work properly on mobile */
+@media (max-width: 991.98px) {
+    .dropend .dropdown-menu {
+        position: static !important;
+        margin-left: 1rem;
+        margin-top: 0.25rem;
+    }
+}

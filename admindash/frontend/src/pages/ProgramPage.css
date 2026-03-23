@@ -1,0 +1,13 @@
+.placeholder-page {
+  animation: fadeIn 0.3s ease;
+}
+
+.placeholder-page h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.placeholder-page p {
+  color: var(--text-tertiary);
+}

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title data-i18n="students.title">学生管理系统</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Iconify for additional icons -->
+    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="navbar.css">
+    <link rel="stylesheet" href="footer.css">
+    <link rel="stylesheet" href="student-modal.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        :root {
+            --primary-color: #ff6b00;
+        }
+        .btn-primary-custom {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+        .btn-primary-custom:hover {
+            background-color: #e55a00;
+            border-color: #e55a00;
+            color: white;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(255, 107, 0, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid px-4 py-4">
+        <div class="row g-4">
+            <!-- 筛选区域卡片 -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium" data-i18n="students.searchName">学生姓名</label>
+                                <input class="form-control" placeholder="输入学生姓名" type="text" id="search-name" data-i18n-attr="placeholder:students.searchNamePlaceholder"/>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium" data-i18n="students.searchId">学号</label>
+                                <input class="form-control" placeholder="输入学号" type="text" id="search-student-id" data-i18n-attr="placeholder:students.searchIdPlaceholder"/>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium" data-i18n="students.searchGrade">年级</label>
+                                <select class="form-select" id="search-grade">
+                                    <option value="" data-i18n="students.allGrades">全部年级</option>
+                                    <option value="一年级" data-i18n="grade.grade1">一年级</option>
+                                    <option value="二年级" data-i18n="grade.grade2">二年级</option>
+                                    <option value="三年级" data-i18n="grade.grade3">三年级</option>
+                                    <option value="四年级" data-i18n="grade.grade4">四年级</option>
+                                    <option value="五年级" data-i18n="grade.grade5">五年级</option>
+                                    <option value="六年级" data-i18n="grade.grade6">六年级</option>
+                                    <option value="初一" data-i18n="grade.middle1">初一</option>
+                                    <option value="初二" data-i18n="grade.middle2">初二</option>
+                                    <option value="初三" data-i18n="grade.middle3">初三</option>
+                                    <option value="高一" data-i18n="grade.high1">高一</option>
+                                    <option value="高二" data-i18n="grade.high2">高二</option>
+                                    <option value="高三" data-i18n="grade.high3">高三</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium" data-i18n="students.searchSchool">在读学校</label>
+                                <input class="form-control" placeholder="输入学校名称" type="text" id="search-school" data-i18n-attr="placeholder:students.searchSchoolPlaceholder"/>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium" data-i18n="students.searchStatus">学生状态</label>
+                                <select class="form-select" id="search-status">
+                                    <option value="" data-i18n="students.allStatus">全部状态</option>
+                                    <option value="正常上课中" data-i18n="students.status.normal">正常上课中</option>
+                                    <option value="请假中" data-i18n="students.status.leave">请假中</option>
+                                    <option value="休学" data-i18n="students.status.suspended">休学</option>
+                                    <option value="已毕业" data-i18n="students.status.graduated">已毕业</option>
+                                    <option value="已退学" data-i18n="students.status.dropped">已退学</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium" data-i18n="students.searchEnrollmentDate">入学日期</label>
+                                <input class="form-control" type="date" id="search-enrollment-date"/>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium" data-i18n="students.searchPhone">联系电话</label>
+                                <input class="form-control" placeholder="输入联系电话" type="text" id="search-phone" data-i18n-attr="placeholder:students.searchPhonePlaceholder"/>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-medium" data-i18n="students.searchTeacher">班主任</label>
+                                <select class="form-select" id="search-teacher">
+                                    <option value="" data-i18n="students.allTeachers">全部班主任</option>
+                                    <option value="张老师">张老师</option>
+                                    <option value="李老师">李老师</option>
+                                    <option value="王老师">王老师</option>
+                                    <option value="赵老师">赵老师</option>
+                                    <option value="陈老师">陈老师</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- 搜索按钮区域 -->
+                        <div class="d-flex justify-content-end mt-3 pt-3 border-top">
+                            <button class="btn btn-primary-custom btn-sm d-flex align-items-center gap-2" id="search-btn">
+                                <span class="iconify" data-icon="mdi:magnify" style="font-size: 18px;"></span>
+                                <span data-i18n="students.search">搜索</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 功能按钮区域 -->
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary-custom btn-sm">
+                            <span data-i18n="students.batchExport">批量导出</span>
+                        </button>
+                        <button class="btn btn-primary-custom btn-sm">
+                            <span data-i18n="students.batchActions">批量操作</span>
+                        </button>
+                        <button class="btn btn-primary-custom btn-sm">
+                            <span data-i18n="students.addStudent">添加学生</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- 数据表格区域 -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-light mb-0" id="student-list-table">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-2 text-start" style="width: 40px;"><input type="checkbox" class="form-check-input" id="select-all"/></th>
+                                        <th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.name">学生姓名</th>
+                                        <th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.studentId">学号</th>
+                                        <th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.gender">性别</th>
+                                        <th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.grade">年级/班级</th>
+                                        <th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.school">在读学校</th>
+                                        <th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.phone">联系电话</th>
+                                        <th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.parent">家长姓名</th>
+                                        <th class="px-4 py-2 text-start small fw-medium text-muted text-uppercase" scope="col" data-i18n="students.status">状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="student-table-body">
+                                    <!-- 表格数据将通过JavaScript动态加载 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 分页控件 -->
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center py-3">
+                    <div class="text-muted small" id="pagination-info">
+                        显示第 1 到 5 条，共 60 条记录
+                    </div>
+                    <div class="d-flex align-items-center gap-2" id="pagination-controls">
+                        <button class="btn btn-outline-secondary btn-sm" id="prev-page-btn" disabled>
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <div id="page-buttons" class="d-flex gap-1"></div>
+                        <button class="btn btn-outline-secondary btn-sm" id="next-page-btn">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ECharts (for student modal) -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Bootstrap 5 JS Bundle (includes Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <!-- Shared Student Data -->
+    <script src="student-data.js"></script>
+    <!-- Custom Scripts -->
+    <script src="i18n.js"></script>
+    <script src="navbar.js"></script>
+    <script src="common.js"></script>
+    <script src="footer.js"></script>
+    <script src="student-modal.js"></script>
+    <script>
+    const itemsPerPage = 10;
+    let currentPage = 1;
+    let totalRecords = 0;
+    let currentData = [];
+
+    const statusColors = {
+        '正常上课中': 'badge bg-success',
+        '请假中': 'badge bg-warning text-dark',
+        '休学': 'badge bg-info text-dark',
+        '已毕业': 'badge bg-primary',
+        '已退学': 'badge bg-danger'
+    };
+
+    if (typeof window.fetchStudentsFromApi !== 'function') {
+        const API_BASE = 'http://localhost:8080';
+        window.fetchStudentsFromApi = async ({ tenant, page = 1, pageSize = 10 }) => {
+            const params = new URLSearchParams({ tenant, limit: String(pageSize), offset: String((page - 1) * pageSize) });
+            const resp = await fetch(`${API_BASE}/students?${params.toString()}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        };
+    }
+
+    const getCurrentTenantId = () => {
+        const navbarCurrent = document.querySelector('.current-site-text');
+        const fromNavbar = navbarCurrent?.getAttribute('data-site-id') || navbarCurrent?.textContent?.trim();
+        return (fromNavbar && fromNavbar.trim()) || 'acmechildcenter';
+    };
+
+    function renderTableRows(data) {
+        const tbody = document.getElementById('student-table-body');
+        if (!data.length) {
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = data.map(student => {
+            const statusClass = statusColors[student.enrollment_status] || 'badge bg-secondary';
+            const name = student.student_name || `${student.student_first_name || ''} ${student.student_last_name || ''}`.trim();
+            const avatarChar = name ? name.charAt(0) : '?';
+            const guardianName = [student.guardian1_first_name, student.guardian1_last_name].filter(Boolean).join(' ') || '';
+            return `
+                <tr>
+                    <td class="px-4 py-3 text-start"><input type="checkbox" class="form-check-input"/></td>
+                    <td class="px-4 py-3 text-start">
+                        <div class="d-flex align-items-center">
+                            <div class="avatar rounded-circle bg-info bg-opacity-25 text-info d-flex align-items-center justify-content-center me-2" style="width:32px;height:32px;">${avatarChar}</div>
+                            <div>
+                                <div class="fw-semibold">${name || '-'}</div>
+                                <div class="text-muted small">${student.student_id || ''}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-start">${student.student_id || '-'}</td>
+                    <td class="px-4 py-3 text-start">${student.student_gender || '-'}</td>
+                    <td class="px-4 py-3 text-start">${student.student_grade_level || '-'}</td>
+                    <td class="px-4 py-3 text-start">${student.school_id || '-'}</td>
+                    <td class="px-4 py-3 text-start">${student.guardian1_phone || '-'}</td>
+                    <td class="px-4 py-3 text-start">${guardianName || '-'}</td>
+                    <td class="px-4 py-3 text-start"><span class="${statusClass}">${student.enrollment_status || '未设置'}</span></td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderPagination() {
+        const totalPages = Math.max(1, Math.ceil(totalRecords / itemsPerPage));
+        const pageButtons = document.getElementById('page-buttons');
+        const paginationInfo = document.getElementById('pagination-info');
+
+        pageButtons.innerHTML = '';
+
+        const maxButtons = 5;
+        let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+        let end = Math.min(totalPages, start + maxButtons - 1);
+        if (end - start < maxButtons - 1) {
+            start = Math.max(1, end - maxButtons + 1);
+        }
+
+        for (let i = start; i <= end; i++) {
+            const btn = document.createElement('button');
+            btn.className = `btn btn-outline-secondary btn-sm${i === currentPage ? ' active' : ''}`;
+            btn.textContent = i;
+            btn.addEventListener('click', () => loadStudents(i));
+            pageButtons.appendChild(btn);
+        }
+
+        const startRecord = totalRecords === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+        const endRecord = Math.min(currentPage * itemsPerPage, totalRecords);
+        paginationInfo.textContent = `显示第 ${startRecord} 到 ${endRecord} 条，共 ${totalRecords} 条记录`;
+
+        document.getElementById('prev-page-btn').disabled = currentPage <= 1;
+        document.getElementById('next-page-btn').disabled = currentPage >= totalPages;
+    }
+
+    async function loadStudents(page = 1) {
+        const tenant = getCurrentTenantId();
+        const info = document.getElementById('pagination-info');
+        info.textContent = '加载中...';
+        try {
+            const res = await window.fetchStudentsFromApi({ tenant, page, pageSize: itemsPerPage });
+            currentPage = page;
+            totalRecords = res.total || 0;
+            currentData = res.data || [];
+            renderTableRows(currentData);
+            renderPagination();
+        } catch (err) {
+            console.error('Failed to load students', err);
+            document.getElementById('student-table-body').innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4">加载失败，请检查后端 http://localhost:8080 是否运行</td></tr>`;
+            info.textContent = '加载失败';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (window.i18n && window.i18n.init) {
+            window.i18n.init();
+        }
+
+        await initNavbar({ currentPage: 'students.html' });
+        initFooter({}, 'body');
+
+        document.getElementById('search-btn').addEventListener('click', () => loadStudents(1));
+
+        document.getElementById('select-all').addEventListener('change', function() {
+            document.querySelectorAll('#student-table-body input[type="checkbox"]')
+                .forEach(cb => { cb.checked = this.checked; });
+        });
+
+        document.getElementById('prev-page-btn').addEventListener('click', () => {
+            if (currentPage > 1) loadStudents(currentPage - 1);
+        });
+
+        document.getElementById('next-page-btn').addEventListener('click', () => {
+            const totalPages = Math.max(1, Math.ceil(totalRecords / itemsPerPage));
+            if (currentPage < totalPages) loadStudents(currentPage + 1);
+        });
+
+        document.addEventListener('siteChanged', () => loadStudents(1));
+
+        loadStudents(1);
+    });
+    </script>
+</body>
+</html>
+
