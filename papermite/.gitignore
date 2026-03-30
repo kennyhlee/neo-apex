@@ -46,3 +46,4 @@ lancedb/
 
 # Claude Code
 .claude/
+.worktrees

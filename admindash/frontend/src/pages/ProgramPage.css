@@ -3,8 +3,10 @@
 }
 
 .placeholder-page h1 {
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #1A202C;
   margin-bottom: 0.75rem;
 }
 

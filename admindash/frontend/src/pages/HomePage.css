@@ -3,8 +3,10 @@
 }
 
 .home-page h1 {
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #1A202C;
   margin-bottom: 1.25rem;
 }
 
@@ -16,10 +18,8 @@
 }
 
 .stat-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-glass);
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
   padding: 1.5rem;
@@ -40,13 +40,13 @@
   height: 44px;
   font-size: 1.6rem;
   font-weight: 700;
-  color: var(--text-inverse);
+  color: var(--text-primary);
   border-radius: var(--radius-sm);
 }
 
-.stat-value.purple { background: linear-gradient(135deg, #667EEA, #764BA2); }
-.stat-value.blue { background: linear-gradient(135deg, #60A5FA, #3B82F6); }
-.stat-value.green { background: linear-gradient(135deg, #34D399, #10B981); }
+.stat-value.purple { background: #E6F1FB; color: #185FA5; }
+.stat-value.blue { background: #EAF3DE; color: #3B6D11; }
+.stat-value.green { background: #FAEEDA; color: #854F0B; }
 
 .home-grid {
   display: grid;
@@ -56,10 +56,8 @@
 }
 
 .home-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-glass);
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
 }
@@ -117,7 +115,7 @@
 .todo-bar {
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
+  background: #EDF2F7;
   margin-bottom: 0.4rem;
   overflow: hidden;
 }
@@ -160,10 +158,8 @@
 }
 
 .schedule-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-glass);
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
 }
@@ -197,7 +193,7 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
   padding: 0.4rem;
-  background: var(--bg-elevated);
+  background: #F1F5F9;
   border-radius: var(--radius-sm);
 }
 
@@ -217,22 +213,22 @@
 }
 
 .schedule-event.course {
-  background: rgba(96, 165, 250, 0.15);
-  border-color: #60A5FA;
+  background: rgba(55, 138, 221, 0.08);
+  border-color: #378ADD;
 }
 
 .schedule-event.meeting {
-  background: rgba(251, 191, 36, 0.15);
-  border-color: #FBBF24;
+  background: rgba(239, 159, 39, 0.1);
+  border-color: #EF9F27;
 }
 
 .schedule-event.activity {
-  background: rgba(52, 211, 153, 0.15);
-  border-color: #34D399;
+  background: rgba(99, 153, 34, 0.1);
+  border-color: #639922;
 }
 
 .schedule-event-time {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
@@ -242,7 +238,7 @@
 }
 
 .schedule-event-location {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   color: var(--text-tertiary);
 }
 

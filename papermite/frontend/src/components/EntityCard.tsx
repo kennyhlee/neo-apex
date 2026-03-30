@@ -10,15 +10,15 @@ interface Props {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  TENANT: "#0969DA",
-  PROGRAM: "#1A7F37",
-  STUDENT: "#CF8A2E",
-  GUARDIAN: "#8250DF",
-  ENROLLMENT: "#BF3989",
-  REGAPP: "#CF222E",
-  EMERGENCY_CONTACT: "#BC4C00",
-  MEDICAL_CONTACT: "#0550AE",
-  ATTENDANCE: "#2DA44E",
+  TENANT: "#378ADD",
+  PROGRAM: "#639922",
+  STUDENT: "#EF9F27",
+  GUARDIAN: "#D4537E",
+  ENROLLMENT: "#993556",
+  REGAPP: "#854F0B",
+  EMERGENCY_CONTACT: "#3B6D11",
+  MEDICAL_CONTACT: "#185FA5",
+  ATTENDANCE: "#639922",
 };
 
 export default function EntityCard({ entity, index, onUpdate }: Props) {

@@ -37,7 +37,7 @@ export default function AddFieldForm({ onAdd }: Props) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         autoFocus
-        style={{ fontFamily: "var(--font-mono)", fontSize: "13px" }}
+        style={{ fontFamily: "var(--font-sans)", fontSize: "14px" }}
       />
       <input
         className="input"

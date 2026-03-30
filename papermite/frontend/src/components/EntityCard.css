@@ -9,7 +9,7 @@
   gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
 }
 
 .entity-card__type-bar {
@@ -20,16 +20,15 @@
 }
 
 .entity-card__type {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: 0.5px;
 }
 
 .entity-card__count {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   color: var(--text-tertiary);
   margin-left: auto;
 }
@@ -44,10 +43,10 @@
 }
 
 .entity-card__table thead th {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 1.5px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-tertiary);
   text-align: left;
@@ -61,7 +60,7 @@
 }
 
 .field-row td {
-  padding: 8px 20px;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle;
 }
@@ -75,15 +74,15 @@
 }
 
 .field-row__name code {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   color: var(--text-secondary);
   background: none;
   padding: 0;
 }
 
 .field-row__display {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-primary);
   cursor: pointer;
   padding: 4px 0;
@@ -97,10 +96,9 @@
 
 .field-row__input {
   padding: 4px 8px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
-/* Required toggle */
 .field-row__required {
   width: 64px;
 }
@@ -147,7 +145,6 @@
   transform: translateX(14px);
 }
 
-/* Data type dropdown */
 .field-row__data-type {
   width: 130px;
 }
@@ -159,9 +156,9 @@
 }
 
 .field-row__type-select {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 3px 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 4px 8px;
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -175,18 +172,17 @@
 }
 
 .field-row__options-btn {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 2px 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 2px 8px;
   white-space: nowrap;
 }
 
-/* Locked base field styles */
 .field-row__type-locked {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   color: var(--text-tertiary);
-  padding: 3px 6px;
+  padding: 4px 8px;
 }
 
 .field-row__toggle--locked {
@@ -198,11 +194,10 @@
   pointer-events: none;
 }
 
-/* Options editor (expanded row) */
 .field-row__options-row td {
   padding: 0 20px 12px 20px;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
 }
 
 .options-editor {
@@ -220,8 +215,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -240,21 +235,21 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 2px 8px;
-  background: var(--accent-muted);
-  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 3px 10px;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-text);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--accent);
+  border: 1px solid rgba(55, 138, 221, 0.2);
 }
 
 .options-editor__tag-remove {
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--tint-blue-text);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   padding: 0 2px;
   opacity: 0.6;
@@ -271,9 +266,9 @@
 }
 
 .options-editor__input {
-  font-size: 11px;
-  padding: 3px 8px;
-  width: 160px;
+  font-size: 13px;
+  padding: 4px 10px;
+  width: 180px;
 }
 
 .entity-card__footer {

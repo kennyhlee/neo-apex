@@ -1,8 +1,6 @@
 .data-table-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-glass);
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
   overflow: hidden;
@@ -25,11 +23,11 @@
 .data-table th {
   padding: 0.7rem 1rem;
   text-align: left;
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
   white-space: nowrap;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -39,11 +37,11 @@
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary);
   vertical-align: middle;
-  background: var(--bg-card);
+  background: #FFFFFF;
 }
 
 .data-table tbody tr:hover td {
-  background: var(--accent-glow);
+  background: rgba(55, 138, 221, 0.06);
 }
 
 .data-table tbody tr:last-child td {
@@ -101,7 +99,7 @@
 }
 
 .data-table-pagination-controls button.active {
-  background: linear-gradient(135deg, #667EEA, #764BA2);
+  background: #378ADD;
   color: var(--text-inverse);
   border-color: transparent;
 }

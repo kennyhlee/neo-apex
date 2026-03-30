@@ -40,7 +40,7 @@ function AccessDenied({ user, onLogout }: { user: TestUser; onLogout: () => void
           </div>
           <h2
             style={{
-              fontFamily: "var(--font-mono)",
+              fontFamily: "var(--font-sans)",
               fontSize: "20px",
               fontWeight: 400,
               color: "var(--text-primary)",
@@ -60,7 +60,7 @@ function AccessDenied({ user, onLogout }: { user: TestUser; onLogout: () => void
           </p>
           <p
             style={{
-              fontFamily: "var(--font-mono)",
+              fontFamily: "var(--font-sans)",
               fontSize: "12px",
               color: "var(--text-tertiary)",
               marginBottom: "24px",

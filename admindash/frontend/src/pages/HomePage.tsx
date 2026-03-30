@@ -42,7 +42,7 @@ export default function HomePage() {
 
   return (
     <div className="home-page">
-      <h1 className="gradient-text">{t('homepage.title')}</h1>
+      <h1>{t('homepage.title')}</h1>
 
       <div className="home-stats">
         <div className="stat-card">

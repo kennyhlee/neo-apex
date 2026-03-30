@@ -56,7 +56,7 @@ export default function Navbar({ currentTenant, onTenantChange }: NavbarProps) {
             src="https://www.acmeschool.com/uploads/2/7/1/4/27147223/1418317113.png"
             alt="Logo"
           />
-          <span className="navbar-brand-text gradient-text">{t('nav.systemName')}</span>
+          <span className="navbar-brand-text" style={{ color: '#378ADD' }}>{t('nav.systemName')}</span>
         </a>
 
         <ul className="navbar-nav">

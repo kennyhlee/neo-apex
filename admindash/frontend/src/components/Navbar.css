@@ -1,8 +1,6 @@
 .navbar {
-  background: rgba(15, 10, 26, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border-glass);
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E8F0;
   padding: 0 1.5rem;
   height: 56px;
   display: flex;
@@ -59,7 +57,7 @@
 }
 
 .navbar-nav a:hover {
-  background: var(--bg-glass);
+  background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 
@@ -109,7 +107,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667EEA, #764BA2);
+  background: #378ADD;
   color: var(--text-inverse);
   display: flex;
   align-items: center;

@@ -3,8 +3,10 @@
 }
 
 .students-page h1 {
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #1A202C;
   margin-bottom: 1rem;
 }
 
@@ -21,15 +23,15 @@
   padding: 0.45rem 0.85rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, #667EEA, #764BA2);
+  background: #378ADD;
   color: var(--text-inverse);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .students-toolbar button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
 }
 
 .student-name-cell {
