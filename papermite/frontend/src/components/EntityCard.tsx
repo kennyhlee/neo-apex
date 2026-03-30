@@ -130,7 +130,10 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
             </tr>
           </thead>
           <tbody>
-            {entity.field_mappings.map((mapping: FieldMapping) => (
+            {[...entity.field_mappings].sort((a, b) => {
+              if (a.source === b.source) return 0;
+              return a.source === "base_model" ? -1 : 1;
+            }).map((mapping: FieldMapping) => (
               <FieldRow
                 key={mapping.field_name}
                 fieldName={mapping.field_name}

@@ -168,7 +168,7 @@ export default function FieldRow({
                 ))}
               </select>
             )}
-            {fieldType === "selection" && !isBase && (
+            {fieldType === "selection" && (
               <button
                 className="btn btn--sm field-row__options-btn"
                 onClick={() => setShowOptions(!showOptions)}
