@@ -83,8 +83,10 @@ def _extract_options(value: Any) -> tuple[list[str], bool]:
     return [], False
 
 
-# System fields that are derived from context, not part of the data model
-SYSTEM_FIELDS = {"tenant_id", "entity_type", "custom_fields"}
+# System fields that are derived from context, not part of the data model.
+# Includes nested entity fields on RegistrationApplication — these are
+# extracted as separate entity types and shouldn't appear as editable fields.
+SYSTEM_FIELDS = {"tenant_id", "entity_type", "custom_fields", "student", "family", "contacts"}
 
 
 def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any], list[FieldMapping]]:

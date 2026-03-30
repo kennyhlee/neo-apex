@@ -40,6 +40,7 @@
 .entity-card__table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .entity-card__table thead th {
@@ -55,9 +56,12 @@
   background: var(--bg-tertiary);
 }
 
-.entity-card__table thead th:last-child {
-  width: 48px;
-}
+/* Column widths for fixed table layout: Field | Value | Data Type | Source | Required | Actions */
+.entity-card__table thead th:nth-child(1) { width: 20%; }
+.entity-card__table thead th:nth-child(3) { width: 130px; }
+.entity-card__table thead th:nth-child(4) { width: 80px; }
+.entity-card__table thead th:nth-child(5) { width: 80px; }
+.entity-card__table thead th:last-child { width: 48px; }
 
 .field-row td {
   padding: 10px 20px;
@@ -81,6 +85,10 @@
   padding: 0;
 }
 
+.field-row__value {
+  overflow: hidden;
+}
+
 .field-row__display {
   font-size: 14px;
   color: var(--text-primary);
@@ -88,6 +96,10 @@
   padding: 4px 0;
   border-bottom: 1px dashed transparent;
   transition: border-color 0.2s;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field-row__display:hover {
@@ -97,6 +109,8 @@
 .field-row__input {
   padding: 4px 8px;
   font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .field-row__required {
