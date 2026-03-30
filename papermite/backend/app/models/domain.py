@@ -1,3 +1,5 @@
+from enum import Enum
+
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List, Dict, Any
 import datetime as _dt
@@ -19,6 +21,14 @@ class Family(BaseEntity):
     primary_phone: Optional[str] = None
 
 
+class ContactRole(str, Enum):
+    GUARDIAN = "guardian"
+    EMERGENCY = "emergency"
+    MEDICAL = "medical"
+    AUTHORIZED_PICKUP = "authorized_pickup"
+    OTHER = "other"
+
+
 class Contact(BaseEntity):
     entity_type: str = "CONTACT"
     contact_id: str = ""
@@ -29,8 +39,9 @@ class Contact(BaseEntity):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     relationship: Optional[str] = None
-    role: str = ""
-    clinic_name: Optional[str] = None
+    role: ContactRole = ContactRole.OTHER
+    organization: Optional[str] = None
+    address: Optional[str] = None
 
 
 class Student(BaseEntity):

@@ -76,7 +76,7 @@ function sampleValue(field: { name: string; type: string; options?: string[]; mu
   if (n === "relationship") return "Mother";
   if (n === "family_name") return "Smith Household";
   if (n === "role") return "guardian";
-  if (n === "clinic_name") return "Springfield Pediatrics";
+  if (n === "organization") return "Springfield Pediatrics";
   if (n === "primary_email") return "smith@example.com";
   if (n === "primary_phone") return "(555) 234-5678";
   if (n === "primary_address") return "123 Oak St, Springfield, IL 62704";

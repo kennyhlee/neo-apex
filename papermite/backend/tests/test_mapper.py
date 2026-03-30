@@ -44,17 +44,19 @@ def test_map_contact_medical():
         contacts=[{
             "first_name": "Dr. Lee",
             "last_name": "Park",
-            "role": "medical_contact",
+            "role": "medical",
             "family_id": "F1",
             "student_id": "S1",
-            "clinic_name": "Springfield Pediatrics",
+            "organization": "Springfield Pediatrics",
+            "address": "456 Health Ave, Springfield",
         }],
     )
     result = map_extraction(raw, "t1", "test.pdf", "raw text")
     contact_entities = [e for e in result.entities if e.entity_type == "CONTACT"]
     assert len(contact_entities) == 1
     c = contact_entities[0]
-    assert any(m.field_name == "clinic_name" and m.value == "Springfield Pediatrics" for m in c.field_mappings)
+    assert any(m.field_name == "organization" and m.value == "Springfield Pediatrics" for m in c.field_mappings)
+    assert any(m.field_name == "address" and m.source == "base_model" for m in c.field_mappings)
 
 
 def test_map_no_guardian_entity_type():

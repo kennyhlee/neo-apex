@@ -1,5 +1,5 @@
 """Tests for Family and Contact domain entities."""
-from app.models.domain import Family, Contact, ENTITY_CLASSES
+from app.models.domain import Family, Contact, ContactRole, ENTITY_CLASSES
 
 
 def test_family_defaults():
@@ -21,13 +21,14 @@ def test_contact_guardian_role():
         student_id="S1",
         first_name="Jane",
         last_name="Smith",
-        role="guardian",
+        role=ContactRole.GUARDIAN,
     )
     assert c.entity_type == "CONTACT"
-    assert c.role == "guardian"
+    assert c.role == ContactRole.GUARDIAN
     assert c.student_id == "S1"
     assert c.family_id == "F1"
-    assert c.clinic_name is None
+    assert c.organization is None
+    assert c.address is None
 
 
 def test_contact_medical_role():
@@ -37,11 +38,13 @@ def test_contact_medical_role():
         student_id="S1",
         first_name="Dr. Lee",
         last_name="Park",
-        role="medical_contact",
-        clinic_name="Springfield Pediatrics",
+        role=ContactRole.MEDICAL,
+        organization="Springfield Pediatrics",
+        address="456 Health Ave, Springfield",
     )
-    assert c.role == "medical_contact"
-    assert c.clinic_name == "Springfield Pediatrics"
+    assert c.role == ContactRole.MEDICAL
+    assert c.organization == "Springfield Pediatrics"
+    assert c.address == "456 Health Ave, Springfield"
 
 
 def test_contact_emergency_role():
@@ -51,11 +54,23 @@ def test_contact_emergency_role():
         student_id="S1",
         first_name="Bob",
         last_name="Smith",
-        role="emergency_contact",
+        role=ContactRole.EMERGENCY,
         relationship="uncle",
     )
-    assert c.role == "emergency_contact"
+    assert c.role == ContactRole.EMERGENCY
     assert c.relationship == "uncle"
+
+
+def test_contact_authorized_pickup_role():
+    c = Contact(
+        contact_id="C4",
+        family_id="F1",
+        student_id="S1",
+        first_name="Alice",
+        last_name="Jones",
+        role=ContactRole.AUTHORIZED_PICKUP,
+    )
+    assert c.role == ContactRole.AUTHORIZED_PICKUP
 
 
 def test_entity_classes_has_family_and_contact():
