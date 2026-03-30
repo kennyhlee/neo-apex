@@ -40,7 +40,7 @@
 .entity-card__table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .entity-card__table thead th {
@@ -56,17 +56,18 @@
   background: var(--bg-tertiary);
 }
 
-/* Column widths for fixed table layout: Field | Value | Data Type | Source | Required | Actions */
-.entity-card__table thead th:nth-child(1) { width: 20%; }
-.entity-card__table thead th:nth-child(3) { width: 130px; }
-.entity-card__table thead th:nth-child(4) { width: 80px; }
-.entity-card__table thead th:nth-child(5) { width: 80px; }
-.entity-card__table thead th:last-child { width: 48px; }
+/* Column widths: Field | Value (flexible) | Data Type | Source | Required | Actions */
+.entity-card__table thead th:nth-child(1) { min-width: 120px; width: 15%; }
+.entity-card__table thead th:nth-child(2) { min-width: 100px; }
+.entity-card__table thead th:nth-child(3) { min-width: 180px; white-space: nowrap; }
+.entity-card__table thead th:nth-child(4) { min-width: 70px; white-space: nowrap; }
+.entity-card__table thead th:nth-child(5) { min-width: 70px; white-space: nowrap; }
+.entity-card__table thead th:last-child { min-width: 48px; width: 48px; }
 
 .field-row td {
   padding: 10px 20px;
   border-bottom: 1px solid var(--border-subtle);
-  vertical-align: middle;
+  vertical-align: top;
 }
 
 .field-row:last-child td {
@@ -97,9 +98,8 @@
   border-bottom: 1px dashed transparent;
   transition: border-color 0.2s;
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .field-row__display:hover {
@@ -160,7 +160,7 @@
 }
 
 .field-row__data-type {
-  width: 130px;
+  white-space: nowrap;
 }
 
 .field-row__type-wrapper {
