@@ -23,10 +23,13 @@ function sampleValue(field: { name: string; type: string; options?: string[]; mu
   const { name, type, options, multiple } = field;
   const n = name.toLowerCase();
 
-  // Selection type — use actual options
-  if (type === "selection" && options && options.length > 0) {
-    if (multiple) return options.slice(0, 2).join(", ");
-    return options[0];
+  // Selection type — use actual options or show placeholder
+  if (type === "selection") {
+    if (options && options.length > 0) {
+      if (multiple) return options.slice(0, 2).join(", ");
+      return options[0];
+    }
+    return "Option A";
   }
 
   // Type-driven samples first

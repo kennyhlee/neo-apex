@@ -54,7 +54,26 @@ class Student(BaseEntity):
     dob: Optional[_dt.date] = None
     grade_level: Optional[str] = None
     email: Optional[EmailStr] = None
-    gender: Optional[str] = None
+    gender: List[str] = Field(
+        default_factory=lambda: [
+            "Male",
+            "Female",
+            "Non-binary",
+            "Prefer not to say",
+        ]
+    )
+    status: List[str] = Field(
+        default_factory=lambda: [
+            "Active",
+            "Inactive",
+            "Enrolled",
+            "Waitlisted",
+            "Graduated",
+            "Withdrawn",
+            "Transferred",
+            "Suspended",
+        ]
+    )
     family_id: str = ""
     primary_address: str = ""
     mailing_address: Optional[str] = None

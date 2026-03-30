@@ -1,6 +1,6 @@
 """Maps raw AI extraction output to base model fields vs custom_fields."""
 import uuid
-from typing import Any
+from typing import Any, List, Union
 
 from app.models.domain import (
     ENTITY_CLASSES,
@@ -113,6 +113,25 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
         if field_type == "selection":
             options, multiple = _extract_options(value)
 
+        # For base fields whose model default is a List[str], use the default
+        # as selection options (e.g. gender, status with predefined enums)
+        if key in schema_fields:
+            model_field = model_class.model_fields.get(key)
+            if model_field and model_field.annotation is List[str]:
+                field_type = "selection"
+                default_opts = model_field.default_factory() if model_field.default_factory else None
+                if isinstance(default_opts, list) and default_opts:
+                    # Merge extracted options with model defaults
+                    if options:
+                        merged = list(default_opts)
+                        for opt in options:
+                            if opt not in merged:
+                                merged.append(opt)
+                        options = merged
+                    else:
+                        options = list(default_opts)
+                    multiple = multiple if multiple is not None else False
+
         if key in schema_fields:
             base_data[key] = value
             mappings.append(FieldMapping(
@@ -127,6 +146,37 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
                 required=False, field_type=field_type,
                 options=options, multiple=multiple,
             ))
+
+    # Ensure ALL base model fields appear even if AI didn't extract them.
+    # All base fields are relevant for query filters regardless of value.
+    mapped_fields = {m.field_name for m in mappings}
+    for field_name, model_field in model_class.model_fields.items():
+        if field_name in mapped_fields or field_name in SYSTEM_FIELDS:
+            continue
+
+        # Selection fields with List[str] defaults get their predefined options
+        if model_field.annotation is List[str] and model_field.default_factory:
+            default_opts = model_field.default_factory()
+            if isinstance(default_opts, list) and default_opts:
+                base_data[field_name] = default_opts
+                mappings.append(FieldMapping(
+                    field_name=field_name, value=default_opts, source="base_model",
+                    required=True, field_type="selection",
+                    options=list(default_opts), multiple=False,
+                ))
+                continue
+
+        # All other base fields — infer type from name, use empty/None value
+        field_type = _infer_field_type(field_name, None)
+        # Optional[X] fields have None as a valid type; non-optional are required
+        annotation = model_field.annotation
+        is_optional = getattr(annotation, '__origin__', None) is Union and type(None) in getattr(annotation, '__args__', ())
+        required = not is_optional
+        base_data[field_name] = None
+        mappings.append(FieldMapping(
+            field_name=field_name, value=None, source="base_model",
+            required=required, field_type=field_type,
+        ))
 
     base_data["custom_fields"] = custom_data
     return base_data, mappings
