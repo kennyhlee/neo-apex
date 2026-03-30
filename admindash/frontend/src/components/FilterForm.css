@@ -1,8 +1,6 @@
 .filter-card {
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-glass);
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
   padding: 1.25rem;
@@ -17,7 +15,7 @@
 
 .filter-field label {
   display: block;
-  font-size: 0.8rem;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 0.35rem;
@@ -39,8 +37,8 @@
 .filter-field input:focus,
 .filter-field select:focus {
   outline: none;
-  border-color: #667EEA;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+  border-color: #378ADD;
+  box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.15);
 }
 
 .filter-actions {
@@ -64,13 +62,13 @@
 }
 
 .filter-btn-primary {
-  background: linear-gradient(135deg, #667EEA, #764BA2);
+  background: #378ADD;
   color: var(--text-inverse);
 }
 
 .filter-btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
 }
 
 .filter-btn-secondary {
@@ -79,5 +77,5 @@
 }
 
 .filter-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: #F1F5F9;
 }

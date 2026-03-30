@@ -6,7 +6,7 @@ export default function ProgramPage() {
 
   return (
     <div className="placeholder-page">
-      <h1 className="gradient-text">{t('program.title')}</h1>
+      <h1>{t('program.title')}</h1>
       <p>Coming soon.</p>
     </div>
   );

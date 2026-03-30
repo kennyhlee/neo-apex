@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
@@ -26,7 +27,10 @@ class Settings(BaseSettings):
         "ollama:llama3.2",
     ]
     upload_dir: Path = Path(__file__).parent.parent / "uploads"
-    lancedb_dir: Path = Path(__file__).parent.parent / "data" / "lancedb"
+    lancedb_dir: Path = Path(os.environ.get(
+        "NEOAPEX_LANCEDB_DIR",
+        str(Path(__file__).resolve().parent.parent.parent.parent / "datacore" / "data" / "lancedb"),
+    ))
     test_user_path: Path = Path(__file__).parent.parent.parent / "test_user.json"
 
     def load_test_user(self) -> TestUser:

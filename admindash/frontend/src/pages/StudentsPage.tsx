@@ -176,7 +176,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   return (
     <div className="students-page">
-      <h1 className="gradient-text">{t('students.title')}</h1>
+      <h1>{t('students.title')}</h1>
 
       <FilterForm onSearch={handleSearch} onReset={handleReset}>
         <div className="filter-field">

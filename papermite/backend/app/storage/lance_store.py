@@ -1,46 +1,31 @@
-"""LanceDB storage for tenant model definitions.
+"""LanceDB storage for tenant model definitions — delegated to datacore.
 
 Stores the finalized model definition (schema only — field definitions per entity type)
-per tenant with version history. Each finalize creates a new version; latest by timestamp
-is active, previous versions are archived. Max 50 versions per tenant.
+per tenant with version history. Each entity type is stored as a separate datacore model
+record with a shared change_id for grouped rollback. Max 50 versions per entity type.
 """
-import json
+import uuid
 from datetime import datetime, timezone
 
-import lancedb
-import pyarrow as pa
+from datacore import Store
 
 from app.config import settings
 from app.models.extraction import ExtractionResult, EntityResult
 
-# Schema for the tenant_models table
-TABLE_NAME = "tenant_models"
-TABLE_SCHEMA = pa.schema([
-    pa.field("tenant_id", pa.string()),
-    pa.field("version", pa.int64()),
-    pa.field("status", pa.string()),  # "active" or "archived"
-    pa.field("model_definition", pa.string()),  # JSON string
-    pa.field("source_filename", pa.string()),
-    pa.field("created_by", pa.string()),
-    pa.field("created_at", pa.string()),
-])
-
 MAX_VERSIONS = 50
 
-
-def _get_db():
-    """Get or create the LanceDB database."""
-    settings.lancedb_dir.mkdir(parents=True, exist_ok=True)
-    return lancedb.connect(str(settings.lancedb_dir))
+_store: Store | None = None
 
 
-def _table_names(db) -> list[str]:
-    """Get table names as plain strings (works across LanceDB versions)."""
-    raw = db.table_names()
-    if isinstance(raw, list):
-        return raw
-    # Newer LanceDB returns a response object with a .tables attribute
-    return list(getattr(raw, "tables", []))
+def _get_store() -> Store:
+    """Get or create the datacore Store singleton."""
+    global _store
+    if _store is None:
+        _store = Store(
+            data_dir=settings.lancedb_dir,
+            max_model_versions=MAX_VERSIONS,
+        )
+    return _store
 
 
 def _build_model_definition(entities: list[EntityResult]) -> dict:
@@ -113,77 +98,6 @@ def _infer_type(value) -> str:
     return "str"
 
 
-def _clear_stale_tables(db) -> None:
-    """Drop any per-entity tables from the old storage format."""
-    for table_name in _table_names(db):
-        if table_name != TABLE_NAME:
-            db.drop_table(table_name)
-
-
-def _get_max_version(db, tenant_id: str) -> int:
-    """Get the highest version number for a tenant, or 0 if none."""
-    if TABLE_NAME not in _table_names(db):
-        return 0
-    table = db.open_table(TABLE_NAME)
-    rows = (
-        table.search()
-        .where(f"tenant_id = '{tenant_id}'")
-        .to_list()
-    )
-    if not rows:
-        return 0
-    return max(r["version"] for r in rows)
-
-
-def _trim_versions(db, tenant_id: str) -> None:
-    """Keep only the newest MAX_VERSIONS records per tenant. Drop oldest."""
-    if TABLE_NAME not in _table_names(db):
-        return
-    table = db.open_table(TABLE_NAME)
-    rows = (
-        table.search()
-        .where(f"tenant_id = '{tenant_id}'")
-        .to_list()
-    )
-    if len(rows) <= MAX_VERSIONS:
-        return
-    # Sort by version descending, find versions to drop
-    rows.sort(key=lambda r: r["version"], reverse=True)
-    to_drop = rows[MAX_VERSIONS:]
-    for row in to_drop:
-        table.delete(f"tenant_id = '{tenant_id}' AND version = {row['version']}")
-
-
-def get_active_model(tenant_id: str) -> dict | None:
-    """Get the active model definition for a tenant, or None if not found."""
-    db = _get_db()
-
-    if TABLE_NAME not in _table_names(db):
-        return None
-
-    table = db.open_table(TABLE_NAME)
-    results = (
-        table.search()
-        .where(f"tenant_id = '{tenant_id}' AND status = 'active'")
-        .limit(1)
-        .to_list()
-    )
-
-    if not results:
-        return None
-
-    row = results[0]
-    return {
-        "tenant_id": row["tenant_id"],
-        "version": row["version"],
-        "status": row["status"],
-        "model_definition": json.loads(row["model_definition"]),
-        "source_filename": row["source_filename"],
-        "created_by": row["created_by"],
-        "created_at": row["created_at"],
-    }
-
-
 def _normalize_model_def(model_def: dict) -> dict:
     """Normalize a model definition for comparison (sort keys and field lists)."""
     normalized = {}
@@ -194,6 +108,40 @@ def _normalize_model_def(model_def: dict) -> dict:
             "custom_fields": sorted(entity.get("custom_fields", []), key=lambda f: f["name"]),
         }
     return normalized
+
+
+def get_active_model(tenant_id: str) -> dict | None:
+    """Get the active model definition for a tenant, or None if not found.
+
+    Retrieves all active model records across entity types from datacore
+    and reassembles them into a single model_definition dict.
+    """
+    store = _get_store()
+    rows = store.list_models(tenant_id, status="active")
+    if not rows:
+        return None
+
+    # Reassemble per-entity-type records into combined model_definition
+    model_definition = {}
+    for row in rows:
+        entity_type = row["entity_type"]
+        defn = row["model_definition"]
+        # Strip underscore-prefixed metadata keys
+        clean_defn = {k: v for k, v in defn.items() if not k.startswith("_")}
+        model_definition[entity_type] = clean_defn
+
+    # Extract metadata from first record (all share the same source_filename/created_by)
+    first_defn = rows[0]["model_definition"]
+
+    return {
+        "tenant_id": tenant_id,
+        "version": max(row["_version"] for row in rows),
+        "status": "active",
+        "model_definition": model_definition,
+        "source_filename": first_defn.get("_source_filename", ""),
+        "created_by": first_defn.get("_created_by", ""),
+        "created_at": max(row["_created_at"] for row in rows),
+    }
 
 
 def preview_finalize(
@@ -220,7 +168,12 @@ def preview_finalize(
                 "created_at": existing["created_at"],
             }
 
-    next_version = (_get_max_version(_get_db(), tenant_id) + 1) if existing else 1
+    # Calculate next version from max across ALL records (active + archived)
+    # to avoid version collisions after rollback
+    store = _get_store()
+    all_rows = store.list_models(tenant_id)
+    max_version = max((r["_version"] for r in all_rows), default=0)
+    next_version = max_version + 1 if max_version > 0 else 1
 
     return {
         "status": "pending_confirmation",
@@ -235,19 +188,14 @@ def commit_finalize(
     extraction: ExtractionResult,
     created_by: str,
 ) -> dict:
-    """Store a finalized model definition in LanceDB.
+    """Store a finalized model definition via datacore.
 
     - Compares against existing active model; skips write if unchanged
-    - Archives any existing active record for this tenant
-    - Inserts the new record as active with incremented version
-    - Enforces max 50 versions per tenant
-    - Clears stale per-entity tables from old format
+    - Stores each entity type as a separate datacore model record
+    - All entity types share a change_id for grouped rollback
     - Returns the stored model definition record with status
     """
-    db = _get_db()
-
-    # Clear stale per-entity tables from old storage format
-    _clear_stale_tables(db)
+    store = _get_store()
 
     model_definition = _build_model_definition(extraction.entities)
 
@@ -267,46 +215,28 @@ def commit_finalize(
                 "created_at": existing["created_at"],
             }
 
+    # Store each entity type with a shared change_id
+    change_id = uuid.uuid4().hex[:12]
     now = datetime.now(timezone.utc).isoformat()
-    next_version = (_get_max_version(db, tenant_id) + 1) if existing else 1
+    max_version = 0
 
-    # Archive existing active records for this tenant
-    if TABLE_NAME in _table_names(db):
-        table = db.open_table(TABLE_NAME)
-        active_rows = (
-            table.search()
-            .where(f"tenant_id = '{tenant_id}' AND status = 'active'")
-            .to_list()
+    for entity_type, definition in model_definition.items():
+        model_def_with_meta = {
+            **definition,
+            "_source_filename": extraction.filename,
+            "_created_by": created_by,
+        }
+        result = store.put_model(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            model_definition=model_def_with_meta,
+            change_id=change_id,
         )
-        if active_rows:
-            table.delete(f"tenant_id = '{tenant_id}' AND status = 'active'")
-            for row in active_rows:
-                row["status"] = "archived"
-            table.add(active_rows)
-
-    # Create the new active record
-    record = {
-        "tenant_id": tenant_id,
-        "version": next_version,
-        "status": "active",
-        "model_definition": json.dumps(model_definition),
-        "source_filename": extraction.filename,
-        "created_by": created_by,
-        "created_at": now,
-    }
-
-    if TABLE_NAME in _table_names(db):
-        table = db.open_table(TABLE_NAME)
-        table.add([record])
-    else:
-        db.create_table(TABLE_NAME, [record], schema=TABLE_SCHEMA)
-
-    # Enforce max versions
-    _trim_versions(db, tenant_id)
+        max_version = max(max_version, result["_version"])
 
     return {
         "tenant_id": tenant_id,
-        "version": next_version,
+        "version": max_version,
         "status": "finalized",
         "model_definition": model_definition,
         "source_filename": extraction.filename,

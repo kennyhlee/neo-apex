@@ -3,13 +3,13 @@ interface StatusBadgeProps {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
-  active:     { bg: 'var(--success-muted)', color: 'var(--success)' },
-  enrolled:   { bg: 'var(--success-muted)', color: 'var(--success)' },
-  on_leave:   { bg: 'var(--warning-muted)', color: 'var(--warning)' },
-  suspended:  { bg: 'var(--info-muted)',    color: 'var(--info)' },
-  graduated:  { bg: 'var(--accent-muted)',  color: 'var(--accent)' },
-  dropped:    { bg: 'var(--danger-muted)',  color: 'var(--danger)' },
-  withdrawn:  { bg: 'var(--danger-muted)',  color: 'var(--danger)' },
+  active:     { bg: '#EAF3DE', color: '#3B6D11' },
+  enrolled:   { bg: '#EAF3DE', color: '#3B6D11' },
+  on_leave:   { bg: '#FAEEDA', color: '#854F0B' },
+  suspended:  { bg: '#E6F1FB', color: '#185FA5' },
+  graduated:  { bg: '#E6F1FB', color: '#378ADD' },
+  dropped:    { bg: '#FBEAF0', color: '#993556' },
+  withdrawn:  { bg: '#FBEAF0', color: '#993556' },
 };
 
 export default function StatusBadge({ status }: StatusBadgeProps) {
@@ -26,9 +26,9 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       style={{
         display: 'inline-block',
         padding: '0.2rem 0.6rem',
-        borderRadius: 'var(--radius-sm)',
-        fontSize: '0.8rem',
-        fontWeight: 500,
+        borderRadius: '20px',
+        fontSize: '12px',
+        fontWeight: 600,
         background: style.bg,
         color: style.color,
       }}

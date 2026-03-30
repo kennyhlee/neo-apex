@@ -1,6 +1,7 @@
 """LanceDB storage abstraction with tenant-scoped tables and versioning."""
 
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +10,11 @@ import lancedb
 import pyarrow as pa
 import toon
 
+
+DEFAULT_DATA_DIR = os.environ.get(
+    "NEOAPEX_LANCEDB_DIR",
+    str(Path(__file__).parent.parent.parent / "data" / "lancedb"),
+)
 
 # Internal metadata fields appended to every table
 _META_FIELDS = [
@@ -48,7 +54,7 @@ class Store:
 
     def __init__(
         self,
-        data_dir: str | Path = "./data/lancedb",
+        data_dir: str | Path = DEFAULT_DATA_DIR,
         max_model_versions: int = 100,
         default_max_entity_versions: int = 5,
         entity_version_limits: dict[str, int] | None = None,
@@ -189,6 +195,35 @@ class Store:
         for row in rows:
             row["model_definition"] = json.loads(row["model_definition"])
         rows.sort(key=lambda r: r["_version"], reverse=True)
+        return rows
+
+    def list_models(
+        self,
+        tenant_id: str,
+        status: str | None = None,
+    ) -> list[dict]:
+        """List model records across all entity types for a tenant.
+
+        Args:
+            tenant_id: tenant scope
+            status: filter by "active", "archived", or None for all
+
+        Returns:
+            List of model records with deserialized model_definition.
+            Empty list if the tenant has no models table.
+        """
+        table_name = self._models_table_name(tenant_id)
+        if table_name not in self._table_names():
+            return []
+
+        table = self._db.open_table(table_name)
+        where = f"_status = '{status}'" if status else "1=1"
+        rows = table.search().where(where).to_list()
+
+        for row in rows:
+            if isinstance(row.get("model_definition"), str):
+                row["model_definition"] = json.loads(row["model_definition"])
+
         return rows
 
     def _trim_model_versions(self, table, entity_type: str) -> None:

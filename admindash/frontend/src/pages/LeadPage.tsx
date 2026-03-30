@@ -6,7 +6,7 @@ export default function LeadPage() {
 
   return (
     <div className="placeholder-page">
-      <h1 className="gradient-text">{t('lead.title')}</h1>
+      <h1>{t('lead.title')}</h1>
       <p>Coming soon.</p>
     </div>
   );

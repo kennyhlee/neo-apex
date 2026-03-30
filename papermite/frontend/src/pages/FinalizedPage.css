@@ -2,7 +2,6 @@
   max-width: 900px;
 }
 
-/* Confirm banner */
 .finalized__confirm-banner {
   display: flex;
   align-items: flex-start;
@@ -17,8 +16,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-muted);
-  border: 1px solid var(--accent);
+  background: var(--tint-blue-bg);
+  border: 1px solid rgba(55, 138, 221, 0.3);
   border-radius: 50%;
   color: var(--accent);
   flex-shrink: 0;
@@ -30,15 +29,14 @@
 }
 
 .finalized__confirm-banner code {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  background: var(--accent-muted);
-  color: var(--accent);
-  padding: 2px 6px;
-  border-radius: 3px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  background: var(--tint-blue-bg);
+  color: var(--tint-blue-text);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-/* Unchanged state */
 .finalized__unchanged {
   display: flex;
   align-items: flex-start;
@@ -53,8 +51,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--info-muted);
-  border: 1px solid var(--info);
+  background: var(--tint-blue-bg);
+  border: 1px solid rgba(55, 138, 221, 0.2);
   border-radius: 50%;
   color: var(--info);
   flex-shrink: 0;
@@ -74,13 +72,12 @@
 }
 
 .finalized__loading-text {
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   color: var(--text-tertiary);
   animation: pulse 2s ease-in-out infinite;
 }
 
-/* Meta bar */
 .finalized__meta {
   display: flex;
   flex-wrap: wrap;
@@ -97,47 +94,48 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .finalized__meta-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-tertiary);
 }
 
 .finalized__meta-version {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
   color: var(--accent);
 }
 
 .finalized__meta-item code {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
-/* Entity summary tables */
 .finalized__tables {
   margin-bottom: 24px;
   animation: fadeIn 0.5s ease-out 0.2s both;
 }
 
 .finalized__tables-header {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 1px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-tertiary);
   margin-bottom: 12px;
 }
 
 .finalized__tables-note {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-tertiary);
   font-style: italic;
   margin-bottom: 12px;
@@ -154,20 +152,19 @@
   justify-content: space-between;
   padding: 10px 16px;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
+  background: var(--bg-tertiary);
 }
 
 .finalized__entity-table-name {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: 0.5px;
 }
 
 .finalized__entity-table-count {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   color: var(--text-tertiary);
 }
 
@@ -197,9 +194,9 @@
 }
 
 .finalized__col-header code {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -210,23 +207,22 @@
 }
 
 .finalized__col-type {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.5px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
   color: var(--text-tertiary);
-  background: var(--bg-secondary);
-  padding: 1px 5px;
-  border-radius: 3px;
+  background: var(--bg-primary);
+  padding: 1px 6px;
+  border-radius: 4px;
   border: 1px solid var(--border-subtle);
 }
 
 .finalized__col-req {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.5px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  color: var(--accent);
-  font-weight: 500;
+  color: var(--tint-blue-text);
 }
 
 .finalized__entity-table td {
@@ -235,13 +231,12 @@
 }
 
 .finalized__sample-value {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   color: var(--text-tertiary);
   font-style: italic;
 }
 
-/* Collapsible JSON preview */
 .finalized__preview {
   margin-bottom: 24px;
   overflow: hidden;
@@ -253,13 +248,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 1px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-tertiary);
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
 }
 
 .finalized__preview-actions {
@@ -272,8 +268,8 @@
 }
 
 .finalized__preview-code {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   line-height: 1.6;
   color: var(--text-secondary);
   padding: 16px;
@@ -296,23 +292,22 @@
 }
 
 .finalized__preview-more {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   color: var(--accent);
   background: var(--bg-card);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
-  padding: 3px 10px;
+  padding: 4px 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .finalized__preview-more:hover {
   border-color: var(--accent);
-  background: var(--accent-muted);
+  background: var(--tint-blue-bg);
 }
 
-/* Actions */
 .finalized__actions {
   display: flex;
   align-items: center;
