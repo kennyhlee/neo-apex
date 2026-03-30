@@ -65,6 +65,39 @@ def test_entity_classes_has_family_and_contact():
     assert ENTITY_CLASSES["contact"] is Contact
 
 
-@pytest.mark.xfail(reason="Guardian removal happens in Task 2")
 def test_entity_classes_no_guardian():
     assert "guardian" not in ENTITY_CLASSES
+
+
+from app.models.domain import Student, RegistrationApplication
+
+
+def test_student_has_family_id():
+    s = Student(student_id="S1", first_name="Alice", last_name="Smith", family_id="F1")
+    assert s.family_id == "F1"
+
+
+def test_student_no_guardian_ids():
+    s = Student(student_id="S1", first_name="Alice", last_name="Smith")
+    assert not hasattr(s, "guardian_ids") or "guardian_ids" not in s.model_fields
+
+
+def test_registration_application_has_contacts():
+    ra = RegistrationApplication(application_id="A1", school_year="2025-2026")
+    assert hasattr(ra, "contacts")
+    assert hasattr(ra, "family")
+    assert ra.contacts == []
+    assert ra.family is None
+
+
+def test_registration_application_no_guardians():
+    ra = RegistrationApplication(application_id="A1", school_year="2025-2026")
+    assert "guardians" not in ra.model_fields
+    assert "emergency_contacts" not in ra.model_fields
+    assert "medical_contacts" not in ra.model_fields
+
+
+def test_registration_application_no_program_fields():
+    ra = RegistrationApplication(application_id="A1", school_year="2025-2026")
+    assert "program_id" not in ra.model_fields
+    assert "program_name" not in ra.model_fields

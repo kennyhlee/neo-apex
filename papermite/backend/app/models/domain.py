@@ -9,16 +9,6 @@ class BaseEntity(BaseModel):
     custom_fields: Dict[str, Any] = Field(default_factory=dict)
 
 
-class Guardian(BaseEntity):
-    entity_type: str = "GUARDIAN"
-    guardian_id: str = ""
-    first_name: str = ""
-    last_name: str = ""
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    relationship: Optional[str] = None
-
-
 class Address(BaseModel):
     type: Optional[str] = None
     line1: Optional[str] = None
@@ -63,8 +53,8 @@ class Student(BaseEntity):
     grade_level: Optional[str] = None
     email: Optional[EmailStr] = None
     gender: Optional[str] = None
+    family_id: str = ""
     addresses: List[Address] = Field(default_factory=list)
-    guardian_ids: List[str] = Field(default_factory=list)
 
 
 class Program(BaseEntity):
@@ -93,33 +83,14 @@ class Attendance(BaseEntity):
     status: str = ""
 
 
-class EmergencyContact(BaseModel):
-    name: str = ""
-    relationship: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    custom_fields: Dict[str, Any] = Field(default_factory=dict)
-
-
-class MedicalContact(BaseModel):
-    physician: Optional[str] = None
-    clinic: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    custom_fields: Dict[str, Any] = Field(default_factory=dict)
-
-
 class RegistrationApplication(BaseEntity):
     entity_type: str = "REGAPP"
     application_id: str = ""
     school_year: str = ""
-    program_id: Optional[str] = None
-    program_name: Optional[str] = None
     school_id: Optional[str] = None
     student: Optional[Student] = None
-    guardians: List[Guardian] = Field(default_factory=list)
-    emergency_contacts: List[EmergencyContact] = Field(default_factory=list)
-    medical_contacts: List[MedicalContact] = Field(default_factory=list)
+    family: Optional[Family] = None
+    contacts: List[Contact] = Field(default_factory=list)
 
 
 class Tenant(BaseEntity):
@@ -136,7 +107,6 @@ ENTITY_CLASSES: Dict[str, type[BaseEntity]] = {
     "tenant": Tenant,
     "program": Program,
     "student": Student,
-    "guardian": Guardian,
     "family": Family,
     "contact": Contact,
     "enrollment": Enrollment,
