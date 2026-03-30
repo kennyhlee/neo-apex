@@ -1,5 +1,4 @@
 """Tests for Family and Contact domain entities."""
-import pytest
 from app.models.domain import Family, Contact, ENTITY_CLASSES
 
 
@@ -10,7 +9,8 @@ def test_family_defaults():
     assert f.family_name == "Smith Household"
     assert f.primary_email is None
     assert f.primary_phone is None
-    assert f.address is None
+    assert f.primary_address == ""
+    assert f.mailing_address is None
     assert f.custom_fields == {}
 
 

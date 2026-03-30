@@ -9,21 +9,12 @@ class BaseEntity(BaseModel):
     custom_fields: Dict[str, Any] = Field(default_factory=dict)
 
 
-class Address(BaseModel):
-    type: Optional[str] = None
-    line1: Optional[str] = None
-    line2: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    postalCode: Optional[str] = None
-    country: Optional[str] = None
-
-
 class Family(BaseEntity):
     entity_type: str = "FAMILY"
     family_id: str = ""
     family_name: str = ""
-    address: Optional[Address] = None
+    primary_address: str = ""
+    mailing_address: Optional[str] = None
     primary_email: Optional[EmailStr] = None
     primary_phone: Optional[str] = None
 
@@ -54,7 +45,8 @@ class Student(BaseEntity):
     email: Optional[EmailStr] = None
     gender: Optional[str] = None
     family_id: str = ""
-    addresses: List[Address] = Field(default_factory=list)
+    primary_address: str = ""
+    mailing_address: Optional[str] = None
 
 
 class Program(BaseEntity):
@@ -99,7 +91,8 @@ class Tenant(BaseEntity):
     display_name: Optional[str] = None
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
-    address: Optional[Address] = None
+    primary_address: str = ""
+    mailing_address: Optional[str] = None
 
 
 # All entity classes that can be extracted from documents
