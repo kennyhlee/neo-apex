@@ -54,7 +54,7 @@ function sampleValue(field: { name: string; type: string; options?: string[]; mu
   // Name-driven samples for str type
   if (n === "tenant_id") return "acme-school";
   if (n === "student_id") return "STU-20260012";
-  if (n === "guardian_id") return "GRD-00483";
+  if (n === "family_id") return "FAM-00215";
   if (n === "program_id") return "PRG-SUMMER-26";
   if (n === "application_id") return "APP-2026-0087";
   if (n === "contact_id") return "CON-00291";
@@ -74,7 +74,13 @@ function sampleValue(field: { name: string; type: string; options?: string[]; mu
   if (n === "gender") return "Female";
   if (n === "grade_level" || n === "grade") return "3rd";
   if (n === "relationship") return "Mother";
-  if (n === "address") return "123 Oak St, Springfield";
+  if (n === "family_name") return "Smith Household";
+  if (n === "role") return "guardian";
+  if (n === "organization") return "Springfield Pediatrics";
+  if (n === "primary_email") return "smith@example.com";
+  if (n === "primary_phone") return "(555) 234-5678";
+  if (n === "primary_address") return "123 Oak St, Springfield, IL 62704";
+  if (n === "mailing_address") return "PO Box 456, Springfield, IL 62705";
   if (n === "medical_conditions") return "Seasonal allergies";
   if (n === "status") return "active";
 

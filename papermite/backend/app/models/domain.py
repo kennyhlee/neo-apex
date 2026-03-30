@@ -1,3 +1,5 @@
+from enum import Enum
+
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List, Dict, Any
 import datetime as _dt
@@ -9,24 +11,37 @@ class BaseEntity(BaseModel):
     custom_fields: Dict[str, Any] = Field(default_factory=dict)
 
 
-class Guardian(BaseEntity):
-    entity_type: str = "GUARDIAN"
-    guardian_id: str = ""
+class Family(BaseEntity):
+    entity_type: str = "FAMILY"
+    family_id: str = ""
+    family_name: str = ""
+    primary_address: str = ""
+    mailing_address: Optional[str] = None
+    primary_email: Optional[EmailStr] = None
+    primary_phone: Optional[str] = None
+
+
+class ContactRole(str, Enum):
+    GUARDIAN = "guardian"
+    EMERGENCY = "emergency"
+    MEDICAL = "medical"
+    AUTHORIZED_PICKUP = "authorized_pickup"
+    OTHER = "other"
+
+
+class Contact(BaseEntity):
+    entity_type: str = "CONTACT"
+    contact_id: str = ""
+    family_id: str = ""
+    student_id: str = ""
     first_name: str = ""
     last_name: str = ""
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     relationship: Optional[str] = None
-
-
-class Address(BaseModel):
-    type: Optional[str] = None
-    line1: Optional[str] = None
-    line2: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    postalCode: Optional[str] = None
-    country: Optional[str] = None
+    role: ContactRole = ContactRole.OTHER
+    organization: Optional[str] = None
+    address: Optional[str] = None
 
 
 class Student(BaseEntity):
@@ -40,8 +55,9 @@ class Student(BaseEntity):
     grade_level: Optional[str] = None
     email: Optional[EmailStr] = None
     gender: Optional[str] = None
-    addresses: List[Address] = Field(default_factory=list)
-    guardian_ids: List[str] = Field(default_factory=list)
+    family_id: str = ""
+    primary_address: str = ""
+    mailing_address: Optional[str] = None
 
 
 class Program(BaseEntity):
@@ -70,33 +86,14 @@ class Attendance(BaseEntity):
     status: str = ""
 
 
-class EmergencyContact(BaseModel):
-    name: str = ""
-    relationship: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    custom_fields: Dict[str, Any] = Field(default_factory=dict)
-
-
-class MedicalContact(BaseModel):
-    physician: Optional[str] = None
-    clinic: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    custom_fields: Dict[str, Any] = Field(default_factory=dict)
-
-
 class RegistrationApplication(BaseEntity):
     entity_type: str = "REGAPP"
     application_id: str = ""
     school_year: str = ""
-    program_id: Optional[str] = None
-    program_name: Optional[str] = None
     school_id: Optional[str] = None
     student: Optional[Student] = None
-    guardians: List[Guardian] = Field(default_factory=list)
-    emergency_contacts: List[EmergencyContact] = Field(default_factory=list)
-    medical_contacts: List[MedicalContact] = Field(default_factory=list)
+    family: Optional[Family] = None
+    contacts: List[Contact] = Field(default_factory=list)
 
 
 class Tenant(BaseEntity):
@@ -105,7 +102,8 @@ class Tenant(BaseEntity):
     display_name: Optional[str] = None
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
-    address: Optional[Address] = None
+    primary_address: str = ""
+    mailing_address: Optional[str] = None
 
 
 # All entity classes that can be extracted from documents
@@ -113,7 +111,8 @@ ENTITY_CLASSES: Dict[str, type[BaseEntity]] = {
     "tenant": Tenant,
     "program": Program,
     "student": Student,
-    "guardian": Guardian,
+    "family": Family,
+    "contact": Contact,
     "enrollment": Enrollment,
     "attendance": Attendance,
     "registration_application": RegistrationApplication,

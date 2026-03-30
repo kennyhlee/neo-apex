@@ -8,11 +8,10 @@ class RawExtraction(BaseModel):
     tenant: Optional[dict[str, Any]] = None
     programs: list[dict[str, Any]] = Field(default_factory=list)
     students: list[dict[str, Any]] = Field(default_factory=list)
-    guardians: list[dict[str, Any]] = Field(default_factory=list)
+    families: list[dict[str, Any]] = Field(default_factory=list)
+    contacts: list[dict[str, Any]] = Field(default_factory=list)
     enrollments: list[dict[str, Any]] = Field(default_factory=list)
     registration_applications: list[dict[str, Any]] = Field(default_factory=list)
-    emergency_contacts: list[dict[str, Any]] = Field(default_factory=list)
-    medical_contacts: list[dict[str, Any]] = Field(default_factory=list)
 
 
 FIELD_TYPES = ("str", "number", "bool", "date", "datetime", "email", "phone", "selection")
