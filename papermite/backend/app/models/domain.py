@@ -29,6 +29,29 @@ class Address(BaseModel):
     country: Optional[str] = None
 
 
+class Family(BaseEntity):
+    entity_type: str = "FAMILY"
+    family_id: str = ""
+    family_name: str = ""
+    address: Optional[Address] = None
+    primary_email: Optional[EmailStr] = None
+    primary_phone: Optional[str] = None
+
+
+class Contact(BaseEntity):
+    entity_type: str = "CONTACT"
+    contact_id: str = ""
+    family_id: str = ""
+    student_id: str = ""
+    first_name: str = ""
+    last_name: str = ""
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    relationship: Optional[str] = None
+    role: str = ""
+    clinic_name: Optional[str] = None
+
+
 class Student(BaseEntity):
     entity_type: str = "STUDENT"
     student_id: str = ""
@@ -114,6 +137,8 @@ ENTITY_CLASSES: Dict[str, type[BaseEntity]] = {
     "program": Program,
     "student": Student,
     "guardian": Guardian,
+    "family": Family,
+    "contact": Contact,
     "enrollment": Enrollment,
     "attendance": Attendance,
     "registration_application": RegistrationApplication,
