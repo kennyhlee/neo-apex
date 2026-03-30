@@ -68,6 +68,8 @@ All other Student fields remain unchanged.
 | Remove `guardians: List[Guardian]` | Replaced by contacts |
 | Remove `emergency_contacts: List[EmergencyContact]` | Merged into Contact |
 | Remove `medical_contacts: List[MedicalContact]` | Merged into Contact |
+| Remove `program_id: str` | Student-program associations handled by Enrollment records |
+| Remove `program_name: str` | Student-program associations handled by Enrollment records |
 | Add `family: Optional[Family]` | Household info |
 | Add `contacts: List[Contact]` | All contacts for this application |
 
@@ -81,6 +83,10 @@ All other Student fields remain unchanged.
 
 Program, Enrollment, Attendance, Tenant — no changes.
 
+Note: Multiple program selection per student is handled by creating multiple Enrollment records (one per student-program pair). This keeps queries flat:
+- `WHERE student_id = 'X'` — all programs for a student
+- `WHERE program_id = 'Y'` — all students in a program
+
 ## Impact Areas
 
 ### Backend
@@ -92,7 +98,7 @@ Program, Enrollment, Attendance, Tenant — no changes.
    - Remove `EmergencyContact` class
    - Remove `MedicalContact` class
    - Update `Student`: add `family_id`, remove `guardian_ids`
-   - Update `RegistrationApplication`: replace `guardians`/`emergency_contacts`/`medical_contacts` with `family`/`contacts`
+   - Update `RegistrationApplication`: replace `guardians`/`emergency_contacts`/`medical_contacts` with `family`/`contacts`; remove `program_id`/`program_name`
    - Update `ENTITY_CLASSES`: add `family`/`contact`, remove `guardian`
 
 2. **`app/models/extraction.py`**
@@ -130,3 +136,4 @@ Program, Enrollment, Attendance, Tenant — no changes.
 | Guardian as Contact role, not own entity | Same flat structure as emergency/medical. Consistent model. Per-student relationship via `student_id`. |
 | Family as household grouping | Administrative/billing unit. Shared address and account. Secondary benefit: see all household members at a glance. |
 | Datacore handles contact deduplication/sync | Papermite defines schema only. Aggregation and sync logic belongs in the data layer, not the ingestion gateway. |
+| Remove program fields from RegistrationApplication | Student-program associations handled by Enrollment records (flat `student_id` + `program_id`). Supports multiple programs per student with bidirectional Arrow queries. |
