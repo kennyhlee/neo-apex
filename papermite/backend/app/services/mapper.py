@@ -5,8 +5,6 @@ from typing import Any
 from app.models.domain import (
     ENTITY_CLASSES,
     BaseEntity,
-    EmergencyContact,
-    MedicalContact,
 )
 from app.models.extraction import (
     EntityResult,
@@ -207,7 +205,8 @@ def map_extraction(raw: RawExtraction, tenant_id: str, filename: str, raw_text: 
     entity_list_map = {
         "program": raw.programs,
         "student": raw.students,
-        "guardian": raw.guardians,
+        "family": raw.families,
+        "contact": raw.contacts,
         "enrollment": raw.enrollments,
         "registration_application": raw.registration_applications,
     }
@@ -216,15 +215,6 @@ def map_extraction(raw: RawExtraction, tenant_id: str, filename: str, raw_text: 
             entities.extend(_map_entity_list(
                 raw_list, entity_type, ENTITY_CLASSES[entity_type], tenant_id,
             ))
-
-    # Map non-BaseEntity types (emergency/medical contacts)
-    for contact in raw.emergency_contacts:
-        data, mappings = _map_entity(contact, EmergencyContact)
-        entities.append(EntityResult(entity_type="EMERGENCY_CONTACT", entity=data, field_mappings=mappings))
-
-    for contact in raw.medical_contacts:
-        data, mappings = _map_entity(contact, MedicalContact)
-        entities.append(EntityResult(entity_type="MEDICAL_CONTACT", entity=data, field_mappings=mappings))
 
     # Consolidate multiple entities of the same type into one
     entities = _consolidate_entities(entities)
