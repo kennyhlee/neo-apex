@@ -50,3 +50,34 @@ export interface StudentsResponse {
 export interface TenantsResponse {
   tenants: { id: string; name?: string }[];
 }
+
+export interface ModelFieldDefinition {
+  name: string;
+  type: 'str' | 'number' | 'bool' | 'date' | 'datetime' | 'email' | 'phone' | 'selection';
+  required: boolean;
+  options?: string[];
+  multiple?: boolean;
+}
+
+export interface ModelDefinition {
+  base_fields: ModelFieldDefinition[];
+  custom_fields: ModelFieldDefinition[];
+}
+
+export interface ModelResponse {
+  entity_type: string;
+  model_definition: ModelDefinition;
+}
+
+export interface CreateEntityResponse {
+  entity_type: string;
+  entity_id: string;
+  base_data: Record<string, unknown>;
+  custom_fields: Record<string, unknown>;
+  _version: number;
+  _status: string;
+}
+
+export interface ExtractResponse {
+  fields: Record<string, string>;
+}
