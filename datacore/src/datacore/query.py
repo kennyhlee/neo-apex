@@ -88,13 +88,13 @@ class QueryEngine:
         return {"rows": rows, "total": total}
 
     def _flatten_custom_fields(self, arrow_table: pa.Table) -> pa.Table:
-        """Flatten _custom_fields TOON into individual columns.
+        """Flatten custom_fields TOON into individual columns.
 
-        Parses the _custom_fields column (TOON-encoded string) from each row,
+        Parses the custom_fields column (TOON-encoded string) from each row,
         collects all unique keys, and adds them as new columns to the
         Arrow table so DuckDB can query them directly.
         """
-        custom_col = arrow_table.column("_custom_fields")
+        custom_col = arrow_table.column("custom_fields")
         all_values = custom_col.to_pylist()
 
         # Parse TOON-encoded strings
