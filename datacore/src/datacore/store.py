@@ -36,7 +36,7 @@ ENTITIES_SCHEMA = pa.schema([
     pa.field("entity_type", pa.string()),
     pa.field("entity_id", pa.string()),
     pa.field("base_data", pa.string()),         # JSON string
-    pa.field("_custom_fields", pa.string()),    # TOON-encoded document
+    pa.field("custom_fields", pa.string()),    # TOON-encoded document
 ] + _META_FIELDS)
 
 
@@ -252,7 +252,7 @@ class Store:
         """Store an entity record.
 
         Archives the current active version and inserts a new one.
-        Custom fields are stored as a TOON document in _custom_fields.
+        Custom fields are stored as a TOON document in custom_fields.
 
         Raises:
             ValueError: if custom_fields keys overlap with base_data keys
@@ -292,7 +292,7 @@ class Store:
             "entity_type": entity_type,
             "entity_id": entity_id,
             "base_data": json.dumps(base_data),
-            "_custom_fields": toon.encode(custom_fields or {}),
+            "custom_fields": toon.encode(custom_fields or {}),
             "_version": next_version,
             "_status": "active",
             "_change_id": change_id,
@@ -305,7 +305,7 @@ class Store:
         self._trim_entity_versions(table, entity_type, entity_id)
 
         record["base_data"] = base_data
-        record["_custom_fields"] = custom_fields or {}
+        record["custom_fields"] = custom_fields or {}
         return record
 
     def get_active_entity(
@@ -332,7 +332,7 @@ class Store:
 
         row = rows[0]
         row["base_data"] = json.loads(row["base_data"])
-        row["_custom_fields"] = toon.decode(row["_custom_fields"]) if row["_custom_fields"] else {}
+        row["custom_fields"] = toon.decode(row["custom_fields"]) if row["custom_fields"] else {}
         return row
 
     def get_entity_history(
@@ -354,7 +354,7 @@ class Store:
         )
         for row in rows:
             row["base_data"] = json.loads(row["base_data"])
-            row["_custom_fields"] = toon.decode(row["_custom_fields"]) if row["_custom_fields"] else {}
+            row["custom_fields"] = toon.decode(row["custom_fields"]) if row["custom_fields"] else {}
         rows.sort(key=lambda r: r["_version"], reverse=True)
         return rows
 
