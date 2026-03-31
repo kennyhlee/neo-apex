@@ -8,11 +8,14 @@ dependencies = [
     "pyarrow>=14.0",
     "duckdb>=0.10",
     "python-toon>=0.1",
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "httpx>=0.28",
 ]
 
 [build-system]
