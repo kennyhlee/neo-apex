@@ -57,7 +57,7 @@ def extract_document_fields(
     # Save uploaded file temporarily
     upload_dir = settings.upload_dir / tenant_id / "extract"
     upload_dir.mkdir(parents=True, exist_ok=True)
-    file_path = upload_dir / file.filename
+    file_path = upload_dir / Path(file.filename or "unknown").name
     try:
         with file_path.open("wb") as f:
             shutil.copyfileobj(file.file, f)

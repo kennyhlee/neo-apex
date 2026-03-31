@@ -27,7 +27,7 @@ def mock_auth():
 
     app.dependency_overrides[require_admin] = lambda: FAKE_USER
     yield
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(require_admin, None)
 
 
 def _upload(tenant_id, entity_type, filename, content, content_type="application/pdf"):
