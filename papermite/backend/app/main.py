@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, upload, extraction, finalize
+from app.api import auth, upload, extraction, finalize, extract
 
 app = FastAPI(
     title="Papermite",
@@ -22,3 +22,4 @@ app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(extraction.router, prefix="/api", tags=["schema"])
 app.include_router(finalize.router, prefix="/api", tags=["finalize"])
+app.include_router(extract.router, prefix="/api", tags=["extract"])
