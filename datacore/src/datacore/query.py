@@ -126,15 +126,48 @@ class QueryEngine:
                 key, pa.array(values, type=pa.string())
             )
 
-        # Also flatten base_data JSON into columns
-        arrow_table = self._flatten_json_column(arrow_table, "base_data")
+        # Also flatten base_data TOON into columns
+        arrow_table = self._flatten_toon_column(arrow_table, "base_data")
 
         return arrow_table
 
-    def _flatten_json_column(
+    def _flatten_toon_column(
         self, arrow_table: pa.Table, column_name: str
     ) -> pa.Table:
-        """Flatten a JSON string column into individual columns."""
+        """Flatten a TOON-encoded string column into individual columns."""
+        col = arrow_table.column(column_name)
+        all_values = col.to_pylist()
+
+        parsed = []
+        all_keys: dict[str, None] = {}
+        for val in all_values:
+            if val:
+                d = toon.decode(val) if isinstance(val, str) else val
+                parsed.append(d)
+                for k in d:
+                    all_keys[k] = None
+            else:
+                parsed.append({})
+
+        for key in all_keys:
+            if key in arrow_table.column_names:
+                continue
+            values = []
+            for row in parsed:
+                v = row.get(key)
+                if isinstance(v, (dict, list)):
+                    v = json.dumps(v)
+                values.append(v)
+            arrow_table = arrow_table.append_column(
+                key, pa.array(values, type=pa.string())
+            )
+
+        return arrow_table
+
+    def _parse_json_column(
+        self, arrow_table: pa.Table, column_name: str
+    ) -> pa.Table:
+        """Parse a JSON string column into flattened columns."""
         col = arrow_table.column(column_name)
         all_values = col.to_pylist()
 
@@ -150,13 +183,11 @@ class QueryEngine:
                 parsed.append({})
 
         for key in all_keys:
-            # Skip if column already exists (e.g., from custom fields)
             if key in arrow_table.column_names:
                 continue
             values = []
             for row in parsed:
                 v = row.get(key)
-                # Serialize non-scalar values (lists, dicts) as JSON strings
                 if isinstance(v, (dict, list)):
                     v = json.dumps(v)
                 values.append(v)
@@ -165,13 +196,3 @@ class QueryEngine:
             )
 
         return arrow_table
-
-    def _parse_json_column(
-        self, arrow_table: pa.Table, column_name: str
-    ) -> pa.Table:
-        """Parse a JSON string column into a struct-like representation.
-
-        For models, we flatten model_definition so fields inside it
-        are queryable.
-        """
-        return self._flatten_json_column(arrow_table, column_name)
