@@ -35,7 +35,7 @@ MODELS_SCHEMA = pa.schema([
 ENTITIES_SCHEMA = pa.schema([
     pa.field("entity_type", pa.string()),
     pa.field("entity_id", pa.string()),
-    pa.field("base_data", pa.string()),         # JSON string
+    pa.field("base_data", pa.string()),         # TOON-encoded document
     pa.field("custom_fields", pa.string()),    # TOON-encoded document
 ] + _META_FIELDS)
 
@@ -291,7 +291,7 @@ class Store:
         record = {
             "entity_type": entity_type,
             "entity_id": entity_id,
-            "base_data": json.dumps(base_data),
+            "base_data": toon.encode(base_data),
             "custom_fields": toon.encode(custom_fields or {}),
             "_version": next_version,
             "_status": "active",
@@ -331,7 +331,7 @@ class Store:
             return None
 
         row = rows[0]
-        row["base_data"] = json.loads(row["base_data"])
+        row["base_data"] = toon.decode(row["base_data"]) if row["base_data"] else {}
         row["custom_fields"] = toon.decode(row["custom_fields"]) if row["custom_fields"] else {}
         return row
 
@@ -353,7 +353,7 @@ class Store:
             .to_list()
         )
         for row in rows:
-            row["base_data"] = json.loads(row["base_data"])
+            row["base_data"] = toon.decode(row["base_data"]) if row["base_data"] else {}
             row["custom_fields"] = toon.decode(row["custom_fields"]) if row["custom_fields"] else {}
         rows.sort(key=lambda r: r["_version"], reverse=True)
         return rows

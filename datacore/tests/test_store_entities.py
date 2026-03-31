@@ -317,3 +317,25 @@ def test_delete_version_invalid_table_type(store):
             entity_type="student",
             entity_id="S001",
         )
+
+
+# ── 18. base_data is TOON-encoded (no braces in raw storage) ────────────────
+
+def test_entity_base_data_stored_as_toon(store):
+    store.put_entity(
+        tenant_id="t1",
+        entity_type="student",
+        entity_id="S001",
+        base_data={"first_name": "Alice", "last_name": "Smith"},
+    )
+
+    # Read raw from LanceDB
+    table = store._db.open_table(store._entities_table_name("t1"))
+    rows = table.search().where("entity_id = 'S001'").to_list()
+    assert len(rows) == 1
+
+    raw_base = rows[0]["base_data"]
+    # Should NOT be JSON (no braces)
+    assert "{" not in raw_base
+    # Should be TOON format: "key: value"
+    assert "first_name: Alice" in raw_base
