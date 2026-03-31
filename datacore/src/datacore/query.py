@@ -60,8 +60,8 @@ class QueryEngine:
 
         # For models, parse model_definition JSON
         if table_type == "models":
-            arrow_table = self._parse_json_column(
-                arrow_table, "model_definition"
+            arrow_table = self._flatten_encoded_column(
+                arrow_table, "model_definition", json.loads
             )
 
         # Register the arrow table and execute SQL via DuckDB
@@ -127,14 +127,20 @@ class QueryEngine:
             )
 
         # Also flatten base_data TOON into columns
-        arrow_table = self._flatten_toon_column(arrow_table, "base_data")
+        arrow_table = self._flatten_encoded_column(arrow_table, "base_data", toon.decode)
 
         return arrow_table
 
-    def _flatten_toon_column(
-        self, arrow_table: pa.Table, column_name: str
+    def _flatten_encoded_column(
+        self, arrow_table: pa.Table, column_name: str, decoder
     ) -> pa.Table:
-        """Flatten a TOON-encoded string column into individual columns."""
+        """Flatten an encoded string column into individual columns.
+
+        Args:
+            arrow_table: source table
+            column_name: column containing encoded strings
+            decoder: callable to decode string values (e.g. toon.decode, json.loads)
+        """
         col = arrow_table.column(column_name)
         all_values = col.to_pylist()
 
@@ -142,40 +148,7 @@ class QueryEngine:
         all_keys: dict[str, None] = {}
         for val in all_values:
             if val:
-                d = toon.decode(val) if isinstance(val, str) else val
-                parsed.append(d)
-                for k in d:
-                    all_keys[k] = None
-            else:
-                parsed.append({})
-
-        for key in all_keys:
-            if key in arrow_table.column_names:
-                continue
-            values = []
-            for row in parsed:
-                v = row.get(key)
-                if isinstance(v, (dict, list)):
-                    v = json.dumps(v)
-                values.append(v)
-            arrow_table = arrow_table.append_column(
-                key, pa.array(values, type=pa.string())
-            )
-
-        return arrow_table
-
-    def _parse_json_column(
-        self, arrow_table: pa.Table, column_name: str
-    ) -> pa.Table:
-        """Parse a JSON string column into flattened columns."""
-        col = arrow_table.column(column_name)
-        all_values = col.to_pylist()
-
-        parsed = []
-        all_keys: dict[str, None] = {}
-        for val in all_values:
-            if val:
-                d = json.loads(val) if isinstance(val, str) else val
+                d = decoder(val) if isinstance(val, str) else val
                 parsed.append(d)
                 for k in d:
                     all_keys[k] = None
