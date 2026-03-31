@@ -78,7 +78,7 @@ def test_full_workflow():
         entity = store.get_active_entity("t1", "student", "S001")
         assert entity is not None
         assert entity["base_data"]["first_name"] == "Alice"
-        assert entity["_custom_fields"]["city"] == "Springfield"
+        assert entity["custom_fields"]["city"] == "Springfield"
         print("✓ Entity store + retrieve works")
 
         # ── 3. SQL query: filter on custom fields ──
