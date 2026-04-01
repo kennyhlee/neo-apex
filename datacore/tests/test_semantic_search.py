@@ -141,3 +141,50 @@ def test_semantic_search_calls_embed_query(search_setup):
     engine, store, embedder = search_setup
     engine.semantic_search(tenant_id="t1", query="find students")
     embedder.embed_query.assert_called_with("find students")
+
+
+from fastapi.testclient import TestClient
+from datacore.api import create_app
+
+
+def test_search_endpoint_returns_results(search_setup):
+    engine, store, embedder = search_setup
+    app = create_app(store)
+    client = TestClient(app)
+
+    response = client.get("/api/search/t1?q=students+in+Springfield")
+    assert response.status_code == 200
+    data = response.json()
+    assert "results" in data
+    assert "total" in data
+    assert data["total"] > 0
+
+
+def test_search_endpoint_with_entity_type_filter(search_setup):
+    engine, store, embedder = search_setup
+    app = create_app(store)
+    client = TestClient(app)
+
+    response = client.get("/api/search/t1?q=people&entity_type=student")
+    assert response.status_code == 200
+    for r in response.json()["results"]:
+        assert r["entity_type"] == "student"
+
+
+def test_search_endpoint_with_limit(search_setup):
+    engine, store, embedder = search_setup
+    app = create_app(store)
+    client = TestClient(app)
+
+    response = client.get("/api/search/t1?q=students&limit=1")
+    assert response.status_code == 200
+    assert len(response.json()["results"]) <= 1
+
+
+def test_search_endpoint_requires_query(search_setup):
+    engine, store, embedder = search_setup
+    app = create_app(store)
+    client = TestClient(app)
+
+    response = client.get("/api/search/t1")
+    assert response.status_code == 422  # missing required query param

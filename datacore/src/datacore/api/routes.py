@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -101,3 +101,19 @@ def register_routes(app: FastAPI, store: Store) -> None:
             return {"data": result["rows"], "total": result["total"]}
         except TableNotFoundError:
             return {"data": [], "total": 0}
+
+    @app.get("/api/search/{tenant_id}")
+    def search_entities(
+        tenant_id: str,
+        q: str = Query(..., description="Search query text"),
+        entity_type: str | None = Query(None, description="Filter by entity type"),
+        limit: int = Query(10, ge=1, le=100, description="Max results"),
+    ):
+        engine = QueryEngine(store)
+        result = engine.semantic_search(
+            tenant_id=tenant_id,
+            query=q,
+            entity_type=entity_type,
+            limit=limit,
+        )
+        return result
