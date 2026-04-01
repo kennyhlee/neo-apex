@@ -60,8 +60,8 @@ class QueryEngine:
 
         # For models, parse model_definition JSON
         if table_type == "models":
-            arrow_table = self._parse_json_column(
-                arrow_table, "model_definition"
+            arrow_table = self._flatten_encoded_column(
+                arrow_table, "model_definition", json.loads
             )
 
         # Register the arrow table and execute SQL via DuckDB
@@ -88,13 +88,13 @@ class QueryEngine:
         return {"rows": rows, "total": total}
 
     def _flatten_custom_fields(self, arrow_table: pa.Table) -> pa.Table:
-        """Flatten _custom_fields TOON into individual columns.
+        """Flatten custom_fields TOON into individual columns.
 
-        Parses the _custom_fields column (TOON-encoded string) from each row,
+        Parses the custom_fields column (TOON-encoded string) from each row,
         collects all unique keys, and adds them as new columns to the
         Arrow table so DuckDB can query them directly.
         """
-        custom_col = arrow_table.column("_custom_fields")
+        custom_col = arrow_table.column("custom_fields")
         all_values = custom_col.to_pylist()
 
         # Parse TOON-encoded strings
@@ -126,15 +126,21 @@ class QueryEngine:
                 key, pa.array(values, type=pa.string())
             )
 
-        # Also flatten base_data JSON into columns
-        arrow_table = self._flatten_json_column(arrow_table, "base_data")
+        # Also flatten base_data TOON into columns
+        arrow_table = self._flatten_encoded_column(arrow_table, "base_data", toon.decode)
 
         return arrow_table
 
-    def _flatten_json_column(
-        self, arrow_table: pa.Table, column_name: str
+    def _flatten_encoded_column(
+        self, arrow_table: pa.Table, column_name: str, decoder
     ) -> pa.Table:
-        """Flatten a JSON string column into individual columns."""
+        """Flatten an encoded string column into individual columns.
+
+        Args:
+            arrow_table: source table
+            column_name: column containing encoded strings
+            decoder: callable to decode string values (e.g. toon.decode, json.loads)
+        """
         col = arrow_table.column(column_name)
         all_values = col.to_pylist()
 
@@ -142,7 +148,7 @@ class QueryEngine:
         all_keys: dict[str, None] = {}
         for val in all_values:
             if val:
-                d = json.loads(val) if isinstance(val, str) else val
+                d = decoder(val) if isinstance(val, str) else val
                 parsed.append(d)
                 for k in d:
                     all_keys[k] = None
@@ -150,13 +156,11 @@ class QueryEngine:
                 parsed.append({})
 
         for key in all_keys:
-            # Skip if column already exists (e.g., from custom fields)
             if key in arrow_table.column_names:
                 continue
             values = []
             for row in parsed:
                 v = row.get(key)
-                # Serialize non-scalar values (lists, dicts) as JSON strings
                 if isinstance(v, (dict, list)):
                     v = json.dumps(v)
                 values.append(v)
@@ -165,13 +169,3 @@ class QueryEngine:
             )
 
         return arrow_table
-
-    def _parse_json_column(
-        self, arrow_table: pa.Table, column_name: str
-    ) -> pa.Table:
-        """Parse a JSON string column into a struct-like representation.
-
-        For models, we flatten model_definition so fields inside it
-        are queryable.
-        """
-        return self._flatten_json_column(arrow_table, column_name)

@@ -17,9 +17,9 @@ def test_create_entity_first_version(store):
     assert result["_version"] == 1
     assert result["_status"] == "active"
     assert isinstance(result["base_data"], dict)
-    assert isinstance(result["_custom_fields"], dict)
+    assert isinstance(result["custom_fields"], dict)
     assert result["base_data"]["first_name"] == "Alice"
-    assert result["_custom_fields"]["city"] == "Springfield"
+    assert result["custom_fields"]["city"] == "Springfield"
 
 
 # ── 2. Second put archives v1, makes v2 active ───────────────────────────────
@@ -194,7 +194,7 @@ def test_entity_custom_fields_stored_as_toon(store):
     rows = table.search().where("entity_id = 'S001'").to_list()
     assert len(rows) == 1
 
-    raw_custom = rows[0]["_custom_fields"]
+    raw_custom = rows[0]["custom_fields"]
     # Should NOT be JSON (no braces)
     assert "{" not in raw_custom
     # Should be TOON format: "key: value"
@@ -211,11 +211,11 @@ def test_entity_custom_fields_empty_dict_ok(store):
         base_data={"first_name": "Alice", "last_name": "Smith"},
         custom_fields=None,
     )
-    assert result["_custom_fields"] == {}
+    assert result["custom_fields"] == {}
 
     active = store.get_active_entity("t1", "student", "S001")
     assert active is not None
-    assert active["_custom_fields"] == {}
+    assert active["custom_fields"] == {}
 
 
 # ── 12. Key conflict between base_data and custom_fields raises ValueError ─────
@@ -317,3 +317,25 @@ def test_delete_version_invalid_table_type(store):
             entity_type="student",
             entity_id="S001",
         )
+
+
+# ── 18. base_data is TOON-encoded (no braces in raw storage) ────────────────
+
+def test_entity_base_data_stored_as_toon(store):
+    store.put_entity(
+        tenant_id="t1",
+        entity_type="student",
+        entity_id="S001",
+        base_data={"first_name": "Alice", "last_name": "Smith"},
+    )
+
+    # Read raw from LanceDB
+    table = store._db.open_table(store._entities_table_name("t1"))
+    rows = table.search().where("entity_id = 'S001'").to_list()
+    assert len(rows) == 1
+
+    raw_base = rows[0]["base_data"]
+    # Should NOT be JSON (no braces)
+    assert "{" not in raw_base
+    # Should be TOON format: "key: value"
+    assert "first_name: Alice" in raw_base

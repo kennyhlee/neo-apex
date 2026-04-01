@@ -1,0 +1,68 @@
+.document-upload-dropzone {
+  border: 2px dashed var(--border-primary);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.document-upload-dropzone:hover,
+.document-upload-dropzone.dragging {
+  border-color: var(--color-accent);
+  background: rgba(55, 138, 221, 0.05);
+}
+
+.document-upload-dropzone.uploading {
+  cursor: wait;
+  border-color: var(--color-accent);
+}
+
+.document-upload-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.document-upload-hint {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.document-upload-status p {
+  margin: 0.5rem 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.document-upload-filename {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.document-upload-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid var(--border-primary);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+
+.document-upload-model {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 0.75rem;
+  text-align: right;
+}
+
+.document-upload-error {
+  background: rgba(212, 83, 126, 0.1);
+  color: var(--color-danger);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}

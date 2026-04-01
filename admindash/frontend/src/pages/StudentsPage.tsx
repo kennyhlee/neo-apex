@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { fetchStudents } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
@@ -112,6 +113,7 @@ function formatCustomLabel(key: string): string {
 
 export default function StudentsPage({ tenant }: StudentsPageProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [data, setData] = useState<Student[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -260,7 +262,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
       <div className="students-toolbar">
         <button>{t('students.batchExport')}</button>
         <button>{t('students.batchActions')}</button>
-        <button>{t('students.addStudent')}</button>
+        <button onClick={() => navigate('/students/add')}>{t('students.addStudent')}</button>
       </div>
 
       {error ? (

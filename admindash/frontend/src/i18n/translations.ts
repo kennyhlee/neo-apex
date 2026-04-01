@@ -82,6 +82,18 @@ export const translations: Record<Locale, Record<string, string>> = {
     'students.status.graduated': 'Graduated',
     'students.status.dropped': 'Dropped Out',
 
+    // Add Student
+    'addStudent.title': 'Add Student',
+    'addStudent.webForm': 'Web Form',
+    'addStudent.uploadDocument': 'Upload Document',
+    'addStudent.dropOrClick': 'Drop a file here or click to browse',
+    'addStudent.supportedFormats': 'Supported formats: PDF, PNG, JPG, JPEG',
+    'addStudent.extracting': 'Extracting information...',
+    'addStudent.unsupportedFormat': 'Unsupported file format. Use PDF, PNG, JPG, or JPEG.',
+    'addStudent.modelNotFound': 'Student model not configured. Please set up the student model in Papermite first.',
+    'addStudent.success': 'Student added successfully.',
+    'addStudent.submitError': 'Failed to add student. Please try again.',
+
     // Program
     'program.title': 'Course Management',
 
@@ -211,6 +223,18 @@ export const translations: Record<Locale, Record<string, string>> = {
     'students.status.suspended': '\u4f11\u5b66',
     'students.status.graduated': '\u5df2\u6bd5\u4e1a',
     'students.status.dropped': '\u5df2\u9000\u5b66',
+
+    // Add Student
+    'addStudent.title': '\u6dfb\u52a0\u5b66\u751f',
+    'addStudent.webForm': '\u8868\u5355\u5f55\u5165',
+    'addStudent.uploadDocument': '\u4e0a\u4f20\u6587\u4ef6',
+    'addStudent.dropOrClick': '\u62d6\u653e\u6587\u4ef6\u6216\u70b9\u51fb\u6d4f\u89c8',
+    'addStudent.supportedFormats': '\u652f\u6301\u683c\u5f0f\uff1aPDF\u3001PNG\u3001JPG\u3001JPEG',
+    'addStudent.extracting': '\u6b63\u5728\u63d0\u53d6\u4fe1\u606f...',
+    'addStudent.unsupportedFormat': '\u4e0d\u652f\u6301\u7684\u6587\u4ef6\u683c\u5f0f\u3002\u8bf7\u4f7f\u7528 PDF\u3001PNG\u3001JPG \u6216 JPEG\u3002',
+    'addStudent.modelNotFound': '\u5b66\u751f\u6a21\u578b\u672a\u914d\u7f6e\u3002\u8bf7\u5148\u5728 Papermite \u4e2d\u8bbe\u7f6e\u5b66\u751f\u6a21\u578b\u3002',
+    'addStudent.success': '\u5b66\u751f\u6dfb\u52a0\u6210\u529f\u3002',
+    'addStudent.submitError': '\u6dfb\u52a0\u5b66\u751f\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5\u3002',
 
     // Program
     'program.title': '\u8bfe\u7a0b\u7ba1\u7406',

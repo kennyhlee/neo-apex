@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import Navbar from './components/Navbar.tsx';
@@ -8,11 +8,17 @@ import HomePage from './pages/HomePage.tsx';
 import StudentsPage from './pages/StudentsPage.tsx';
 import LeadPage from './pages/LeadPage.tsx';
 import ProgramPage from './pages/ProgramPage.tsx';
+import AddStudentPage from './pages/AddStudentPage.tsx';
 import './App.css';
 
 function AppRoutes() {
   const { user, ready } = useAuth();
-  const [tenant, setTenant] = useState(user?.tenant_id ?? 'acmechildcenter');
+  const [tenant, setTenant] = useState(user?.tenant_id ?? '');
+
+  // Sync tenant with logged-in user's tenant_id
+  useEffect(() => {
+    if (user?.tenant_id) setTenant(user.tenant_id);
+  }, [user?.tenant_id]);
 
   if (!ready) return null;
 
@@ -36,6 +42,10 @@ function AppRoutes() {
               <main className="app-main">
                 <Routes>
                   <Route path="/home" element={<HomePage />} />
+                  <Route
+                    path="/students/add"
+                    element={<AddStudentPage tenant={tenant} />}
+                  />
                   <Route
                     path="/students"
                     element={<StudentsPage tenant={tenant} />}
