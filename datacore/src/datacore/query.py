@@ -87,6 +87,64 @@ class QueryEngine:
 
         return {"rows": rows, "total": total}
 
+    def semantic_search(
+        self,
+        tenant_id: str,
+        query: str,
+        entity_type: str | None = None,
+        limit: int = 10,
+        distance_threshold: float | None = None,
+    ) -> dict:
+        """Search entities by semantic similarity to a natural language query.
+
+        Args:
+            tenant_id: tenant scope
+            query: natural language search text
+            entity_type: optional filter to scope by entity type
+            limit: max results to return (default 10)
+            distance_threshold: optional max distance to include. Note: applied
+                after LanceDB's limit, so fewer than `limit` results may be returned.
+
+        Returns:
+            {"results": [...], "total": int} with _distance per result
+        """
+        table_name = self.store._entities_table_name(tenant_id)
+        if table_name not in self.store._table_names():
+            return {"results": [], "total": 0}
+
+        if not self.store.embedder:
+            raise ValueError("semantic_search requires an Embedder instance on the Store")
+
+        # Embed the query
+        query_vector = self.store.embedder.embed_query(query)
+
+        # Run vector search
+        table = self.store._db.open_table(table_name)
+        search = table.search(query_vector).limit(limit)
+
+        # Apply entity_type filter
+        where_clauses = ["_status = 'active'"]
+        if entity_type:
+            safe_type = entity_type.replace("'", "''")
+            where_clauses.append(f"entity_type = '{safe_type}'")
+        search = search.where(" AND ".join(where_clauses))
+
+        rows = search.to_list()
+
+        # Apply distance threshold if specified
+        if distance_threshold is not None:
+            rows = [r for r in rows if r.get("_distance", float("inf")) <= distance_threshold]
+
+        # Decode TOON fields and clean up results
+        results = []
+        for row in rows:
+            row["base_data"] = toon.decode(row["base_data"]) if row["base_data"] else {}
+            row["custom_fields"] = toon.decode(row["custom_fields"]) if row["custom_fields"] else {}
+            row.pop("vector", None)
+            results.append(row)
+
+        return {"results": results, "total": len(results)}
+
     def _flatten_custom_fields(self, arrow_table: pa.Table) -> pa.Table:
         """Flatten custom_fields TOON into individual columns.
 
