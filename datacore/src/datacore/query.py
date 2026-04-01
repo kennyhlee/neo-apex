@@ -111,10 +111,7 @@ class QueryEngine:
             else:
                 parsed.append({})
 
-        if not all_keys:
-            return arrow_table
-
-        # Add each custom field as a new column
+        # Add each custom field as a new column (skip if none found)
         for key in all_keys:
             values = []
             for row in parsed:

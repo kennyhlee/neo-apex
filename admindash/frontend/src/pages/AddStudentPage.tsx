@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
-import { fetchStudentModel, createStudent, extractStudentFromDocument } from '../api/client.ts';
+import { createStudent, extractStudentFromDocument } from '../api/client.ts';
+import { useModel } from '../contexts/ModelContext.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import DocumentUpload from '../components/DocumentUpload.tsx';
 import type { ModelDefinition } from '../types/models.ts';
@@ -14,6 +15,7 @@ interface AddStudentPageProps {
 export default function AddStudentPage({ tenant }: AddStudentPageProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { getModel } = useModel();
 
   const [activeTab, setActiveTab] = useState<'form' | 'upload'>('form');
   const [modelDef, setModelDef] = useState<ModelDefinition | null>(null);
@@ -27,11 +29,11 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
   useEffect(() => {
     setLoading(true);
     setModelError(null);
-    fetchStudentModel(tenant)
-      .then((resp) => setModelDef(resp.model_definition))
+    getModel(tenant, 'student')
+      .then((def) => setModelDef(def))
       .catch(() => setModelError(t('addStudent.modelNotFound')))
       .finally(() => setLoading(false));
-  }, [tenant, t]);
+  }, [tenant, getModel, t]);
 
   const handleExtracted = (fields: Record<string, string>) => {
     setExtractedValues((prev) => ({ ...prev, ...fields }));
@@ -50,9 +52,11 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await createStudent(tenant, baseData, customFields);
+      const result = await createStudent(tenant, baseData, customFields);
       setSuccessMessage(t('addStudent.success'));
-      setTimeout(() => navigate('/students'), 1500);
+      setTimeout(() => navigate('/students', {
+        state: { highlightEntityId: result.entity_id },
+      }), 1500);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : t('addStudent.submitError'));
     } finally {

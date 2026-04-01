@@ -18,6 +18,17 @@ interface DataTableProps<T> {
   loading?: boolean;
   onPageChange: (page: number) => void;
   rowKey: (row: T) => string;
+  // Sort
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
+  onSortChange?: (column: string) => void;
+  // Page size
+  pageSizeOptions?: number[];
+  onPageSizeChange?: (size: number) => void;
+  // Column visibility
+  hiddenColumns?: string[];
+  // Row styling
+  rowClassName?: (row: T) => string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,10 +41,22 @@ export default function DataTable<T extends Record<string, any>>({
   loading,
   onPageChange,
   rowKey,
+  sortBy,
+  sortDir,
+  onSortChange,
+  pageSizeOptions,
+  onPageSizeChange,
+  hiddenColumns,
+  rowClassName,
 }: DataTableProps<T>) {
   const { t } = useTranslation();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const hiddenSet = hiddenColumns ? new Set(hiddenColumns) : null;
+  const visibleColumns = hiddenSet
+    ? columns.filter((col) => !hiddenSet.has(col.key))
+    : columns;
 
   const allOnPageSelected =
     data.length > 0 && data.every((row) => selectedIds.has(rowKey(row)));
@@ -82,9 +105,20 @@ export default function DataTable<T extends Record<string, any>>({
                   onChange={toggleAll}
                 />
               </th>
-              {columns.map((col) => (
-                <th key={col.key}>
-                  {col.i18nKey ? t(col.i18nKey) : col.label}
+              {visibleColumns.map((col) => (
+                <th
+                  key={col.key}
+                  className={onSortChange ? 'data-table-sortable' : undefined}
+                  onClick={onSortChange ? () => onSortChange(col.key) : undefined}
+                >
+                  <span className="data-table-header-content">
+                    {col.i18nKey ? t(col.i18nKey) : col.label}
+                    {sortBy === col.key && (
+                      <span className="data-table-sort-indicator">
+                        {sortDir === 'asc' ? '\u25B2' : '\u25BC'}
+                      </span>
+                    )}
+                  </span>
                 </th>
               ))}
             </tr>
@@ -93,7 +127,7 @@ export default function DataTable<T extends Record<string, any>>({
             {loading ? (
               <tr>
                 <td
-                  colSpan={columns.length + 1}
+                  colSpan={visibleColumns.length + 1}
                   className="data-table-empty"
                 >
                   {t('common.loading')}
@@ -102,7 +136,7 @@ export default function DataTable<T extends Record<string, any>>({
             ) : data.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length + 1}
+                  colSpan={visibleColumns.length + 1}
                   className="data-table-empty"
                 >
                   {t('students.noResults')}
@@ -111,8 +145,9 @@ export default function DataTable<T extends Record<string, any>>({
             ) : (
               data.map((row) => {
                 const id = rowKey(row);
+                const extraClass = rowClassName ? rowClassName(row) : '';
                 return (
-                  <tr key={id}>
+                  <tr key={id} className={extraClass || undefined}>
                     <td className="data-table-checkbox">
                       <input
                         type="checkbox"
@@ -120,7 +155,7 @@ export default function DataTable<T extends Record<string, any>>({
                         onChange={() => toggleRow(id)}
                       />
                     </td>
-                    {columns.map((col) => (
+                    {visibleColumns.map((col) => (
                       <td key={col.key}>
                         {col.render
                           ? col.render(row)
@@ -138,6 +173,21 @@ export default function DataTable<T extends Record<string, any>>({
         <div className="data-table-pagination-info">
           {t('common.showing')} {startRecord} {t('common.to')} {endRecord}{' '}
           {t('common.of')} {total} {t('common.records')}
+          {pageSizeOptions && onPageSizeChange && (
+            <span className="data-table-page-size">
+              {t('students.pageSize')}{' '}
+              <select
+                value={pageSize}
+                onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              >
+                {pageSizeOptions.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </span>
+          )}
         </div>
         <div className="data-table-pagination-controls">
           <button
