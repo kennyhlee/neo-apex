@@ -52,9 +52,11 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await createStudent(tenant, baseData, customFields);
+      const result = await createStudent(tenant, baseData, customFields);
       setSuccessMessage(t('addStudent.success'));
-      setTimeout(() => navigate('/students'), 1500);
+      setTimeout(() => navigate('/students', {
+        state: { highlightEntityId: result.entity_id },
+      }), 1500);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : t('addStudent.submitError'));
     } finally {
