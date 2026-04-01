@@ -1,29 +1,135 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
-import { fetchStudents } from '../api/client.ts';
+import { useAuth } from '../contexts/AuthContext.tsx';
+import { useModel } from '../contexts/ModelContext.tsx';
+import { useTablePreferences } from '../hooks/useTablePreferences.ts';
+import { queryStudents } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
-import type { Student } from '../types/models.ts';
+import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
 
-const PAGE_SIZE = 10;
+type DataRow = Record<string, unknown>;
+
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const;
+const DEFAULT_PAGE_SIZE = 20;
+
+const STATUS_OPTIONS = [
+  { value: 'active', i18nKey: 'students.status.active' },
+  { value: 'on_leave', i18nKey: 'students.status.onLeave' },
+  { value: 'suspended', i18nKey: 'students.status.suspended' },
+  { value: 'graduated', i18nKey: 'students.status.graduated' },
+  { value: 'dropped', i18nKey: 'students.status.dropped' },
+];
+
+/** Fields that get a dedicated Status dropdown instead of a dynamic input */
+const SKIP_DYNAMIC_FIELDS = new Set(['enrollment_status', '_status']);
 
 interface StudentsPageProps {
   tenant: string;
 }
 
 /**
- * Builds the required (fixed) columns that every tenant sees.
+ * Converts snake_case or camelCase field names to Title Case labels.
  */
-function getRequiredColumns(): Column<Student>[] {
+function formatFieldLabel(key: string): string {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Build columns from a model definition. Base fields first, then custom fields,
+ * in model definition order. Special rendering for name and status fields.
+ */
+function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
+  const cols: Column<DataRow>[] = [];
+
+  for (const field of model.base_fields) {
+    if (field.name === 'first_name') {
+      // Composite name column — placed at position of first_name
+      cols.push({
+        key: 'name',
+        label: 'Student Name',
+        i18nKey: 'students.name',
+        render: (row: DataRow) => {
+          const fullName =
+            `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || '-';
+          const avatarChar = fullName.charAt(0);
+          return (
+            <div className="student-name-cell">
+              <div className="student-avatar">{avatarChar}</div>
+              <div className="student-name-info">
+                <span className="student-display-name">{fullName}</span>
+                {row.preferred_name ? (
+                  <span className="student-preferred-name">
+                    {String(row.preferred_name)}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          );
+        },
+      });
+      continue;
+    }
+    if (field.name === 'last_name' || field.name === 'preferred_name') {
+      // Consumed by composite name column
+      continue;
+    }
+
+    const i18nMap: Record<string, string> = {
+      student_id: 'students.studentId',
+      gender: 'students.gender',
+      dob: 'students.dob',
+      grade_level: 'students.gradeLevel',
+      email: 'students.email',
+    };
+
+    cols.push({
+      key: field.name,
+      label: formatFieldLabel(field.name),
+      i18nKey: i18nMap[field.name],
+      render: field.name === 'enrollment_status' || field.name === '_status'
+        ? (row: DataRow) => <StatusBadge status={String(row._status ?? row.enrollment_status ?? '-')} />
+        : undefined,
+    });
+  }
+
+  // Status column from _status (always present in query response)
+  // Add if not already included from base_fields
+  if (!cols.some((c) => c.key === 'enrollment_status' || c.key === '_status')) {
+    cols.push({
+      key: '_status',
+      label: 'Status',
+      i18nKey: 'students.status',
+      render: (row: DataRow) => <StatusBadge status={String(row._status ?? '-')} />,
+    });
+  }
+
+  for (const field of model.custom_fields) {
+    cols.push({
+      key: field.name,
+      label: formatFieldLabel(field.name),
+    });
+  }
+
+  return cols;
+}
+
+/**
+ * Build fallback columns when no model is available.
+ */
+function getFallbackColumns(): Column<DataRow>[] {
   return [
     {
       key: 'name',
       label: 'Student Name',
       i18nKey: 'students.name',
-      render: (row: Student) => {
+      render: (row: DataRow) => {
         const fullName =
           `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || '-';
         const avatarChar = fullName.charAt(0);
@@ -32,11 +138,11 @@ function getRequiredColumns(): Column<Student>[] {
             <div className="student-avatar">{avatarChar}</div>
             <div className="student-name-info">
               <span className="student-display-name">{fullName}</span>
-              {row.preferred_name && (
+              {row.preferred_name ? (
                 <span className="student-preferred-name">
-                  {row.preferred_name}
+                  {String(row.preferred_name)}
                 </span>
-              )}
+              ) : null}
             </div>
           </div>
         );
@@ -45,101 +151,137 @@ function getRequiredColumns(): Column<Student>[] {
     { key: 'student_id', label: 'Student ID', i18nKey: 'students.studentId' },
     { key: 'gender', label: 'Gender', i18nKey: 'students.gender' },
     { key: 'dob', label: 'Date of Birth', i18nKey: 'students.dob' },
-    {
-      key: 'grade_level',
-      label: 'Grade Level',
-      i18nKey: 'students.gradeLevel',
-    },
+    { key: 'grade_level', label: 'Grade Level', i18nKey: 'students.gradeLevel' },
     { key: 'email', label: 'Email', i18nKey: 'students.email' },
     {
-      key: 'guardian',
-      label: 'Guardian',
-      i18nKey: 'students.guardian',
-      render: (row: Student) => {
-        const name = [row.guardian1_first_name, row.guardian1_last_name]
-          .filter(Boolean)
-          .join(' ');
-        return name || '-';
-      },
-    },
-    {
-      key: 'enrollment_status',
+      key: '_status',
       label: 'Status',
       i18nKey: 'students.status',
-      render: (row: Student) => (
-        <StatusBadge status={row.enrollment_status} />
-      ),
+      render: (row: DataRow) => <StatusBadge status={String(row._status ?? '-')} />,
     },
   ];
 }
 
 /**
- * Discovers custom_fields keys across the current page of data and
- * builds dynamic columns for them. Keys are sorted alphabetically.
+ * Build dynamic filter fields from model base_fields, skipping status-like fields.
  */
-function getCustomColumns(data: Student[]): Column<Student>[] {
-  const keys = new Set<string>();
-  for (const student of data) {
-    if (student.custom_fields) {
-      for (const k of Object.keys(student.custom_fields)) {
-        keys.add(k);
-      }
-    }
-  }
-  return Array.from(keys)
-    .sort()
-    .map((key) => ({
-      key: `custom:${key}`,
-      label: formatCustomLabel(key),
-      render: (row: Student) => {
-        const val = row.custom_fields?.[key];
-        if (val == null) return '-';
-        if (typeof val === 'object') return JSON.stringify(val);
-        return String(val);
-      },
-    }));
-}
-
-/**
- * Converts snake_case or camelCase field names to Title Case labels.
- * e.g. "school_name" -> "School Name", "emergencyPhone" -> "Emergency Phone"
- */
-function formatCustomLabel(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+function getDynamicFilterFields(model: ModelDefinition | undefined): ModelFieldDefinition[] {
+  if (!model) return [];
+  return model.base_fields.filter(
+    (f) => !SKIP_DYNAMIC_FIELDS.has(f.name) && f.name !== 'preferred_name',
+  );
 }
 
 export default function StudentsPage({ tenant }: StudentsPageProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [data, setData] = useState<Student[]>([]);
+  const location = useLocation();
+  const { user } = useAuth();
+  const { getModel, getCachedModel } = useModel();
+
+  // Data state
+  const [data, setData] = useState<DataRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modelLoaded, setModelLoaded] = useState(false);
 
-  // Filter state
-  const [filterName, setFilterName] = useState('');
-  const [filterId, setFilterId] = useState('');
-  const [filterGrade, setFilterGrade] = useState('');
-  const [filterGender, setFilterGender] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterEmail, setFilterEmail] = useState('');
+  // Filter state — _status defaults to 'active'
+  const [filters, setFilters] = useState<Record<string, string>>({ _status: 'active' });
 
+  // Column popover state
+  const [showColumnPopover, setShowColumnPopover] = useState(false);
+  const columnToggleRef = useRef<HTMLDivElement>(null);
+
+  // Highlight state from navigation
+  const highlightEntityId = (location.state as { highlightEntityId?: string } | null)?.highlightEntityId ?? null;
+  const [activeHighlight, setActiveHighlight] = useState<string | null>(highlightEntityId);
+
+  // Model loading
+  useEffect(() => {
+    getModel(tenant, 'student').then(() => setModelLoaded(true)).catch(() => setModelLoaded(true));
+  }, [tenant, getModel]);
+
+  const model = getCachedModel('student');
+
+  // Build columns from model
+  const columns = useMemo<Column<DataRow>[]>(() => {
+    if (model) return buildColumnsFromModel(model);
+    return getFallbackColumns();
+  }, [model]);
+
+  const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
+
+  // Table preferences
+  const userId = user?.user_id ?? 'anonymous';
+  const { prefs, updatePrefs, toggleColumn } = useTablePreferences(userId, tenant, columnKeys);
+
+  // Adaptive page size on mount
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hasUserChangedPageSize = useRef(false);
+
+  useEffect(() => {
+    if (hasUserChangedPageSize.current) return;
+    if (prefs.pageSize !== DEFAULT_PAGE_SIZE) return; // user had a saved non-default
+    const el = containerRef.current;
+    if (!el) return;
+    const containerHeight = el.clientHeight;
+    const estimatedRowHeight = 48; // approximate row height in px
+    const headerOverhead = 260; // filters + toolbar + pagination + header
+    const availableHeight = containerHeight - headerOverhead;
+    if (availableHeight <= 0) return;
+    const fittingRows = Math.floor(availableHeight / estimatedRowHeight);
+    const rounded = Math.max(10, Math.min(50, Math.floor(fittingRows / 10) * 10));
+    if (rounded !== prefs.pageSize) {
+      updatePrefs({ pageSize: rounded as 10 | 20 | 30 | 40 | 50 });
+    }
+  }, [modelLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load data
   const loadData = useCallback(
-    async (p: number) => {
+    async (p: number, currentFilters?: Record<string, string>) => {
       setLoading(true);
       setError(null);
+      const f = currentFilters ?? filters;
       try {
-        const res = await fetchStudents(tenant, PAGE_SIZE, (p - 1) * PAGE_SIZE);
-        setData(res.data ?? []);
+        const res = await queryStudents(tenant, {
+          ...f,
+          sort_by: prefs.sortBy,
+          sort_dir: prefs.sortDir,
+          limit: prefs.pageSize,
+          offset: (p - 1) * prefs.pageSize,
+        });
+        let rows = res.data ?? [];
+
+        // Highlight: prepend newly-added entity on page 1
+        if (activeHighlight && p === 1) {
+          const alreadyPresent = rows.some((r) => String(r.entity_id) === activeHighlight);
+          if (!alreadyPresent) {
+            // Fetch the specific entity via a query
+            try {
+              const highlighted = await queryStudents(tenant, {
+                limit: 1,
+                offset: 0,
+              });
+              const found = highlighted.data?.find(
+                (r) => String(r.entity_id) === activeHighlight,
+              );
+              if (found) {
+                rows = [found, ...rows];
+              }
+            } catch {
+              // ignore — highlight is best effort
+            }
+          }
+        }
+
+        setData(rows);
         setTotal(res.total ?? 0);
         setPage(p);
       } catch (err) {
         setError(
-          `Failed to load students. Is the backend at http://localhost:8080 running? (${err})`,
+          `Failed to load students. Is the datacore API at http://localhost:8081 running? (${err})`,
         );
         setData([]);
         setTotal(0);
@@ -147,136 +289,183 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         setLoading(false);
       }
     },
-    [tenant],
+    [tenant, filters, prefs.sortBy, prefs.sortDir, prefs.pageSize, activeHighlight],
   );
 
+  // Fetch on mount and when deps change
   useEffect(() => {
-    loadData(1);
-  }, [loadData]);
+    if (modelLoaded) {
+      loadData(1);
+    }
+  }, [modelLoaded, loadData]);
+
+  // Close column popover on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        columnToggleRef.current &&
+        !columnToggleRef.current.contains(e.target as Node)
+      ) {
+        setShowColumnPopover(false);
+      }
+    }
+    if (showColumnPopover) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showColumnPopover]);
+
+  // Filter handlers
+  function updateFilter(key: string, value: string) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
 
   function handleSearch() {
     loadData(1);
   }
 
   function handleReset() {
-    setFilterName('');
-    setFilterId('');
-    setFilterGrade('');
-    setFilterGender('');
-    setFilterStatus('');
-    setFilterEmail('');
-    loadData(1);
+    const resetFilters = { _status: 'active' };
+    setFilters(resetFilters);
+    loadData(1, resetFilters);
   }
 
-  // Combine required + dynamic custom columns
-  const requiredCols = useMemo(() => getRequiredColumns(), []);
-  const customCols = useMemo(() => getCustomColumns(data), [data]);
-  const columns = useMemo(
-    () => [...requiredCols, ...customCols],
-    [requiredCols, customCols],
-  );
+  // Sort handler
+  function handleSortChange(column: string) {
+    const newDir =
+      prefs.sortBy === column && prefs.sortDir === 'asc' ? 'desc' : 'asc';
+    updatePrefs({ sortBy: column, sortDir: newDir });
+    setActiveHighlight(null); // clear highlight on sort change
+  }
+
+  // Page size handler
+  function handlePageSizeChange(size: number) {
+    hasUserChangedPageSize.current = true;
+    updatePrefs({ pageSize: size as 10 | 20 | 30 | 40 | 50 });
+  }
+
+  // Row class for highlight
+  function rowClassName(row: DataRow): string {
+    if (activeHighlight && String(row.entity_id) === activeHighlight) {
+      return 'data-table-row-highlight';
+    }
+    return '';
+  }
+
+  // Clear highlight on navigation away
+  useEffect(() => {
+    return () => {
+      // Replace state to remove highlightEntityId so back-nav doesn't re-highlight
+      if (highlightEntityId) {
+        window.history.replaceState({}, '');
+      }
+    };
+  }, [highlightEntityId]);
+
+  // Dynamic filter fields from model
+  const dynamicFilterFields = useMemo(() => getDynamicFilterFields(model), [model]);
 
   return (
-    <div className="students-page">
+    <div className="students-page" ref={containerRef}>
       <h1>{t('students.title')}</h1>
 
       <FilterForm onSearch={handleSearch} onReset={handleReset}>
-        <div className="filter-field">
-          <label>{t('students.searchName')}</label>
-          <input
-            type="text"
-            placeholder={t('students.searchNamePlaceholder')}
-            value={filterName}
-            onChange={(e) => setFilterName(e.target.value)}
-          />
-        </div>
-        <div className="filter-field">
-          <label>{t('students.searchId')}</label>
-          <input
-            type="text"
-            placeholder={t('students.searchIdPlaceholder')}
-            value={filterId}
-            onChange={(e) => setFilterId(e.target.value)}
-          />
-        </div>
-        <div className="filter-field">
-          <label>{t('students.searchGrade')}</label>
-          <select
-            value={filterGrade}
-            onChange={(e) => setFilterGrade(e.target.value)}
-          >
-            <option value="">{t('students.allGrades')}</option>
-            {[1, 2, 3, 4, 5, 6].map((g) => (
-              <option key={g} value={`Grade ${g}`}>
-                {t(`grade.grade${g}`)}
-              </option>
-            ))}
-            {[1, 2, 3].map((g) => (
-              <option key={`m${g}`} value={`Grade ${6 + g}`}>
-                {t(`grade.middle${g}`)}
-              </option>
-            ))}
-            {[1, 2, 3].map((g) => (
-              <option key={`h${g}`} value={`Grade ${9 + g}`}>
-                {t(`grade.high${g}`)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="filter-field">
-          <label>{t('students.searchGender')}</label>
-          <select
-            value={filterGender}
-            onChange={(e) => setFilterGender(e.target.value)}
-          >
-            <option value="">{t('students.allGenders')}</option>
-            <option value="Male">Male</option>
-            <option value="Female">Female</option>
-          </select>
-        </div>
+        {dynamicFilterFields.map((field) => (
+          <div className="filter-field" key={field.name}>
+            <label>{formatFieldLabel(field.name)}</label>
+            {field.type === 'selection' && field.options ? (
+              <select
+                value={filters[field.name] ?? ''}
+                onChange={(e) => updateFilter(field.name, e.target.value)}
+              >
+                <option value="">All</option>
+                {field.options.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                placeholder={`Search ${formatFieldLabel(field.name).toLowerCase()}`}
+                value={filters[field.name] ?? ''}
+                onChange={(e) => updateFilter(field.name, e.target.value)}
+              />
+            )}
+          </div>
+        ))}
+        {/* Dedicated Status dropdown */}
         <div className="filter-field">
           <label>{t('students.searchStatus')}</label>
           <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            value={filters._status ?? ''}
+            onChange={(e) => updateFilter('_status', e.target.value)}
           >
             <option value="">{t('students.allStatus')}</option>
-            <option value="Active">{t('students.status.active')}</option>
-            <option value="On Leave">{t('students.status.onLeave')}</option>
-            <option value="Suspended">{t('students.status.suspended')}</option>
-            <option value="Graduated">{t('students.status.graduated')}</option>
-            <option value="Dropped">{t('students.status.dropped')}</option>
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {t(opt.i18nKey)}
+              </option>
+            ))}
           </select>
         </div>
+        {/* Address search */}
         <div className="filter-field">
-          <label>{t('students.searchEmail')}</label>
+          <label>{t('students.addressSearch')}</label>
           <input
             type="text"
-            placeholder={t('students.searchEmailPlaceholder')}
-            value={filterEmail}
-            onChange={(e) => setFilterEmail(e.target.value)}
+            placeholder={t('students.addressSearchPlaceholder')}
+            value={filters.address ?? ''}
+            onChange={(e) => updateFilter('address', e.target.value)}
           />
         </div>
       </FilterForm>
 
       <div className="students-toolbar">
+        <div className="students-column-toggle" ref={columnToggleRef}>
+          <button onClick={() => setShowColumnPopover((prev) => !prev)}>
+            {t('students.columnSettings')}
+          </button>
+          {showColumnPopover && (
+            <div className="students-column-popover">
+              {columns.map((col) => (
+                <label key={col.key} className="students-column-option">
+                  <input
+                    type="checkbox"
+                    checked={!prefs.hiddenColumns.includes(col.key)}
+                    onChange={() => toggleColumn(col.key)}
+                  />
+                  {col.i18nKey ? t(col.i18nKey) : col.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
         <button>{t('students.batchExport')}</button>
         <button>{t('students.batchActions')}</button>
-        <button onClick={() => navigate('/students/add')}>{t('students.addStudent')}</button>
+        <button onClick={() => navigate('/students/add')}>
+          {t('students.addStudent')}
+        </button>
       </div>
 
       {error ? (
         <div className="student-error">{error}</div>
       ) : (
-        <DataTable<Student>
+        <DataTable<DataRow>
           columns={columns}
           data={data}
           total={total}
           page={page}
-          pageSize={PAGE_SIZE}
+          pageSize={prefs.pageSize}
           loading={loading}
-          onPageChange={loadData}
-          rowKey={(row) => row.student_id}
+          onPageChange={(p) => loadData(p)}
+          rowKey={(row) => String(row.entity_id ?? '')}
+          sortBy={prefs.sortBy}
+          sortDir={prefs.sortDir}
+          onSortChange={handleSortChange}
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+          onPageSizeChange={handlePageSizeChange}
+          hiddenColumns={prefs.hiddenColumns}
+          rowClassName={rowClassName}
         />
       )}
     </div>

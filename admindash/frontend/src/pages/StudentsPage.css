@@ -77,3 +77,46 @@
   border-radius: var(--radius-md);
   margin-top: 1rem;
 }
+
+.students-column-toggle {
+  position: relative;
+}
+
+.students-column-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  margin-top: 0.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-elevated);
+  padding: 0.5rem;
+  min-width: 180px;
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.students-column-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.students-column-option:hover {
+  background: var(--accent-glow);
+}
+
+.students-column-option input[type="checkbox"] {
+  width: 0.9rem;
+  height: 0.9rem;
+}
