@@ -128,8 +128,11 @@ def test_entity_version_trimming_different_limits(store):
 # ── 8. Default version limit (no entity_version_limits) applies 5 ─────────────
 
 def test_entity_version_trimming_default_limit(tmp_dir):
+    from unittest.mock import MagicMock
+    mock_embedder = MagicMock()
+    mock_embedder.embed.return_value = [0.0] * 1024
     # Create a Store with no entity_version_limits — default is 5
-    s = Store(data_dir=tmp_dir)
+    s = Store(data_dir=tmp_dir, embedder=mock_embedder)
     for i in range(8):
         s.put_entity(
             tenant_id="t1",

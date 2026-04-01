@@ -37,6 +37,7 @@ ENTITIES_SCHEMA = pa.schema([
     pa.field("entity_id", pa.string()),
     pa.field("base_data", pa.string()),         # TOON-encoded document
     pa.field("custom_fields", pa.string()),    # TOON-encoded document
+    pa.field("vector", pa.list_(pa.float32(), 1024)),
 ] + _META_FIELDS)
 
 
@@ -55,6 +56,7 @@ class Store:
     def __init__(
         self,
         data_dir: str | Path = DEFAULT_DATA_DIR,
+        embedder=None,
         max_model_versions: int = 100,
         default_max_entity_versions: int = 5,
         entity_version_limits: dict[str, int] | None = None,
@@ -62,6 +64,7 @@ class Store:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._db = lancedb.connect(str(self.data_dir))
+        self.embedder = embedder
         self.max_model_versions = max_model_versions
         self.default_max_entity_versions = default_max_entity_versions
         self.entity_version_limits = entity_version_limits or {}
@@ -287,12 +290,18 @@ class Store:
                 row["_updated_at"] = now
             table.add(active_rows)
 
+        # Generate embedding from entity fields
+        all_fields = dict(base_data)
+        all_fields.update(custom_fields or {})
+        vector = self.embedder.embed(all_fields) if self.embedder else [0.0] * 1024
+
         # Insert new active — custom fields stored as TOON format
         record = {
             "entity_type": entity_type,
             "entity_id": entity_id,
             "base_data": toon.encode(base_data),
             "custom_fields": toon.encode(custom_fields or {}),
+            "vector": vector,
             "_version": next_version,
             "_status": "active",
             "_change_id": change_id,
@@ -306,6 +315,7 @@ class Store:
 
         record["base_data"] = base_data
         record["custom_fields"] = custom_fields or {}
+        del record["vector"]
         return record
 
     def get_active_entity(

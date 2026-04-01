@@ -1,6 +1,16 @@
 import tempfile
+from unittest.mock import MagicMock
+
 import pytest
 from datacore import Store, QueryEngine
+
+
+@pytest.fixture
+def mock_embedder():
+    embedder = MagicMock()
+    embedder.embed.return_value = [0.0] * 1024
+    embedder.embed_batch.return_value = []
+    return embedder
 
 
 @pytest.fixture
@@ -10,9 +20,10 @@ def tmp_dir():
 
 
 @pytest.fixture
-def store(tmp_dir):
+def store(tmp_dir, mock_embedder):
     return Store(
         data_dir=tmp_dir,
+        embedder=mock_embedder,
         max_model_versions=5,
         default_max_entity_versions=3,
         entity_version_limits={"student": 3, "staff": 2},
