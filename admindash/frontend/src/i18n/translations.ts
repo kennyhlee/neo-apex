@@ -94,6 +94,15 @@ export const translations: Record<Locale, Record<string, string>> = {
     'addStudent.success': 'Student added successfully.',
     'addStudent.submitError': 'Failed to add student. Please try again.',
 
+    // Student List
+    'students.pageSize': 'Rows per page',
+    'students.columnSettings': 'Columns',
+    'students.addressSearch': 'Address',
+    'students.addressSearchPlaceholder': 'Search by address, city, state, zip',
+    'students.sortAsc': 'Sorted ascending',
+    'students.sortDesc': 'Sorted descending',
+    'students.showAll': 'Show All',
+
     // Program
     'program.title': 'Course Management',
 
@@ -235,6 +244,15 @@ export const translations: Record<Locale, Record<string, string>> = {
     'addStudent.modelNotFound': '\u5b66\u751f\u6a21\u578b\u672a\u914d\u7f6e\u3002\u8bf7\u5148\u5728 Papermite \u4e2d\u8bbe\u7f6e\u5b66\u751f\u6a21\u578b\u3002',
     'addStudent.success': '\u5b66\u751f\u6dfb\u52a0\u6210\u529f\u3002',
     'addStudent.submitError': '\u6dfb\u52a0\u5b66\u751f\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5\u3002',
+
+    // Student List
+    'students.pageSize': '\u6bcf\u9875\u884c\u6570',
+    'students.columnSettings': '\u5217\u8bbe\u7f6e',
+    'students.addressSearch': '\u5730\u5740',
+    'students.addressSearchPlaceholder': '\u6309\u5730\u5740\u3001\u57ce\u5e02\u3001\u5dde\u3001\u90ae\u7f16\u641c\u7d22',
+    'students.sortAsc': '\u5347\u5e8f\u6392\u5217',
+    'students.sortDesc': '\u964d\u5e8f\u6392\u5217',
+    'students.showAll': '\u663e\u793a\u5168\u90e8',
 
     // Program
     'program.title': '\u8bfe\u7a0b\u7ba1\u7406',
