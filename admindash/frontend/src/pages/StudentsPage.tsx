@@ -337,9 +337,11 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Sort handler
   function handleSortChange(column: string) {
+    // Map composite UI column keys to actual data column names
+    const sortColumn = column === 'name' ? 'last_name' : column;
     const newDir =
-      prefs.sortBy === column && prefs.sortDir === 'asc' ? 'desc' : 'asc';
-    updatePrefs({ sortBy: column, sortDir: newDir });
+      prefs.sortBy === sortColumn && prefs.sortDir === 'asc' ? 'desc' : 'asc';
+    updatePrefs({ sortBy: sortColumn, sortDir: newDir });
     setActiveHighlight(null); // clear highlight on sort change
   }
 

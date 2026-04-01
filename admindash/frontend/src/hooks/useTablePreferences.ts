@@ -42,7 +42,7 @@ function loadPreferences(
     return {
       hiddenColumns: (parsed.hiddenColumns ?? []).filter((c) => colSet.has(c)),
       pageSize: validatePageSize(parsed.pageSize ?? 20),
-      sortBy: parsed.sortBy ?? DEFAULT_PREFS.sortBy,
+      sortBy: (parsed.sortBy && colSet.has(parsed.sortBy)) ? parsed.sortBy : DEFAULT_PREFS.sortBy,
       sortDir: parsed.sortDir === 'desc' ? 'desc' : 'asc',
     };
   } catch {
