@@ -130,3 +130,90 @@ def test_create_entity_persists_to_store(app_client):
     assert active is not None
     assert active["base_data"]["first_name"] == "Alice"
     assert active["custom_fields"]["city"] == "Springfield"
+
+
+# --- Query endpoint tests ---
+
+
+def test_query_default_returns_active_students(app_client):
+    client, store = app_client
+    store.put_entity("t1", "student", "s1", {"first_name": "Zara", "last_name": "Adams"}, {})
+    store.put_entity("t1", "student", "s2", {"first_name": "Alice", "last_name": "Brown"}, {})
+    store.put_entity("t1", "student", "s3", {"first_name": "Bob", "last_name": "Clark"}, {})
+
+    resp = client.get("/api/entities/t1/student/query")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 3
+    assert len(body["data"]) == 3
+    assert body["data"][0]["last_name"] == "Adams"
+    assert body["data"][1]["last_name"] == "Brown"
+
+
+def test_query_filters_by_entity_type(app_client):
+    client, store = app_client
+    store.put_entity("t1", "student", "s1", {"last_name": "A"}, {})
+    store.put_entity("t1", "teacher", "t1", {"last_name": "B"}, {})
+
+    resp = client.get("/api/entities/t1/student/query")
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+    assert resp.json()["data"][0]["entity_type"] == "student"
+
+
+def test_query_sort(app_client):
+    client, store = app_client
+    store.put_entity("t1", "student", "s1", {"first_name": "Zara", "last_name": "A"}, {})
+    store.put_entity("t1", "student", "s2", {"first_name": "Alice", "last_name": "B"}, {})
+
+    resp = client.get("/api/entities/t1/student/query?sort_by=first_name&sort_dir=desc")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data[0]["first_name"] == "Zara"
+
+
+def test_query_invalid_sort_column(app_client):
+    client, store = app_client
+    store.put_entity("t1", "student", "s1", {"last_name": "A"}, {})
+    resp = client.get("/api/entities/t1/student/query?sort_by=nonexistent")
+    assert resp.status_code == 400
+
+
+def test_query_pagination(app_client):
+    client, store = app_client
+    for i in range(5):
+        store.put_entity("t1", "student", f"s{i}", {"last_name": f"Name{i:02d}"}, {})
+
+    resp = client.get("/api/entities/t1/student/query?limit=2&offset=2")
+    body = resp.json()
+    assert body["total"] == 5
+    assert len(body["data"]) == 2
+
+
+def test_query_limit_clamped(app_client):
+    client, store = app_client
+    store.put_entity("t1", "student", "s1", {"last_name": "A"}, {})
+    resp = client.get("/api/entities/t1/student/query?limit=100")
+    assert resp.status_code == 200
+
+
+def test_query_base_field_filter(app_client):
+    client, store = app_client
+    store.put_entity("t1", "student", "s1", {"first_name": "Jane", "last_name": "Doe"}, {})
+    store.put_entity("t1", "student", "s2", {"first_name": "John", "last_name": "Smith"}, {})
+
+    resp = client.get("/api/entities/t1/student/query?first_name=jan")
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["data"][0]["first_name"] == "Jane"
+
+
+def test_query_address_substring_match(app_client):
+    client, store = app_client
+    store.put_entity("t1", "student", "s1", {"last_name": "A", "address": "123 Main St, San Jose, CA"}, {})
+    store.put_entity("t1", "student", "s2", {"last_name": "B", "address": "456 Oak Ave, Portland, OR"}, {})
+
+    resp = client.get("/api/entities/t1/student/query?address=san jose")
+    body = resp.json()
+    assert body["total"] == 1
+    assert "San Jose" in body["data"][0]["address"]
