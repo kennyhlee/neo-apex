@@ -11,8 +11,11 @@ from datacore.api import create_app
 
 @pytest.fixture
 def app_client():
+    from unittest.mock import MagicMock
     with tempfile.TemporaryDirectory() as tmp:
-        store = Store(data_dir=tmp)
+        mock_embedder = MagicMock()
+        mock_embedder.embed.return_value = [0.0] * 1024
+        store = Store(data_dir=tmp, embedder=mock_embedder)
         app = create_app(store)
         yield TestClient(app), store
 

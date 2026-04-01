@@ -2,14 +2,18 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from datacore import Store, QueryEngine
 
 
 def test_full_workflow():
     with tempfile.TemporaryDirectory() as tmp:
+        mock_embedder = MagicMock()
+        mock_embedder.embed.return_value = [0.0] * 1024
         store = Store(
             data_dir=tmp,
+            embedder=mock_embedder,
             max_model_versions=100,
             default_max_entity_versions=5,
             entity_version_limits={"student": 3},
