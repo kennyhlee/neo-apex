@@ -51,6 +51,13 @@
   margin: 0 auto;
 }
 
+.document-upload-model {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 0.75rem;
+  text-align: right;
+}
+
 .document-upload-error {
   background: rgba(212, 83, 126, 0.1);
   color: var(--color-danger);

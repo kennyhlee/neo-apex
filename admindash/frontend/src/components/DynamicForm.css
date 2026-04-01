@@ -65,6 +65,16 @@
   color: var(--text-primary);
 }
 
+.dynamic-form-input-error {
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 3px rgba(212, 83, 126, 0.15) !important;
+}
+
+.dynamic-form-field-error {
+  font-size: 0.75rem;
+  color: var(--color-danger);
+}
+
 .dynamic-form-error {
   background: rgba(212, 83, 126, 0.1);
   color: var(--color-danger);
@@ -84,23 +94,24 @@
 
 .dynamic-form-btn-primary,
 .dynamic-form-btn-secondary {
+  font-family: var(--font-sans);
   font-size: 0.85rem;
   font-weight: 500;
-  padding: 0.5rem 1.25rem;
-  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-sm);
   border: none;
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition: all 0.15s;
 }
 
 .dynamic-form-btn-primary {
-  background: var(--color-accent);
+  background: #378ADD;
   color: var(--text-inverse);
 }
 
 .dynamic-form-btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(55, 138, 221, 0.3);
+  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
 }
 
 .dynamic-form-btn-primary:disabled {
@@ -108,11 +119,21 @@
   cursor: not-allowed;
 }
 
+.dynamic-form-btn-invalid {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.dynamic-form-btn-invalid:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .dynamic-form-btn-secondary {
   background: var(--bg-tertiary);
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .dynamic-form-btn-secondary:hover {
-  transform: translateY(-2px);
+  background: #F1F5F9;
 }

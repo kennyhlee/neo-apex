@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import Navbar from './components/Navbar.tsx';
@@ -13,7 +13,12 @@ import './App.css';
 
 function AppRoutes() {
   const { user, ready } = useAuth();
-  const [tenant, setTenant] = useState(user?.tenant_id ?? 'acmechildcenter');
+  const [tenant, setTenant] = useState(user?.tenant_id ?? '');
+
+  // Sync tenant with logged-in user's tenant_id
+  useEffect(() => {
+    if (user?.tenant_id) setTenant(user.tenant_id);
+  }, [user?.tenant_id]);
 
   if (!ready) return null;
 

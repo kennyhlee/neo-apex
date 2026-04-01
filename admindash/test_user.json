@@ -4,7 +4,7 @@
   "password": "admin123",
   "name": "Jane Admin",
   "email": "jane@acme.edu",
-  "tenant_id": "acmechildcenter",
+  "tenant_id": "acme",
   "tenant_name": "Acme Afterschool",
   "role": "tenant_admin"
 }

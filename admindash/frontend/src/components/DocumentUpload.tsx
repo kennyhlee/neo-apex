@@ -85,6 +85,7 @@ export default function DocumentUpload({ onExtracted, onUpload }: DocumentUpload
         )}
       </div>
       {error && <div className="document-upload-error">{error}</div>}
+      <p className="document-upload-model">Extraction model: claude-haiku-4-5</p>
     </div>
   );
 }
