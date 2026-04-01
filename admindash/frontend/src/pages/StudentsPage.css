@@ -38,6 +38,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  white-space: nowrap;
+  min-width: 160px;
 }
 
 .student-avatar {
@@ -62,6 +64,10 @@
 .student-display-name {
   font-weight: 600;
   font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
 .student-preferred-name {

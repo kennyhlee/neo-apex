@@ -17,19 +17,20 @@
 }
 
 .data-table thead {
-  background: var(--bg-elevated);
+  background: var(--bg-tertiary);
 }
 
 .data-table th {
+  position: relative;
   padding: 0.7rem 1rem;
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   white-space: nowrap;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 2px solid var(--border-primary);
 }
 
 .data-table td {
@@ -147,11 +148,11 @@
 }
 
 /* Row highlight for newly added */
-.data-table-row-highlight {
+.data-table-row-highlight td {
   background: var(--accent-muted) !important;
   animation: fadeIn 0.5s ease;
 }
 
-.data-table-row-highlight:hover {
+.data-table-row-highlight:hover td {
   background: rgba(55, 138, 221, 0.15) !important;
 }

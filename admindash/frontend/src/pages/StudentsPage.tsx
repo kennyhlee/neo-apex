@@ -58,7 +58,8 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
         render: (row: DataRow) => {
           const fullName =
             `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || '-';
-          const avatarChar = fullName.charAt(0);
+          const lastName = String(row.last_name ?? '');
+          const avatarChar = (lastName.charAt(0) || fullName.charAt(0)).toUpperCase();
           return (
             <div className="student-name-cell">
               <div className="student-avatar">{avatarChar}</div>
@@ -415,16 +416,6 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
             ))}
           </select>
         </div>
-        {/* Address search */}
-        <div className="filter-field">
-          <label>{t('students.addressSearch')}</label>
-          <input
-            type="text"
-            placeholder={t('students.addressSearchPlaceholder')}
-            value={filters.address ?? ''}
-            onChange={(e) => updateFilter('address', e.target.value)}
-          />
-        </div>
       </FilterForm>
 
       <div className="students-toolbar">
@@ -466,7 +457,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           loading={loading}
           onPageChange={(p) => loadData(p)}
           rowKey={(row) => String(row.entity_id ?? '')}
-          sortBy={prefs.sortBy}
+          sortBy={prefs.sortBy === 'last_name' ? 'name' : prefs.sortBy}
           sortDir={prefs.sortDir}
           onSortChange={handleSortChange}
           pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
