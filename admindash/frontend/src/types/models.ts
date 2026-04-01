@@ -88,13 +88,7 @@ export interface QueryStudentsParams {
   sort_dir?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
-  first_name?: string;
-  last_name?: string;
-  student_id?: string;
-  email?: string;
-  grade_level?: string;
-  gender?: string;
-  address?: string;
+  [field: string]: string | number | undefined;
 }
 
 export interface QueryStudentsResponse {

@@ -254,19 +254,23 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         });
         let rows = res.data ?? [];
 
-        // Highlight: prepend newly-added entity on page 1
+        // Highlight: move newly-added entity to top of list on page 1
         if (activeHighlight && p === 1) {
-          const alreadyPresent = rows.some((r) => String(r.entity_id) === activeHighlight);
-          if (!alreadyPresent) {
-            // Fetch the specific entity via a query
+          const idx = rows.findIndex((r) => String(r.entity_id) === activeHighlight);
+          if (idx > 0) {
+            // Already in results — move to top
+            const [item] = rows.splice(idx, 1);
+            rows = [item, ...rows];
+          } else if (idx === -1) {
+            // Not in current page (maybe filtered out) — fetch it directly
             try {
               const highlighted = await queryStudents(tenant, {
+                _status: 'all',
+                entity_id: activeHighlight,
                 limit: 1,
                 offset: 0,
               });
-              const found = highlighted.data?.find(
-                (r) => String(r.entity_id) === activeHighlight,
-              );
+              const found = highlighted.data?.[0];
               if (found) {
                 rows = [found, ...rows];
               }
@@ -274,6 +278,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
               // ignore — highlight is best effort
             }
           }
+          // idx === 0 means it's already at top, nothing to do
         }
 
         setData(rows);
