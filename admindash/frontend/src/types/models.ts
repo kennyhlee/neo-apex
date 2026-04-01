@@ -81,3 +81,23 @@ export interface CreateEntityResponse {
 export interface ExtractResponse {
   fields: Record<string, string>;
 }
+
+export interface QueryStudentsParams {
+  _status?: string;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+  first_name?: string;
+  last_name?: string;
+  student_id?: string;
+  email?: string;
+  grade_level?: string;
+  gender?: string;
+  address?: string;
+}
+
+export interface QueryStudentsResponse {
+  data: Record<string, unknown>[];
+  total: number;
+}

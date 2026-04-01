@@ -4,6 +4,8 @@ import type {
   ModelResponse,
   CreateEntityResponse,
   ExtractResponse,
+  QueryStudentsParams,
+  QueryStudentsResponse,
 } from '../types/models.ts';
 
 const API_BASE = 'http://localhost:8080';
@@ -74,6 +76,23 @@ export async function extractStudentFromDocument(
       method: 'POST',
       body: formData,
     },
+  );
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+export async function queryStudents(
+  tenantId: string,
+  params: QueryStudentsParams = {},
+): Promise<QueryStudentsResponse> {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value != null && value !== '') {
+      searchParams.set(key, String(value));
+    }
+  }
+  const resp = await fetch(
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/query?${searchParams}`,
   );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
