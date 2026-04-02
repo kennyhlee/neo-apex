@@ -1,5 +1,6 @@
 """Maps raw AI extraction output to base model fields vs custom_fields."""
 import uuid
+from enum import Enum
 from typing import Any, List, Union
 
 from app.models.domain import (
@@ -113,8 +114,8 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
         if field_type == "selection":
             options, multiple = _extract_options(value)
 
-        # For base fields whose model default is a List[str], use the default
-        # as selection options (e.g. gender, status with predefined enums)
+        # For base fields with predefined options (List[str] defaults or Enum types),
+        # treat as selection fields
         if key in schema_fields:
             model_field = model_class.model_fields.get(key)
             if model_field and model_field.annotation is List[str]:
@@ -131,6 +132,10 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
                     else:
                         options = list(default_opts)
                     multiple = multiple if multiple is not None else False
+            elif model_field and isinstance(model_field.annotation, type) and issubclass(model_field.annotation, Enum):
+                field_type = "selection"
+                options = [e.value for e in model_field.annotation]
+                multiple = False
 
         if key in schema_fields:
             base_data[key] = value
@@ -165,6 +170,18 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
                     options=list(default_opts), multiple=False,
                 ))
                 continue
+
+        # Enum fields get their enum values as selection options
+        if isinstance(model_field.annotation, type) and issubclass(model_field.annotation, Enum):
+            enum_options = [e.value for e in model_field.annotation]
+            default_val = model_field.default.value if isinstance(model_field.default, Enum) else None
+            base_data[field_name] = default_val
+            mappings.append(FieldMapping(
+                field_name=field_name, value=default_val, source="base_model",
+                required=True, field_type="selection",
+                options=enum_options, multiple=False,
+            ))
+            continue
 
         # All other base fields — infer type from name, use empty/None value
         field_type = _infer_field_type(field_name, None)

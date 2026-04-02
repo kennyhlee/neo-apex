@@ -130,8 +130,9 @@ def get_active_model(tenant_id: str) -> dict | None:
         clean_defn = {k: v for k, v in defn.items() if not k.startswith("_")}
         model_definition[entity_type] = clean_defn
 
-    # Extract metadata from first record (all share the same source_filename/created_by)
-    first_defn = rows[0]["model_definition"]
+    # Extract metadata from highest-versioned record (most recently written)
+    latest_row = max(rows, key=lambda r: r["_version"])
+    first_defn = latest_row["model_definition"]
 
     return {
         "tenant_id": tenant_id,

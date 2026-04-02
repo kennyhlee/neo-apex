@@ -227,6 +227,7 @@ class Store:
             if isinstance(row.get("model_definition"), str):
                 row["model_definition"] = json.loads(row["model_definition"])
 
+        rows.sort(key=lambda r: r["_version"], reverse=True)
         return rows
 
     def _trim_model_versions(self, table, entity_type: str) -> None:
