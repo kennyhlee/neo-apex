@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import {
@@ -37,7 +37,8 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
   // Auto-ID state
   const [generatedId, setGeneratedId] = useState<string | null>(null);
   const [idError, setIdError] = useState<string | null>(null);
-  const readOnlyFields = generatedId ? ['student_id'] : [];
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const readOnlyFields = useMemo(() => generatedId ? ['student_id'] : [], [generatedId]);
 
   // Duplicate detection state
   const [duplicateMatches, setDuplicateMatches] = useState<SimilarityMatch[] | null>(null);
@@ -102,6 +103,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     customFields: Record<string, unknown>,
   ) => {
     setSubmitting(true);
+    setCheckingDuplicates(true);
     setSubmitError(null);
 
     // Run similarity search before creating
@@ -119,6 +121,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
         setDuplicateMatches(result.matches);
         setPendingSubmission({ baseData, customFields });
         setSubmitting(false);
+        setCheckingDuplicates(false);
         return;
       }
     } catch {
@@ -126,10 +129,12 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
       setDuplicateMatches([]);
       setPendingSubmission({ baseData, customFields });
       setSubmitting(false);
+      setCheckingDuplicates(false);
       return;
     }
 
     // No duplicates found — proceed
+    setCheckingDuplicates(false);
     setSubmitting(false);
     await doCreateStudent(baseData, customFields);
   };
@@ -179,7 +184,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
   }
 
   // Determine submit button text
-  const submitButtonText = submitting
+  const submitButtonText = checkingDuplicates
     ? t('addStudent.checkingDuplicates')
     : undefined;
 

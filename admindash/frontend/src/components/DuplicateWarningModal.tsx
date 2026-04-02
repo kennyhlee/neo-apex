@@ -14,7 +14,7 @@ export default function DuplicateWarningModal({
   onSaveAnyway,
 }: DuplicateWarningModalProps) {
   const { t } = useTranslation();
-  const displayed = matches
+  const displayed = [...matches]
     .sort((a, b) => b.similarity_score - a.similarity_score)
     .slice(0, 5);
 
