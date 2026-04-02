@@ -60,6 +60,12 @@ ENTITIES_SCHEMA = pa.schema([
     pa.field("vector", pa.list_(pa.float32(), 1024)),
 ] + _META_FIELDS)
 
+SEQUENCES_SCHEMA = pa.schema([
+    pa.field("entity_type", pa.string()),
+    pa.field("year", pa.string()),
+    pa.field("counter", pa.int64()),
+])
+
 
 class Store:
     """Tenant-scoped LanceDB storage with versioning.
@@ -102,6 +108,9 @@ class Store:
 
     def _entities_table_name(self, tenant_id: str) -> str:
         return f"{tenant_id}_entities"
+
+    def _sequences_table_name(self, tenant_id: str) -> str:
+        return f"{tenant_id}_sequences"
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -511,6 +520,42 @@ class Store:
         rows.sort(key=lambda r: r["_created_at"], reverse=True)
         for row in rows[max_versions:]:
             table.delete(f"{where} AND _version = {row['_version']}")
+
+    # ── sequences (lightweight counters) ───────────────────────────
+
+    def get_sequence(self, tenant_id: str, entity_type: str, year: str) -> int:
+        """Get the current sequence counter, or 0 if not set."""
+        table_name = self._sequences_table_name(tenant_id)
+        if table_name not in self._table_names():
+            return 0
+        table = self._db.open_table(table_name)
+        rows = (
+            table.search()
+            .where(f"entity_type = '{entity_type}' AND year = '{year}'")
+            .to_list()
+        )
+        if not rows:
+            return 0
+        return rows[0]["counter"]
+
+    def increment_sequence(
+        self, tenant_id: str, entity_type: str, year: str
+    ) -> int:
+        """Increment and return the sequence counter for entity_type + year."""
+        table_name = self._sequences_table_name(tenant_id)
+        table = self._open_or_create(table_name, SEQUENCES_SCHEMA)
+        where = f"entity_type = '{entity_type}' AND year = '{year}'"
+        rows = table.search().where(where).to_list()
+        current = rows[0]["counter"] if rows else 0
+        new_counter = current + 1
+        if rows:
+            table.delete(where)
+        table.add([{
+            "entity_type": entity_type,
+            "year": year,
+            "counter": new_counter,
+        }])
+        return new_counter
 
     # ── table access for QueryEngine ────────────────────────────────
 
