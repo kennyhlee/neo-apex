@@ -216,6 +216,17 @@ def commit_finalize(
                 "created_at": existing["created_at"],
             }
 
+    # Ensure tenant entity exists (datacore prerequisite for put_model).
+    # Creates a minimal record if missing — full tenant details are managed
+    # by a separate tenant creation/settings flow.
+    if store.get_active_entity(tenant_id, "tenant", tenant_id) is None:
+        store.put_entity(
+            tenant_id=tenant_id,
+            entity_type="tenant",
+            entity_id=tenant_id,
+            base_data={"tenant_id": tenant_id},
+        )
+
     # Store each entity type with a shared change_id
     change_id = uuid.uuid4().hex[:12]
     now = datetime.now(timezone.utc).isoformat()

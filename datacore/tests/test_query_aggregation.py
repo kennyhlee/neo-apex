@@ -23,7 +23,7 @@ def test_group_by_custom_field(seeded_engine):
     """GROUP BY on a custom field with COUNT."""
     result = seeded_engine.query(
         tenant_id="t1", table_type="entities",
-        sql="SELECT bus_day, COUNT(*) AS count FROM data WHERE _status = 'active' GROUP BY bus_day ORDER BY bus_day",
+        sql="SELECT bus_day, COUNT(*) AS count FROM data WHERE _status = 'active' AND entity_type != 'tenant' GROUP BY bus_day ORDER BY bus_day",
     )
     assert result["total"] == 2  # 2 groups
     groups = {r["bus_day"]: r["count"] for r in result["rows"]}

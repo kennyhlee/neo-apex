@@ -6,10 +6,12 @@ import './DynamicForm.css';
 interface DynamicFormProps {
   modelDefinition: ModelDefinition;
   initialValues?: Record<string, unknown>;
+  readOnlyFields?: string[];
   onSubmit: (baseData: Record<string, unknown>, customFields: Record<string, unknown>) => void;
   onCancel: () => void;
   submitting?: boolean;
   error?: string | null;
+  submitButtonText?: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -49,6 +51,7 @@ function renderField(
   value: unknown,
   onChange: (name: string, value: unknown) => void,
   fieldError: string | null,
+  isReadOnly: boolean,
 ) {
   const strValue = value != null ? String(value) : '';
   const errorClass = fieldError ? ' dynamic-form-input-error' : '';
@@ -58,9 +61,10 @@ function renderField(
       return (
         <input
           type="text"
-          className={errorClass}
+          className={`${errorClass}${isReadOnly ? ' dynamic-form-input-readonly' : ''}`}
           value={strValue}
           onChange={(e) => onChange(field.name, e.target.value)}
+          disabled={isReadOnly}
         />
       );
 
@@ -68,9 +72,10 @@ function renderField(
       return (
         <input
           type="number"
-          className={errorClass}
+          className={`${errorClass}${isReadOnly ? ' dynamic-form-input-readonly' : ''}`}
           value={strValue}
           onChange={(e) => onChange(field.name, e.target.value ? Number(e.target.value) : '')}
+          disabled={isReadOnly}
         />
       );
 
@@ -80,6 +85,7 @@ function renderField(
           type="checkbox"
           checked={Boolean(value)}
           onChange={(e) => onChange(field.name, e.target.checked)}
+          disabled={isReadOnly}
         />
       );
 
@@ -87,9 +93,10 @@ function renderField(
       return (
         <input
           type="date"
-          className={errorClass}
+          className={`${errorClass}${isReadOnly ? ' dynamic-form-input-readonly' : ''}`}
           value={strValue}
           onChange={(e) => onChange(field.name, e.target.value)}
+          disabled={isReadOnly}
         />
       );
 
@@ -97,9 +104,10 @@ function renderField(
       return (
         <input
           type="datetime-local"
-          className={errorClass}
+          className={`${errorClass}${isReadOnly ? ' dynamic-form-input-readonly' : ''}`}
           value={strValue}
           onChange={(e) => onChange(field.name, e.target.value)}
+          disabled={isReadOnly}
         />
       );
 
@@ -107,9 +115,10 @@ function renderField(
       return (
         <input
           type="email"
-          className={errorClass}
+          className={`${errorClass}${isReadOnly ? ' dynamic-form-input-readonly' : ''}`}
           value={strValue}
           onChange={(e) => onChange(field.name, e.target.value)}
+          disabled={isReadOnly}
         />
       );
 
@@ -117,9 +126,10 @@ function renderField(
       return (
         <input
           type="tel"
-          className={errorClass}
+          className={`${errorClass}${isReadOnly ? ' dynamic-form-input-readonly' : ''}`}
           value={strValue}
           onChange={(e) => onChange(field.name, e.target.value)}
+          disabled={isReadOnly}
         />
       );
 
@@ -139,6 +149,7 @@ function renderField(
                       : selected.filter((s) => s !== opt);
                     onChange(field.name, next);
                   }}
+                  disabled={isReadOnly}
                 />
                 {opt}
               </label>
@@ -148,9 +159,10 @@ function renderField(
       }
       return (
         <select
-          className={errorClass}
+          className={`${errorClass}${isReadOnly ? ' dynamic-form-input-readonly' : ''}`}
           value={strValue}
           onChange={(e) => onChange(field.name, e.target.value)}
+          disabled={isReadOnly}
         >
           <option value="">--</option>
           {(field.options || []).map((opt) => (
@@ -165,8 +177,10 @@ function renderField(
       return (
         <input
           type="text"
+          className={`${isReadOnly ? 'dynamic-form-input-readonly' : ''}`}
           value={strValue}
           onChange={(e) => onChange(field.name, e.target.value)}
+          disabled={isReadOnly}
         />
       );
   }
@@ -181,10 +195,12 @@ function formatFieldLabel(name: string): string {
 export default function DynamicForm({
   modelDefinition,
   initialValues,
+  readOnlyFields = [],
   onSubmit,
   onCancel,
   submitting = false,
   error,
+  submitButtonText,
 }: DynamicFormProps) {
   const { t } = useTranslation();
   const allFields = useMemo(() => [
@@ -273,7 +289,10 @@ export default function DynamicForm({
                 {formatFieldLabel(field.name)}
                 {field.required && <span className="dynamic-form-required">*</span>}
               </label>
-              {renderField(field, values[field.name], handleChange, fieldError)}
+              {renderField(field, values[field.name], handleChange, fieldError, readOnlyFields.includes(field.name))}
+              {readOnlyFields.includes(field.name) && (
+                <span className="dynamic-form-field-helper">{t('dynamicForm.autoGenerated')}</span>
+              )}
               {fieldError && <span className="dynamic-form-field-error">{fieldError}</span>}
             </div>
           );
@@ -293,7 +312,7 @@ export default function DynamicForm({
           className={`dynamic-form-btn-primary ${hasErrors ? 'dynamic-form-btn-invalid' : ''}`}
           disabled={submitting}
         >
-          {submitting ? t('common.loading') : t('common.save')}
+          {submitting ? (submitButtonText || t('common.loading')) : t('common.save')}
         </button>
       </div>
     </form>

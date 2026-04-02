@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
-import { createStudent, extractStudentFromDocument } from '../api/client.ts';
+import {
+  createStudent,
+  extractStudentFromDocument,
+  fetchNextStudentId,
+  searchSimilarStudents,
+} from '../api/client.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import DocumentUpload from '../components/DocumentUpload.tsx';
-import type { ModelDefinition } from '../types/models.ts';
+import DuplicateWarningModal from '../components/DuplicateWarningModal.tsx';
+import type { ModelDefinition, SimilarityMatch } from '../types/models.ts';
 import './AddStudentPage.css';
 
 interface AddStudentPageProps {
@@ -28,11 +34,36 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Auto-ID state
+  const [generatedId, setGeneratedId] = useState<string | null>(null);
+  const [idError, setIdError] = useState<string | null>(null);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const readOnlyFields = useMemo(() => generatedId ? ['student_id'] : [], [generatedId]);
+
+  // Duplicate detection state
+  const [duplicateMatches, setDuplicateMatches] = useState<SimilarityMatch[] | null>(null);
+  const [pendingSubmission, setPendingSubmission] = useState<{
+    baseData: Record<string, unknown>;
+    customFields: Record<string, unknown>;
+  } | null>(null);
+
+  // Load model + fetch next ID
   useEffect(() => {
     setLoading(true);
     setModelError(null);
-    getModel(tenant, 'student')
-      .then((def) => setModelDef(def))
+
+    Promise.all([
+      getModel(tenant, 'student'),
+      fetchNextStudentId(tenant).catch(() => null),
+    ])
+      .then(([def, nextId]) => {
+        setModelDef(def);
+        if (nextId) {
+          setGeneratedId(nextId.next_id);
+        } else {
+          setIdError(t('addStudent.autoIdUnavailable'));
+        }
+      })
       .catch(() => setModelError(t('addStudent.modelNotFound')))
       .finally(() => setLoading(false));
   }, [tenant, getModel, t]);
@@ -47,7 +78,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     return resp.fields;
   };
 
-  const handleSubmit = async (
+  const doCreateStudent = useCallback(async (
     baseData: Record<string, unknown>,
     customFields: Record<string, unknown>,
   ) => {
@@ -65,6 +96,66 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     } finally {
       setSubmitting(false);
     }
+  }, [tenant, invalidateStudentCount, navigate, t]);
+
+  const handleSubmit = async (
+    baseData: Record<string, unknown>,
+    customFields: Record<string, unknown>,
+  ) => {
+    setSubmitting(true);
+    setCheckingDuplicates(true);
+    setSubmitError(null);
+
+    // Run similarity search before creating
+    try {
+      const searchData = {
+        first_name: String(baseData.first_name || ''),
+        last_name: String(baseData.last_name || ''),
+        dob: baseData.dob ? String(baseData.dob) : undefined,
+        primary_address: baseData.primary_address ? String(baseData.primary_address) : undefined,
+      };
+      const result = await searchSimilarStudents(tenant, searchData);
+
+      if (result.matches.length > 0) {
+        // Show modal — pause submission
+        setDuplicateMatches(result.matches);
+        setPendingSubmission({ baseData, customFields });
+        setSubmitting(false);
+        setCheckingDuplicates(false);
+        return;
+      }
+    } catch {
+      // Similarity search failed — ask user what to do
+      setDuplicateMatches([]);
+      setPendingSubmission({ baseData, customFields });
+      setSubmitting(false);
+      setCheckingDuplicates(false);
+      return;
+    }
+
+    // No duplicates found — proceed
+    setCheckingDuplicates(false);
+    setSubmitting(false);
+    await doCreateStudent(baseData, customFields);
+  };
+
+  const handleSaveAnyway = async () => {
+    if (!pendingSubmission) return;
+    setDuplicateMatches(null);
+    const { baseData, customFields } = pendingSubmission;
+    setPendingSubmission(null);
+    await doCreateStudent(baseData, customFields);
+  };
+
+  const handleGoBack = () => {
+    setDuplicateMatches(null);
+    setPendingSubmission(null);
+  };
+
+  // Build initialValues: merge extracted values with generated ID
+  const initialValues: Record<string, unknown> = {
+    ...extractedValues,
+    ...(generatedId ? { student_id: generatedId } : {}),
   };
 
   if (loading) {
@@ -92,6 +183,11 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     );
   }
 
+  // Determine submit button text
+  const submitButtonText = checkingDuplicates
+    ? t('addStudent.checkingDuplicates')
+    : undefined;
+
   return (
     <div className="add-student-page">
       <div className="add-student-header">
@@ -100,6 +196,10 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
 
       {successMessage && (
         <div className="add-student-success">{successMessage}</div>
+      )}
+
+      {idError && (
+        <div className="add-student-id-warning">{idError}</div>
       )}
 
       <div className="add-student-tabs">
@@ -121,11 +221,13 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
         {activeTab === 'form' && modelDef && (
           <DynamicForm
             modelDefinition={modelDef}
-            initialValues={extractedValues}
+            initialValues={initialValues}
+            readOnlyFields={readOnlyFields}
             onSubmit={handleSubmit}
             onCancel={() => navigate('/students')}
             submitting={submitting}
             error={submitError}
+            submitButtonText={submitButtonText}
           />
         )}
         {activeTab === 'upload' && (
@@ -135,6 +237,43 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
           />
         )}
       </div>
+
+      {/* Duplicate warning modal — matches found */}
+      {duplicateMatches !== null && duplicateMatches.length > 0 && (
+        <DuplicateWarningModal
+          matches={duplicateMatches}
+          onGoBack={handleGoBack}
+          onSaveAnyway={handleSaveAnyway}
+        />
+      )}
+
+      {/* Duplicate check failed — let user choose */}
+      {duplicateMatches !== null && duplicateMatches.length === 0 && pendingSubmission && (
+        <div className="duplicate-modal-overlay" onClick={handleGoBack}>
+          <div className="duplicate-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="duplicate-modal-title">
+              {t('duplicateWarning.title')}
+            </h3>
+            <p className="duplicate-modal-description">
+              {t('addStudent.duplicateCheckUnavailable')}
+            </p>
+            <div className="duplicate-modal-actions">
+              <button
+                className="duplicate-modal-btn-secondary"
+                onClick={handleGoBack}
+              >
+                {t('duplicateWarning.cancelSave')}
+              </button>
+              <button
+                className="duplicate-modal-btn-primary"
+                onClick={handleSaveAnyway}
+              >
+                {t('duplicateWarning.proceedWithoutCheck')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

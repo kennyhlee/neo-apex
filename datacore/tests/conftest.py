@@ -35,9 +35,24 @@ def engine(store):
     return QueryEngine(store)
 
 
+def _setup_tenant(store, tenant_id="t1"):
+    """Create a tenant entity for the given tenant_id."""
+    store.put_entity(
+        tenant_id=tenant_id,
+        entity_type="tenant",
+        entity_id=tenant_id,
+        base_data={
+            "tenant_id": tenant_id,
+            "name": "Test School",
+            "_abbrev": "TES",
+        },
+    )
+
+
 @pytest.fixture
 def seeded_store(store):
     """Store with pre-loaded model definitions and entity records."""
+    _setup_tenant(store, "t1")
     cid = "seed-change"
     store.put_model(
         tenant_id="t1",

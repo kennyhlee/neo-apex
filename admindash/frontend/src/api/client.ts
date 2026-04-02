@@ -6,6 +6,9 @@ import type {
   ExtractResponse,
   QueryStudentsParams,
   QueryStudentsResponse,
+  NextIdResponse,
+  SimilaritySearchRequest,
+  SimilaritySearchResponse,
 } from '../types/models.ts';
 
 const API_BASE = 'http://localhost:8080';
@@ -111,6 +114,32 @@ export async function queryStudents(
   }
   const resp = await fetch(
     `${DATACORE_API_BASE}/api/entities/${tenantId}/student/query?${searchParams}`,
+  );
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchNextStudentId(
+  tenantId: string,
+): Promise<NextIdResponse> {
+  const resp = await fetch(
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/next-id`,
+  );
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+export async function searchSimilarStudents(
+  tenantId: string,
+  data: SimilaritySearchRequest,
+): Promise<SimilaritySearchResponse> {
+  const resp = await fetch(
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/similarity-search`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
   );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();

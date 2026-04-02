@@ -1,5 +1,7 @@
 """Unit tests for Store model definition CRUD and versioning."""
 
+import pytest
+
 
 MODEL_DEF_V1 = {
     "base_fields": [
@@ -17,6 +19,17 @@ MODEL_DEF_V2 = {
     ],
     "custom_fields": [],
 }
+
+
+@pytest.fixture(autouse=True)
+def setup_tenant(store):
+    """Ensure tenant exists before each test."""
+    store.put_entity(
+        tenant_id="t1",
+        entity_type="tenant",
+        entity_id="t1",
+        base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+    )
 
 
 def test_create_model_first_version(store):

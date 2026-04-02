@@ -1,12 +1,15 @@
 """API route handlers."""
 
 import uuid
+from datetime import datetime, timezone
+
+import toon
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from datacore.store import Store
+from datacore.store import Store, derive_abbrev
 from datacore.query import QueryEngine, TableNotFoundError
 
 
@@ -15,11 +18,122 @@ class CreateEntityRequest(BaseModel):
     custom_fields: dict | None = None
 
 
+class TenantRequest(BaseModel):
+    base_data: dict
+    custom_fields: dict | None = None
+
+
 def register_routes(app: FastAPI, store: Store) -> None:
     """Register API routes."""
 
+    @app.put("/api/tenants/{tenant_id}")
+    def put_tenant(tenant_id: str, body: TenantRequest):
+        name = body.base_data.get("name")
+        abbrev = derive_abbrev(name, tenant_id)
+        base_data = {**body.base_data, "_abbrev": abbrev}
+
+        existing = store.get_active_entity(tenant_id, "tenant", tenant_id)
+        try:
+            result = store.put_entity(
+                tenant_id=tenant_id,
+                entity_type="tenant",
+                entity_id=tenant_id,
+                base_data=base_data,
+                custom_fields=body.custom_fields,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        status = 200 if existing else 201
+        return JSONResponse(status_code=status, content=result)
+
+    @app.get("/api/tenants/{tenant_id}")
+    def get_tenant(tenant_id: str):
+        result = store.get_active_entity(tenant_id, "tenant", tenant_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        return result
+
+    @app.get("/api/entities/{tenant_id}/student/next-id")
+    def next_student_id(tenant_id: str):
+        tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=404, detail="Tenant not set up")
+
+        abbrev = tenant["base_data"].get("_abbrev", tenant_id[:3].upper())
+        year = str(datetime.now(timezone.utc).year)
+        yy = year[-2:]
+
+        seq = store.increment_sequence(tenant_id, "student", year)
+        next_id = f"{abbrev}-ST{yy}{seq:04d}"
+
+        return {
+            "next_id": next_id,
+            "tenant_abbrev": abbrev,
+            "entity_abbrev": "ST",
+            "sequence": seq,
+        }
+
+    class SimilaritySearchRequest(BaseModel):
+        first_name: str
+        last_name: str
+        dob: str | None = None
+        primary_address: str | None = None
+
+    @app.post("/api/entities/{tenant_id}/student/similarity-search")
+    def similarity_search(tenant_id: str, body: SimilaritySearchRequest):
+        if not store.embedder:
+            raise HTTPException(status_code=503, detail="Embedder not available")
+
+        table_name = store._entities_table_name(tenant_id)
+        if table_name not in store._table_names():
+            return {"matches": []}
+
+        # Build fields dict for embedding (only non-null fields)
+        fields = {"first_name": body.first_name, "last_name": body.last_name}
+        if body.dob:
+            fields["dob"] = body.dob
+        if body.primary_address:
+            fields["primary_address"] = body.primary_address
+
+        # Embed using document type (same as stored entities)
+        query_vector = store.embedder.embed(fields)
+
+        # Vector search against active students
+        table = store._db.open_table(table_name)
+        rows = (
+            table.search(query_vector)
+            .where("entity_type = 'student' AND _status = 'active'")
+            .limit(5)
+            .to_list()
+        )
+
+        # Convert L2 distance to cosine similarity: 1 - (d^2 / 2)
+        # For normalized vectors, L2^2 = 2(1 - cosine_similarity)
+        matches = []
+        for row in rows:
+            dist = row.get("_distance", float("inf"))
+            similarity = max(0.0, 1.0 - dist / 2.0)
+            if similarity < 0.85:
+                continue
+            base_data = toon.decode(row["base_data"]) if row["base_data"] else {}
+            matches.append({
+                "entity_id": row["entity_id"],
+                "student_id": base_data.get("student_id", ""),
+                "first_name": base_data.get("first_name", ""),
+                "last_name": base_data.get("last_name", ""),
+                "dob": base_data.get("dob", ""),
+                "primary_address": base_data.get("primary_address", ""),
+                "similarity_score": round(similarity, 4),
+            })
+
+        matches.sort(key=lambda m: m["similarity_score"], reverse=True)
+        return {"matches": matches}
+
     @app.get("/api/models/{tenant_id}/{entity_type}")
     def get_model(tenant_id: str, entity_type: str):
+        tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=400, detail="Tenant not set up")
         result = store.get_active_model(tenant_id, entity_type)
         if result is None:
             raise HTTPException(status_code=404, detail="Model not found")
@@ -30,13 +144,16 @@ def register_routes(app: FastAPI, store: Store) -> None:
         tenant_id: str, entity_type: str, body: CreateEntityRequest
     ):
         entity_id = uuid.uuid4().hex[:12]
-        result = store.put_entity(
-            tenant_id=tenant_id,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            base_data=body.base_data,
-            custom_fields=body.custom_fields,
-        )
+        try:
+            result = store.put_entity(
+                tenant_id=tenant_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                base_data=body.base_data,
+                custom_fields=body.custom_fields,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         return JSONResponse(status_code=201, content=result)
 
     @app.get("/api/entities/{tenant_id}/{entity_type}/query")

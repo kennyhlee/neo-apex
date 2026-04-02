@@ -8,7 +8,7 @@ def test_query_basic_select(seeded_engine):
     """Spec: Query a table with SQL — results as list of dicts."""
     result = seeded_engine.query(
         tenant_id="t1", table_type="entities",
-        sql="SELECT entity_id FROM data WHERE _status = 'active'",
+        sql="SELECT entity_id FROM data WHERE _status = 'active' AND entity_type != 'tenant'",
     )
     assert isinstance(result, dict)
     assert "rows" in result
@@ -23,6 +23,12 @@ def test_query_tenant_scoping(seeded_store):
     from datacore import QueryEngine
 
     seeded_store.put_entity(
+        tenant_id="t2",
+        entity_type="tenant",
+        entity_id="t2",
+        base_data={"tenant_id": "t2", "name": "Tenant Two", "_abbrev": "TEN"},
+    )
+    seeded_store.put_entity(
         tenant_id="t2", entity_type="student", entity_id="T2-001",
         base_data={"first_name": "Zara"},
     )
@@ -30,11 +36,11 @@ def test_query_tenant_scoping(seeded_store):
 
     t1_result = engine.query(
         tenant_id="t1", table_type="entities",
-        sql="SELECT entity_id FROM data WHERE _status = 'active'",
+        sql="SELECT entity_id FROM data WHERE _status = 'active' AND entity_type != 'tenant'",
     )
     t2_result = engine.query(
         tenant_id="t2", table_type="entities",
-        sql="SELECT entity_id FROM data WHERE _status = 'active'",
+        sql="SELECT entity_id FROM data WHERE _status = 'active' AND entity_type != 'tenant'",
     )
     assert t1_result["total"] == 3
     assert t2_result["total"] == 1

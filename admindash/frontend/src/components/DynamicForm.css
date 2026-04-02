@@ -137,3 +137,16 @@
 .dynamic-form-btn-secondary:hover {
   background: #F1F5F9;
 }
+
+.dynamic-form-input-readonly {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-secondary) !important;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.dynamic-form-field-helper {
+  font-size: 0.7rem;
+  color: var(--text-tertiary, #94a3b8);
+  font-style: italic;
+}

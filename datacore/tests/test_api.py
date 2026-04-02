@@ -16,6 +16,12 @@ def app_client():
         mock_embedder = MagicMock()
         mock_embedder.embed.return_value = [0.0] * 1024
         store = Store(data_dir=tmp, embedder=mock_embedder)
+        store.put_entity(
+            tenant_id="t1",
+            entity_type="tenant",
+            entity_id="t1",
+            base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+        )
         app = create_app(store)
         yield TestClient(app), store
 
@@ -220,3 +226,15 @@ def test_query_address_substring_match(app_client):
     body = resp.json()
     assert body["total"] == 1
     assert "San Jose" in body["data"][0]["address"]
+
+
+def test_create_entity_without_tenant_returns_400(app_client):
+    """POST /api/entities without tenant setup returns 400."""
+    client, _ = app_client
+    # Use a tenant that has no tenant entity
+    resp = client.post(
+        "/api/entities/no_tenant/student",
+        json={"base_data": {"first_name": "Alice", "last_name": "Smith"}},
+    )
+    assert resp.status_code == 400
+    assert "Tenant not set up" in resp.json()["detail"]

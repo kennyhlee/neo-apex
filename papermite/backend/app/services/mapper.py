@@ -139,9 +139,12 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
 
         if key in schema_fields:
             base_data[key] = value
+            model_field = model_class.model_fields.get(key)
+            annotation = model_field.annotation if model_field else None
+            is_optional = getattr(annotation, '__origin__', None) is Union and type(None) in getattr(annotation, '__args__', ())
             mappings.append(FieldMapping(
                 field_name=key, value=value, source="base_model",
-                required=True, field_type=field_type,
+                required=not is_optional, field_type=field_type,
                 options=options, multiple=multiple,
             ))
         else:

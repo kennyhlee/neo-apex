@@ -11,6 +11,26 @@ import pyarrow as pa
 import toon
 
 
+def derive_abbrev(name: str | None, tenant_id: str) -> str:
+    """Derive an uppercase abbreviation from a tenant name.
+
+    Rules:
+    - 1 word:  first 3 chars (or fewer if short)
+    - 2 words: 1st char of word 1 + first 2 chars of word 2
+    - 3+ words: 1st char of first 3 words
+    - No name / empty: first 3 chars of tenant_id (or full ID if < 3)
+    """
+    if not name or not name.strip():
+        return tenant_id[:3].upper() if len(tenant_id) >= 3 else tenant_id.upper()
+    words = name.split()
+    if len(words) == 1:
+        return words[0][:3].upper()
+    elif len(words) == 2:
+        return (words[0][0] + words[1][:2]).upper()
+    else:
+        return (words[0][0] + words[1][0] + words[2][0]).upper()
+
+
 DEFAULT_DATA_DIR = os.environ.get(
     "NEOAPEX_LANCEDB_DIR",
     str(Path(__file__).parent.parent.parent / "data" / "lancedb"),
@@ -39,6 +59,12 @@ ENTITIES_SCHEMA = pa.schema([
     pa.field("custom_fields", pa.string()),    # TOON-encoded document
     pa.field("vector", pa.list_(pa.float32(), 1024)),
 ] + _META_FIELDS)
+
+SEQUENCES_SCHEMA = pa.schema([
+    pa.field("entity_type", pa.string()),
+    pa.field("year", pa.string()),
+    pa.field("counter", pa.int64()),
+])
 
 
 class Store:
@@ -83,6 +109,9 @@ class Store:
     def _entities_table_name(self, tenant_id: str) -> str:
         return f"{tenant_id}_entities"
 
+    def _sequences_table_name(self, tenant_id: str) -> str:
+        return f"{tenant_id}_sequences"
+
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
@@ -105,6 +134,12 @@ class Store:
             entity_type, self.default_max_entity_versions
         )
 
+    def _check_tenant_exists(self, tenant_id: str) -> None:
+        """Raise ValueError if tenant entity has not been set up."""
+        tenant = self.get_active_entity(tenant_id, "tenant", tenant_id)
+        if tenant is None:
+            raise ValueError("Tenant not set up")
+
     # ── models CRUD ─────────────────────────────────────────────────
 
     def put_model(
@@ -119,6 +154,7 @@ class Store:
         Archives the current active version and inserts a new one.
         Returns the stored record.
         """
+        self._check_tenant_exists(tenant_id)
         table_name = self._models_table_name(tenant_id)
         table = self._open_or_create(table_name, MODELS_SCHEMA)
         change_id = change_id or self._new_change_id()
@@ -268,6 +304,9 @@ class Store:
                 raise ValueError(
                     f"Custom field keys conflict with base data keys: {conflicts}"
                 )
+
+        if entity_type != "tenant":
+            self._check_tenant_exists(tenant_id)
 
         table_name = self._entities_table_name(tenant_id)
         table = self._open_or_create(table_name, ENTITIES_SCHEMA)
@@ -491,6 +530,42 @@ class Store:
         rows.sort(key=lambda r: r["_created_at"], reverse=True)
         for row in rows[max_versions:]:
             table.delete(f"{where} AND _version = {row['_version']}")
+
+    # ── sequences (lightweight counters) ───────────────────────────
+
+    def get_sequence(self, tenant_id: str, entity_type: str, year: str) -> int:
+        """Get the current sequence counter, or 0 if not set."""
+        table_name = self._sequences_table_name(tenant_id)
+        if table_name not in self._table_names():
+            return 0
+        table = self._db.open_table(table_name)
+        rows = (
+            table.search()
+            .where(f"entity_type = '{entity_type}' AND year = '{year}'")
+            .to_list()
+        )
+        if not rows:
+            return 0
+        return rows[0]["counter"]
+
+    def increment_sequence(
+        self, tenant_id: str, entity_type: str, year: str
+    ) -> int:
+        """Increment and return the sequence counter for entity_type + year."""
+        table_name = self._sequences_table_name(tenant_id)
+        table = self._open_or_create(table_name, SEQUENCES_SCHEMA)
+        where = f"entity_type = '{entity_type}' AND year = '{year}'"
+        rows = table.search().where(where).to_list()
+        current = rows[0]["counter"] if rows else 0
+        new_counter = current + 1
+        if rows:
+            table.delete(where)
+        table.add([{
+            "entity_type": entity_type,
+            "year": year,
+            "counter": new_counter,
+        }])
+        return new_counter
 
     # ── table access for QueryEngine ────────────────────────────────
 
