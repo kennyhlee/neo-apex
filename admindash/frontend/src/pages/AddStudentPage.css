@@ -76,3 +76,12 @@
   color: var(--text-primary);
   cursor: pointer;
 }
+
+.add-student-id-warning {
+  background: rgba(229, 160, 13, 0.1);
+  color: var(--color-warning, #e5a00d);
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.82rem;
+}

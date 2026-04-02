@@ -11,6 +11,7 @@ interface DynamicFormProps {
   onCancel: () => void;
   submitting?: boolean;
   error?: string | null;
+  submitButtonText?: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -199,6 +200,7 @@ export default function DynamicForm({
   onCancel,
   submitting = false,
   error,
+  submitButtonText,
 }: DynamicFormProps) {
   const { t } = useTranslation();
   const allFields = useMemo(() => [
@@ -310,7 +312,7 @@ export default function DynamicForm({
           className={`dynamic-form-btn-primary ${hasErrors ? 'dynamic-form-btn-invalid' : ''}`}
           disabled={submitting}
         >
-          {submitting ? t('common.loading') : t('common.save')}
+          {submitting ? (submitButtonText || t('common.loading')) : t('common.save')}
         </button>
       </div>
     </form>
