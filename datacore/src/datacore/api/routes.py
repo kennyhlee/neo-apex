@@ -80,13 +80,16 @@ def register_routes(app: FastAPI, store: Store) -> None:
         tenant_id: str, entity_type: str, body: CreateEntityRequest
     ):
         entity_id = uuid.uuid4().hex[:12]
-        result = store.put_entity(
-            tenant_id=tenant_id,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            base_data=body.base_data,
-            custom_fields=body.custom_fields,
-        )
+        try:
+            result = store.put_entity(
+                tenant_id=tenant_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                base_data=body.base_data,
+                custom_fields=body.custom_fields,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         return JSONResponse(status_code=201, content=result)
 
     @app.get("/api/entities/{tenant_id}/{entity_type}/query")

@@ -226,3 +226,15 @@ def test_query_address_substring_match(app_client):
     body = resp.json()
     assert body["total"] == 1
     assert "San Jose" in body["data"][0]["address"]
+
+
+def test_create_entity_without_tenant_returns_400(app_client):
+    """POST /api/entities without tenant setup returns 400."""
+    client, _ = app_client
+    # Use a tenant that has no tenant entity
+    resp = client.post(
+        "/api/entities/no_tenant/student",
+        json={"base_data": {"first_name": "Alice", "last_name": "Smith"}},
+    )
+    assert resp.status_code == 400
+    assert "Tenant not set up" in resp.json()["detail"]
