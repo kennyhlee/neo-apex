@@ -95,3 +95,31 @@ export interface QueryStudentsResponse {
   data: Record<string, unknown>[];
   total: number;
 }
+
+export interface NextIdResponse {
+  next_id: string;
+  tenant_abbrev: string;
+  entity_abbrev: string;
+  sequence: number;
+}
+
+export interface SimilarityMatch {
+  entity_id: string;
+  student_id: string;
+  first_name: string;
+  last_name: string;
+  dob: string;
+  primary_address: string;
+  similarity_score: number;
+}
+
+export interface SimilaritySearchRequest {
+  first_name: string;
+  last_name: string;
+  dob?: string;
+  primary_address?: string;
+}
+
+export interface SimilaritySearchResponse {
+  matches: SimilarityMatch[];
+}
