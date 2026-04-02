@@ -31,13 +31,16 @@ def register_routes(app: FastAPI, store: Store) -> None:
         base_data = {**body.base_data, "_abbrev": abbrev}
 
         existing = store.get_active_entity(tenant_id, "tenant", tenant_id)
-        result = store.put_entity(
-            tenant_id=tenant_id,
-            entity_type="tenant",
-            entity_id=tenant_id,
-            base_data=base_data,
-            custom_fields=body.custom_fields,
-        )
+        try:
+            result = store.put_entity(
+                tenant_id=tenant_id,
+                entity_type="tenant",
+                entity_id=tenant_id,
+                base_data=base_data,
+                custom_fields=body.custom_fields,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         status = 200 if existing else 201
         return JSONResponse(status_code=status, content=result)
 
@@ -70,6 +73,9 @@ def register_routes(app: FastAPI, store: Store) -> None:
 
     @app.get("/api/models/{tenant_id}/{entity_type}")
     def get_model(tenant_id: str, entity_type: str):
+        tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=400, detail="Tenant not set up")
         result = store.get_active_model(tenant_id, entity_type)
         if result is None:
             raise HTTPException(status_code=404, detail="Model not found")
