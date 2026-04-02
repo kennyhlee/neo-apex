@@ -3,6 +3,8 @@
 import uuid
 from datetime import datetime, timezone
 
+import toon
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -70,6 +72,62 @@ def register_routes(app: FastAPI, store: Store) -> None:
             "entity_abbrev": "ST",
             "sequence": seq,
         }
+
+    class SimilaritySearchRequest(BaseModel):
+        first_name: str
+        last_name: str
+        dob: str | None = None
+        primary_address: str | None = None
+
+    @app.post("/api/entities/{tenant_id}/student/similarity-search")
+    def similarity_search(tenant_id: str, body: SimilaritySearchRequest):
+        if not store.embedder:
+            raise HTTPException(status_code=503, detail="Embedder not available")
+
+        table_name = store._entities_table_name(tenant_id)
+        if table_name not in store._table_names():
+            return {"matches": []}
+
+        # Build fields dict for embedding (only non-null fields)
+        fields = {"first_name": body.first_name, "last_name": body.last_name}
+        if body.dob:
+            fields["dob"] = body.dob
+        if body.primary_address:
+            fields["primary_address"] = body.primary_address
+
+        # Embed using document type (same as stored entities)
+        query_vector = store.embedder.embed(fields)
+
+        # Vector search against active students
+        table = store._db.open_table(table_name)
+        rows = (
+            table.search(query_vector)
+            .where("entity_type = 'student' AND _status = 'active'")
+            .limit(5)
+            .to_list()
+        )
+
+        # Convert L2 distance to cosine similarity: 1 - (d^2 / 2)
+        # For normalized vectors, L2^2 = 2(1 - cosine_similarity)
+        matches = []
+        for row in rows:
+            dist = row.get("_distance", float("inf"))
+            similarity = max(0.0, 1.0 - dist / 2.0)
+            if similarity < 0.85:
+                continue
+            base_data = toon.decode(row["base_data"]) if row["base_data"] else {}
+            matches.append({
+                "entity_id": row["entity_id"],
+                "student_id": base_data.get("student_id", ""),
+                "first_name": base_data.get("first_name", ""),
+                "last_name": base_data.get("last_name", ""),
+                "dob": base_data.get("dob", ""),
+                "primary_address": base_data.get("primary_address", ""),
+                "similarity_score": round(similarity, 4),
+            })
+
+        matches.sort(key=lambda m: m["similarity_score"], reverse=True)
+        return {"matches": matches}
 
     @app.get("/api/models/{tenant_id}/{entity_type}")
     def get_model(tenant_id: str, entity_type: str):
