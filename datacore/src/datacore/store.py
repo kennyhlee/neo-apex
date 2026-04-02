@@ -11,6 +11,26 @@ import pyarrow as pa
 import toon
 
 
+def derive_abbrev(name: str | None, tenant_id: str) -> str:
+    """Derive an uppercase abbreviation from a tenant name.
+
+    Rules:
+    - 1 word:  first 3 chars (or fewer if short)
+    - 2 words: 1st char of word 1 + first 2 chars of word 2
+    - 3+ words: 1st char of first 3 words
+    - No name / empty: first 3 chars of tenant_id (or full ID if < 3)
+    """
+    if not name or not name.strip():
+        return tenant_id[:3].upper() if len(tenant_id) >= 3 else tenant_id.upper()
+    words = name.split()
+    if len(words) == 1:
+        return words[0][:3].upper()
+    elif len(words) == 2:
+        return (words[0][0] + words[1][:2]).upper()
+    else:
+        return (words[0][0] + words[1][0] + words[2][0]).upper()
+
+
 DEFAULT_DATA_DIR = os.environ.get(
     "NEOAPEX_LANCEDB_DIR",
     str(Path(__file__).parent.parent.parent / "data" / "lancedb"),
