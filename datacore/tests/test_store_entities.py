@@ -4,6 +4,17 @@ import pytest
 from datacore import Store
 
 
+@pytest.fixture(autouse=True)
+def setup_tenant(store):
+    """Ensure tenant exists before each test."""
+    store.put_entity(
+        tenant_id="t1",
+        entity_type="tenant",
+        entity_id="t1",
+        base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+    )
+
+
 # ── 1. First entity gets version=1, status="active", dicts returned ──────────
 
 def test_create_entity_first_version(store):
@@ -133,6 +144,12 @@ def test_entity_version_trimming_default_limit(tmp_dir):
     mock_embedder.embed.return_value = [0.0] * 1024
     # Create a Store with no entity_version_limits — default is 5
     s = Store(data_dir=tmp_dir, embedder=mock_embedder)
+    s.put_entity(
+        tenant_id="t1",
+        entity_type="tenant",
+        entity_id="t1",
+        base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+    )
     for i in range(8):
         s.put_entity(
             tenant_id="t1",

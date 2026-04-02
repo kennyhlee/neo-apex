@@ -42,6 +42,12 @@ def search_setup():
         store = Store(data_dir=tmp, embedder=embedder)
         engine = QueryEngine(store)
 
+        store.put_entity(
+            tenant_id="t1",
+            entity_type="tenant",
+            entity_id="t1",
+            base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+        )
         store.put_entity("t1", "student", "S001",
             base_data={"first_name": "Alice", "last_name": "Smith"},
             custom_fields={"city": "Springfield"})

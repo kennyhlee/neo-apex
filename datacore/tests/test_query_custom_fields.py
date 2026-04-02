@@ -1,6 +1,18 @@
 """Tests for querying TOON custom fields as flattened columns."""
 
+import pytest
 from datacore import QueryEngine
+
+
+@pytest.fixture(autouse=True)
+def setup_tenant(store):
+    """Ensure tenant exists before each test."""
+    store.put_entity(
+        tenant_id="t1",
+        entity_type="tenant",
+        entity_id="t1",
+        base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+    )
 
 
 def test_query_filter_on_custom_field(seeded_engine):

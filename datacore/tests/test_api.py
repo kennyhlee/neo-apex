@@ -16,6 +16,12 @@ def app_client():
         mock_embedder = MagicMock()
         mock_embedder.embed.return_value = [0.0] * 1024
         store = Store(data_dir=tmp, embedder=mock_embedder)
+        store.put_entity(
+            tenant_id="t1",
+            entity_type="tenant",
+            entity_id="t1",
+            base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+        )
         app = create_app(store)
         yield TestClient(app), store
 

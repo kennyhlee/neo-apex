@@ -1,5 +1,18 @@
 """Unit tests for store.rollback_by_change_id."""
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def setup_tenant(store):
+    """Ensure tenant exists before each test."""
+    store.put_entity(
+        tenant_id="t1",
+        entity_type="tenant",
+        entity_id="t1",
+        base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+    )
+
 
 def test_rollback_models_by_change_id(store):
     """Put 2 models with cid1, put 2 with cid2, rollback cid2, both back to v1."""
@@ -162,6 +175,13 @@ def test_rollback_tenant_isolation(store):
         entity_type="student",
         model_definition={"base_fields": [{"name": "bad_field", "type": "str"}], "custom_fields": []},
         change_id=cid,
+    )
+
+    store.put_entity(
+        tenant_id="t2",
+        entity_type="tenant",
+        entity_id="t2",
+        base_data={"tenant_id": "t2", "name": "Tenant Two", "_abbrev": "TEN"},
     )
 
     # t2: v1 only

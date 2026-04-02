@@ -20,6 +20,14 @@ def test_full_workflow():
         )
         engine = QueryEngine(store)
 
+        # ── 0. Set up tenant ──
+        store.put_entity(
+            tenant_id="t1",
+            entity_type="tenant",
+            entity_id="t1",
+            base_data={"tenant_id": "t1", "name": "Test School", "_abbrev": "TES"},
+        )
+
         # ── 1. Store model definitions ──
         change_id = "ch001"
         store.put_model(
@@ -99,7 +107,7 @@ def test_full_workflow():
         result = engine.query(
             tenant_id="t1",
             table_type="entities",
-            sql="SELECT bus_day, COUNT(*) AS count FROM data WHERE _status = 'active' GROUP BY bus_day ORDER BY bus_day",
+            sql="SELECT bus_day, COUNT(*) AS count FROM data WHERE _status = 'active' AND entity_type != 'tenant' GROUP BY bus_day ORDER BY bus_day",
         )
         assert result["total"] == 2  # 2 groups
         bus_counts = {r["bus_day"]: r["count"] for r in result["rows"]}
@@ -121,7 +129,7 @@ def test_full_workflow():
         result = engine.query(
             tenant_id="t1",
             table_type="entities",
-            sql="SELECT entity_id FROM data WHERE _status = 'active' ORDER BY entity_id",
+            sql="SELECT entity_id FROM data WHERE _status = 'active' AND entity_type != 'tenant' ORDER BY entity_id",
             limit=2,
             offset=0,
         )
@@ -132,7 +140,7 @@ def test_full_workflow():
         result_page2 = engine.query(
             tenant_id="t1",
             table_type="entities",
-            sql="SELECT entity_id FROM data WHERE _status = 'active' ORDER BY entity_id",
+            sql="SELECT entity_id FROM data WHERE _status = 'active' AND entity_type != 'tenant' ORDER BY entity_id",
             limit=2,
             offset=2,
         )
