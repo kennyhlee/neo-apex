@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from datacore.store import Store
+from datacore.store import Store, derive_abbrev
 from datacore.query import QueryEngine, TableNotFoundError
 
 
@@ -15,8 +15,37 @@ class CreateEntityRequest(BaseModel):
     custom_fields: dict | None = None
 
 
+class TenantRequest(BaseModel):
+    base_data: dict
+    custom_fields: dict | None = None
+
+
 def register_routes(app: FastAPI, store: Store) -> None:
     """Register API routes."""
+
+    @app.put("/api/tenants/{tenant_id}")
+    def put_tenant(tenant_id: str, body: TenantRequest):
+        name = body.base_data.get("name")
+        abbrev = derive_abbrev(name, tenant_id)
+        base_data = {**body.base_data, "_abbrev": abbrev}
+
+        existing = store.get_active_entity(tenant_id, "tenant", tenant_id)
+        result = store.put_entity(
+            tenant_id=tenant_id,
+            entity_type="tenant",
+            entity_id=tenant_id,
+            base_data=base_data,
+            custom_fields=body.custom_fields,
+        )
+        status = 200 if existing else 201
+        return JSONResponse(status_code=status, content=result)
+
+    @app.get("/api/tenants/{tenant_id}")
+    def get_tenant(tenant_id: str):
+        result = store.get_active_entity(tenant_id, "tenant", tenant_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        return result
 
     @app.get("/api/models/{tenant_id}/{entity_type}")
     def get_model(tenant_id: str, entity_type: str):
