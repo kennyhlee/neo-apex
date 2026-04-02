@@ -2,10 +2,9 @@
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File
 
-from app.api.auth import require_admin
-from app.config import TestUser, settings
+from app.config import settings
 from app.services.parser import parse_document
 from app.services.field_extractor import extract_fields
 from app.storage.lance_store import get_active_model
@@ -20,15 +19,12 @@ def extract_document_fields(
     tenant_id: str,
     entity_type: str,
     file: UploadFile = File(...),
-    user: TestUser = Depends(require_admin),
 ):
     """Extract field values from an uploaded document, guided by the entity model.
 
     Returns {"fields": {"field_name": "value", ...}} with only successfully
     extracted fields. Partial extraction is success (HTTP 200), not failure.
     """
-    if user.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail="Tenant mismatch")
 
     # Validate file format
     suffix = Path(file.filename or "").suffix.lower()

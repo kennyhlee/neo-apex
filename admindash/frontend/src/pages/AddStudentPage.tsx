@@ -64,7 +64,13 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
           setIdError(t('addStudent.autoIdUnavailable'));
         }
       })
-      .catch(() => setModelError(t('addStudent.modelNotFound')))
+      .catch((err) => {
+        if (err instanceof Error && err.message === 'Tenant not set up') {
+          setModelError(t('addStudent.tenantNotSetUp'));
+        } else {
+          setModelError(t('addStudent.modelNotFound'));
+        }
+      })
       .finally(() => setLoading(false));
   }, [tenant, getModel, t]);
 

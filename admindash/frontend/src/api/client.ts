@@ -42,6 +42,7 @@ export async function fetchStudentModel(
   const resp = await fetch(
     `${DATACORE_API_BASE}/api/models/${tenantId}/student`,
   );
+  if (resp.status === 400) throw new Error('Tenant not set up');
   if (resp.status === 404) throw new Error('Student model not configured');
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
