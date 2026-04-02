@@ -134,6 +134,12 @@ class Store:
             entity_type, self.default_max_entity_versions
         )
 
+    def _check_tenant_exists(self, tenant_id: str) -> None:
+        """Raise ValueError if tenant entity has not been set up."""
+        tenant = self.get_active_entity(tenant_id, "tenant", tenant_id)
+        if tenant is None:
+            raise ValueError("Tenant not set up")
+
     # ── models CRUD ─────────────────────────────────────────────────
 
     def put_model(
@@ -148,6 +154,7 @@ class Store:
         Archives the current active version and inserts a new one.
         Returns the stored record.
         """
+        self._check_tenant_exists(tenant_id)
         table_name = self._models_table_name(tenant_id)
         table = self._open_or_create(table_name, MODELS_SCHEMA)
         change_id = change_id or self._new_change_id()
@@ -297,6 +304,9 @@ class Store:
                 raise ValueError(
                     f"Custom field keys conflict with base data keys: {conflicts}"
                 )
+
+        if entity_type != "tenant":
+            self._check_tenant_exists(tenant_id)
 
         table_name = self._entities_table_name(tenant_id)
         table = self._open_or_create(table_name, ENTITIES_SCHEMA)
