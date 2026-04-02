@@ -117,12 +117,12 @@ class RegistrationApplication(BaseEntity):
 
 class Tenant(BaseEntity):
     entity_type: str = "TENANT"
-    name: Optional[str] = None
-    display_name: Optional[str] = None
-    contact_email: Optional[EmailStr] = None
-    contact_phone: Optional[str] = None
+    name: str = ""
+    display_name: str = ""
+    contact_email: str = ""
+    contact_phone: str = ""
     primary_address: str = ""
-    mailing_address: Optional[str] = None
+    mailing_address: str = ""
     license_number: Optional[str] = None
     capacity: Optional[int] = None
     accreditation: Optional[str] = None
