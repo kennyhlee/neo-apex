@@ -123,6 +123,10 @@ class Tenant(BaseEntity):
     contact_phone: Optional[str] = None
     primary_address: str = ""
     mailing_address: Optional[str] = None
+    license_number: Optional[str] = None
+    capacity: Optional[int] = None
+    accreditation: Optional[str] = None
+    insurance_provider: Optional[str] = None
 
 
 # All entity classes that can be extracted from documents
