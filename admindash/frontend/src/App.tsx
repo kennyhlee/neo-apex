@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import { ModelProvider } from './contexts/ModelContext.tsx';
+import { DashboardProvider } from './contexts/DashboardContext.tsx';
 import Navbar from './components/Navbar.tsx';
 import Footer from './components/Footer.tsx';
 import LoginPage from './pages/LoginPage.tsx';
@@ -39,11 +40,12 @@ function AppRoutes() {
             <Navigate to="/login" replace />
           ) : (
             <ModelProvider>
+            <DashboardProvider>
               <div className="app-shell">
                 <Navbar currentTenant={tenant} onTenantChange={setTenant} />
                 <main className="app-main">
                   <Routes>
-                    <Route path="/home" element={<HomePage />} />
+                    <Route path="/home" element={<HomePage tenant={tenant} />} />
                     <Route
                       path="/students/add"
                       element={<AddStudentPage tenant={tenant} />}
@@ -59,6 +61,7 @@ function AppRoutes() {
                 </main>
                 <Footer />
               </div>
+            </DashboardProvider>
             </ModelProvider>
           )
         }

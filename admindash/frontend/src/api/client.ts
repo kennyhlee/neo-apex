@@ -81,6 +81,24 @@ export async function extractStudentFromDocument(
   return resp.json();
 }
 
+export interface QueryResult {
+  rows: Record<string, unknown>[];
+  total: number;
+}
+
+export async function runQuery(
+  tenantId: string,
+  tableType: string,
+  sql: string,
+): Promise<QueryResult> {
+  const params = new URLSearchParams({ sql });
+  const resp = await fetch(
+    `${DATACORE_API_BASE}/api/query/${tenantId}/${tableType}?${params}`,
+  );
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
 export async function queryStudents(
   tenantId: string,
   params: QueryStudentsParams = {},
