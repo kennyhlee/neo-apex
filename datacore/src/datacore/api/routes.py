@@ -1,6 +1,7 @@
 """API route handlers."""
 
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -46,6 +47,26 @@ def register_routes(app: FastAPI, store: Store) -> None:
         if result is None:
             raise HTTPException(status_code=404, detail="Tenant not found")
         return result
+
+    @app.get("/api/entities/{tenant_id}/student/next-id")
+    def next_student_id(tenant_id: str):
+        tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=404, detail="Tenant not set up")
+
+        abbrev = tenant["base_data"].get("_abbrev", tenant_id[:3].upper())
+        year = str(datetime.now(timezone.utc).year)
+        yy = year[-2:]
+
+        seq = store.increment_sequence(tenant_id, "student", year)
+        next_id = f"{abbrev}-ST{yy}{seq:04d}"
+
+        return {
+            "next_id": next_id,
+            "tenant_abbrev": abbrev,
+            "entity_abbrev": "ST",
+            "sequence": seq,
+        }
 
     @app.get("/api/models/{tenant_id}/{entity_type}")
     def get_model(tenant_id: str, entity_type: str):
