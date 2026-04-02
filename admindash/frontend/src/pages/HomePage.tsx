@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { useDashboard } from '../contexts/DashboardContext.tsx';
 import './HomePage.css';
 
 const scheduleData = [
@@ -37,8 +39,18 @@ const scheduleData = [
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export default function HomePage() {
+interface HomePageProps {
+  tenant: string;
+}
+
+export default function HomePage({ tenant }: HomePageProps) {
   const { t } = useTranslation();
+  const { getStudentCount } = useDashboard();
+  const [studentCount, setStudentCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    getStudentCount(tenant).then(setStudentCount);
+  }, [tenant, getStudentCount]);
 
   return (
     <div className="home-page">
@@ -47,7 +59,7 @@ export default function HomePage() {
       <div className="home-stats">
         <div className="stat-card">
           <div className="stat-label">{t('homepage.totalStudents')}</div>
-          <div className="stat-value purple">&mdash;</div>
+          <div className="stat-value purple">{studentCount === null ? '\u2014' : studentCount}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">{t('homepage.attendanceRate')}</div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { createStudent, extractStudentFromDocument } from '../api/client.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
+import { useDashboard } from '../contexts/DashboardContext.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import DocumentUpload from '../components/DocumentUpload.tsx';
 import type { ModelDefinition } from '../types/models.ts';
@@ -16,6 +17,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { getModel } = useModel();
+  const { invalidateStudentCount } = useDashboard();
 
   const [activeTab, setActiveTab] = useState<'form' | 'upload'>('form');
   const [modelDef, setModelDef] = useState<ModelDefinition | null>(null);
@@ -53,6 +55,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     setSubmitError(null);
     try {
       const result = await createStudent(tenant, baseData, customFields);
+      invalidateStudentCount();
       setSuccessMessage(t('addStudent.success'));
       setTimeout(() => navigate('/students', {
         state: { highlightEntityId: result.entity_id },

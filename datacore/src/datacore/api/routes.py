@@ -47,14 +47,15 @@ def register_routes(app: FastAPI, store: Store) -> None:
         _status: str = "active",
         sort_by: str = "last_name",
         sort_dir: str = "asc",
-        limit: int = 20,
+        limit: int | None = None,
         offset: int = 0,
     ):
-        # Clamp pagination
-        if limit < 1:
-            limit = 20
-        if limit > 50:
-            limit = 50
+        # Clamp pagination when provided
+        if limit is not None:
+            if limit < 1:
+                limit = 20
+            if limit > 50:
+                limit = 50
         if offset < 0:
             offset = 0
         if sort_dir not in ("asc", "desc"):
@@ -101,6 +102,19 @@ def register_routes(app: FastAPI, store: Store) -> None:
             return {"data": result["rows"], "total": result["total"]}
         except TableNotFoundError:
             return {"data": [], "total": 0}
+
+    @app.get("/api/query/{tenant_id}/{table_type}")
+    def run_query(
+        tenant_id: str,
+        table_type: str,
+        sql: str = Query(..., description="SQL query using table alias 'data'"),
+    ):
+        qe = QueryEngine(store)
+        try:
+            result = qe.query(tenant_id, table_type, sql)
+            return {"rows": result["rows"], "total": result["total"]}
+        except TableNotFoundError:
+            return {"rows": [], "total": 0}
 
     @app.get("/api/search/{tenant_id}")
     def search_entities(
