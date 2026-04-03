@@ -66,6 +66,13 @@ SEQUENCES_SCHEMA = pa.schema([
     pa.field("counter", pa.int64()),
 ])
 
+GLOBAL_SCHEMA = pa.schema([
+    pa.field("record_key", pa.string()),
+    pa.field("data", pa.string()),  # JSON-encoded
+    pa.field("_created_at", pa.string()),
+    pa.field("_updated_at", pa.string()),
+])
+
 
 class Store:
     """Tenant-scoped LanceDB storage with versioning.
@@ -585,3 +592,93 @@ class Store:
 
         table = self._db.open_table(table_name)
         return table.to_arrow()
+
+    # ── Global (non-tenant-scoped) tables ──────────────────────
+
+    def put_global(self, table_name: str, record_key: str, data: dict) -> dict:
+        """Create or update a record in a global table."""
+        table = self._open_or_create(table_name, GLOBAL_SCHEMA)
+        now = self._now()
+
+        # Check if record exists
+        existing = table.search().where(
+            f"record_key = '{record_key}'"
+        ).to_list()
+
+        if existing:
+            # Delete old record, insert updated
+            table.delete(f"record_key = '{record_key}'")
+            record = {
+                "record_key": record_key,
+                "data": json.dumps(data),
+                "_created_at": existing[0]["_created_at"],
+                "_updated_at": now,
+            }
+        else:
+            record = {
+                "record_key": record_key,
+                "data": json.dumps(data),
+                "_created_at": now,
+                "_updated_at": now,
+            }
+
+        table.add([record])
+        return {
+            "record_key": record_key,
+            "data": data,
+            "_created_at": record["_created_at"],
+            "_updated_at": record["_updated_at"],
+        }
+
+    def get_global(self, table_name: str, record_key: str) -> dict | None:
+        """Get a single record from a global table by key."""
+        if table_name not in self._table_names():
+            return None
+        table = self._db.open_table(table_name)
+        rows = table.search().where(
+            f"record_key = '{record_key}'"
+        ).to_list()
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "record_key": row["record_key"],
+            "data": json.loads(row["data"]),
+            "_created_at": row["_created_at"],
+            "_updated_at": row["_updated_at"],
+        }
+
+    def query_global(
+        self, table_name: str, filters: dict | None = None
+    ) -> list[dict]:
+        """Query all records from a global table, optionally filtering by data fields."""
+        if table_name not in self._table_names():
+            return []
+        table = self._db.open_table(table_name)
+        rows = table.search().to_list()
+        results = []
+        for row in rows:
+            data = json.loads(row["data"])
+            if filters:
+                if not all(data.get(k) == v for k, v in filters.items()):
+                    continue
+            results.append({
+                "record_key": row["record_key"],
+                "data": data,
+                "_created_at": row["_created_at"],
+                "_updated_at": row["_updated_at"],
+            })
+        return results
+
+    def delete_global(self, table_name: str, record_key: str) -> bool:
+        """Delete a record from a global table. Returns True if deleted."""
+        if table_name not in self._table_names():
+            return False
+        table = self._db.open_table(table_name)
+        existing = table.search().where(
+            f"record_key = '{record_key}'"
+        ).to_list()
+        if not existing:
+            return False
+        table.delete(f"record_key = '{record_key}'")
+        return True
