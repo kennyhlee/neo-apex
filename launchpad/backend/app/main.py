@@ -2,6 +2,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import auth
+
 app = FastAPI(
     title="Launchpad",
     description="Tenant lifecycle and identity service for the NeoApex platform",
@@ -15,6 +17,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 
 @app.get("/api/health")
 def health():
