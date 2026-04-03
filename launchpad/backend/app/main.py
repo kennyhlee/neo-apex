@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth
+from app.api import auth, tenants, users
 
 app = FastAPI(
     title="Launchpad",
@@ -19,6 +19,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(tenants.router, prefix="/api", tags=["tenants"])
+app.include_router(users.router, prefix="/api", tags=["users"])
 
 @app.get("/api/health")
 def health():
