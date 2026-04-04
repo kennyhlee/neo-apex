@@ -27,6 +27,10 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+export function setExternalToken(token: string): void {
+  storeToken(token);
+}
+
 // ─── Auth fetch ───────────────────────────────────────────────
 
 async function authFetch(url: string, init?: RequestInit): Promise<Response> {

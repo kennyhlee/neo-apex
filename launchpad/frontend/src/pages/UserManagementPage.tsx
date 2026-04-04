@@ -11,9 +11,14 @@ export default function UserManagementPage({ user }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "staff" });
   const [error, setError] = useState("");
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", role: "" });
+  const [editError, setEditError] = useState("");
 
   const reload = () => listUsers(user.tenant_id).then(setUsers);
   useEffect(() => { reload(); }, [user.tenant_id]);
+
+  const adminCount = users.filter(u => u.role === "admin").length;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,9 +31,19 @@ export default function UserManagementPage({ user }: Props) {
     } catch (err) { setError(err instanceof Error ? err.message : "Failed"); }
   };
 
-  const handleRoleChange = async (userId: string, role: string) => {
-    try { await updateUser(user.tenant_id, userId, { role }); reload(); }
-    catch (err) { alert(err instanceof Error ? err.message : "Failed"); }
+  const handleEditSave = async () => {
+    if (!editingUser) return;
+    setEditError("");
+    try {
+      const fields: { name?: string; role?: string } = {};
+      if (editForm.name !== editingUser.name) fields.name = editForm.name;
+      if (editForm.role !== editingUser.role) fields.role = editForm.role;
+      if (Object.keys(fields).length > 0) {
+        await updateUser(user.tenant_id, editingUser.user_id, fields);
+      }
+      setEditingUser(null);
+      reload();
+    } catch (err) { setEditError(err instanceof Error ? err.message : "Failed"); }
   };
 
   const handleDelete = async (userId: string) => {
@@ -36,6 +51,8 @@ export default function UserManagementPage({ user }: Props) {
     try { await deleteUser(user.tenant_id, userId); reload(); }
     catch (err) { alert(err instanceof Error ? err.message : "Failed"); }
   };
+
+  const isLastAdmin = (u: UserRow) => u.role === "admin" && adminCount <= 1;
 
   return (
     <div>
@@ -67,17 +84,52 @@ export default function UserManagementPage({ user }: Props) {
             <tr key={u.user_id}>
               <td>{u.name}</td>
               <td>{u.email}</td>
-              <td>
-                <select value={u.role} onChange={e => handleRoleChange(u.user_id, e.target.value)} className="um-role-select">
-                  <option value="admin">admin</option><option value="staff">staff</option>
-                  <option value="teacher">teacher</option><option value="parent">parent</option>
-                </select>
+              <td>{u.role}</td>
+              <td style={{ display: "flex", gap: 8 }}>
+                <button className="um-edit" onClick={() => { setEditingUser(u); setEditForm({ name: u.name, role: u.role }); setEditError(""); }}>Edit</button>
+                <button className="um-delete" onClick={() => handleDelete(u.user_id)} disabled={isLastAdmin(u)}
+                  style={isLastAdmin(u) ? { opacity: 0.4, cursor: "not-allowed" } : {}}>
+                  Remove
+                </button>
               </td>
-              <td><button className="um-delete" onClick={() => handleDelete(u.user_id)}>Remove</button></td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {editingUser && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", padding: 32, width: 400, boxShadow: "var(--shadow-card)" }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, color: "var(--text-primary)" }}>Edit User</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label className="auth-label">Name</label>
+                <input className="auth-input" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <label className="auth-label">Role</label>
+                <select className="auth-input" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
+                  disabled={isLastAdmin(editingUser) && editForm.role === "admin"}>
+                  <option value="admin">Admin</option>
+                  <option value="staff">Staff</option>
+                  <option value="teacher">Teacher</option>
+                  <option value="parent">Parent</option>
+                </select>
+                {isLastAdmin(editingUser) && <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>Cannot change role — this is the only admin.</p>}
+              </div>
+              {editError && <div style={{ color: "var(--danger)", fontSize: 13 }}>{editError}</div>}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                <button onClick={() => setEditingUser(null)} style={{ padding: "8px 16px", fontSize: 14, background: "var(--bg-secondary)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-md)", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                  Cancel
+                </button>
+                <button onClick={handleEditSave} className="auth-submit" style={{ padding: "8px 16px", fontSize: 14 }}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

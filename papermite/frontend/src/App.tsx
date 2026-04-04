@@ -68,7 +68,7 @@ function AccessDenied({ user, onLogout }: { user: TestUser; onLogout: () => void
           >
             Role <code style={{ color: "var(--danger)" }}>{user.role}</code> does
             not have access. Requires{" "}
-            <code style={{ color: "var(--success)" }}>tenant_admin</code>.
+            <code style={{ color: "var(--success)" }}>admin</code>.
           </p>
           <button className="btn" onClick={onLogout}>
             Sign Out
@@ -126,6 +126,20 @@ export default function App() {
   const [backendError, setBackendError] = useState(false);
 
   useEffect(() => {
+    // Check for external token from launchpad
+    const params = new URLSearchParams(window.location.search);
+    const externalToken = params.get("token");
+    if (externalToken) {
+      storeToken(externalToken);
+      // Clean token from URL but preserve other params
+      params.delete("token");
+      const remaining = params.toString();
+      const newUrl = remaining
+        ? `${window.location.pathname}?${remaining}`
+        : window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+
     const token = getStoredToken();
     if (!token) {
       setAuthChecked(true);
@@ -171,7 +185,7 @@ export default function App() {
     return <LoginPage onLogin={handleLogin} />;
   }
 
-  if (user.role !== "tenant_admin") {
+  if (user.role !== "admin") {
     return (
       <BrowserRouter>
         <AccessDenied user={user} onLogout={handleLogout} />

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type {
   ExtractionResult,
   FinalizePreviewResponse,
@@ -146,6 +146,8 @@ function EntityTable({ entityType, def }: { entityType: string; def: ModelDefini
 export default function FinalizedPage({ user }: Props) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnUrl = searchParams.get("return_url");
   const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
   const [status, setStatus] = useState<
     "loading" | "previewing" | "preview" | "unchanged" | "committing" | "error"
@@ -188,7 +190,11 @@ export default function FinalizedPage({ user }: Props) {
     try {
       await commitFinalize(user.tenant_id, extraction);
       if (id) deleteDraft(id);
-      navigate("/");
+      if (returnUrl) {
+        window.location.href = returnUrl;
+      } else {
+        navigate("/");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Finalization failed");
       setStatus("error");
@@ -197,7 +203,11 @@ export default function FinalizedPage({ user }: Props) {
 
   const handleCancel = () => {
     if (id) deleteDraft(id);
-    navigate("/");
+    if (returnUrl) {
+      window.location.href = returnUrl;
+    } else {
+      navigate("/");
+    }
   };
 
   const handleDownload = () => {

@@ -53,8 +53,8 @@ export default function LoginPage({ onLogin, onSwitchToSignup }: Props) {
           </button>
         </form>
         <div className="auth-footer">
-          <span>Don't have an account? </span>
-          <button className="auth-link" onClick={onSwitchToSignup}>Sign up</button>
+          <span>Setting up a new organization? </span>
+          <button className="auth-link" onClick={onSwitchToSignup}>Create your first admin account</button>
         </div>
       </div>
     </div>

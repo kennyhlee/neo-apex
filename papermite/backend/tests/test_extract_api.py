@@ -16,7 +16,7 @@ FAKE_USER = TestUser(
     password="pass",
     tenant_id="t1",
     tenant_name="Test Tenant",
-    role="tenant_admin",
+    role="admin",
 )
 
 

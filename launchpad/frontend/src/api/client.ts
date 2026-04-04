@@ -43,11 +43,11 @@ export async function login(email: string, password: string): Promise<{ token: s
   return res.json();
 }
 
-export async function register(name: string, email: string, password: string, tenant_name: string): Promise<{ token: string; user: User }> {
+export async function register(name: string, email: string, password: string, tenant_name: string, tenant_id: string): Promise<{ token: string; user: User }> {
   const res = await fetch(`${BASE_URL}/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password, tenant_name }),
+    body: JSON.stringify({ name, email, password, tenant_name, tenant_id }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -67,7 +67,8 @@ export async function getTenantModel(tenantId: string): Promise<import("../types
   if (!res.ok) throw new Error("Failed to fetch model");
   const data = await res.json();
   if (!data) return null;
-  // Model definition is keyed by entity type — look for "tenant" (case insensitive)
+  // Response may be the model directly or keyed by entity type
+  if (data.base_fields) return data;
   const key = Object.keys(data).find(k => k.toLowerCase() === "tenant");
   return key ? data[key] : null;
 }
@@ -126,5 +127,39 @@ export async function markOnboardingStep(tenantId: string, stepId: string): Prom
     body: JSON.stringify({ step_id: stepId, completed: true }),
   });
   if (!res.ok) throw new Error("Failed to update onboarding status");
+  return res.json();
+}
+
+export async function checkEmail(email: string): Promise<{ status: string; admin_email_hint: string | null }> {
+  const res = await fetch(`${BASE_URL}/register/check-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Failed to check email");
+  return res.json();
+}
+
+export async function suggestTenantIds(email: string, tenantName: string): Promise<{ suggestions: string[] }> {
+  const res = await fetch(`${BASE_URL}/register/suggest-ids`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, tenant_name: tenantName }),
+  });
+  if (!res.ok) throw new Error("Failed to suggest IDs");
+  return res.json();
+}
+
+export async function useDefaultModel(tenantId: string): Promise<Record<string, unknown>> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/model/use-default`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to apply default model");
+  return res.json();
+}
+
+export async function getTenantModelInfo(tenantId: string): Promise<{ model_definition: Record<string, unknown>; version: number; change_id: string; created_at: string; updated_at: string } | null> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/model/info`);
+  if (!res.ok) throw new Error("Failed to fetch model info");
   return res.json();
 }

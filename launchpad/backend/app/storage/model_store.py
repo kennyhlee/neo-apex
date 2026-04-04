@@ -21,3 +21,18 @@ def get_tenant_model(tenant_id: str) -> dict | None:
     if not model:
         return None
     return model["model_definition"]
+
+
+def get_tenant_model_info(tenant_id: str) -> dict | None:
+    """Get the active Tenant model with metadata (version, change_id, timestamps)."""
+    store = _get_store()
+    model = store.get_active_model(tenant_id, "tenant")
+    if not model:
+        return None
+    return {
+        "model_definition": model["model_definition"],
+        "version": model.get("_version"),
+        "change_id": model.get("_change_id"),
+        "created_at": model.get("_created_at"),
+        "updated_at": model.get("_updated_at"),
+    }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { TestUser, TenantModel } from "../types/models";
 import {
   getAvailableModels,
@@ -20,6 +20,9 @@ interface Props {
 
 export default function UploadPage({ user }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnUrl = searchParams.get("return_url");
+  const tenantIdParam = searchParams.get("tenant_id");
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -42,9 +45,12 @@ export default function UploadPage({ user }: Props) {
     setError(null);
     setShowConfirm(false);
     try {
-      const result = await uploadDocument(user.tenant_id, file, selectedModel);
+      const result = await uploadDocument(tenantIdParam || user.tenant_id, file, selectedModel);
       await saveDraft(result);
-      navigate(`/review/${result.extraction_id}`);
+      const forwardParams = new URLSearchParams();
+      if (returnUrl) forwardParams.set("return_url", returnUrl);
+      const qs = forwardParams.toString();
+      navigate(`/review/${result.extraction_id}${qs ? `?${qs}` : ""}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {

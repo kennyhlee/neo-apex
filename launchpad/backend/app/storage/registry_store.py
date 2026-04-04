@@ -90,6 +90,18 @@ class RegistryStore:
     def delete_user(self, user_id: str) -> bool:
         return self._store.delete_global(REGISTRY_TABLE, f"user:{user_id}")
 
+    def get_users_by_email_domain(self, domain: str) -> list[UserRecord]:
+        """Return all users whose email matches the given domain."""
+        results = self._store.query_global(REGISTRY_TABLE)
+        users = []
+        for row in results:
+            if not row["record_key"].startswith("user:"):
+                continue
+            email = row["data"].get("email", "")
+            if email.split("@")[-1].lower() == domain.lower():
+                users.append(UserRecord(**row["data"]))
+        return users
+
     def count_admins(self, tenant_id: str) -> int:
         users = self.list_users_by_tenant(tenant_id)
         return sum(1 for u in users if u.role == "admin")
