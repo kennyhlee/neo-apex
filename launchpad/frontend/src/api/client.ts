@@ -88,6 +88,37 @@ export async function updateTenantProfile(tenantId: string, data: Record<string,
   return res.json();
 }
 
+export async function listUsers(tenantId: string): Promise<Array<{ user_id: string; name: string; email: string; role: string; created_at: string }>> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/users`);
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+}
+
+export async function createUser(tenantId: string, data: { name: string; email: string; password: string; role: string }): Promise<unknown> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || "Failed to create user"); }
+  return res.json();
+}
+
+export async function updateUser(tenantId: string, userId: string, data: { name?: string; role?: string }): Promise<unknown> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/users/${userId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || "Failed to update user"); }
+  return res.json();
+}
+
+export async function deleteUser(tenantId: string, userId: string): Promise<void> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/users/${userId}`, { method: "DELETE" });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || "Failed to delete user"); }
+}
+
 export async function markOnboardingStep(tenantId: string, stepId: string): Promise<import("../types/models").OnboardingStatus> {
   const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/onboarding-status`, {
     method: "POST",

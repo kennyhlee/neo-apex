@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 import type { User, OnboardingStatus } from "./types/models";
 import { getCurrentUser, getStoredToken, storeToken, clearToken, getOnboardingStatus } from "./api/client";
 import OnboardingPage from "./pages/OnboardingPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
+import TenantSettingsPage from "./pages/TenantSettingsPage";
+import UserManagementPage from "./pages/UserManagementPage";
 import "./index.css";
 
 export default function App() {
@@ -72,11 +75,46 @@ export default function App() {
     );
   }
 
-  // Onboarding complete — main app (placeholder for Task 12)
+  // Onboarding complete — main app
+  return <BrowserRouter><AppShell user={user} onLogout={handleLogout} /></BrowserRouter>;
+}
+
+function AppShell({ user, onLogout }: { user: User; onLogout: () => void }) {
   return (
-    <div style={{ fontFamily: "var(--font-sans)", padding: 32 }}>
-      <p>Welcome, {user.name}! Onboarding complete.</p>
-      <button onClick={handleLogout}>Sign Out</button>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 32px", height: 60, background: "var(--bg-secondary)", borderBottom: "1px solid var(--border-primary)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <Link to="/" style={{ fontWeight: 700, fontSize: 16, color: "var(--accent)", textDecoration: "none" }}>Launchpad</Link>
+          {(user.role === "admin" || user.role === "staff") && (
+            <Link to="/settings/tenant" style={{ fontSize: 14, color: "var(--text-secondary)", textDecoration: "none" }}>Tenant Info</Link>
+          )}
+          {user.role === "admin" && (
+            <Link to="/settings/users" style={{ fontSize: 14, color: "var(--text-secondary)", textDecoration: "none" }}>Users</Link>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 14, color: "var(--text-secondary)" }}>
+          <span>{user.name}</span>
+          <span style={{ fontSize: 12, padding: "2px 8px", background: "var(--tint-blue-bg)", color: "var(--tint-blue-text)", borderRadius: 12 }}>{user.role}</span>
+          <button onClick={onLogout} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>Sign out</button>
+        </div>
+      </header>
+      <main style={{ flex: 1, padding: 32, maxWidth: 1000, width: "100%", margin: "0 auto" }}>
+        <Routes>
+          <Route path="/" element={
+            <div>
+              <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Welcome to Launchpad</h2>
+              <p style={{ color: "var(--text-secondary)", marginTop: 8 }}>Manage your tenant, users, and settings.</p>
+            </div>
+          } />
+          <Route path="/settings/tenant" element={
+            user.role === "admin" || user.role === "staff" ? <TenantSettingsPage user={user} /> : <Navigate to="/" />
+          } />
+          <Route path="/settings/users" element={
+            user.role === "admin" ? <UserManagementPage user={user} /> : <Navigate to="/" />
+          } />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </main>
     </div>
   );
 }

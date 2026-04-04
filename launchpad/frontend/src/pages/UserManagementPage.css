@@ -1,0 +1,8 @@
+.um-add-form { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; padding: 16px; background: var(--bg-card); border: 1px solid var(--border-primary); border-radius: var(--radius-md); }
+.um-add-form .auth-input { flex: 1; min-width: 140px; padding: 8px 12px; font-size: 14px; }
+.um-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border: 1px solid var(--border-primary); border-radius: var(--radius-lg); overflow: hidden; }
+.um-table th { text-align: left; padding: 12px 16px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); background: var(--bg-tertiary); border-bottom: 1px solid var(--border-primary); }
+.um-table td { padding: 12px 16px; font-size: 14px; color: var(--text-primary); border-bottom: 1px solid var(--border-subtle); }
+.um-role-select { font-family: var(--font-sans); font-size: 13px; padding: 4px 8px; border: 1px solid var(--border-primary); border-radius: var(--radius-sm); background: var(--bg-input); }
+.um-delete { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 13px; font-family: var(--font-sans); }
+.um-delete:hover { text-decoration: underline; }
