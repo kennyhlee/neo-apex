@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { EntityResult, ExtractionResult } from "../types/models";
 import { getDraft, saveDraft } from "../db/indexedDb";
 import EntityCard from "../components/EntityCard";
@@ -30,6 +30,8 @@ function hasChanges(original: ExtractionResult, current: ExtractionResult): bool
 export default function ReviewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnUrl = searchParams.get("return_url");
   const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
   const [showSource, setShowSource] = useState(false);
   const originalRef = useRef<ExtractionResult | null>(null);
@@ -65,7 +67,10 @@ export default function ReviewPage() {
 
   const handleFinalize = () => {
     if (extraction) {
-      navigate(`/finalize/${extraction.extraction_id}`);
+      const forwardParams = new URLSearchParams();
+      if (returnUrl) forwardParams.set("return_url", returnUrl);
+      const qs = forwardParams.toString();
+      navigate(`/finalize/${extraction.extraction_id}${qs ? `?${qs}` : ""}`);
     }
   };
 
