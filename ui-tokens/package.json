@@ -1,0 +1,7 @@
+{
+  "name": "@neoapex/ui-tokens",
+  "version": "0.1.0",
+  "description": "Shared design tokens for NeoApex modules",
+  "main": "tokens.css",
+  "files": ["tokens.css"]
+}

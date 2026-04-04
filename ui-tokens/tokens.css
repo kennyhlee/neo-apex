@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Backgrounds */
+  --bg-primary: #F8FAFC;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-input: #FFFFFF;
+
+  /* Borders */
+  --border-primary: #E2E8F0;
+  --border-subtle: #EDF2F7;
+  --border-accent: rgba(55, 138, 221, 0.4);
+
+  /* Text */
+  --text-primary: #1A202C;
+  --text-secondary: #4A5568;
+  --text-tertiary: #A0AEC0;
+  --text-inverse: #FFFFFF;
+
+  /* Accent */
+  --accent: #378ADD;
+  --accent-hover: #2B6FB5;
+  --accent-muted: rgba(55, 138, 221, 0.1);
+  --accent-glow: rgba(55, 138, 221, 0.06);
+
+  /* Status */
+  --success: #639922;
+  --success-muted: rgba(99, 153, 34, 0.1);
+  --danger: #D4537E;
+  --danger-muted: rgba(212, 83, 126, 0.08);
+  --info: #378ADD;
+  --info-muted: rgba(55, 138, 221, 0.08);
+
+  /* Tinted pairs */
+  --tint-blue-bg: #E6F1FB;
+  --tint-blue-text: #185FA5;
+  --tint-pink-bg: #FBEAF0;
+  --tint-pink-text: #993556;
+  --tint-green-bg: #EAF3DE;
+  --tint-green-text: #3B6D11;
+  --tint-amber-bg: #FAEEDA;
+  --tint-amber-text: #854F0B;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Sizing */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Shadows */
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
