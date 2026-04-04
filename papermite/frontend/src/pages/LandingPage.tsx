@@ -13,6 +13,8 @@ interface Props {
 
 export default function LandingPage({ user }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useState(() => new URLSearchParams(window.location.search));
+  const returnUrl = searchParams.get("return_url");
   const [model, setModel] = useState<TenantModel | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -23,11 +25,13 @@ export default function LandingPage({ user }: Props) {
       .finally(() => setLoading(false));
   }, [user.tenant_id]);
 
+  const forwardQs = returnUrl ? `?return_url=${encodeURIComponent(returnUrl)}` : "";
+
   const handleEditModel = async () => {
     if (!model) return;
     const extraction = modelToExtraction(model);
     await saveDraft(extraction);
-    navigate(`/review/${extraction.extraction_id}`);
+    navigate(`/review/${extraction.extraction_id}${forwardQs}`);
   };
 
   if (loading) {
@@ -144,10 +148,10 @@ export default function LandingPage({ user }: Props) {
 
             <div
               className="landing__action-card card"
-              onClick={() => navigate("/upload")}
+              onClick={() => navigate(`/upload${forwardQs}`)}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && navigate("/upload")}
+              onKeyDown={(e) => e.key === "Enter" && navigate(`/upload${forwardQs}`)}
             >
               <div className="landing__action-icon">
                 <svg
@@ -179,10 +183,10 @@ export default function LandingPage({ user }: Props) {
         <div className="landing__actions">
           <div
             className="landing__action-card card"
-            onClick={() => navigate("/upload")}
+            onClick={() => navigate(`/upload${forwardQs}`)}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && navigate("/upload")}
+            onKeyDown={(e) => e.key === "Enter" && navigate(`/upload${forwardQs}`)}
           >
             <div className="landing__action-icon">
               <svg

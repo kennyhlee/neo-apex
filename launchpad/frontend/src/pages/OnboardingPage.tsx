@@ -53,7 +53,7 @@ export default function OnboardingPage({ user, onboarding, papermiteUrl, onCompl
       const updatedStatus = await getOnboardingStatus(user.tenant_id);
       setStatus(updatedStatus);
     } catch (err) {
-      // silently handle
+      console.error("useDefaultModel failed:", err);
     }
   };
 

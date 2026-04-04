@@ -67,7 +67,8 @@ export async function getTenantModel(tenantId: string): Promise<import("../types
   if (!res.ok) throw new Error("Failed to fetch model");
   const data = await res.json();
   if (!data) return null;
-  // Model definition is keyed by entity type — look for "tenant" (case insensitive)
+  // Response may be the model directly or keyed by entity type
+  if (data.base_fields) return data;
   const key = Object.keys(data).find(k => k.toLowerCase() === "tenant");
   return key ? data[key] : null;
 }
@@ -154,5 +155,11 @@ export async function useDefaultModel(tenantId: string): Promise<Record<string, 
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to apply default model");
+  return res.json();
+}
+
+export async function getTenantModelInfo(tenantId: string): Promise<{ model_definition: Record<string, unknown>; version: number; change_id: string; created_at: string; updated_at: string } | null> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/model/info`);
+  if (!res.ok) throw new Error("Failed to fetch model info");
   return res.json();
 }

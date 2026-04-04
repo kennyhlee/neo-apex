@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from app.api.auth import get_current_user, require_role
 from app.storage import get_registry_store
 from app.storage.registry_store import RegistryStore
-from app.storage.model_store import get_tenant_model
+from app.storage.model_store import get_tenant_model, get_tenant_model_info
 
 router = APIRouter()
 
@@ -51,6 +51,15 @@ def get_model(tenant_id: str, user=Depends(get_current_user)):
         return None
     return model
 
+@router.get("/tenants/{tenant_id}/model/info")
+def get_model_info(tenant_id: str, user=Depends(get_current_user)):
+    if user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    info = get_tenant_model_info(tenant_id)
+    if not info:
+        return None
+    return info
+
 BASE_MODEL_PATH = Path(__file__).parent.parent / "data" / "base_model.json"
 
 @router.post("/tenants/{tenant_id}/model/use-default")
@@ -61,6 +70,9 @@ def use_default_model(tenant_id: str, user=Depends(require_role("admin")), regis
     from datacore import Store
     from app.config import settings
     store = Store(data_dir=settings.datacore_store_path)
+    # Ensure tenant entity exists in datacore before storing models
+    if not store.get_active_entity(tenant_id, "tenant", tenant_id):
+        store.put_entity(tenant_id=tenant_id, entity_type="tenant", entity_id=tenant_id, base_data={"tenant_id": tenant_id, "name": user.tenant_name})
     for entity_type, model_def in base_model.items():
         store.put_model(tenant_id=tenant_id, entity_type=entity_type, model_definition=model_def)
     registry.mark_step_complete(tenant_id, "model_setup")

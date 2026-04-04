@@ -100,12 +100,7 @@ function AppShell({ user, onLogout }: { user: User; onLogout: () => void }) {
       </header>
       <main style={{ flex: 1, padding: 32, maxWidth: 1000, width: "100%", margin: "0 auto" }}>
         <Routes>
-          <Route path="/" element={
-            <div>
-              <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Welcome to Launchpad</h2>
-              <p style={{ color: "var(--text-secondary)", marginTop: 8 }}>Manage your tenant, users, and settings.</p>
-            </div>
-          } />
+          <Route path="/" element={<TenantSettingsPage user={user} />} />
           <Route path="/settings/tenant" element={
             user.role === "admin" || user.role === "staff" ? <TenantSettingsPage user={user} /> : <Navigate to="/" />
           } />
