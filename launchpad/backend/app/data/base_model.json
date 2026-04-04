@@ -1,0 +1,89 @@
+{
+  "tenant": {
+    "base_fields": [
+      {"name": "name", "type": "str", "required": true},
+      {"name": "address", "type": "str", "required": false},
+      {"name": "phone", "type": "phone", "required": false},
+      {"name": "email", "type": "email", "required": false},
+      {"name": "website", "type": "str", "required": false}
+    ],
+    "custom_fields": []
+  },
+  "student": {
+    "base_fields": [
+      {"name": "student_id", "type": "str", "required": true},
+      {"name": "first_name", "type": "str", "required": true},
+      {"name": "last_name", "type": "str", "required": true},
+      {"name": "middle_name", "type": "str", "required": false},
+      {"name": "preferred_name", "type": "str", "required": false},
+      {"name": "dob", "type": "date", "required": false},
+      {"name": "grade_level", "type": "str", "required": false},
+      {"name": "email", "type": "email", "required": false},
+      {"name": "gender", "type": "selection", "required": false, "options": ["Male", "Female", "Non-binary", "Prefer not to say"]},
+      {"name": "status", "type": "selection", "required": false, "options": ["Active", "Inactive", "Enrolled", "Withdrawn", "Graduated", "Waitlisted", "Suspended", "Transferred"]},
+      {"name": "family_id", "type": "str", "required": true},
+      {"name": "primary_address", "type": "str", "required": true},
+      {"name": "mailing_address", "type": "str", "required": false}
+    ],
+    "custom_fields": []
+  },
+  "family": {
+    "base_fields": [
+      {"name": "family_id", "type": "str", "required": true},
+      {"name": "family_name", "type": "str", "required": true},
+      {"name": "primary_address", "type": "str", "required": true},
+      {"name": "mailing_address", "type": "str", "required": false},
+      {"name": "primary_phone", "type": "phone", "required": false},
+      {"name": "primary_email", "type": "email", "required": false}
+    ],
+    "custom_fields": []
+  },
+  "contact": {
+    "base_fields": [
+      {"name": "contact_id", "type": "str", "required": true},
+      {"name": "first_name", "type": "str", "required": true},
+      {"name": "last_name", "type": "str", "required": true},
+      {"name": "relationship", "type": "str", "required": true},
+      {"name": "phone", "type": "phone", "required": false},
+      {"name": "email", "type": "email", "required": false},
+      {"name": "is_emergency", "type": "bool", "required": false},
+      {"name": "is_authorized_pickup", "type": "bool", "required": false},
+      {"name": "family_id", "type": "str", "required": true}
+    ],
+    "custom_fields": []
+  },
+  "program": {
+    "base_fields": [
+      {"name": "program_id", "type": "str", "required": true},
+      {"name": "name", "type": "str", "required": true},
+      {"name": "description", "type": "str", "required": false},
+      {"name": "start_date", "type": "date", "required": false},
+      {"name": "end_date", "type": "date", "required": false},
+      {"name": "capacity", "type": "number", "required": false},
+      {"name": "status", "type": "selection", "required": false, "options": ["Active", "Inactive", "Planned", "Completed"]}
+    ],
+    "custom_fields": []
+  },
+  "enrollment": {
+    "base_fields": [
+      {"name": "enrollment_id", "type": "str", "required": true},
+      {"name": "student_id", "type": "str", "required": true},
+      {"name": "program_id", "type": "str", "required": true},
+      {"name": "enrollment_date", "type": "date", "required": true},
+      {"name": "status", "type": "selection", "required": false, "options": ["Active", "Withdrawn", "Completed", "Waitlisted"]},
+      {"name": "notes", "type": "str", "required": false}
+    ],
+    "custom_fields": []
+  },
+  "attendance": {
+    "base_fields": [
+      {"name": "attendance_id", "type": "str", "required": true},
+      {"name": "student_id", "type": "str", "required": true},
+      {"name": "program_id", "type": "str", "required": true},
+      {"name": "date", "type": "date", "required": true},
+      {"name": "status", "type": "selection", "required": true, "options": ["Present", "Absent", "Tardy", "Excused"]},
+      {"name": "notes", "type": "str", "required": false}
+    ],
+    "custom_fields": []
+  }
+}

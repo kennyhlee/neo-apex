@@ -1,4 +1,6 @@
 """Tenant profile and onboarding status endpoints."""
+import json
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -48,6 +50,21 @@ def get_model(tenant_id: str, user=Depends(get_current_user)):
     if not model:
         return None
     return model
+
+BASE_MODEL_PATH = Path(__file__).parent.parent / "data" / "base_model.json"
+
+@router.post("/tenants/{tenant_id}/model/use-default")
+def use_default_model(tenant_id: str, user=Depends(require_role("admin")), registry: RegistryStore = Depends(get_registry_store)):
+    if user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    base_model = json.loads(BASE_MODEL_PATH.read_text())
+    from datacore import Store
+    from app.config import settings
+    store = Store(data_dir=settings.datacore_store_path)
+    for entity_type, model_def in base_model.items():
+        store.put_model(tenant_id=tenant_id, entity_type=entity_type, model_definition=model_def)
+    registry.mark_step_complete(tenant_id, "model_setup")
+    return base_model
 
 @router.get("/tenants/{tenant_id}/onboarding-status")
 def get_onboarding_status(tenant_id: str, user=Depends(get_current_user), registry: RegistryStore = Depends(get_registry_store)):
