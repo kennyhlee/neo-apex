@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { User, OnboardingStatus, EntityModelDefinition } from "../types/models";
-import { getTenantModel, getTenantProfile, updateTenantProfile, markOnboardingStep } from "../api/client";
+import { getTenantModel, getTenantProfile, updateTenantProfile, markOnboardingStep, useDefaultModel, getStoredToken, getOnboardingStatus } from "../api/client";
 import DynamicEntityForm from "../components/DynamicEntityForm";
 import "./OnboardingPage.css";
 
@@ -42,8 +42,19 @@ export default function OnboardingPage({ user, onboarding, papermiteUrl, onCompl
   }, [user.tenant_id]);
 
   const handleModelSetup = () => {
+    const token = getStoredToken();
     const returnUrl = `${window.location.origin}?model_setup=complete`;
-    window.location.href = `${papermiteUrl}/upload?return_url=${encodeURIComponent(returnUrl)}`;
+    window.location.href = `${papermiteUrl}/upload?tenant_id=${user.tenant_id}&token=${encodeURIComponent(token || "")}&return_url=${encodeURIComponent(returnUrl)}`;
+  };
+
+  const handleUseDefault = async () => {
+    try {
+      await useDefaultModel(user.tenant_id);
+      const updatedStatus = await getOnboardingStatus(user.tenant_id);
+      setStatus(updatedStatus);
+    } catch (err) {
+      // silently handle
+    }
   };
 
   const handleTenantSave = async (data: Record<string, unknown>) => {
@@ -73,7 +84,7 @@ export default function OnboardingPage({ user, onboarding, papermiteUrl, onCompl
           <div className="onboard__card">
             <h3>Set Up Your Data Model</h3>
             <p style={{ color: "var(--text-secondary)", margin: "8px 0 24px" }}>
-              Upload a document to define the data model for your organization.
+              Choose how to set up the data model for your organization.
             </p>
             {status.steps[0].completed ? (
               <>
@@ -81,7 +92,18 @@ export default function OnboardingPage({ user, onboarding, papermiteUrl, onCompl
                 <button className="auth-submit" onClick={() => setActiveStep(1)}>Next</button>
               </>
             ) : (
-              <button className="auth-submit" onClick={handleModelSetup}>Open Papermite</button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <button className="auth-submit" onClick={handleModelSetup}>
+                  Upload Document
+                </button>
+                <button className="auth-submit" onClick={handleUseDefault}
+                  style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border-primary)" }}>
+                  Use Default Model
+                </button>
+                <p style={{ fontSize: 13, color: "var(--text-tertiary)", margin: 0 }}>
+                  You can customize the model later from Tenant Settings.
+                </p>
+              </div>
             )}
           </div>
         )}
