@@ -17,6 +17,7 @@ class TestUser(BaseModel):
 
 class Settings(BaseSettings):
     jwt_secret: str = "papermite-dev-secret-change-in-prod"
+    launchpad_jwt_secret: str = "neoapex-dev-secret-change-in-prod"
     jwt_expiry_hours: int = 24
     default_model: str = "anthropic:claude-haiku-4-5-20251001"
     available_models: list[str] = [

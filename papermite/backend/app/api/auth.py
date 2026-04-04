@@ -22,27 +22,47 @@ def _create_token(user: TestUser) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
-def _decode_token(token: str) -> dict:
+def _decode_token(token: str, secret: str) -> dict:
     try:
-        return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+        return jwt.decode(token, secret, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.InvalidTokenError as e:
+        raise e  # Let caller handle fallback
 
 
 # ─── FastAPI dependencies ──────────────────────────────────────
 
 def get_current_user(authorization: str = Header(...)) -> TestUser:
-    """Decode JWT from Authorization header and return the matching user."""
+    """Decode JWT from Authorization header. Tries papermite secret first, then launchpad secret."""
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     token = authorization[7:]
-    payload = _decode_token(token)
-    user = settings.find_user_by_email(payload["email"])
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+
+    # Try papermite's own secret first
+    try:
+        payload = _decode_token(token, settings.jwt_secret)
+        user = settings.find_user_by_email(payload["email"])
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+    except jwt.InvalidTokenError:
+        pass
+
+    # Try launchpad secret
+    try:
+        payload = _decode_token(token, settings.launchpad_jwt_secret)
+        return TestUser(
+            user_id=payload["user_id"],
+            name=payload.get("name", payload["email"].split("@")[0]),
+            email=payload["email"],
+            password="",  # Not used for JWT-authenticated users
+            tenant_id=payload["tenant_id"],
+            tenant_name=payload.get("tenant_name", ""),
+            role=payload["role"],
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 def require_admin(user: TestUser = Depends(get_current_user)) -> TestUser:
