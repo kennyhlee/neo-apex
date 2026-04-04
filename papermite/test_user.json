@@ -7,7 +7,7 @@
       "password": "admin123",
       "tenant_id": "acme",
       "tenant_name": "Acme Afterschool",
-      "role": "tenant_admin"
+      "role": "admin"
     },
     {
       "user_id": "u-002",

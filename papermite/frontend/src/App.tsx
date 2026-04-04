@@ -68,7 +68,7 @@ function AccessDenied({ user, onLogout }: { user: TestUser; onLogout: () => void
           >
             Role <code style={{ color: "var(--danger)" }}>{user.role}</code> does
             not have access. Requires{" "}
-            <code style={{ color: "var(--success)" }}>tenant_admin</code>.
+            <code style={{ color: "var(--success)" }}>admin</code>.
           </p>
           <button className="btn" onClick={onLogout}>
             Sign Out
@@ -171,7 +171,7 @@ export default function App() {
     return <LoginPage onLogin={handleLogin} />;
   }
 
-  if (user.role !== "tenant_admin") {
+  if (user.role !== "admin") {
     return (
       <BrowserRouter>
         <AccessDenied user={user} onLogout={handleLogout} />

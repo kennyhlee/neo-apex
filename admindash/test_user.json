@@ -6,5 +6,5 @@
   "email": "jane@acme.edu",
   "tenant_id": "acme",
   "tenant_name": "Acme Afterschool",
-  "role": "tenant_admin"
+  "role": "admin"
 }

@@ -46,9 +46,9 @@ def get_current_user(authorization: str = Header(...)) -> TestUser:
 
 
 def require_admin(user: TestUser = Depends(get_current_user)) -> TestUser:
-    """Verify the current user has tenant_admin role."""
-    if user.role != "tenant_admin":
-        raise HTTPException(status_code=403, detail="Requires tenant_admin role")
+    """Verify the current user has admin role."""
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Requires admin role")
     return user
 
 
