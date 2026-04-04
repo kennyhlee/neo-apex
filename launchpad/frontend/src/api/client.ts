@@ -61,3 +61,39 @@ export async function getOnboardingStatus(tenantId: string): Promise<OnboardingS
   if (!res.ok) throw new Error("Failed to fetch onboarding status");
   return res.json();
 }
+
+export async function getTenantModel(tenantId: string): Promise<import("../types/models").EntityModelDefinition | null> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/model`);
+  if (!res.ok) throw new Error("Failed to fetch model");
+  const data = await res.json();
+  if (!data) return null;
+  // Model definition is keyed by entity type — look for "tenant" (case insensitive)
+  const key = Object.keys(data).find(k => k.toLowerCase() === "tenant");
+  return key ? data[key] : null;
+}
+
+export async function getTenantProfile(tenantId: string): Promise<Record<string, unknown>> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}`);
+  if (!res.ok) throw new Error("Failed to fetch tenant profile");
+  return res.json();
+}
+
+export async function updateTenantProfile(tenantId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update tenant profile");
+  return res.json();
+}
+
+export async function markOnboardingStep(tenantId: string, stepId: string): Promise<import("../types/models").OnboardingStatus> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/onboarding-status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ step_id: stepId, completed: true }),
+  });
+  if (!res.ok) throw new Error("Failed to update onboarding status");
+  return res.json();
+}

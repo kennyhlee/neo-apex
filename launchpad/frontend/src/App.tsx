@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { User, OnboardingStatus } from "./types/models";
 import { getCurrentUser, getStoredToken, storeToken, clearToken, getOnboardingStatus } from "./api/client";
+import OnboardingPage from "./pages/OnboardingPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import "./index.css";
@@ -56,15 +57,18 @@ export default function App() {
     );
   }
 
-  // Onboarding gate — admin redirected to onboarding (placeholder for Task 11)
+  // Onboarding gate — admin redirected to onboarding wizard
   if (onboarding && !onboarding.is_complete && user.role === "admin") {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "var(--font-sans)" }}>
-        <div style={{ textAlign: "center" }}>
-          <p>Onboarding wizard (coming in Task 11)</p>
-          <button onClick={handleLogout}>Sign Out</button>
-        </div>
-      </div>
+      <OnboardingPage
+        user={user}
+        onboarding={onboarding}
+        papermiteUrl="http://localhost:5173"
+        onComplete={() => {
+          getOnboardingStatus(user.tenant_id).then(setOnboarding);
+        }}
+        onLogout={handleLogout}
+      />
     );
   }
 
