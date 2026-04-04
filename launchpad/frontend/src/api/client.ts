@@ -43,11 +43,11 @@ export async function login(email: string, password: string): Promise<{ token: s
   return res.json();
 }
 
-export async function register(name: string, email: string, password: string, tenant_name: string): Promise<{ token: string; user: User }> {
+export async function register(name: string, email: string, password: string, tenant_name: string, tenant_id: string): Promise<{ token: string; user: User }> {
   const res = await fetch(`${BASE_URL}/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password, tenant_name }),
+    body: JSON.stringify({ name, email, password, tenant_name, tenant_id }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -126,5 +126,33 @@ export async function markOnboardingStep(tenantId: string, stepId: string): Prom
     body: JSON.stringify({ step_id: stepId, completed: true }),
   });
   if (!res.ok) throw new Error("Failed to update onboarding status");
+  return res.json();
+}
+
+export async function checkEmail(email: string): Promise<{ status: string; admin_email_hint: string | null }> {
+  const res = await fetch(`${BASE_URL}/register/check-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Failed to check email");
+  return res.json();
+}
+
+export async function suggestTenantIds(email: string, tenantName: string): Promise<{ suggestions: string[] }> {
+  const res = await fetch(`${BASE_URL}/register/suggest-ids`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, tenant_name: tenantName }),
+  });
+  if (!res.ok) throw new Error("Failed to suggest IDs");
+  return res.json();
+}
+
+export async function useDefaultModel(tenantId: string): Promise<Record<string, unknown>> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/model/use-default`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to apply default model");
   return res.json();
 }
