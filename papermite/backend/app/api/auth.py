@@ -60,12 +60,16 @@ def login(req: LoginRequest):
     return resp.json()
 
 
+class RedeemRequest(BaseModel):
+    code: str
+
+
 @router.post("/redeem-code")
-def redeem_code(code: str):
+def redeem_code(req: RedeemRequest):
     """Redeem an exchange code from LaunchPad for a token."""
     resp = httpx.post(
         f"{settings.datacore_auth_url}/redeem-code",
-        json={"code": code},
+        json={"code": req.code},
     )
     if resp.status_code != 200:
         raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail", "Invalid code"))
