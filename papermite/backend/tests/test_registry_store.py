@@ -1,5 +1,7 @@
 """Tests for RegistryStore and UserRecord in papermite."""
 
+from unittest.mock import MagicMock
+
 
 def test_user_record_import():
     from app.models.registry import UserRecord
@@ -16,9 +18,6 @@ def test_user_record_import():
     assert user.user_id == "u-abc123"
     assert user.email == "jane@acme.edu"
     assert user.role == "admin"
-
-
-from unittest.mock import MagicMock
 
 
 def _make_store(rows=None, get_result=None):

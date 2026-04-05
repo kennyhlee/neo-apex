@@ -13,7 +13,10 @@ class RegistryStore:
 
     @staticmethod
     def verify_password(password: str, password_hash: str) -> bool:
-        return bcrypt.checkpw(password.encode(), password_hash.encode())
+        try:
+            return bcrypt.checkpw(password.encode(), password_hash.encode())
+        except ValueError:
+            return False
 
     def get_user_by_email(self, email: str) -> UserRecord | None:
         results = self._store.query_global(REGISTRY_TABLE)
