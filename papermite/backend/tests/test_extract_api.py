@@ -5,18 +5,19 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.config import TestUser
+from app.models.registry import UserRecord
 
 client = TestClient(app)
 
-FAKE_USER = TestUser(
+FAKE_USER = UserRecord(
     user_id="u1",
     name="Test Admin",
     email="admin@test.com",
-    password="pass",
+    password_hash="",
     tenant_id="t1",
     tenant_name="Test Tenant",
     role="admin",
+    created_at="",
 )
 
 

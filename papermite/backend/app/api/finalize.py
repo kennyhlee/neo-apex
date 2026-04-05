@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.auth import require_admin
-from app.config import TestUser
+from app.models.registry import UserRecord
 from app.models.extraction import ExtractionResult
 from app.storage.lance_store import preview_finalize, commit_finalize
 
@@ -18,7 +18,7 @@ class FinalizeRequest(BaseModel):
 async def finalize_preview(
     tenant_id: str,
     request: FinalizeRequest,
-    user: TestUser = Depends(require_admin),
+    user: UserRecord = Depends(require_admin),
 ):
     """Preview the finalization without storing anything."""
     if user.tenant_id != tenant_id:
@@ -48,7 +48,7 @@ async def finalize_preview(
 async def finalize_commit(
     tenant_id: str,
     request: FinalizeRequest,
-    user: TestUser = Depends(require_admin),
+    user: UserRecord = Depends(require_admin),
 ):
     """Commit the finalized model definition to LanceDB."""
     if user.tenant_id != tenant_id:

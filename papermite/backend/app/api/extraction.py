@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.auth import require_admin
-from app.config import TestUser, settings
+from app.config import settings
+from app.models.registry import UserRecord
 from app.models.domain import ENTITY_CLASSES
 from app.storage.lance_store import get_active_model
 
@@ -10,7 +11,7 @@ router = APIRouter()
 
 
 @router.get("/schema")
-def get_schema(user: TestUser = Depends(require_admin)):
+def get_schema(user: UserRecord = Depends(require_admin)):
     """Return base model schemas so frontend knows which fields are base vs custom."""
     schemas = {}
     for name, cls in ENTITY_CLASSES.items():
@@ -28,7 +29,7 @@ def get_schema(user: TestUser = Depends(require_admin)):
 
 
 @router.get("/config/models")
-def get_available_models(user: TestUser = Depends(require_admin)):
+def get_available_models(user: UserRecord = Depends(require_admin)):
     """Return available LLM model options."""
     return {
         "default": settings.default_model,
@@ -37,7 +38,7 @@ def get_available_models(user: TestUser = Depends(require_admin)):
 
 
 @router.get("/tenants/{tenant_id}/model")
-def get_tenant_model(tenant_id: str, user: TestUser = Depends(require_admin)):
+def get_tenant_model(tenant_id: str, user: UserRecord = Depends(require_admin)):
     """Return the active model definition for the tenant, if it exists."""
     if user.tenant_id != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")

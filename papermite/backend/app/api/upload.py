@@ -5,7 +5,8 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 
 from app.api.auth import require_admin
-from app.config import TestUser, settings
+from app.config import settings
+from app.models.registry import UserRecord
 from app.models.extraction import ExtractionResult
 from app.services.parser import parse_document
 from app.services.extractor import extract_entities
@@ -21,7 +22,7 @@ def upload_document(
     tenant_id: str,
     file: UploadFile = File(...),
     model_id: str = Form(default=settings.default_model),
-    user: TestUser = Depends(require_admin),
+    user: UserRecord = Depends(require_admin),
 ):
     """Upload a document, extract entities, and return the mapped result."""
     if user.tenant_id != tenant_id:
