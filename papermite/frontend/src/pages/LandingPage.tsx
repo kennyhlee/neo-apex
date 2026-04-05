@@ -64,7 +64,7 @@ export default function LandingPage({ user }: Props) {
 
       <TenantInfo user={user} />
 
-      {model ? (
+      {model && model.model_definition ? (
         <>
           <div className="landing__model card">
             <div className="landing__model-header">
