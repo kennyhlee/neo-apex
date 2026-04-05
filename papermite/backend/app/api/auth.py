@@ -1,75 +1,37 @@
-"""Auth endpoints and dependencies — JWT-based login with registry user lookup."""
-from datetime import datetime, timedelta, timezone
-
-import jwt
+"""Auth dependencies — delegates token validation to DataCore auth service."""
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings
 from app.models.registry import UserRecord
-from app.storage import get_registry_store
-from app.storage.registry_store import RegistryStore
 
 router = APIRouter()
-
-# ─── JWT helpers ───────────────────────────────────────────────
-
-def _create_token(user: UserRecord) -> str:
-    payload = {
-        "user_id": user.user_id,
-        "email": user.email,
-        "tenant_id": user.tenant_id,
-        "role": user.role,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiry_hours),
-    }
-    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
-
-
-def _decode_token(token: str, secret: str) -> dict:
-    try:
-        return jwt.decode(token, secret, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError as e:
-        raise e  # Let caller handle fallback
 
 
 # ─── FastAPI dependencies ──────────────────────────────────────
 
-def get_current_user(
-    authorization: str = Header(...),
-    registry: RegistryStore = Depends(get_registry_store),
-) -> UserRecord:
-    """Decode JWT from Authorization header. Tries papermite secret first, then launchpad secret."""
+def get_current_user(authorization: str = Header(...)) -> UserRecord:
+    """Validate token by calling DataCore auth service."""
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
-    token = authorization[7:]
-
-    # Try papermite's own secret first
-    try:
-        payload = _decode_token(token, settings.jwt_secret)
-        user = registry.get_user_by_email(payload["email"])
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        return user
-    except jwt.InvalidTokenError:
-        pass
-
-    # Try launchpad secret
-    try:
-        payload = _decode_token(token, settings.launchpad_jwt_secret)
-        return UserRecord(
-            user_id=payload["user_id"],
-            name=payload.get("name", payload["email"].split("@")[0]),
-            email=payload["email"],
-            password_hash="",
-            tenant_id=payload["tenant_id"],
-            tenant_name=payload.get("tenant_name", ""),
-            role=payload["role"],
-            created_at="",
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    resp = httpx.get(
+        f"{settings.datacore_auth_url}/me",
+        headers={"Authorization": authorization},
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    data = resp.json()
+    return UserRecord(
+        user_id=data["user_id"],
+        name=data["name"],
+        email=data["email"],
+        password_hash="",
+        tenant_id=data["tenant_id"],
+        tenant_name=data["tenant_name"],
+        role=data["role"],
+        created_at=data.get("created_at", ""),
+    )
 
 
 def require_admin(user: UserRecord = Depends(get_current_user)) -> UserRecord:
@@ -86,22 +48,32 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class LoginResponse(BaseModel):
-    token: str
-    user: dict
-
-
 @router.post("/login")
-def login(req: LoginRequest, registry: RegistryStore = Depends(get_registry_store)):
-    """Authenticate with email + password, return JWT."""
-    user = registry.get_user_by_email(req.email)
-    if not user or not RegistryStore.verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = _create_token(user)
-    # Exclude password_hash from response
-    user_data = user.model_dump()
-    del user_data["password_hash"]
-    return {"token": token, "user": user_data}
+def login(req: LoginRequest):
+    """Proxy login to DataCore auth service."""
+    resp = httpx.post(
+        f"{settings.datacore_auth_url}/login",
+        json=req.model_dump(),
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail", "Login failed"))
+    return resp.json()
+
+
+class RedeemRequest(BaseModel):
+    code: str
+
+
+@router.post("/redeem-code")
+def redeem_code(req: RedeemRequest):
+    """Redeem an exchange code from LaunchPad for a token."""
+    resp = httpx.post(
+        f"{settings.datacore_auth_url}/redeem-code",
+        json={"code": req.code},
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail", "Invalid code"))
+    return resp.json()
 
 
 @router.get("/me")

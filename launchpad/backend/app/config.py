@@ -1,11 +1,10 @@
-"""Launchpad configuration — settings, JWT config, datacore path."""
+"""Launchpad configuration — settings and datacore path."""
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    jwt_secret: str = "neoapex-dev-secret-change-in-prod"
-    jwt_expiry_hours: int = 24
+    datacore_auth_url: str = "http://localhost:8081/auth"
     datacore_store_path: Path = Path(os.environ.get(
         "NEOAPEX_LANCEDB_DIR",
         str(Path(__file__).resolve().parent.parent.parent.parent

@@ -48,7 +48,7 @@ No test framework is configured.
 - **i18n/** — Translation JSON files keyed by locale
 
 ### Key Patterns
-- **Authentication**: AuthContext loads `test_user.json` (dev credentials: jane/admin123), stores session in sessionStorage. Routes protected via AppRoutes component.
+- **Authentication**: AuthContext authenticates against DataCore auth API (`http://localhost:8081/auth`), stores JWT in localStorage under `neoapex_token`. Routes protected via AppRoutes component.
 - **Multi-tenancy**: Tenant selected via Navbar dropdown, passed as prop to page components.
 - **Dynamic columns**: StudentsPage discovers `custom_fields` from API data and generates table columns dynamically.
 - **API endpoints**: `GET /students?tenant=&limit=&offset=` and `GET /tenants`.

@@ -4,9 +4,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    jwt_secret: str = "papermite-dev-secret-change-in-prod"
-    launchpad_jwt_secret: str = "neoapex-dev-secret-change-in-prod"
-    jwt_expiry_hours: int = 24
+    datacore_auth_url: str = "http://localhost:8081/auth"
     default_model: str = "anthropic:claude-haiku-4-5-20251001"
     available_models: list[str] = [
         "anthropic:claude-haiku-4-5-20251001",

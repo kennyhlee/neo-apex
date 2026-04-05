@@ -1,7 +1,7 @@
 import type { User, OnboardingStatus } from "../types/models";
 
 const BASE_URL = "http://localhost:8001/api";
-const TOKEN_KEY = "launchpad_token";
+const TOKEN_KEY = "neoapex_token";
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);

@@ -11,7 +11,7 @@ import type {
 } from "../types/models";
 
 const BASE_URL = "http://localhost:8000/api";
-const TOKEN_KEY = "papermite_token";
+const TOKEN_KEY = "neoapex_token";
 
 // ─── Token helpers ────────────────────────────────────────────
 
@@ -27,8 +27,19 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-export function setExternalToken(token: string): void {
-  storeToken(token);
+/**
+ * Redeem an exchange code received via URL param for a real token.
+ */
+export async function redeemExchangeCode(code: string): Promise<string> {
+  const res = await fetch(`${BASE_URL}/redeem-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) throw new Error("Failed to redeem code");
+  const data = await res.json();
+  storeToken(data.token);
+  return data.token;
 }
 
 // ─── Auth fetch ───────────────────────────────────────────────
