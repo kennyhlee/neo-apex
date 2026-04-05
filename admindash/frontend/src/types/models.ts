@@ -1,7 +1,5 @@
 export interface TestUser {
   user_id: string;
-  username: string;
-  password: string;
   name: string;
   email: string;
   tenant_id: string;

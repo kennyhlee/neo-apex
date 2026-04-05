@@ -1,51 +1,65 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { TestUser } from '../types/models.ts';
 
+const DATACORE_AUTH_URL = 'http://localhost:8081/auth';
+const TOKEN_KEY = 'neoapex_token';
+
 interface AuthState {
   user: TestUser | null;
-  login: (username: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   ready: boolean;
 }
 
 const AuthContext = createContext<AuthState>({
   user: null,
-  login: () => false,
+  login: async () => false,
   logout: () => {},
   ready: false,
 });
 
-let cachedTestUser: TestUser | null = null;
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<TestUser | null>(() => {
-    const saved = sessionStorage.getItem('admindash_user');
-    return saved ? (JSON.parse(saved) as TestUser) : null;
-  });
-  const [ready, setReady] = useState(!!cachedTestUser);
+  const [user, setUser] = useState<TestUser | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (cachedTestUser) { setReady(true); return; }
-    fetch('/test_user.json')
-      .then((r) => r.json())
-      .then((data: TestUser) => { cachedTestUser = data; })
-      .catch(() => {})
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      setReady(true);
+      return;
+    }
+    fetch(`${DATACORE_AUTH_URL}/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error('Invalid token');
+        return r.json();
+      })
+      .then((data: TestUser) => setUser(data))
+      .catch(() => localStorage.removeItem(TOKEN_KEY))
       .finally(() => setReady(true));
   }, []);
 
-  const login = useCallback((username: string, password: string) => {
-    if (!cachedTestUser) return false;
-    if (username === cachedTestUser.username && password === cachedTestUser.password) {
-      setUser(cachedTestUser);
-      sessionStorage.setItem('admindash_user', JSON.stringify(cachedTestUser));
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const resp = await fetch(`${DATACORE_AUTH_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!resp.ok) return false;
+      const data = await resp.json();
+      localStorage.setItem(TOKEN_KEY, data.token);
+      setUser(data.user);
       return true;
+    } catch {
+      return false;
     }
-    return false;
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
-    sessionStorage.removeItem('admindash_user');
+    localStorage.removeItem(TOKEN_KEY);
   }, []);
 
   return (

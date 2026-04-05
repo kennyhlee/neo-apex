@@ -9,22 +9,21 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setError('');
+    setLoading(true);
     const form = e.target as HTMLFormElement;
-    const username = (form.elements.namedItem('username') as HTMLInputElement).value;
+    const email = (form.elements.namedItem('email') as HTMLInputElement).value;
     const password = (form.elements.namedItem('password') as HTMLInputElement).value;
-    if (login(username, password)) {
+    const success = await login(email, password);
+    setLoading(false);
+    if (success) {
       navigate('/home');
     } else {
       setError('Invalid credentials');
-    }
-  }
-
-  function handleGoogleLogin() {
-    if (login('google-user', '')) {
-      navigate('/home');
     }
   }
 
@@ -44,41 +43,29 @@ export default function LoginPage() {
               {error}
             </div>
           )}
-          <div className="login-columns">
-            <form onSubmit={handleSubmit}>
-              <div className="login-field">
-                <label htmlFor="username">{t('login.username')}</label>
-                <input
-                  id="username"
-                  type="text"
-                  placeholder={t('login.usernamePlaceholder')}
-                  required
-                />
-              </div>
-              <div className="login-field">
-                <label htmlFor="password">{t('login.password')}</label>
-                <input
-                  id="password"
-                  type="password"
-                  placeholder={t('login.passwordPlaceholder')}
-                  required
-                />
-              </div>
-              <button type="submit" className="login-submit">
-                {t('login.submit')}
-              </button>
-            </form>
-            <div className="login-alt login-divider">
-              <div className="login-alt-label">{t('login.otherMethods')}</div>
-              <button
-                type="button"
-                className="login-google-btn"
-                onClick={handleGoogleLogin}
-              >
-                {t('login.googleLogin')}
-              </button>
+          <form onSubmit={handleSubmit}>
+            <div className="login-field">
+              <label htmlFor="email">{t('login.email')}</label>
+              <input
+                id="email"
+                type="email"
+                placeholder={t('login.emailPlaceholder')}
+                required
+              />
             </div>
-          </div>
+            <div className="login-field">
+              <label htmlFor="password">{t('login.password')}</label>
+              <input
+                id="password"
+                type="password"
+                placeholder={t('login.passwordPlaceholder')}
+                required
+              />
+            </div>
+            <button type="submit" className="login-submit" disabled={loading}>
+              {loading ? '...' : t('login.submit')}
+            </button>
+          </form>
         </div>
         <div className="login-footer">
           {t('login.noAccount')}{' '}

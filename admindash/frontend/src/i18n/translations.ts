@@ -145,13 +145,11 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Login
     'login.title': 'Welcome Back',
-    'login.username': 'Username',
-    'login.usernamePlaceholder': 'Enter username',
+    'login.email': 'Email',
+    'login.emailPlaceholder': 'Enter email',
     'login.password': 'Password',
     'login.passwordPlaceholder': 'Enter password',
     'login.submit': 'Sign In',
-    'login.googleLogin': 'Sign in with Google',
-    'login.otherMethods': 'Other sign-in methods',
     'login.noAccount': "Don't have an account?",
     'login.register': 'Register now',
 
@@ -313,13 +311,11 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Login
     'login.title': '\u6b22\u8fce\u56de\u6765',
-    'login.username': '\u7528\u6237\u540d',
-    'login.usernamePlaceholder': '\u8bf7\u8f93\u5165\u7528\u6237\u540d',
+    'login.email': '\u90ae\u7bb1',
+    'login.emailPlaceholder': '\u8bf7\u8f93\u5165\u90ae\u7bb1',
     'login.password': '\u5bc6\u7801',
     'login.passwordPlaceholder': '\u8bf7\u8f93\u5165\u5bc6\u7801',
     'login.submit': '\u767b\u5f55',
-    'login.googleLogin': '\u4f7f\u7528 Google \u767b\u5f55',
-    'login.otherMethods': '\u5176\u4ed6\u767b\u5f55\u65b9\u5f0f',
     'login.noAccount': '\u8fd8\u6ca1\u6709\u8d26\u53f7\uff1f',
     'login.register': '\u7acb\u5373\u6ce8\u518c',
 
