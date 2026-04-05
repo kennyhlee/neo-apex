@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import type { TestUser } from "./types/models";
-import { getCurrentUser, getStoredToken, storeToken, clearToken } from "./api/client";
+import { getCurrentUser, getStoredToken, storeToken, clearToken, redeemExchangeCode } from "./api/client";
 import LoginPage from "./pages/LoginPage";
 import LandingPage from "./pages/LandingPage";
 import UploadPage from "./pages/UploadPage";
@@ -126,18 +126,26 @@ export default function App() {
   const [backendError, setBackendError] = useState(false);
 
   useEffect(() => {
-    // Check for external token from launchpad
+    // Check for exchange code from launchpad
     const params = new URLSearchParams(window.location.search);
-    const externalToken = params.get("token");
-    if (externalToken) {
-      storeToken(externalToken);
-      // Clean token from URL but preserve other params
-      params.delete("token");
+    const code = params.get("code");
+    if (code) {
+      // Clean code from URL before async redemption
+      params.delete("code");
       const remaining = params.toString();
       const newUrl = remaining
         ? `${window.location.pathname}?${remaining}`
         : window.location.pathname;
       window.history.replaceState({}, "", newUrl);
+
+      redeemExchangeCode(code)
+        .then(() => getCurrentUser())
+        .then(setUser)
+        .catch(() => {
+          clearToken();
+        })
+        .finally(() => setAuthChecked(true));
+      return;
     }
 
     const token = getStoredToken();
