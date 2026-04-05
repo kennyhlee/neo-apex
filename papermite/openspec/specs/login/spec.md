@@ -2,36 +2,36 @@
 
 ## Purpose
 
-Authentication flow for users to log in with email and password credentials against the test user database.
+Authentication flow for users to log in with email and password credentials against the user store.
 
 ## Requirements
 
 ### Requirement: Credential Authentication
 
-Users must authenticate with email and password against the test user database before accessing the application.
+Users must authenticate with email and password against the user store before accessing the application. The user store includes both database-persisted users and (in development) test_user.json seeded users.
 
 #### Scenario: Valid credentials with tenant_admin role
 
-- **WHEN** a user submits email and password that match a user in test_user.json
-- **AND** the matched user has role `tenant_admin`
+- **WHEN** a user submits email and password that match a user in the user store
+- **AND** the matched user has role `admin`
 - **THEN** the backend returns a JWT token containing user_id, tenant_id, and role
 - **AND** the frontend stores the token in localStorage
-- **AND** the user is redirected to the landing page
+- **AND** if the user's tenant onboarding is incomplete, the user is redirected to the onboarding wizard
+- **AND** if onboarding is complete, the user is redirected to the landing page
 
 #### Scenario: Valid credentials with non-admin role
 
-- **WHEN** a user submits email and password that match a user in test_user.json
-- **AND** the matched user does NOT have role `tenant_admin`
-- **THEN** the backend returns a JWT token
-- **AND** the frontend shows an "Access Denied" screen explaining tenant_admin role is required
-- **AND** a logout option is available to return to the login page
+- **WHEN** a user submits email and password that match a user in the user store
+- **AND** the matched user has role `staff`, `teacher`, or `parent`
+- **THEN** the backend returns a JWT token containing user_id, tenant_id, and role
+- **AND** the frontend stores the token in localStorage
+- **AND** if the tenant's onboarding is not complete, the user sees a "setup pending" message
+- **AND** if onboarding is complete, the user is redirected to the landing page
 
 #### Scenario: Invalid credentials
 
-- **WHEN** a user submits email and password that do NOT match any user
-- **THEN** the backend returns 401 Unauthorized
-- **AND** the login form shows an error message "Invalid email or password"
-- **AND** the password field is cleared
+- **WHEN** a user submits email and password that do not match any user
+- **THEN** the backend returns HTTP 401 with message "Invalid credentials"
 
 #### Scenario: Empty form submission
 
@@ -39,11 +39,11 @@ Users must authenticate with email and password against the test user database b
 - **THEN** the form shows validation errors
 - **AND** no API call is made
 
-### Requirement: Multi-User Test Config
+### Requirement: Registration link on login page
 
-test_user.json supports multiple user accounts for testing different roles and tenants.
+The login page SHALL include a navigation link to the registration page.
 
-#### Scenario: Config structure
-
-- **WHEN** the application loads test_user.json
-- **THEN** it reads a `users` array where each entry has: user_id, name, email, password, tenant_id, tenant_name, role
+#### Scenario: User navigates to registration
+- **WHEN** a user views the login page
+- **THEN** a "Don't have an account? Sign up" link is displayed below the login form
+- **AND** clicking it navigates to `/signup`

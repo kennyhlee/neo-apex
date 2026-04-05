@@ -2,41 +2,69 @@
 
 ## Purpose
 
-Access control enforcement ensuring only authenticated users with the tenant_admin role can access the application's API routes and frontend pages.
+Access control enforcement ensuring only authenticated users with appropriate roles can access the application's API routes and frontend pages.
 
 ## Requirements
 
 ### Requirement: API Route Protection
 
-All API routes (except POST /login) require a valid JWT with tenant_admin role.
+All API routes (except `POST /api/login` and `POST /api/register`) require a valid JWT. Route access is determined by role.
 
 #### Scenario: Request with valid admin token
 
 - **WHEN** an API request includes `Authorization: Bearer <valid_token>`
-- **AND** the token's role is `tenant_admin`
-- **THEN** the request proceeds normally
+- **AND** the token's role is `admin`
+- **THEN** the request proceeds normally for all routes
 - **AND** the user's tenant_id is extracted from the token for tenant scoping
+
+#### Scenario: Request with valid staff token
+
+- **WHEN** an API request includes `Authorization: Bearer <valid_token>`
+- **AND** the token's role is `staff`
+- **THEN** tenant info read routes proceed (`GET /api/tenants/{tenant_id}`)
+- **AND** model management routes return HTTP 403 (upload, extraction, finalize, schema)
+- **AND** user management routes return HTTP 403
+- **AND** tenant profile update routes return HTTP 403
+
+#### Scenario: Request with valid teacher token
+
+- **WHEN** an API request includes `Authorization: Bearer <valid_token>`
+- **AND** the token's role is `teacher`
+- **THEN** all Papermite routes return HTTP 403 except `GET /api/me`
+- **AND** teacher permissions apply only in downstream apps (admindash)
+
+#### Scenario: Request with valid parent token
+
+- **WHEN** an API request includes `Authorization: Bearer <valid_token>`
+- **AND** the token's role is `parent`
+- **THEN** all Papermite routes return HTTP 403 except `GET /api/me`
+- **AND** parent permissions apply only in downstream apps (familyhub)
 
 #### Scenario: Request with no token
 
 - **WHEN** an API request has no Authorization header
-- **THEN** the backend returns 401 Unauthorized
+- **THEN** the backend returns HTTP 401
 
-#### Scenario: Request with non-admin token
+#### Scenario: Request with expired token
 
-- **WHEN** an API request includes a valid token but role is not `tenant_admin`
-- **THEN** the backend returns 403 Forbidden with detail "Requires tenant_admin role"
+- **WHEN** an API request includes an expired JWT
+- **THEN** the backend returns HTTP 401
 
-### Requirement: Frontend Route Protection
+### Requirement: Frontend route protection by role
 
-All app pages are protected; unauthenticated users see the login page.
+The frontend SHALL restrict page access based on the authenticated user's role.
 
-#### Scenario: Unauthenticated user navigates to any page
+#### Scenario: Non-admin accessing admin-only pages
 
-- **WHEN** a user with no token navigates to /, /upload, /review/:id, or /finalize/:id
-- **THEN** they are redirected to the login page
+- **WHEN** a staff, teacher, or parent user navigates to `/settings/users`, `/upload`, `/review`, or `/finalize`
+- **THEN** the user is redirected to the landing page
 
-#### Scenario: Authenticated non-admin user
+#### Scenario: Staff accessing tenant info page
 
-- **WHEN** a user with a valid token but non-admin role accesses the app
-- **THEN** they see an "Access Denied" screen with the option to log out
+- **WHEN** a staff user navigates to `/settings/tenant`
+- **THEN** the page renders in read-only mode (no edit controls)
+
+#### Scenario: Teacher or parent accessing Papermite pages
+
+- **WHEN** a teacher or parent user logs into Papermite
+- **THEN** they see only a minimal landing page with no model management or tenant settings access
