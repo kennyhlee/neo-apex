@@ -47,19 +47,7 @@ cd ..
 
 ### Configuration
 
-Copy and edit the test user file to match your tenant:
-
-```json
-// test_user.json (project root)
-{
-  "user_id": "u-001",
-  "name": "Jane Admin",
-  "email": "jane@acme.edu",
-  "tenant_id": "acme",
-  "tenant_name": "Acme Afterschool",
-  "role": "tenant_admin"
-}
-```
+Users are authenticated via the DataCore global registry table (bcrypt-hashed passwords). No local `test_user.json` is needed — seed users are loaded into the registry during tenant onboarding.
 
 Set your LLM API key as an environment variable:
 
@@ -160,7 +148,6 @@ papermite/
 │       ├── db/                  # IndexedDB draft storage
 │       ├── pages/               # Landing, Upload, Review, Finalize
 │       └── types/               # TypeScript interfaces
-├── test_user.json               # Dev user config
 ├── CLAUDE.md                    # AI assistant instructions
 └── pyproject.toml               # Python package config
 ```

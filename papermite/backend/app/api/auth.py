@@ -96,7 +96,7 @@ def login(req: LoginRequest, registry: RegistryStore = Depends(get_registry_stor
     """Authenticate with email + password, return JWT."""
     user = registry.get_user_by_email(req.email)
     if not user or not RegistryStore.verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     token = _create_token(user)
     # Exclude password_hash from response
     user_data = user.model_dump()
