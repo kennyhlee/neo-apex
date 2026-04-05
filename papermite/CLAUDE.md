@@ -37,7 +37,7 @@ Papermite is the **data ingestion gateway** for NeoApex. Tenant admins upload po
 - `services/mapper.py`: Fields in `model_class.model_fields` → `base_model` (required=True default); everything else → `custom_field` (required=False default). `_infer_field_type()` does best-effort type detection from field name patterns (e.g. `dob` → `date`, `email` → `email`). `_extract_options()` pulls selection options from list/dict/CSV values. `_consolidate_entities()` merges multiple entities of the same type into one (union of fields, merged options).
 - `storage/lance_store.py`: Single `tenant_models` table, versioned per tenant (max 50 versions, oldest trimmed). Each record has `version` (int), `status` (active/archived), `created_by` (user name), `created_at` (timestamp). Model definition = `{entity_type: {base_fields: [...], custom_fields: [...]}}` where each field has `name`, `type`, `required`, and optionally `options`/`multiple` for selection type. Change detection via normalized comparison skips writes when unchanged. `preview_finalize()` returns diff without storing; `commit_finalize()` stores and archives previous.
 
-**Config** (`app/config.py`): Env prefix `PAPERMITE_`. Test user loaded from `test_user.json` at project root. LLM models configurable (Claude Haiku/Sonnet, GPT-4.1/5, Ollama).
+**Config** (`app/config.py`): Env prefix `PAPERMITE_`. Users authenticated via DataCore global registry table (bcrypt). LLM models configurable (Claude Haiku/Sonnet, GPT-4.1/5, Ollama).
 
 ### Field Type System
 

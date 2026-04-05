@@ -1,18 +1,6 @@
-import json
 import os
 from pathlib import Path
-from pydantic import BaseModel
 from pydantic_settings import BaseSettings
-
-
-class TestUser(BaseModel):
-    user_id: str
-    name: str
-    email: str
-    password: str
-    tenant_id: str
-    tenant_name: str
-    role: str
 
 
 class Settings(BaseSettings):
@@ -32,25 +20,6 @@ class Settings(BaseSettings):
         "NEOAPEX_LANCEDB_DIR",
         str(Path(__file__).resolve().parent.parent.parent.parent / "datacore" / "data" / "lancedb"),
     ))
-    test_user_path: Path = Path(__file__).parent.parent.parent / "test_user.json"
-
-    def load_test_user(self) -> TestUser:
-        """Backward compat — returns the first user."""
-        users = self.load_users()
-        return users[0]
-
-    def load_users(self) -> list[TestUser]:
-        data = json.loads(self.test_user_path.read_text())
-        if isinstance(data, dict) and "users" in data:
-            return [TestUser(**u) for u in data["users"]]
-        # Legacy single-user format
-        return [TestUser(**data)]
-
-    def find_user_by_email(self, email: str) -> TestUser | None:
-        for user in self.load_users():
-            if user.email.lower() == email.lower():
-                return user
-        return None
 
     model_config = {"env_prefix": "PAPERMITE_"}
 
