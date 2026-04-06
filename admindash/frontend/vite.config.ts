@@ -6,5 +6,6 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: services.services["admindash-frontend"].port,
+    host: '127.0.0.1',
   },
 })

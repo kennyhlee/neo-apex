@@ -4,5 +4,5 @@ import services from '../../services.json'
 
 export default defineConfig({
   plugins: [react()],
-  server: { port: services.services["papermite-frontend"].port },
+  server: { port: services.services["papermite-frontend"].port, host: '127.0.0.1' },
 })

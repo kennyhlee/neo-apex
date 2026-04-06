@@ -55,6 +55,7 @@ def register_routes(app: FastAPI, store: Store) -> None:
 
     @app.get("/api/entities/{tenant_id}/student/next-id")
     def next_student_id(tenant_id: str):
+        """Preview the next student ID without incrementing the counter."""
         tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
         if tenant is None:
             raise HTTPException(status_code=404, detail="Tenant not set up")
@@ -63,14 +64,16 @@ def register_routes(app: FastAPI, store: Store) -> None:
         year = str(datetime.now(timezone.utc).year)
         yy = year[-2:]
 
-        seq = store.increment_sequence(tenant_id, "student", year)
-        next_id = f"{abbrev}-ST{yy}{seq:04d}"
+        current = store.get_sequence(tenant_id, "student", year)
+        next_seq = current + 1
+        next_id = f"{abbrev}-ST{yy}{next_seq:04d}"
 
         return {
             "next_id": next_id,
             "tenant_abbrev": abbrev,
             "entity_abbrev": "ST",
-            "sequence": seq,
+            "sequence": next_seq,
+            "approximate": True,
         }
 
     class SimilaritySearchRequest(BaseModel):
@@ -245,12 +248,24 @@ def register_routes(app: FastAPI, store: Store) -> None:
         tenant_id: str, entity_type: str, body: CreateEntityRequest
     ):
         entity_id = uuid.uuid4().hex[:12]
+        base_data = dict(body.base_data)
+
+        # Auto-assign sequential student_id at creation time
+        if entity_type == "student" and not base_data.get("student_id"):
+            tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
+            if tenant:
+                abbrev = tenant["base_data"].get("_abbrev", tenant_id[:3].upper())
+                year = str(datetime.now(timezone.utc).year)
+                yy = year[-2:]
+                seq = store.increment_sequence(tenant_id, "student", year)
+                base_data["student_id"] = f"{abbrev}-ST{yy}{seq:04d}"
+
         try:
             result = store.put_entity(
                 tenant_id=tenant_id,
                 entity_type=entity_type,
                 entity_id=entity_id,
-                base_data=body.base_data,
+                base_data=base_data,
                 custom_fields=body.custom_fields,
             )
         except ValueError as e:
@@ -289,12 +304,9 @@ def register_routes(app: FastAPI, store: Store) -> None:
         flat = qe._flatten_custom_fields(arrow_table)
         available_cols = set(flat.column_names)
 
-        # Validate sort column
+        # If sort column doesn't exist (e.g. empty table), return empty
         if sort_by not in available_cols:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid sort column: '{sort_by}'",
-            )
+            return {"data": [], "total": 0}
 
         # Build WHERE clauses
         conditions = [f"entity_type = '{entity_type}'"]

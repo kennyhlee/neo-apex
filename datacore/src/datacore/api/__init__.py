@@ -29,7 +29,9 @@ def _load_cors_origins() -> list[str]:
     origins = []
     for key in frontend_keys:
         svc = config["services"][key]
-        origins.append(f"http://{svc['host']}:{svc['port']}")
+        port = svc["port"]
+        origins.append(f"http://localhost:{port}")
+        origins.append(f"http://127.0.0.1:{port}")
     return origins
 
 
