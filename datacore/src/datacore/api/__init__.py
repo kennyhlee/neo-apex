@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from datacore.store import Store
 from datacore.api.routes import register_routes
+from datacore.api.registry_routes import register_registry_routes
 from datacore.api.auth_routes import register_auth_routes
 
 
@@ -48,6 +49,7 @@ def create_app(store: Store) -> FastAPI:
     )
 
     register_routes(app, store)
+    register_registry_routes(app, store)
     register_auth_routes(app, store)
 
     return app
