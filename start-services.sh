@@ -9,6 +9,14 @@
 #
 set -euo pipefail
 
+# Load environment variables (API keys, etc.)
+# Extract export lines from shell profile (works in both bash and zsh)
+if [ -f "$HOME/.zshrc" ]; then
+  eval "$(grep '^export ' "$HOME/.zshrc" 2>/dev/null)" || true
+elif [ -f "$HOME/.bashrc" ]; then
+  eval "$(grep '^export ' "$HOME/.bashrc" 2>/dev/null)" || true
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -197,15 +205,7 @@ start_service() {
     datacore)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/datacore"
-      uv run python3 -c "
-from datacore import Store, create_app
-from datacore.auth.seed import seed_test_user
-import uvicorn
-store = Store()
-seed_test_user(store)
-app = create_app(store)
-uvicorn.run(app, host='127.0.0.1', port=$port)
-" > "$log_file" 2>&1 &
+      uv run uvicorn datacore.api.server:app --host 127.0.0.1 --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
     launchpad-backend)

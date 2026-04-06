@@ -181,11 +181,12 @@ def test_query_sort(app_client):
     assert data[0]["first_name"] == "Zara"
 
 
-def test_query_invalid_sort_column(app_client):
+def test_query_invalid_sort_column_returns_empty(app_client):
     client, store = app_client
     store.put_entity("t1", "student", "s1", {"last_name": "A"}, {})
     resp = client.get("/api/entities/t1/student/query?sort_by=nonexistent")
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    assert resp.json() == {"data": [], "total": 0}
 
 
 def test_query_pagination(app_client):

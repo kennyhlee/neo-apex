@@ -16,6 +16,12 @@ import { DATACORE_URL, PAPERMITE_BACKEND_URL } from '../config.ts';
 const API_BASE = 'http://localhost:8080';
 const DATACORE_API_BASE = DATACORE_URL;
 const PAPERMITE_API_BASE = PAPERMITE_BACKEND_URL;
+const TOKEN_KEY = 'neoapex_token';
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export async function fetchStudents(
   tenant: string,
@@ -79,6 +85,7 @@ export async function extractStudentFromDocument(
     `${PAPERMITE_API_BASE}/api/extract/${tenantId}/student`,
     {
       method: 'POST',
+      headers: authHeaders(),
       body: formData,
     },
   );

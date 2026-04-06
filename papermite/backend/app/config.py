@@ -26,7 +26,13 @@ def _cors_origins() -> list[str]:
     env_origins = os.environ.get("CORS_ALLOWED_ORIGINS")
     if env_origins:
         return [o.strip() for o in env_origins.split(",") if o.strip()]
-    return [_svc_url(k) for k in _services if k.endswith("-frontend")]
+    origins = []
+    for k in _services:
+        if k.endswith("-frontend"):
+            port = _services[k].get("port", 0)
+            origins.append(f"http://localhost:{port}")
+            origins.append(f"http://127.0.0.1:{port}")
+    return origins
 
 
 class Settings(BaseSettings):

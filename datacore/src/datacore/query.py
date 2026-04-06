@@ -174,9 +174,12 @@ class QueryEngine:
             values = []
             for row in parsed:
                 v = row.get(key)
-                if isinstance(v, (dict, list)):
-                    v = json.dumps(v)
-                values.append(v)
+                if v is None:
+                    values.append(None)
+                elif isinstance(v, (dict, list)):
+                    values.append(json.dumps(v))
+                else:
+                    values.append(str(v))
             arrow_table = arrow_table.append_column(
                 key, pa.array(values, type=pa.string())
             )

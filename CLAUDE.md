@@ -98,4 +98,6 @@ All data tenant-scoped. Tenant ID embedded in JWT. API routes enforce tenant mat
 - Backend: FastAPI + Uvicorn, pydantic_settings for config.
 - Frontend: React 19 + TypeScript + Vite. Native Fetch API (no axios). CSS variables (no CSS-in-JS). No global state library.
 - Always use SSH for git remotes (`git@github.com:` URLs).
+- Always use the `superpowers:subagent-driven-development` skill when executing implementation plans with independent tasks.
+- Prefer the `/floatify` skill for development workflow: use OpenSpec to write and review specs, then execute with superpowers skills.
 - `VOYAGE_API_KEY` and other API keys are in `~/.zshrc`. Run `source ~/.zshrc` if env vars appear missing.
