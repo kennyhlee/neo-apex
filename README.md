@@ -113,9 +113,29 @@ All services sit behind a reverse proxy/load balancer on port 443 in production.
 
 ## Quick Start
 
-```bash
-# Start all services (from repo root)
+### Using the start script (recommended)
 
+```bash
+# Interactive mode — prompts to kill existing and choose which to start
+./start-services.sh
+
+# Non-interactive mode — kills all existing services, starts everything
+./start-services.sh --yes
+# or
+./start-services.sh -y
+```
+
+The script:
+1. Reads ports from `services.json`
+2. Checks for services already running on those ports
+3. In interactive mode, asks whether to kill some or all; in non-interactive mode, kills all automatically
+4. Starts selected (or all) services in the background
+5. Shows a status table when done
+6. Logs output to `.logs/` directory (e.g., `.logs/datacore.log`)
+
+### Starting services manually
+
+```bash
 # 1. DataCore (port 6300)
 cd datacore && uv run python3 -c "
 from datacore import Store, create_app
