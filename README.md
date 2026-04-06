@@ -47,6 +47,7 @@ Python backends read `services.json` at startup. Environment variables override 
 | `DATACORE_JWT_SECRET` | JWT signing secret | `neoapex-dev-secret-change-in-prod` |
 | `DATACORE_JWT_EXPIRY_HOURS` | JWT token expiry in hours | `24` |
 | `NEOAPEX_LANCEDB_DIR` | LanceDB data directory | `datacore/data/lancedb` |
+| `DATACORE_DUPLICATE_CHECK_THRESHOLD` | Minimum cosine similarity for duplicate student detection | `0.75` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated CORS origins (overrides services.json) | Built from frontend entries |
 
 #### LaunchPad Backend

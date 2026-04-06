@@ -1,5 +1,6 @@
 """API route handlers."""
 
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -11,6 +12,10 @@ from pydantic import BaseModel
 
 from datacore.store import Store, derive_abbrev
 from datacore.query import QueryEngine, TableNotFoundError
+
+DUPLICATE_CHECK_THRESHOLD = float(
+    os.environ.get("DATACORE_DUPLICATE_CHECK_THRESHOLD", "0.75")
+)
 
 
 class CreateEntityRequest(BaseModel):
@@ -116,7 +121,7 @@ def register_routes(app: FastAPI, store: Store) -> None:
         for row in rows:
             dist = row.get("_distance", float("inf"))
             similarity = max(0.0, 1.0 - dist / 2.0)
-            if similarity < 0.85:
+            if similarity < DUPLICATE_CHECK_THRESHOLD:
                 continue
             base_data = toon.decode(row["base_data"]) if row["base_data"] else {}
             matches.append({
