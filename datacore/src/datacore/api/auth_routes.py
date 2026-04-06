@@ -1,8 +1,5 @@
 """Auth API routes — login, token validation, exchange codes."""
-import copy
 import re
-import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
@@ -10,17 +7,14 @@ from pydantic import BaseModel
 from datacore.auth.config import AuthConfig
 from datacore.auth.exchange import ExchangeStore
 from datacore.auth.passwords import verify_password
-from datacore.auth.passwords import hash_password as _hash_password
 from datacore.auth.tokens import TokenError, create_token, decode_token
 from datacore.store import Store
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_store: Store | None = None
 _config: AuthConfig | None = None
 _exchange: ExchangeStore | None = None
-
-REGISTRY_TABLE = "registry"
+_registry = None  # set in register_auth_routes via deferred import
 
 
 class LoginRequest(BaseModel):
@@ -33,28 +27,12 @@ class RedeemRequest(BaseModel):
 
 
 def register_auth_routes(app, store: Store, config: AuthConfig | None = None) -> None:
-    global _store, _config, _exchange
-    _store = store
+    global _config, _exchange, _registry
     _config = config or AuthConfig()
     _exchange = ExchangeStore(ttl_seconds=30)
+    from datacore.api import registry_routes
+    _registry = registry_routes
     app.include_router(router)
-
-
-def _get_user_by_email(email: str) -> dict | None:
-    results = _store.query_global(REGISTRY_TABLE)
-    for row in results:
-        if not row["record_key"].startswith("user:"):
-            continue
-        if row["data"].get("email", "").lower() == email.lower():
-            return row["data"]
-    return None
-
-
-def _get_user_by_id(user_id: str) -> dict | None:
-    result = _store.get_global(REGISTRY_TABLE, f"user:{user_id}")
-    if not result:
-        return None
-    return result["data"]
 
 
 def _sanitize_user(user_data: dict) -> dict:
@@ -69,7 +47,7 @@ def _extract_bearer_token(authorization: str) -> str:
 
 @router.post("/login")
 def login(req: LoginRequest):
-    user = _get_user_by_email(req.email)
+    user = _registry.get_user_by_email(req.email)
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_token(
@@ -91,7 +69,7 @@ def get_me(authorization: str = Header(None)):
         payload = decode_token(_config, token)
     except TokenError as e:
         raise HTTPException(status_code=401, detail=str(e))
-    user = _get_user_by_id(payload["user_id"])
+    user = _registry.get_user_by_id(payload["user_id"])
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return _sanitize_user(user)
@@ -122,18 +100,12 @@ def redeem_code(req: RedeemRequest):
 # Registration endpoints
 # ---------------------------------------------------------------------------
 
-VALID_ROLES = {"admin", "staff", "teacher", "parent"}
 TENANT_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{2,39}$")
 COMMON_EMAIL_PROVIDERS = frozenset({
     "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
     "icloud.com", "protonmail.com", "aol.com", "mail.com", "zoho.com",
     "live.com", "msn.com", "ymail.com",
 })
-
-ONBOARDING_STEPS = [
-    {"id": "model_setup", "label": "Set Up Model", "completed": False},
-    {"id": "tenant_details", "label": "Tenant Details", "completed": False},
-]
 
 
 class RegisterRequest(BaseModel):
@@ -197,25 +169,6 @@ def _generate_slug_candidates(email: str, tenant_name: str) -> list[str]:
     return unique
 
 
-def _get_onboarding(tenant_id: str) -> dict | None:
-    result = _store.get_global(REGISTRY_TABLE, f"onboarding:{tenant_id}")
-    if not result:
-        return None
-    return result["data"]
-
-
-def _get_users_by_email_domain(domain: str) -> list[dict]:
-    results = _store.query_global(REGISTRY_TABLE)
-    users = []
-    for row in results:
-        if not row["record_key"].startswith("user:"):
-            continue
-        email = row["data"].get("email", "")
-        if email.split("@")[-1].lower() == domain.lower():
-            users.append(row["data"])
-    return users
-
-
 @router.post("/register")
 def register(req: RegisterRequest):
     if not TENANT_ID_PATTERN.match(req.tenant_id):
@@ -223,31 +176,20 @@ def register(req: RegisterRequest):
             status_code=422,
             detail="Invalid tenant ID format. Must be 3-40 lowercase alphanumeric characters and hyphens, starting with a letter.",
         )
-    if _get_onboarding(req.tenant_id) is not None:
+    if _registry.get_onboarding(req.tenant_id) is not None:
         raise HTTPException(status_code=409, detail="Tenant ID already taken")
-    if _get_user_by_email(req.email):
+    if _registry.get_user_by_email(req.email):
         raise HTTPException(status_code=409, detail="Email already registered")
 
-    user_id = f"u-{uuid.uuid4().hex[:8]}"
-    now = datetime.now(timezone.utc).isoformat()
-    user_data = {
-        "user_id": user_id,
-        "name": req.name,
-        "email": req.email.lower(),
-        "password_hash": _hash_password(req.password),
-        "tenant_id": req.tenant_id,
-        "tenant_name": req.tenant_name,
-        "role": "admin",
-        "created_at": now,
-    }
-    _store.put_global(REGISTRY_TABLE, f"user:{user_id}", user_data)
-
-    onboarding = {
-        "tenant_id": req.tenant_id,
-        "steps": copy.deepcopy(ONBOARDING_STEPS),
-        "is_complete": False,
-    }
-    _store.put_global(REGISTRY_TABLE, f"onboarding:{req.tenant_id}", onboarding)
+    user_data = _registry.create_user_record(
+        name=req.name,
+        email=req.email,
+        password=req.password,
+        tenant_id=req.tenant_id,
+        tenant_name=req.tenant_name,
+        role="admin",
+    )
+    _registry.create_onboarding(req.tenant_id)
 
     token = create_token(
         _config,
@@ -264,7 +206,7 @@ def check_email(req: CheckEmailRequest):
     domain = req.email.split("@")[-1].lower()
     if domain in COMMON_EMAIL_PROVIDERS:
         return {"status": "new_tenant", "admin_email_hint": None}
-    users = _get_users_by_email_domain(domain)
+    users = _registry.get_users_by_email_domain(domain)
     admins = [u for u in users if u.get("role") == "admin"]
     if admins:
         return {
@@ -277,5 +219,5 @@ def check_email(req: CheckEmailRequest):
 @router.post("/register/suggest-ids")
 def suggest_ids(req: SuggestIdsRequest):
     candidates = _generate_slug_candidates(req.email, req.tenant_name)
-    available = [c for c in candidates if _get_onboarding(c) is None]
+    available = [c for c in candidates if _registry.get_onboarding(c) is None]
     return {"suggestions": available}
