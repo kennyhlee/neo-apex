@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 import type { User, OnboardingStatus } from "./types/models";
 import { getCurrentUser, getStoredToken, storeToken, clearToken, getOnboardingStatus } from "./api/client";
+import { PAPERMITE_FRONTEND_URL } from "./config";
 import OnboardingPage from "./pages/OnboardingPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
@@ -66,7 +67,7 @@ export default function App() {
       <OnboardingPage
         user={user}
         onboarding={onboarding}
-        papermiteUrl="http://localhost:5173"
+        papermiteUrl={PAPERMITE_FRONTEND_URL}
         onComplete={() => {
           getOnboardingStatus(user.tenant_id).then(setOnboarding);
         }}
