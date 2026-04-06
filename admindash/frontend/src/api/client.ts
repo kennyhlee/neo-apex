@@ -7,8 +7,8 @@ import type {
   QueryStudentsParams,
   QueryStudentsResponse,
   NextIdResponse,
-  SimilaritySearchRequest,
-  SimilaritySearchResponse,
+  DuplicateCheckRequest,
+  DuplicateCheckResponse,
 } from '../types/models.ts';
 
 import { DATACORE_URL, PAPERMITE_BACKEND_URL } from '../config.ts';
@@ -138,12 +138,12 @@ export async function fetchNextStudentId(
   return resp.json();
 }
 
-export async function searchSimilarStudents(
+export async function checkDuplicateStudents(
   tenantId: string,
-  data: SimilaritySearchRequest,
-): Promise<SimilaritySearchResponse> {
+  data: DuplicateCheckRequest,
+): Promise<DuplicateCheckResponse> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/similarity-search`,
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/duplicate-check`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

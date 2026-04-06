@@ -5,14 +5,14 @@ import {
   createStudent,
   extractStudentFromDocument,
   fetchNextStudentId,
-  searchSimilarStudents,
+  checkDuplicateStudents,
 } from '../api/client.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import DocumentUpload from '../components/DocumentUpload.tsx';
 import DuplicateWarningModal from '../components/DuplicateWarningModal.tsx';
-import type { ModelDefinition, SimilarityMatch } from '../types/models.ts';
+import type { ModelDefinition, DuplicateMatch } from '../types/models.ts';
 import './AddStudentPage.css';
 
 interface AddStudentPageProps {
@@ -41,7 +41,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
   const readOnlyFields = useMemo(() => generatedId ? ['student_id'] : [], [generatedId]);
 
   // Duplicate detection state
-  const [duplicateMatches, setDuplicateMatches] = useState<SimilarityMatch[] | null>(null);
+  const [duplicateMatches, setDuplicateMatches] = useState<DuplicateMatch[] | null>(null);
   const [pendingSubmission, setPendingSubmission] = useState<{
     baseData: Record<string, unknown>;
     customFields: Record<string, unknown>;
@@ -106,7 +106,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     setCheckingDuplicates(true);
     setSubmitError(null);
 
-    // Run similarity search before creating
+    // Run duplicate check before creating
     try {
       const searchData = {
         first_name: String(baseData.first_name || ''),
@@ -114,7 +114,7 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
         dob: baseData.dob ? String(baseData.dob) : undefined,
         primary_address: baseData.primary_address ? String(baseData.primary_address) : undefined,
       };
-      const result = await searchSimilarStudents(tenant, searchData);
+      const result = await checkDuplicateStudents(tenant, searchData);
 
       if (result.matches.length > 0) {
         // Show modal — pause submission

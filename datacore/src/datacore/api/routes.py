@@ -82,8 +82,8 @@ def register_routes(app: FastAPI, store: Store) -> None:
         dob: str | None = None
         primary_address: str | None = None
 
-    @app.post("/api/entities/{tenant_id}/student/similarity-search")
-    def similarity_search(tenant_id: str, body: SimilaritySearchRequest):
+    @app.post("/api/entities/{tenant_id}/student/duplicate-check")
+    def duplicate_check(tenant_id: str, body: SimilaritySearchRequest):
         if not store.embedder:
             raise HTTPException(status_code=503, detail="Embedder not available")
 

@@ -101,7 +101,7 @@ export interface NextIdResponse {
   sequence: number;
 }
 
-export interface SimilarityMatch {
+export interface DuplicateMatch {
   entity_id: string;
   student_id: string;
   first_name: string;
@@ -111,13 +111,13 @@ export interface SimilarityMatch {
   similarity_score: number;
 }
 
-export interface SimilaritySearchRequest {
+export interface DuplicateCheckRequest {
   first_name: string;
   last_name: string;
   dob?: string;
   primary_address?: string;
 }
 
-export interface SimilaritySearchResponse {
-  matches: SimilarityMatch[];
+export interface DuplicateCheckResponse {
+  matches: DuplicateMatch[];
 }

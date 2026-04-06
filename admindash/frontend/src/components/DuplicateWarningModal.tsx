@@ -1,9 +1,9 @@
-import type { SimilarityMatch } from '../types/models.ts';
+import type { DuplicateMatch } from '../types/models.ts';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './DuplicateWarningModal.css';
 
 interface DuplicateWarningModalProps {
-  matches: SimilarityMatch[];
+  matches: DuplicateMatch[];
   onGoBack: () => void;
   onSaveAnyway: () => void;
 }
