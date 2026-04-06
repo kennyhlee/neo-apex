@@ -38,11 +38,7 @@ def _cors_origins() -> list[str]:
 
 class Settings(BaseSettings):
     datacore_auth_url: str = _svc_url("datacore") + "/auth"
-    datacore_store_path: Path = Path(os.environ.get(
-        "NEOAPEX_LANCEDB_DIR",
-        str(Path(__file__).resolve().parent.parent.parent.parent
-            / "datacore" / "data" / "lancedb"),
-    ))
+    datacore_api_url: str = _svc_url("datacore") + "/api"
     papermite_frontend_url: str = _svc_url("papermite-frontend")
     port: int = _services.get("launchpad-backend", {}).get("port", 6010)
     cors_origins: list[str] = _cors_origins()
