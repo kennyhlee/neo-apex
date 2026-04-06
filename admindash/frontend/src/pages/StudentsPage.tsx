@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DATACORE_URL } from '../config.ts';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
@@ -287,7 +288,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         setPage(p);
       } catch (err) {
         setError(
-          `Failed to load students. Is the datacore API at http://localhost:8081 running? (${err})`,
+          `Failed to load students. Is the datacore API at ${DATACORE_URL} running? (${err})`,
         );
         setData([]);
         setTotal(0);
