@@ -10,7 +10,9 @@ import type {
   TestUser,
 } from "../types/models";
 
-const BASE_URL = "http://localhost:8000/api";
+import { PAPERMITE_API_URL } from "../config";
+
+const BASE_URL = PAPERMITE_API_URL;
 const TOKEN_KEY = "neoapex_token";
 
 // ─── Token helpers ────────────────────────────────────────────

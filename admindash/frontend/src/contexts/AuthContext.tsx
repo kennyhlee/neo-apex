@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { TestUser } from '../types/models.ts';
-
-const DATACORE_AUTH_URL = 'http://localhost:8081/auth';
+import { DATACORE_AUTH_URL } from '../config.ts';
 const TOKEN_KEY = 'neoapex_token';
 
 interface AuthState {

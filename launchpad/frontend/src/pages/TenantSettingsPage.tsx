@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { User, EntityModelDefinition } from "../types/models";
 import { getTenantModel, getTenantProfile, updateTenantProfile, getTenantModelInfo, getStoredToken } from "../api/client";
+import { PAPERMITE_FRONTEND_URL } from "../config";
 import DynamicEntityForm from "../components/DynamicEntityForm";
 
 interface Props { user: User; }
@@ -28,7 +29,7 @@ export default function TenantSettingsPage({ user }: Props) {
   const handleEditModel = () => {
     const token = getStoredToken();
     const returnUrl = `${window.location.origin}/settings/tenant`;
-    window.location.href = `http://localhost:5173/?tenant_id=${user.tenant_id}&token=${encodeURIComponent(token || "")}&return_url=${encodeURIComponent(returnUrl)}`;
+    window.location.href = `${PAPERMITE_FRONTEND_URL}/?tenant_id=${user.tenant_id}&token=${encodeURIComponent(token || "")}&return_url=${encodeURIComponent(returnUrl)}`;
   };
 
   if (!model) return <p>Loading...</p>;

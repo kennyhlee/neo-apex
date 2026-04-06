@@ -1,6 +1,7 @@
 import type { User, OnboardingStatus } from "../types/models";
+import { LAUNCHPAD_API_URL } from "../config";
 
-const BASE_URL = "http://localhost:8001/api";
+const BASE_URL = LAUNCHPAD_API_URL;
 const TOKEN_KEY = "neoapex_token";
 
 export function getStoredToken(): string | null {

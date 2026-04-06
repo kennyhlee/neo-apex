@@ -11,9 +11,11 @@ import type {
   SimilaritySearchResponse,
 } from '../types/models.ts';
 
+import { DATACORE_URL, PAPERMITE_BACKEND_URL } from '../config.ts';
+
 const API_BASE = 'http://localhost:8080';
-const DATACORE_API_BASE = 'http://localhost:8081';
-const PAPERMITE_API_BASE = 'http://localhost:8000';
+const DATACORE_API_BASE = DATACORE_URL;
+const PAPERMITE_API_BASE = PAPERMITE_BACKEND_URL;
 
 export async function fetchStudents(
   tenant: string,

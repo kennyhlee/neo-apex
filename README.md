@@ -1,131 +1,166 @@
 # NeoApex
 
-An AI-powered platform for afterschool program management — from document ingestion and tenant onboarding to enrollment, analytics, and operations.
+Multi-service education/enrollment management platform.
 
-## Modules
+## Services
 
-| Module | Type | Frontend | Backend | Stack |
-|--------|------|----------|---------|-------|
-| [papermite](#papermite) | Full-stack | `:5173` | `:8000` | React 19 + FastAPI |
-| [launchpad](#launchpad) | Full-stack | `:5175` | `:8001` | React 19 + FastAPI |
-| [admindash](#admindash) | Frontend | `:5174` | — | React 19 + Vite |
-| [datacore](#datacore) | Backend | — | `:8081` | FastAPI + LanceDB |
-| [apexflow](#apexflow) | Planned | — | — | — |
-| [enrollx](#enrollx) | Planned | — | — | — |
-| [familyhub](#familyhub) | Planned | — | — | — |
-| [ui-tokens](#ui-tokens) | Shared lib | — | — | CSS variables |
-| [sampledoc](#sampledoc) | Sample data | — | — | PDFs |
+| Service | Description | Port | Block |
+|---|---|---|---|
+| LaunchPad frontend | Tenant onboarding & admin UI | 6000 | 60xx |
+| LaunchPad backend | Tenant lifecycle & identity API | 6010 | 60xx |
+| AdminDash frontend | Operations dashboard UI | 6100 | 61xx |
+| Papermite frontend | Document ingestion UI | 6200 | 62xx |
+| Papermite backend | Document ingestion API | 6210 | 62xx |
+| DataCore backend | Storage, query engine & auth server | 6300 | 63xx |
 
----
+**Port convention:** Each service owns a 100-port block. Frontend = `X00`, backend = `X10`.
 
-## papermite
+## Configuration
 
-**Document ingestion gateway.** Transforms afterschool program documents (PDF, DOCX, TXT) into structured, tenant-scoped Pydantic data models using AI-powered extraction.
+### services.json
 
-- **Frontend** `localhost:5173` — Upload documents, review AI-extracted draft models, and finalize schemas. Draft state stored in IndexedDB.
-- **Backend** `localhost:8000` — FastAPI. Parses documents via Docling, extracts entities via Pydantic-AI. Supports Claude Haiku/Sonnet (default), GPT-4.1/5, and Ollama.
+All service hostnames and ports are defined in `services.json` at the repo root:
 
-```bash
-# Backend
-cd papermite && uv run uvicorn main:app --reload --port 8000
-
-# Frontend
-cd papermite/frontend && npm run dev   # → localhost:5173
+```json
+{
+  "services": {
+    "launchpad-frontend": { "host": "localhost", "port": 6000 },
+    "launchpad-backend": { "host": "localhost", "port": 6010 },
+    "admindash-frontend": { "host": "localhost", "port": 6100 },
+    "papermite-frontend": { "host": "localhost", "port": 6200 },
+    "papermite-backend": { "host": "localhost", "port": 6210 },
+    "datacore": { "host": "localhost", "port": 6300 }
+  }
+}
 ```
 
----
+**To change a port for local development**, edit `services.json` and restart the affected services. All services read from this file — no need to update multiple config files.
 
-## launchpad
+### Backend Configuration
 
-**Tenant lifecycle and identity service.** Handles authentication, tenant provisioning, and user management.
+Python backends read `services.json` at startup. Environment variables override for production deployment.
 
-- **Frontend** `localhost:5175` — Tenant onboarding UI. Uses `@neoapex/ui-tokens` for shared design.
-- **Backend** `localhost:8001` — FastAPI with JWT auth (24h expiry). Integrates with datacore for model registry. Endpoints: `/api/auth`, `/api/tenants`, `/api/users`, `/api/health`.
+#### DataCore
 
-```bash
-# Backend
-cd launchpad && uv run uvicorn main:app --reload --port 8001
+| Variable | Description | Default |
+|---|---|---|
+| `DATACORE_JWT_SECRET` | JWT signing secret | `neoapex-dev-secret-change-in-prod` |
+| `DATACORE_JWT_EXPIRY_HOURS` | JWT token expiry in hours | `24` |
+| `NEOAPEX_LANCEDB_DIR` | LanceDB data directory | `datacore/data/lancedb` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated CORS origins (overrides services.json) | Built from frontend entries |
 
-# Frontend
-cd launchpad/frontend && npm run dev   # → localhost:5175
-```
+#### LaunchPad Backend
 
----
+| Variable | Description | Default |
+|---|---|---|
+| `LAUNCHPAD_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:6300/auth` |
+| `LAUNCHPAD_PAPERMITE_FRONTEND_URL` | Papermite frontend URL (for redirects) | `http://localhost:6200` |
+| `LAUNCHPAD_PORT` | LaunchPad backend port | `6010` |
+| `NEOAPEX_LANCEDB_DIR` | LanceDB data directory | `datacore/data/lancedb` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated CORS origins (overrides services.json) | Built from frontend entries |
 
-## admindash
+#### Papermite Backend
 
-**Operations dashboard.** Management interface for viewing students, guardians, programs, and enrollments across tenants.
+| Variable | Description | Default |
+|---|---|---|
+| `PAPERMITE_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:6300/auth` |
+| `PAPERMITE_PORT` | Papermite backend port | `6210` |
+| `NEOAPEX_LANCEDB_DIR` | LanceDB data directory | `datacore/data/lancedb` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated CORS origins (overrides services.json) | Built from frontend entries |
 
-- **Frontend only** `localhost:5174` — React SPA. Consumes APIs from datacore (`:8081`), papermite (`:8000`), and a central API server (`:8080`). Supports i18n (en-US, zh-CN).
+### Frontend Configuration
 
-```bash
-cd admindash && npm run dev   # → localhost:5174
-```
+React frontends read `services.json` at build time via Vite's JSON import. For production builds, use `VITE_` prefixed environment variables to override.
 
----
+#### LaunchPad Frontend
 
-## datacore
+| Variable | Description | Default |
+|---|---|---|
+| `VITE_LAUNCHPAD_BACKEND_URL` | LaunchPad backend base URL | `http://localhost:6010` |
+| `VITE_PAPERMITE_FRONTEND_URL` | Papermite frontend URL (for cross-app navigation) | `http://localhost:6200` |
 
-**Centralized storage and query engine.** Manages vector storage, embeddings, and analytics for the platform.
+#### Papermite Frontend
 
-- **Backend only** `localhost:8081` — FastAPI. Uses LanceDB for vector storage and DuckDB/PyArrow for analytics. Provides entity persistence, versioning, and similarity search. Consumed by admindash, papermite, launchpad, and future modules.
+| Variable | Description | Default |
+|---|---|---|
+| `VITE_PAPERMITE_BACKEND_URL` | Papermite backend base URL | `http://localhost:6210` |
 
-```bash
-cd datacore && uv run uvicorn main:app --reload --port 8081
-```
+#### AdminDash Frontend
 
----
+| Variable | Description | Default |
+|---|---|---|
+| `VITE_DATACORE_URL` | DataCore API base URL | `http://localhost:6300` |
+| `VITE_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:6300/auth` |
+| `VITE_PAPERMITE_BACKEND_URL` | Papermite backend base URL | `http://localhost:6210` |
 
-## apexflow
+### CORS
 
-**Workflow orchestration** — planned, not yet implemented.
-
----
-
-## enrollx
-
-**Smart application processing** — planned, not yet implemented.
-
----
-
-## familyhub
-
-**Parent portal** — planned, not yet implemented.
-
----
-
-## ui-tokens
-
-Shared CSS design token package used across frontend modules.
-
-- **Package**: `@neoapex/ui-tokens`
-- **Exports**: `tokens.css` (CSS custom properties)
-- **Used by**: `launchpad/frontend`, `papermite/frontend`
+All backends build their CORS allowed origins dynamically from the frontend entries in `services.json`. In production, set `CORS_ALLOWED_ORIGINS` as a comma-separated list to override:
 
 ```bash
-# Link locally during development
-cd ui-tokens && npm link
-cd ../launchpad/frontend && npm link @neoapex/ui-tokens
+CORS_ALLOWED_ORIGINS=https://app.neoapex.com,https://admin.neoapex.com
 ```
 
----
+## Production Deployment
 
-## sampledoc
+In production (AWS ECS, Lambda, EKS, etc.), `services.json` is not used. Instead:
 
-Sample documents for testing the papermite extraction pipeline:
-- `2025-2026 Afterschool Admission Packet.pdf`
-- `Kenny's Application.pdf`
-- `Wei's Application.pdf`
+1. **Backend services** read configuration from environment variables set in the deployment configuration (ECS task definitions, Kubernetes ConfigMaps, etc.)
+2. **Frontend apps** are built with `VITE_` env vars injected at build time in CI/CD
+3. **CORS origins** are set via `CORS_ALLOWED_ORIGINS` env var on each backend
 
----
+All services sit behind a reverse proxy/load balancer on port 443 in production.
 
-## Port Reference
+## Quick Start
 
-| Service | Port |
-|---------|------|
-| papermite frontend | 5173 |
-| admindash frontend | 5174 |
-| launchpad frontend | 5175 |
-| papermite backend | 8000 |
-| launchpad backend | 8001 |
-| datacore backend | 8081 |
+### Using the start script (recommended)
+
+```bash
+# Default — kills all existing services, starts everything
+./start-services.sh
+
+# Interactive mode — prompts to kill existing and choose which to start
+./start-services.sh -i
+# or
+./start-services.sh --interactive
+```
+
+The script:
+1. Reads ports from `services.json`
+2. Checks for services already running on those ports
+3. By default, kills all and starts all automatically; with `-i`, asks which to kill/start
+4. Starts services in the background
+5. Shows a status table when done
+6. Logs output to `.logs/` directory (e.g., `.logs/datacore.log`)
+
+### Starting services manually
+
+```bash
+# 1. DataCore (port 6300)
+cd datacore && uv run python3 -c "
+from datacore import Store, create_app
+from datacore.auth.seed import seed_test_user
+import uvicorn
+store = Store()
+seed_test_user(store)
+app = create_app(store)
+uvicorn.run(app, host='127.0.0.1', port=6300)
+"
+
+# 2. LaunchPad backend (port 6010)
+cd launchpad/backend && uvicorn app.main:app --port 6010
+
+# 3. Papermite backend (port 6210)
+cd papermite/backend && uvicorn app.main:app --port 6210
+
+# 4. LaunchPad frontend (port 6000)
+cd launchpad/frontend && npm run dev
+
+# 5. Papermite frontend (port 6200)
+cd papermite/frontend && npm run dev
+
+# 6. AdminDash frontend (port 6100)
+cd admindash/frontend && npm run dev
+```
+
+Test login: `jane@acme.edu` / `admin123`
