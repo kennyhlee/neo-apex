@@ -31,6 +31,7 @@ def _cors_origins() -> list[str]:
 
 class Settings(BaseSettings):
     datacore_auth_url: str = _svc_url("datacore") + "/auth"
+    datacore_api_url: str = _svc_url("datacore") + "/api"
     default_model: str = "anthropic:claude-haiku-4-5-20251001"
     available_models: list[str] = [
         "anthropic:claude-haiku-4-5-20251001",
@@ -40,10 +41,6 @@ class Settings(BaseSettings):
         "ollama:llama3.2",
     ]
     upload_dir: Path = Path(__file__).parent.parent / "uploads"
-    lancedb_dir: Path = Path(os.environ.get(
-        "NEOAPEX_LANCEDB_DIR",
-        str(Path(__file__).resolve().parent.parent.parent.parent / "datacore" / "data" / "lancedb"),
-    ))
     port: int = _services.get("papermite-backend", {}).get("port", 6210)
     cors_origins: list[str] = _cors_origins()
 

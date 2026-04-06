@@ -2,7 +2,6 @@ import type {
   EntityResult,
   ExtractionResult,
   FieldMapping,
-  FinalizePreviewResponse,
   FinalizeCommitResponse,
   ModelConfig,
   SchemaMap,
@@ -181,22 +180,6 @@ export function modelToExtraction(
     raw_text: "",
     status: "pending_review",
   };
-}
-
-export async function previewFinalize(
-  tenantId: string,
-  extraction: ExtractionResult
-): Promise<FinalizePreviewResponse> {
-  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/finalize/preview`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ extraction }),
-  });
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}));
-    throw new Error(detail.detail || "Preview failed");
-  }
-  return res.json();
 }
 
 export async function commitFinalize(

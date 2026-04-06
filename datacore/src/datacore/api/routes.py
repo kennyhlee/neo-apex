@@ -129,6 +129,107 @@ def register_routes(app: FastAPI, store: Store) -> None:
         matches.sort(key=lambda m: m["similarity_score"], reverse=True)
         return {"matches": matches}
 
+    class PutModelsRequest(BaseModel):
+        model_definition: dict
+        source_filename: str
+        created_by: str
+
+    @app.get("/api/models/{tenant_id}")
+    def list_tenant_models(tenant_id: str):
+        """List all active models for a tenant, assembled into a combined definition."""
+        rows = store.list_models(tenant_id, status="active")
+        if not rows:
+            raise HTTPException(status_code=404, detail="No models found")
+
+        model_definition = {}
+        for row in rows:
+            entity_type = row["entity_type"]
+            defn = row["model_definition"]
+            clean_defn = {k: v for k, v in defn.items() if not k.startswith("_")}
+            model_definition[entity_type] = clean_defn
+
+        latest_row = max(rows, key=lambda r: r["_version"])
+        first_defn = latest_row["model_definition"]
+
+        return {
+            "tenant_id": tenant_id,
+            "version": max(row["_version"] for row in rows),
+            "status": "active",
+            "model_definition": model_definition,
+            "source_filename": first_defn.get("_source_filename", ""),
+            "created_by": first_defn.get("_created_by", ""),
+            "created_at": max(row["_created_at"] for row in rows),
+        }
+
+    @app.put("/api/models/{tenant_id}")
+    def put_tenant_models(tenant_id: str, body: PutModelsRequest):
+        """Store a finalized model definition for a tenant."""
+        def normalize(md: dict) -> dict:
+            return {
+                et: {
+                    "base_fields": sorted(d.get("base_fields", []), key=lambda f: f["name"]),
+                    "custom_fields": sorted(d.get("custom_fields", []), key=lambda f: f["name"]),
+                }
+                for et, d in sorted(md.items())
+            }
+
+        existing_rows = store.list_models(tenant_id, status="active")
+        if existing_rows:
+            existing_def = {}
+            for row in existing_rows:
+                et = row["entity_type"]
+                defn = row["model_definition"]
+                existing_def[et] = {k: v for k, v in defn.items() if not k.startswith("_")}
+
+            if normalize(existing_def) == normalize(body.model_definition):
+                latest = max(existing_rows, key=lambda r: r["_version"])
+                first_defn = latest["model_definition"]
+                return {
+                    "tenant_id": tenant_id,
+                    "version": max(r["_version"] for r in existing_rows),
+                    "status": "unchanged",
+                    "model_definition": existing_def,
+                    "source_filename": first_defn.get("_source_filename", ""),
+                    "created_by": first_defn.get("_created_by", ""),
+                    "created_at": max(r["_created_at"] for r in existing_rows),
+                }
+
+        if store.get_active_entity(tenant_id, "tenant", tenant_id) is None:
+            store.put_entity(
+                tenant_id=tenant_id,
+                entity_type="tenant",
+                entity_id=tenant_id,
+                base_data={"tenant_id": tenant_id},
+            )
+
+        change_id = uuid.uuid4().hex[:12]
+        now = datetime.now(timezone.utc).isoformat()
+        max_version = 0
+
+        for entity_type, definition in body.model_definition.items():
+            model_def_with_meta = {
+                **definition,
+                "_source_filename": body.source_filename,
+                "_created_by": body.created_by,
+            }
+            result = store.put_model(
+                tenant_id=tenant_id,
+                entity_type=entity_type,
+                model_definition=model_def_with_meta,
+                change_id=change_id,
+            )
+            max_version = max(max_version, result["_version"])
+
+        return {
+            "tenant_id": tenant_id,
+            "version": max_version,
+            "status": "finalized",
+            "model_definition": body.model_definition,
+            "source_filename": body.source_filename,
+            "created_by": body.created_by,
+            "created_at": now,
+        }
+
     @app.get("/api/models/{tenant_id}/{entity_type}")
     def get_model(tenant_id: str, entity_type: str):
         tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
