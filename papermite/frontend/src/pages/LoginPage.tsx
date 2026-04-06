@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { TestUser } from "../types/models";
+import { PAPERMITE_API_URL } from "../config";
 import "./LoginPage.css";
 
 interface Props {
@@ -26,7 +27,7 @@ export default function LoginPage({ onLogin }: Props) {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:8000/api/login", {
+      const res = await fetch(`${PAPERMITE_API_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
