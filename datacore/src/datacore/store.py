@@ -340,7 +340,10 @@ class Store:
         # Generate embedding from entity fields
         all_fields = dict(base_data)
         all_fields.update(custom_fields or {})
-        vector = self.embedder.embed(all_fields) if self.embedder else [0.0] * 1024
+        try:
+            vector = self.embedder.embed(all_fields) if self.embedder else [0.0] * 1024
+        except Exception:
+            vector = [0.0] * 1024
 
         # Insert new active — custom fields stored as TOON format
         record = {

@@ -114,8 +114,8 @@ export interface DuplicateMatch {
 export interface DuplicateCheckRequest {
   first_name: string;
   last_name: string;
-  dob?: string;
-  primary_address?: string;
+  dob: string;
+  primary_address: string;
 }
 
 export interface DuplicateCheckResponse {

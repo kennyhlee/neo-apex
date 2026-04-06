@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from datacore.query import QueryEngine, TableNotFoundError
 from datacore.store import Store
 
-router = APIRouter(tags=["unified"])
+router = APIRouter(tags=["default"])
 
 _store: Store | None = None
 

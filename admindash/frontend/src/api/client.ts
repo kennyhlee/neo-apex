@@ -1,5 +1,4 @@
 import type {
-  StudentsResponse,
   TenantsResponse,
   ModelResponse,
   CreateEntityResponse,
@@ -13,7 +12,6 @@ import type {
 
 import { DATACORE_URL, PAPERMITE_BACKEND_URL } from '../config.ts';
 
-const API_BASE = 'http://localhost:8080';
 const DATACORE_API_BASE = DATACORE_URL;
 const PAPERMITE_API_BASE = PAPERMITE_BACKEND_URL;
 const TOKEN_KEY = 'neoapex_token';
@@ -23,23 +21,8 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function fetchStudents(
-  tenant: string,
-  limit: number,
-  offset: number,
-): Promise<StudentsResponse> {
-  const params = new URLSearchParams({
-    tenant,
-    limit: String(limit),
-    offset: String(offset),
-  });
-  const resp = await fetch(`${API_BASE}/students?${params}`);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
-}
-
 export async function fetchTenants(): Promise<TenantsResponse> {
-  const resp = await fetch(`${API_BASE}/tenants`);
+  const resp = await fetch(`${DATACORE_API_BASE}/api/tenants`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
 }

@@ -28,8 +28,46 @@ class TenantRequest(BaseModel):
     custom_fields: dict | None = None
 
 
+def _max_student_seq(store: Store, tenant_id: str, prefix: str) -> int:
+    """Scan active students to find the highest sequence number for a prefix."""
+    import re
+    table_name = store._entities_table_name(tenant_id)
+    if table_name not in store._table_names():
+        return 0
+    table = store._db.open_table(table_name)
+    rows = table.search().where(
+        "entity_type = 'student' AND _status = 'active'"
+    ).to_list()
+    pattern = re.compile(re.escape(prefix) + r"(\d+)$")
+    max_seq = 0
+    for row in rows:
+        bd = toon.decode(row["base_data"]) if row.get("base_data") else {}
+        sid = bd.get("student_id", "")
+        m = pattern.match(sid)
+        if m:
+            max_seq = max(max_seq, int(m.group(1)))
+    return max_seq
+
+
 def register_routes(app: FastAPI, store: Store) -> None:
     """Register API routes."""
+
+    @app.get("/api/tenants")
+    def list_tenants():
+        """List all tenants."""
+        tenants = []
+        for table_name in store._table_names():
+            if not table_name.endswith("_entities"):
+                continue
+            tenant_id = table_name.removesuffix("_entities")
+            entity = store.get_active_entity(tenant_id, "tenant", tenant_id)
+            if entity:
+                base = entity.get("base_data", {})
+                tenants.append({
+                    "id": tenant_id,
+                    "name": base.get("name", tenant_id),
+                })
+        return {"tenants": tenants}
 
     @app.put("/api/tenants/{tenant_id}")
     def put_tenant(tenant_id: str, body: TenantRequest):
@@ -68,10 +106,13 @@ def register_routes(app: FastAPI, store: Store) -> None:
         abbrev = tenant["base_data"].get("_abbrev", tenant_id[:3].upper())
         year = str(datetime.now(timezone.utc).year)
         yy = year[-2:]
+        prefix = f"{abbrev}-ST{yy}"
 
-        current = store.get_sequence(tenant_id, "student", year)
-        next_seq = current + 1
-        next_id = f"{abbrev}-ST{yy}{next_seq:04d}"
+        # Use the higher of sequence counter and actual max ID in data
+        counter_seq = store.get_sequence(tenant_id, "student", year)
+        data_seq = _max_student_seq(store, tenant_id, prefix)
+        next_seq = max(counter_seq, data_seq) + 1
+        next_id = f"{prefix}{next_seq:04d}"
 
         return {
             "next_id": next_id,
@@ -84,55 +125,74 @@ def register_routes(app: FastAPI, store: Store) -> None:
     class SimilaritySearchRequest(BaseModel):
         first_name: str
         last_name: str
-        dob: str | None = None
-        primary_address: str | None = None
+        dob: str
+        primary_address: str
 
     @app.post("/api/entities/{tenant_id}/student/duplicate-check")
     def duplicate_check(tenant_id: str, body: SimilaritySearchRequest):
-        if not store.embedder:
-            raise HTTPException(status_code=503, detail="Embedder not available")
-
         table_name = store._entities_table_name(tenant_id)
         if table_name not in store._table_names():
             return {"matches": []}
 
-        # Build fields dict for embedding (only non-null fields)
-        fields = {"first_name": body.first_name, "last_name": body.last_name}
-        if body.dob:
-            fields["dob"] = body.dob
-        if body.primary_address:
-            fields["primary_address"] = body.primary_address
-
-        # Embed using document type (same as stored entities)
-        query_vector = store.embedder.embed(fields)
-
-        # Vector search against active students
         table = store._db.open_table(table_name)
-        rows = (
-            table.search(query_vector)
-            .where("entity_type = 'student' AND _status = 'active'")
-            .limit(5)
-            .to_list()
-        )
-
-        # Convert L2 distance to cosine similarity: 1 - (d^2 / 2)
-        # For normalized vectors, L2^2 = 2(1 - cosine_similarity)
+        matched_ids: set[str] = set()
         matches = []
-        for row in rows:
-            dist = row.get("_distance", float("inf"))
-            similarity = max(0.0, 1.0 - dist / 2.0)
-            if similarity < DUPLICATE_CHECK_THRESHOLD:
-                continue
-            base_data = toon.decode(row["base_data"]) if row["base_data"] else {}
+
+        def _add_match(entity_id: str, base_data: dict, score: float):
+            if entity_id in matched_ids:
+                return
+            matched_ids.add(entity_id)
             matches.append({
-                "entity_id": row["entity_id"],
+                "entity_id": entity_id,
                 "student_id": base_data.get("student_id", ""),
                 "first_name": base_data.get("first_name", ""),
                 "last_name": base_data.get("last_name", ""),
                 "dob": base_data.get("dob", ""),
                 "primary_address": base_data.get("primary_address", ""),
-                "similarity_score": round(similarity, 4),
+                "similarity_score": round(score, 4),
             })
+
+        # 1. Field-based exact match on name + dob (always works, no embedder needed)
+        all_rows = (
+            table.search()
+            .where("entity_type = 'student' AND _status = 'active'")
+            .to_list()
+        )
+        for row in all_rows:
+            bd = toon.decode(row["base_data"]) if row.get("base_data") else {}
+            name_match = (
+                bd.get("first_name", "").lower() == body.first_name.lower()
+                and bd.get("last_name", "").lower() == body.last_name.lower()
+            )
+            dob_match = bd.get("dob", "") == body.dob
+            if name_match and dob_match:
+                _add_match(row["entity_id"], bd, 1.0)
+
+        # 2. Vector similarity search (catches fuzzy/near matches)
+        if store.embedder:
+            fields = {
+                "first_name": body.first_name,
+                "last_name": body.last_name,
+                "dob": body.dob,
+                "primary_address": body.primary_address,
+            }
+            try:
+                query_vector = store.embedder.embed(fields)
+                rows = (
+                    table.search(query_vector)
+                    .where("entity_type = 'student' AND _status = 'active'")
+                    .limit(5)
+                    .to_list()
+                )
+                for row in rows:
+                    dist = row.get("_distance", float("inf"))
+                    similarity = max(0.0, 1.0 - dist / 2.0)
+                    if similarity < DUPLICATE_CHECK_THRESHOLD:
+                        continue
+                    bd = toon.decode(row["base_data"]) if row.get("base_data") else {}
+                    _add_match(row["entity_id"], bd, similarity)
+            except Exception:
+                pass  # Vector search is best-effort; field match above is authoritative
 
         matches.sort(key=lambda m: m["similarity_score"], reverse=True)
         return {"matches": matches}
@@ -256,14 +316,19 @@ def register_routes(app: FastAPI, store: Store) -> None:
         base_data = dict(body.base_data)
 
         # Auto-assign sequential student_id at creation time
-        if entity_type == "student" and not base_data.get("student_id"):
-            tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
-            if tenant:
-                abbrev = tenant["base_data"].get("_abbrev", tenant_id[:3].upper())
+        needs_auto_id = entity_type == "student" and not base_data.get("student_id")
+        auto_id_seq = None
+        if needs_auto_id:
+            tenant_info = store.get_active_entity(tenant_id, "tenant", tenant_id)
+            if tenant_info:
+                abbrev = tenant_info["base_data"].get("_abbrev", tenant_id[:3].upper())
                 year = str(datetime.now(timezone.utc).year)
                 yy = year[-2:]
-                seq = store.increment_sequence(tenant_id, "student", year)
-                base_data["student_id"] = f"{abbrev}-ST{yy}{seq:04d}"
+                prefix = f"{abbrev}-ST{yy}"
+                counter_seq = store.get_sequence(tenant_id, "student", year)
+                data_seq = _max_student_seq(store, tenant_id, prefix)
+                auto_id_seq = max(counter_seq, data_seq) + 1
+                base_data["student_id"] = f"{prefix}{auto_id_seq:04d}"
 
         try:
             result = store.put_entity(
@@ -275,6 +340,14 @@ def register_routes(app: FastAPI, store: Store) -> None:
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+        # Sync sequence counter to match the assigned ID
+        if auto_id_seq is not None:
+            current = store.get_sequence(tenant_id, "student", year)
+            while current < auto_id_seq:
+                store.increment_sequence(tenant_id, "student", year)
+                current += 1
+
         return JSONResponse(status_code=201, content=result)
 
     @app.get("/api/entities/{tenant_id}/{entity_type}/query")

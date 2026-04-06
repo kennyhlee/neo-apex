@@ -85,7 +85,9 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await createStudent(tenant, baseData, customFields);
+      // Strip auto-generated student_id so the backend assigns and increments it
+      const { student_id: _, ...submitData } = baseData;
+      const result = await createStudent(tenant, submitData, customFields);
       invalidateStudentCount();
       setSuccessMessage(t('addStudent.success'));
       setTimeout(() => navigate('/students', {
@@ -111,8 +113,8 @@ export default function AddStudentPage({ tenant }: AddStudentPageProps) {
       const searchData = {
         first_name: String(baseData.first_name || ''),
         last_name: String(baseData.last_name || ''),
-        dob: baseData.dob ? String(baseData.dob) : undefined,
-        primary_address: baseData.primary_address ? String(baseData.primary_address) : undefined,
+        dob: String(baseData.dob || ''),
+        primary_address: String(baseData.primary_address || ''),
       };
       const result = await checkDuplicateStudents(tenant, searchData);
 
