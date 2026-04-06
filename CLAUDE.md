@@ -34,7 +34,7 @@ cd datacore && uv run python -m pytest tests/test_auth_api.py::test_login_succes
 
 **LaunchPad** (Python backend + React frontend):
 ```bash
-cd launchpad/backend && uvicorn app.main:app --port 6010 --reload  # Backend dev
+cd launchpad/backend && uvicorn app.main:app --port 5510 --reload  # Backend dev
 cd launchpad/frontend && npm run dev      # Frontend dev
 cd launchpad/frontend && npm run build    # TypeScript check + Vite build
 cd launchpad/frontend && npm run lint     # ESLint
@@ -42,7 +42,7 @@ cd launchpad/frontend && npm run lint     # ESLint
 
 **Papermite** (Python backend + React frontend):
 ```bash
-cd papermite/backend && uvicorn app.main:app --port 6210 --reload  # Backend dev
+cd papermite/backend && uvicorn app.main:app --port 5710 --reload  # Backend dev
 cd papermite/frontend && npm run dev      # Frontend dev
 cd papermite/frontend && npm run build    # TypeScript check + Vite build
 cd papermite/frontend && npm run lint     # ESLint
@@ -64,12 +64,12 @@ Defined in `services.json` at repo root. All services read from this file.
 
 | Service | Port |
 |---|---|
-| LaunchPad frontend | 6000 |
-| LaunchPad backend | 6010 |
-| AdminDash frontend | 6100 |
-| Papermite frontend | 6200 |
-| Papermite backend | 6210 |
-| DataCore backend | 6300 |
+| LaunchPad frontend | 5500 |
+| LaunchPad backend | 5510 |
+| AdminDash frontend | 5600 |
+| Papermite frontend | 5700 |
+| Papermite backend | 5710 |
+| DataCore backend | 5800 |
 
 To change a port: edit `services.json`, restart affected services.
 

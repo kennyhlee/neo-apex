@@ -6,14 +6,14 @@ Multi-service education/enrollment management platform.
 
 | Service | Description | Port | Block |
 |---|---|---|---|
-| LaunchPad frontend | Tenant onboarding & admin UI | 6000 | 60xx |
-| LaunchPad backend | Tenant lifecycle & identity API | 6010 | 60xx |
-| AdminDash frontend | Operations dashboard UI | 6100 | 61xx |
-| Papermite frontend | Document ingestion UI | 6200 | 62xx |
-| Papermite backend | Document ingestion API | 6210 | 62xx |
-| DataCore backend | Storage, query engine & auth server | 6300 | 63xx |
+| LaunchPad frontend | Tenant onboarding & admin UI | 5500 | 55xx |
+| LaunchPad backend | Tenant lifecycle & identity API | 5510 | 55xx |
+| AdminDash frontend | Operations dashboard UI | 5600 | 56xx |
+| Papermite frontend | Document ingestion UI | 5700 | 57xx |
+| Papermite backend | Document ingestion API | 5710 | 57xx |
+| DataCore backend | Storage, query engine & auth server | 5800 | 58xx |
 
-**Port convention:** Each service owns a 100-port block. Frontend = `X00`, backend = `X10`.
+**Port convention:** Each service owns a 100-port block in the `55xx-58xx` range (avoids Chrome-blocked ports and common macOS/dev tool conflicts). Frontend = `X00`, backend = `X10`. Future services continue the pattern: `59xx`, `60xx`, etc.
 
 ## Configuration
 
@@ -24,12 +24,12 @@ All service hostnames and ports are defined in `services.json` at the repo root:
 ```json
 {
   "services": {
-    "launchpad-frontend": { "host": "localhost", "port": 6000 },
-    "launchpad-backend": { "host": "localhost", "port": 6010 },
-    "admindash-frontend": { "host": "localhost", "port": 6100 },
-    "papermite-frontend": { "host": "localhost", "port": 6200 },
-    "papermite-backend": { "host": "localhost", "port": 6210 },
-    "datacore": { "host": "localhost", "port": 6300 }
+    "launchpad-frontend": { "host": "localhost", "port": 5500 },
+    "launchpad-backend": { "host": "localhost", "port": 5510 },
+    "admindash-frontend": { "host": "localhost", "port": 5600 },
+    "papermite-frontend": { "host": "localhost", "port": 5700 },
+    "papermite-backend": { "host": "localhost", "port": 5710 },
+    "datacore": { "host": "localhost", "port": 5800 }
   }
 }
 ```
@@ -53,19 +53,19 @@ Python backends read `services.json` at startup. Environment variables override 
 
 | Variable | Description | Default |
 |---|---|---|
-| `LAUNCHPAD_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:6300/auth` |
-| `LAUNCHPAD_PAPERMITE_FRONTEND_URL` | Papermite frontend URL (for redirects) | `http://localhost:6200` |
-| `LAUNCHPAD_PORT` | LaunchPad backend port | `6010` |
-| `NEOAPEX_LANCEDB_DIR` | LanceDB data directory | `datacore/data/lancedb` |
+| `LAUNCHPAD_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:5800/auth` |
+| `LAUNCHPAD_DATACORE_API_URL` | DataCore API base URL | `http://localhost:5800/api` |
+| `LAUNCHPAD_PAPERMITE_FRONTEND_URL` | Papermite frontend URL (for redirects) | `http://localhost:5700` |
+| `LAUNCHPAD_PORT` | LaunchPad backend port | `5510` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated CORS origins (overrides services.json) | Built from frontend entries |
 
 #### Papermite Backend
 
 | Variable | Description | Default |
 |---|---|---|
-| `PAPERMITE_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:6300/auth` |
-| `PAPERMITE_PORT` | Papermite backend port | `6210` |
-| `NEOAPEX_LANCEDB_DIR` | LanceDB data directory | `datacore/data/lancedb` |
+| `PAPERMITE_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:5800/auth` |
+| `PAPERMITE_DATACORE_API_URL` | DataCore API base URL | `http://localhost:5800/api` |
+| `PAPERMITE_PORT` | Papermite backend port | `5710` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated CORS origins (overrides services.json) | Built from frontend entries |
 
 ### Frontend Configuration
@@ -76,22 +76,22 @@ React frontends read `services.json` at build time via Vite's JSON import. For p
 
 | Variable | Description | Default |
 |---|---|---|
-| `VITE_LAUNCHPAD_BACKEND_URL` | LaunchPad backend base URL | `http://localhost:6010` |
-| `VITE_PAPERMITE_FRONTEND_URL` | Papermite frontend URL (for cross-app navigation) | `http://localhost:6200` |
+| `VITE_LAUNCHPAD_BACKEND_URL` | LaunchPad backend base URL | `http://localhost:5510` |
+| `VITE_PAPERMITE_FRONTEND_URL` | Papermite frontend URL (for cross-app navigation) | `http://localhost:5700` |
 
 #### Papermite Frontend
 
 | Variable | Description | Default |
 |---|---|---|
-| `VITE_PAPERMITE_BACKEND_URL` | Papermite backend base URL | `http://localhost:6210` |
+| `VITE_PAPERMITE_BACKEND_URL` | Papermite backend base URL | `http://localhost:5710` |
 
 #### AdminDash Frontend
 
 | Variable | Description | Default |
 |---|---|---|
-| `VITE_DATACORE_URL` | DataCore API base URL | `http://localhost:6300` |
-| `VITE_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:6300/auth` |
-| `VITE_PAPERMITE_BACKEND_URL` | Papermite backend base URL | `http://localhost:6210` |
+| `VITE_DATACORE_URL` | DataCore API base URL | `http://localhost:5800` |
+| `VITE_DATACORE_AUTH_URL` | DataCore auth endpoint | `http://localhost:5800/auth` |
+| `VITE_PAPERMITE_BACKEND_URL` | Papermite backend base URL | `http://localhost:5710` |
 
 ### CORS
 
@@ -136,30 +136,22 @@ The script:
 ### Starting services manually
 
 ```bash
-# 1. DataCore (port 6300)
-cd datacore && uv run python3 -c "
-from datacore import Store, create_app
-from datacore.auth.seed import seed_test_user
-import uvicorn
-store = Store()
-seed_test_user(store)
-app = create_app(store)
-uvicorn.run(app, host='127.0.0.1', port=6300)
-"
+# 1. DataCore (port 5800)
+cd datacore && uv run uvicorn datacore.api.server:app --port 5800
 
-# 2. LaunchPad backend (port 6010)
-cd launchpad/backend && uvicorn app.main:app --port 6010
+# 2. LaunchPad backend (port 5510)
+cd launchpad/backend && uvicorn app.main:app --port 5510
 
-# 3. Papermite backend (port 6210)
-cd papermite/backend && uvicorn app.main:app --port 6210
+# 3. Papermite backend (port 5710)
+cd papermite/backend && uvicorn app.main:app --port 5710
 
-# 4. LaunchPad frontend (port 6000)
+# 4. LaunchPad frontend (port 5500)
 cd launchpad/frontend && npm run dev
 
-# 5. Papermite frontend (port 6200)
+# 5. Papermite frontend (port 5700)
 cd papermite/frontend && npm run dev
 
-# 6. AdminDash frontend (port 6100)
+# 6. AdminDash frontend (port 5600)
 cd admindash/frontend && npm run dev
 ```
 
