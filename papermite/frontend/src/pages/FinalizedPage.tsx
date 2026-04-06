@@ -8,7 +8,7 @@ import type {
   TestUser,
 } from "../types/models";
 import { getDraft, deleteDraft } from "../db/indexedDb";
-import { previewFinalize, commitFinalize } from "../api/client";
+import { commitFinalize, getActiveModel } from "../api/client";
 import "./FinalizedPage.css";
 
 interface Props {
@@ -160,7 +160,8 @@ export default function FinalizedPage({ user }: Props) {
   useEffect(() => {
     if (!id || previewCalledRef.current) return;
     previewCalledRef.current = true;
-    getDraft(id).then((draft) => {
+
+    getDraft(id).then(async (draft) => {
       if (!draft) {
         navigate("/");
         return;
@@ -168,21 +169,98 @@ export default function FinalizedPage({ user }: Props) {
       setExtraction(draft);
       setStatus("previewing");
 
-      previewFinalize(user.tenant_id, draft)
-        .then((res) => {
-          setPreview(res);
-          if (res.status === "unchanged") {
-            setStatus("unchanged");
-          } else {
-            setStatus("preview");
+      try {
+        // Build model definition from draft extraction locally
+        const modelDef: Record<string, { base_fields: Array<Record<string, unknown>>; custom_fields: Array<Record<string, unknown>> }> = {};
+        for (const entity of draft.entities) {
+          const entityType = entity.entity_type.toLowerCase();
+          const baseFields: Array<Record<string, unknown>> = [];
+          const customFields: Array<Record<string, unknown>> = [];
+
+          for (const mapping of entity.field_mappings) {
+            const fieldDef: Record<string, unknown> = {
+              name: mapping.field_name,
+              type: mapping.field_type || "str",
+              required: mapping.required,
+            };
+            if (mapping.field_type === "selection") {
+              fieldDef.options = mapping.options || [];
+              fieldDef.multiple = mapping.multiple || false;
+            }
+            if (mapping.source === "base_model") {
+              baseFields.push(fieldDef);
+            } else {
+              customFields.push(fieldDef);
+            }
           }
-        })
-        .catch((e) => {
-          setError(e instanceof Error ? e.message : "Preview failed");
-          setStatus("error");
-        });
+
+          if (modelDef[entityType]) {
+            const existingBaseNames = new Set(modelDef[entityType].base_fields.map((f) => f.name));
+            const existingCustomNames = new Set(modelDef[entityType].custom_fields.map((f) => f.name));
+            for (const f of baseFields) {
+              if (!existingBaseNames.has(f.name as string)) modelDef[entityType].base_fields.push(f);
+            }
+            for (const f of customFields) {
+              if (!existingCustomNames.has(f.name as string)) modelDef[entityType].custom_fields.push(f);
+            }
+          } else {
+            modelDef[entityType] = { base_fields: baseFields, custom_fields: customFields };
+          }
+        }
+
+        // Fetch current active model to compare
+        let isUnchanged = false;
+        let existingVersion = 0;
+        let existingMeta: { source_filename?: string; created_by?: string; created_at?: string } = {};
+
+        try {
+          const active = await getActiveModel(user.tenant_id);
+          if (active && active.model_definition) {
+            existingVersion = active.version;
+            existingMeta = {
+              source_filename: active.source_filename,
+              created_by: active.created_by,
+              created_at: active.created_at,
+            };
+
+            // Normalize and compare
+            const normalize = (md: Record<string, { base_fields: unknown[]; custom_fields: unknown[] }>) => {
+              const sorted: Record<string, unknown> = {};
+              for (const et of Object.keys(md).sort()) {
+                sorted[et] = {
+                  base_fields: [...md[et].base_fields].sort((a: any, b: any) => (a.name > b.name ? 1 : -1)),
+                  custom_fields: [...md[et].custom_fields].sort((a: any, b: any) => (a.name > b.name ? 1 : -1)),
+                };
+              }
+              return JSON.stringify(sorted);
+            };
+
+            isUnchanged = normalize(active.model_definition) === normalize(modelDef);
+          }
+        } catch {
+          // No existing model — treat as new
+        }
+
+        const previewData: FinalizePreviewResponse = {
+          status: isUnchanged ? "unchanged" : "pending_confirmation",
+          tenant_id: user.tenant_id,
+          version: isUnchanged ? existingVersion : existingVersion + 1,
+          entity_count: draft.entities.length,
+          model_definition: modelDef as ModelDefinition,
+          source_filename: isUnchanged ? (existingMeta.source_filename || draft.filename) : draft.filename,
+          created_by: isUnchanged ? existingMeta.created_by : user.name,
+          created_at: isUnchanged ? existingMeta.created_at : undefined,
+        };
+
+        setPreview(previewData);
+        setStatus(isUnchanged ? "unchanged" : "preview");
+
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Preview failed");
+        setStatus("error");
+      }
     });
-  }, [id, user.tenant_id, navigate]);
+  }, [id, user.tenant_id, user.name, navigate]);
 
   const handleConfirm = async () => {
     if (!extraction) return;
