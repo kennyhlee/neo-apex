@@ -1,22 +1,21 @@
 ## Context
 
-DataCore uses LanceDB (Arrow-based) for storage and DuckDB for SQL queries over Arrow tables. The existing query endpoint (`GET /api/query/{tenant_id}/{table_type}?sql=...`) already accepts DuckDB SQL. Other data operations (tenant profile, model definitions, entity creation) each have their own endpoint.
+DataCore uses LanceDB (Arrow-based) for storage and DuckDB for SQL queries over Arrow tables. The existing query endpoint (`GET /api/query/{tenant_id}/{table_type}?sql=...`) already accepts DuckDB SQL but is limited to one table type and uses GET with query params (problematic for long SQL).
 
-The consolidation applies only to data endpoints — not auth, registry, vector search, or sequence endpoints.
+Five read endpoints with different URL patterns and response shapes can be replaced by one.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Add `POST /api/query` and `POST /api/mutate` as unified data endpoints
-- Accept DuckDB SQL for both reads and writes
-- Support tenant, model, and entity operations
+- Add `POST /api/query` as a unified read endpoint
+- Accept DuckDB SQL for reads across tenants, models, and entities
+- Consistent response format
 - Phase 1 only: additive, no breaking changes
 
 **Non-Goals:**
-- Consolidating auth endpoints (`/auth/*`)
-- Consolidating registry endpoints (`/api/registry/*`)
-- Consolidating vector/semantic search
-- Removing existing REST endpoints (future phase)
+- Consolidating write endpoints (each has unique business logic)
+- Consolidating auth, registry, search, or sequence endpoints
+- Removing existing endpoints (future phase)
 - Migrating consumers (future phase)
 
 ## Decisions
@@ -45,56 +44,37 @@ Response is always:
 }
 ```
 
-For `tenants` table, the query runs against the tenant's entities table filtered to `entity_type = 'tenant'`.
+### Table mapping
 
-### Mutate endpoint
-
-`POST /api/mutate` accepts:
-
-```json
-{
-  "tenant_id": "acme",
-  "table": "entities",
-  "operation": "insert",
-  "data": {
-    "entity_type": "student",
-    "base_data": {"first_name": "Alice", "last_name": "Smith"},
-    "custom_fields": {}
-  }
-}
-```
-
-**Operations:**
-- `insert` — create new record (entities, tenants)
-- `upsert` — create or update (tenants, models)
-- `delete` — delete record (entities — by version)
-
-The mutate endpoint dispatches to existing `Store` methods (`put_entity`, `put_model`, `put_entity` for tenants). Business logic (auto student ID, tenant abbrev derivation, model version management) stays in the Store layer.
-
-### Tables and what they map to
-
-| Table | Read (query) | Write (mutate) |
+| Table value | Loads | Notes |
 |---|---|---|
-| `entities` | `QueryEngine.query()` on `{tenant}_entities` | `Store.put_entity()` |
-| `models` | `Store.list_models()` / `Store.get_active_model()` | `Store.put_model()` via PUT models logic |
-| `tenants` | `Store.get_active_entity(tenant, "tenant", tenant)` | `Store.put_entity()` with entity_type="tenant" |
+| `entities` | `{tenant_id}_entities` | Same as existing entity query endpoint |
+| `models` | `{tenant_id}_models` | Deserializes model_definition JSON |
+| `tenants` | `{tenant_id}_entities` filtered to entity_type='tenant' | Convenience — tenants are stored as entities |
+
+### What this replaces (Phase 2, future)
+
+| Current endpoint | Equivalent unified query |
+|---|---|
+| `GET /api/tenants/{tenant_id}` | `SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'` |
+| `GET /api/models/{tenant_id}` | `SELECT * FROM data WHERE _status = 'active'` (table=models) |
+| `GET /api/models/{tenant_id}/{entity_type}` | `SELECT * FROM data WHERE entity_type = '{et}' AND _status = 'active'` |
+| `GET /api/entities/{tenant_id}/{entity_type}/query` | `SELECT * FROM data WHERE entity_type = '{et}' ...` |
+| `GET /api/query/{tenant_id}/{table_type}` | Direct replacement — same SQL, just POST instead of GET |
 
 ### What's excluded
 
-| Endpoint | Why excluded |
+| Endpoint | Why |
 |---|---|
-| `/auth/*` | Authentication — different concern |
-| `/api/registry/*` | User/onboarding CRUD with business logic (password hashing, etc.) |
-| `/api/search/{tenant_id}` | Vector search requires embedding pipeline |
+| `PUT /api/tenants/{tenant_id}` | Write — abbrev derivation, versioning |
+| `PUT /api/models/{tenant_id}` | Write — version management, unchanged detection |
+| `POST /api/entities/{tenant_id}/{entity_type}` | Write — auto student ID, vector embedding |
+| `/auth/*` | Authentication |
+| `/api/registry/*` | User/onboarding CRUD with business logic |
+| `/api/search/{tenant_id}` | Semantic search (vector) |
 | `/api/entities/*/student/duplicate-check` | Vector search |
-| `/api/entities/*/student/next-id` | Sequence counter with side effects |
+| `/api/entities/*/student/next-id` | Sequence counter |
 
 ### Implementation
 
-New `unified_routes.py` registered in `create_app()`. Dispatches to existing Store and QueryEngine methods. No new storage logic.
-
-## Alternatives Considered
-
-**Structured JSON filters instead of SQL** — less expressive, requires inventing a query DSL that maps to SQL anyway. DuckDB SQL is already proven in the codebase.
-
-**GraphQL** — overkill, adds client dependency. Rejected.
+New `unified_routes.py` with `register_unified_routes(app, store)`. Uses existing `QueryEngine.query()` for entities, `Store.list_models()`/`Store.get_active_model()` for models, `Store.get_active_entity()` for tenants. Reuses `QueryEngine._flatten_custom_fields()` for consistent field flattening.
