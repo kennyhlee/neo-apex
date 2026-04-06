@@ -11,6 +11,7 @@ from datacore.store import Store
 from datacore.api.routes import register_routes
 from datacore.api.registry_routes import register_registry_routes
 from datacore.api.auth_routes import register_auth_routes
+from datacore.api.unified_routes import register_unified_routes
 
 
 def _load_cors_origins() -> list[str]:
@@ -51,5 +52,6 @@ def create_app(store: Store) -> FastAPI:
     register_routes(app, store)
     register_registry_routes(app, store)
     register_auth_routes(app, store)
+    register_unified_routes(app, store)
 
     return app
