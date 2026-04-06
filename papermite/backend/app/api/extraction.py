@@ -1,13 +1,23 @@
 """Schema and model endpoints."""
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.auth import require_admin
 from app.config import settings
 from app.models.registry import UserRecord
 from app.models.domain import ENTITY_CLASSES
-from app.storage.lance_store import get_active_model
 
 router = APIRouter()
+
+
+def _get_active_model(tenant_id: str) -> dict | None:
+    """Fetch the combined active model from DataCore API."""
+    resp = httpx.get(f"{settings.datacore_api_url}/models/{tenant_id}")
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch model from DataCore")
+    return resp.json()
 
 
 @router.get("/schema")
@@ -43,7 +53,7 @@ def get_tenant_model(tenant_id: str, user: UserRecord = Depends(require_admin)):
     if user.tenant_id != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
 
-    model = get_active_model(tenant_id)
+    model = _get_active_model(tenant_id)
     if model is None:
         return None
     return model
