@@ -8,7 +8,6 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
-    "datacore @ file:///Users/kennylee/Development/NeoApex/datacore",
     "httpx>=0.28",
 ]
 
