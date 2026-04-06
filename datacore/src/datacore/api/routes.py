@@ -129,6 +129,33 @@ def register_routes(app: FastAPI, store: Store) -> None:
         matches.sort(key=lambda m: m["similarity_score"], reverse=True)
         return {"matches": matches}
 
+    @app.get("/api/models/{tenant_id}")
+    def list_tenant_models(tenant_id: str):
+        """List all active models for a tenant, assembled into a combined definition."""
+        rows = store.list_models(tenant_id, status="active")
+        if not rows:
+            raise HTTPException(status_code=404, detail="No models found")
+
+        model_definition = {}
+        for row in rows:
+            entity_type = row["entity_type"]
+            defn = row["model_definition"]
+            clean_defn = {k: v for k, v in defn.items() if not k.startswith("_")}
+            model_definition[entity_type] = clean_defn
+
+        latest_row = max(rows, key=lambda r: r["_version"])
+        first_defn = latest_row["model_definition"]
+
+        return {
+            "tenant_id": tenant_id,
+            "version": max(row["_version"] for row in rows),
+            "status": "active",
+            "model_definition": model_definition,
+            "source_filename": first_defn.get("_source_filename", ""),
+            "created_by": first_defn.get("_created_by", ""),
+            "created_at": max(row["_created_at"] for row in rows),
+        }
+
     @app.get("/api/models/{tenant_id}/{entity_type}")
     def get_model(tenant_id: str, entity_type: str):
         tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)

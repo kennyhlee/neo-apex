@@ -238,3 +238,123 @@ def test_create_entity_without_tenant_returns_400(app_client):
     )
     assert resp.status_code == 400
     assert "Tenant not set up" in resp.json()["detail"]
+
+
+# --- GET /api/models/{tenant_id} tests ---
+
+
+def test_list_models_returns_combined_definition(app_client):
+    client, store = app_client
+    store.put_model(
+        tenant_id="t1",
+        entity_type="student",
+        model_definition={
+            "base_fields": [{"name": "first_name", "type": "str", "required": True}],
+            "custom_fields": [],
+            "_source_filename": "test.pdf",
+            "_created_by": "Jane",
+        },
+    )
+    store.put_model(
+        tenant_id="t1",
+        entity_type="contact",
+        model_definition={
+            "base_fields": [{"name": "phone", "type": "phone", "required": True}],
+            "custom_fields": [],
+            "_source_filename": "test.pdf",
+            "_created_by": "Jane",
+        },
+    )
+
+    response = client.get("/api/models/t1")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tenant_id"] == "t1"
+    assert "student" in data["model_definition"]
+    assert "contact" in data["model_definition"]
+    assert data["model_definition"]["student"]["base_fields"][0]["name"] == "first_name"
+    assert "version" in data
+    assert "source_filename" in data
+    assert "created_by" in data
+    assert "created_at" in data
+
+
+def test_list_models_empty_returns_404(app_client):
+    client, _ = app_client
+    response = client.get("/api/models/t1")
+    assert response.status_code == 404
+
+
+# --- PUT /api/models/{tenant_id} tests ---
+
+
+def test_put_models_creates_new(app_client):
+    client, store = app_client
+    response = client.put("/api/models/t1", json={
+        "model_definition": {
+            "student": {
+                "base_fields": [{"name": "first_name", "type": "str", "required": True}],
+                "custom_fields": [],
+            }
+        },
+        "source_filename": "test.pdf",
+        "created_by": "Jane Admin",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "finalized"
+    assert data["version"] == 1
+    assert "student" in data["model_definition"]
+    assert data["source_filename"] == "test.pdf"
+    assert data["created_by"] == "Jane Admin"
+
+
+def test_put_models_unchanged(app_client):
+    client, store = app_client
+    body = {
+        "model_definition": {
+            "student": {
+                "base_fields": [{"name": "first_name", "type": "str", "required": True}],
+                "custom_fields": [],
+            }
+        },
+        "source_filename": "test.pdf",
+        "created_by": "Jane Admin",
+    }
+    client.put("/api/models/t1", json=body)
+    response = client.put("/api/models/t1", json=body)
+    assert response.status_code == 200
+    assert response.json()["status"] == "unchanged"
+
+
+def test_put_models_increments_version(app_client):
+    client, store = app_client
+    body1 = {
+        "model_definition": {
+            "student": {
+                "base_fields": [{"name": "first_name", "type": "str", "required": True}],
+                "custom_fields": [],
+            }
+        },
+        "source_filename": "v1.pdf",
+        "created_by": "Jane",
+    }
+    r1 = client.put("/api/models/t1", json=body1)
+    assert r1.json()["version"] == 1
+
+    body2 = {
+        "model_definition": {
+            "student": {
+                "base_fields": [
+                    {"name": "first_name", "type": "str", "required": True},
+                    {"name": "last_name", "type": "str", "required": True},
+                ],
+                "custom_fields": [],
+            }
+        },
+        "source_filename": "v2.pdf",
+        "created_by": "Jane",
+    }
+    r2 = client.put("/api/models/t1", json=body2)
+    assert r2.json()["version"] == 2
+    assert r2.json()["status"] == "finalized"
