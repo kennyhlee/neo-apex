@@ -49,6 +49,7 @@ export default function HomePage({ tenant }: HomePageProps) {
   const [studentCount, setStudentCount] = useState<number | null>(null);
 
   useEffect(() => {
+    if (!tenant) return;
     getStudentCount(tenant).then(setStudentCount);
   }, [tenant, getStudentCount]);
 
