@@ -3,9 +3,9 @@
 # Start NeoApex services.
 #
 # Usage:
-#   ./start-services.sh          # Interactive mode (default)
-#   ./start-services.sh --yes    # Non-interactive: kill existing, start all
-#   ./start-services.sh -y       # Same as --yes
+#   ./start-services.sh          # Non-interactive (default): kill existing, start all
+#   ./start-services.sh -i       # Interactive mode: choose which to kill/start
+#   ./start-services.sh --interactive  # Same as -i
 #
 set -euo pipefail
 
@@ -14,13 +14,13 @@ cd "$SCRIPT_DIR"
 
 # ── Parse args ────────────────────────────────────────────────
 
-INTERACTIVE=true
+INTERACTIVE=false
 for arg in "$@"; do
   case "$arg" in
-    -y|--yes) INTERACTIVE=false ;;
+    -i|--interactive) INTERACTIVE=true ;;
     -h|--help)
-      echo "Usage: $0 [--yes|-y]"
-      echo "  --yes, -y   Non-interactive mode: kill existing services and start all"
+      echo "Usage: $0 [-i|--interactive]"
+      echo "  -i, --interactive   Interactive mode: choose which services to kill/start"
       exit 0
       ;;
     *) echo "Unknown option: $arg"; exit 1 ;;
