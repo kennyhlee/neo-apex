@@ -31,11 +31,11 @@ def test_cors_allows_admindash_origin(app_client):
     response = client.options(
         "/api/models/t1/student",
         headers={
-            "Origin": "http://localhost:5174",
+            "Origin": "http://localhost:6100",
             "Access-Control-Request-Method": "GET",
         },
     )
-    assert response.headers.get("access-control-allow-origin") == "http://localhost:5174"
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:6100"
 
 
 def test_cors_allows_papermite_origin(app_client):
@@ -43,11 +43,11 @@ def test_cors_allows_papermite_origin(app_client):
     response = client.options(
         "/api/models/t1/student",
         headers={
-            "Origin": "http://localhost:5173",
+            "Origin": "http://localhost:6200",
             "Access-Control-Request-Method": "GET",
         },
     )
-    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:6200"
 
 
 def test_get_model_returns_active_definition(app_client):
