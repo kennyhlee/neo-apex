@@ -1,0 +1,10 @@
+{
+  "services": {
+    "launchpad-frontend": { "host": "localhost", "port": 6000 },
+    "launchpad-backend": { "host": "localhost", "port": 6010 },
+    "admindash-frontend": { "host": "localhost", "port": 6100 },
+    "papermite-frontend": { "host": "localhost", "port": 6200 },
+    "papermite-backend": { "host": "localhost", "port": 6210 },
+    "datacore": { "host": "localhost", "port": 6300 }
+  }
+}
