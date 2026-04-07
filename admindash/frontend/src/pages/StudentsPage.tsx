@@ -467,6 +467,11 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
       </FilterForm>
 
       <div className="students-toolbar">
+        <button>{t('students.batchExport')}</button>
+        <button>{t('students.batchActions')}</button>
+        <button onClick={() => navigate('/students/add')}>
+          {t('students.addStudent')}
+        </button>
         <div className="students-column-toggle" ref={columnToggleRef}>
           <button onClick={() => setShowColumnPopover((prev) => !prev)}>
             {t('students.columnSettings')}
@@ -486,11 +491,6 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
             </div>
           )}
         </div>
-        <button>{t('students.batchExport')}</button>
-        <button>{t('students.batchActions')}</button>
-        <button onClick={() => navigate('/students/add')}>
-          {t('students.addStudent')}
-        </button>
       </div>
 
       {error ? (
