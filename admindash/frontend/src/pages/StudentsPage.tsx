@@ -599,8 +599,8 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
       {/* Edit student modal */}
       {editingEntity && model && (
-        <div className="students-confirm-overlay" onClick={() => { setEditingEntity(null); setEditError(null); }}>
-          <div className="students-edit-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="students-confirm-overlay">
+          <div className="students-edit-modal">
             <div className="students-edit-modal-header">
               <h3>Edit Student</h3>
               <span className="students-edit-modal-subtitle">
