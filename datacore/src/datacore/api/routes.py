@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import toon
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -52,23 +52,6 @@ def _max_student_seq(store: Store, tenant_id: str, prefix: str) -> int:
 def register_routes(app: FastAPI, store: Store) -> None:
     """Register API routes."""
 
-    @app.get("/api/tenants")
-    def list_tenants():
-        """List all tenants."""
-        tenants = []
-        for table_name in store._table_names():
-            if not table_name.endswith("_entities"):
-                continue
-            tenant_id = table_name.removesuffix("_entities")
-            entity = store.get_active_entity(tenant_id, "tenant", tenant_id)
-            if entity:
-                base = entity.get("base_data", {})
-                tenants.append({
-                    "id": tenant_id,
-                    "name": base.get("name", tenant_id),
-                })
-        return {"tenants": tenants}
-
     @app.put("/api/tenants/{tenant_id}")
     def put_tenant(tenant_id: str, body: TenantRequest):
         name = body.base_data.get("name")
@@ -88,13 +71,6 @@ def register_routes(app: FastAPI, store: Store) -> None:
             raise HTTPException(status_code=400, detail=str(e))
         status = 200 if existing else 201
         return JSONResponse(status_code=status, content=result)
-
-    @app.get("/api/tenants/{tenant_id}")
-    def get_tenant(tenant_id: str):
-        result = store.get_active_entity(tenant_id, "tenant", tenant_id)
-        if result is None:
-            raise HTTPException(status_code=404, detail="Tenant not found")
-        return result
 
     @app.get("/api/entities/{tenant_id}/student/next-id")
     def next_student_id(tenant_id: str):
@@ -202,33 +178,6 @@ def register_routes(app: FastAPI, store: Store) -> None:
         source_filename: str
         created_by: str
 
-    @app.get("/api/models/{tenant_id}")
-    def list_tenant_models(tenant_id: str):
-        """List all active models for a tenant, assembled into a combined definition."""
-        rows = store.list_models(tenant_id, status="active")
-        if not rows:
-            raise HTTPException(status_code=404, detail="No models found")
-
-        model_definition = {}
-        for row in rows:
-            entity_type = row["entity_type"]
-            defn = row["model_definition"]
-            clean_defn = {k: v for k, v in defn.items() if not k.startswith("_")}
-            model_definition[entity_type] = clean_defn
-
-        latest_row = max(rows, key=lambda r: r["_version"])
-        first_defn = latest_row["model_definition"]
-
-        return {
-            "tenant_id": tenant_id,
-            "version": max(row["_version"] for row in rows),
-            "status": "active",
-            "model_definition": model_definition,
-            "source_filename": first_defn.get("_source_filename", ""),
-            "created_by": first_defn.get("_created_by", ""),
-            "created_at": max(row["_created_at"] for row in rows),
-        }
-
     @app.put("/api/models/{tenant_id}")
     def put_tenant_models(tenant_id: str, body: PutModelsRequest):
         """Store a finalized model definition for a tenant."""
@@ -298,16 +247,6 @@ def register_routes(app: FastAPI, store: Store) -> None:
             "created_at": now,
         }
 
-    @app.get("/api/models/{tenant_id}/{entity_type}")
-    def get_model(tenant_id: str, entity_type: str):
-        tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
-        if tenant is None:
-            raise HTTPException(status_code=400, detail="Tenant not set up")
-        result = store.get_active_model(tenant_id, entity_type)
-        if result is None:
-            raise HTTPException(status_code=404, detail="Model not found")
-        return result
-
     class ArchiveRequest(BaseModel):
         entity_ids: list[str]
 
@@ -360,80 +299,6 @@ def register_routes(app: FastAPI, store: Store) -> None:
                 current += 1
 
         return JSONResponse(status_code=201, content=result)
-
-    @app.get("/api/entities/{tenant_id}/{entity_type}/query")
-    def query_entities(
-        tenant_id: str,
-        entity_type: str,
-        request: Request,
-        _status: str = "active",
-        sort_by: str = "last_name",
-        sort_dir: str = "asc",
-        limit: int | None = None,
-        offset: int = 0,
-    ):
-        # Clamp pagination when provided
-        if limit is not None:
-            if limit < 1:
-                limit = 20
-            if limit > 50:
-                limit = 50
-        if offset < 0:
-            offset = 0
-        if sort_dir not in ("asc", "desc"):
-            sort_dir = "asc"
-
-        qe = QueryEngine(store)
-
-        # Load and flatten table to discover available columns
-        arrow_table = store.get_table_as_arrow(tenant_id, "entities")
-        if arrow_table is None:
-            return {"data": [], "total": 0}
-
-        flat = qe._flatten_custom_fields(arrow_table)
-        available_cols = set(flat.column_names)
-
-        # If sort column doesn't exist (e.g. empty table), return empty
-        if sort_by not in available_cols:
-            return {"data": [], "total": 0}
-
-        # Build WHERE clauses
-        conditions = [f"entity_type = '{entity_type}'"]
-
-        if _status and _status != "all":
-            safe_status = _status.replace("'", "''")
-            conditions.append(f"_status = '{safe_status}'")
-
-        # Dynamic field filters — any query param matching a column name
-        reserved = {"_status", "sort_by", "sort_dir", "limit", "offset"}
-        for key, val in request.query_params.items():
-            if key in reserved or not val:
-                continue
-            if key in available_cols:
-                safe_val = val.replace("'", "''")
-                conditions.append(f"{key} ILIKE '%{safe_val}%'")
-
-        where = " AND ".join(conditions)
-        sql = f"SELECT * FROM data WHERE {where} ORDER BY {sort_by} {sort_dir.upper()}"
-
-        try:
-            result = qe.query(tenant_id, "entities", sql, limit=limit, offset=offset)
-            return {"data": result["rows"], "total": result["total"]}
-        except TableNotFoundError:
-            return {"data": [], "total": 0}
-
-    @app.get("/api/query/{tenant_id}/{table_type}")
-    def run_query(
-        tenant_id: str,
-        table_type: str,
-        sql: str = Query(..., description="SQL query using table alias 'data'"),
-    ):
-        qe = QueryEngine(store)
-        try:
-            result = qe.query(tenant_id, table_type, sql)
-            return {"rows": result["rows"], "total": result["total"]}
-        except TableNotFoundError:
-            return {"rows": [], "total": 0}
 
     @app.get("/api/search/{tenant_id}")
     def search_entities(

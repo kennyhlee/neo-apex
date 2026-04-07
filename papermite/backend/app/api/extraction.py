@@ -13,13 +13,25 @@ router = APIRouter()
 
 
 def _get_active_model(tenant_id: str) -> dict | None:
-    """Fetch the combined active model from DataCore models API."""
-    resp = httpx.get(f"{settings.datacore_api_url}/models/{tenant_id}")
-    if resp.status_code == 404:
-        return None
+    """Fetch the combined active model from DataCore unified query API."""
+    resp = httpx.post(
+        f"{settings.datacore_api_url}/query",
+        json={
+            "tenant_id": tenant_id,
+            "table": "models",
+            "sql": "SELECT * FROM data WHERE _status = 'active'",
+        },
+    )
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Failed to fetch model from DataCore")
-    return resp.json()
+    rows = resp.json().get("data", [])
+    if not rows:
+        return None
+    record = rows[0]
+    md = record.get("model_definition")
+    if isinstance(md, str):
+        record["model_definition"] = json.loads(md)
+    return record
 
 
 @router.get("/schema")

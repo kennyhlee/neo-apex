@@ -98,19 +98,3 @@ def test_put_tenant_with_custom_fields(tenant_client):
     assert resp.json()["custom_fields"]["state_rating"] == "5-star"
 
 
-def test_get_tenant_returns_entity(tenant_client):
-    client, _ = tenant_client
-    client.put(
-        "/api/tenants/t1",
-        json={"base_data": {"tenant_id": "t1", "name": "Test School"}},
-    )
-    resp = client.get("/api/tenants/t1")
-    assert resp.status_code == 200
-    assert resp.json()["base_data"]["name"] == "Test School"
-    assert resp.json()["base_data"]["_abbrev"] == "TSC"
-
-
-def test_get_tenant_not_found(tenant_client):
-    client, _ = tenant_client
-    resp = client.get("/api/tenants/nonexistent")
-    assert resp.status_code == 404
