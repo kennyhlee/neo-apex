@@ -5,7 +5,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
-import { queryStudents } from '../api/client.ts';
+import { postQuery } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -247,31 +247,44 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
       setError(null);
       const f = currentFilters ?? filters;
       try {
-        const res = await queryStudents(tenant, {
-          ...f,
-          sort_by: prefs.sortBy,
-          sort_dir: prefs.sortDir,
-          limit: prefs.pageSize,
-          offset: (p - 1) * prefs.pageSize,
-        });
+        // Build WHERE clauses
+        const conditions: string[] = ["entity_type = 'student'"];
+
+        for (const [key, value] of Object.entries(f)) {
+          if (!value) continue;
+          const safeVal = value.replace(/'/g, "''");
+          if (key === '_status') {
+            if (value !== 'all') conditions.push(`_status = '${safeVal}'`);
+          } else {
+            conditions.push(`${key} ILIKE '%${safeVal}%'`);
+          }
+        }
+
+        const where = conditions.join(' AND ');
+        const sortCol = prefs.sortBy;
+        const dir = prefs.sortDir.toUpperCase();
+        const limit = prefs.pageSize;
+        const offset = (p - 1) * prefs.pageSize;
+
+        const sql = `SELECT * FROM data WHERE ${where} ORDER BY ${sortCol} ${dir} LIMIT ${limit} OFFSET ${offset}`;
+        const res = await postQuery(tenant, 'entities', sql);
         let rows = res.data ?? [];
+
+        // For total count, run a separate count query with same filters (no LIMIT/OFFSET)
+        const countSql = `SELECT COUNT(*) as count FROM data WHERE ${where}`;
+        const countRes = await postQuery(tenant, 'entities', countSql);
+        const totalCount = Number(countRes.data[0]?.count ?? 0);
 
         // Highlight: move newly-added entity to top of list on page 1
         if (activeHighlight && p === 1) {
           const idx = rows.findIndex((r) => String(r.entity_id) === activeHighlight);
           if (idx > 0) {
-            // Already in results — move to top
             const [item] = rows.splice(idx, 1);
             rows = [item, ...rows];
           } else if (idx === -1) {
-            // Not in current page (maybe filtered out) — fetch it directly
             try {
-              const highlighted = await queryStudents(tenant, {
-                _status: 'all',
-                entity_id: activeHighlight,
-                limit: 1,
-                offset: 0,
-              });
+              const highlightSql = `SELECT * FROM data WHERE entity_id = '${activeHighlight.replace(/'/g, "''")}' LIMIT 1`;
+              const highlighted = await postQuery(tenant, 'entities', highlightSql);
               const found = highlighted.data?.[0];
               if (found) {
                 rows = [found, ...rows];
@@ -280,11 +293,10 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
               // ignore — highlight is best effort
             }
           }
-          // idx === 0 means it's already at top, nothing to do
         }
 
         setData(rows);
-        setTotal(res.total ?? 0);
+        setTotal(totalCount);
         setPage(p);
       } catch (err) {
         setError(
