@@ -225,8 +225,8 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
 
-  // Filter state — _status defaults to 'active'
-  const [filters, setFilters] = useState<Record<string, string>>({ _status: 'active' });
+  // Filter state
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
   // Highlight state from navigation
   const highlightEntityId = (location.state as { highlightEntityId?: string } | null)?.highlightEntityId ?? null;
@@ -296,11 +296,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         for (const [key, value] of Object.entries(f)) {
           if (!value) continue;
           const safeVal = value.replace(/'/g, "''");
-          if (key === '_status') {
-            // already filtered to active above; skip unless explicitly overridden
-          } else {
-            conditions.push(`${key} ILIKE '%${safeVal}%'`);
-          }
+          conditions.push(`${key} ILIKE '%${safeVal}%'`);
         }
 
         const where = conditions.join(' AND ');
@@ -385,7 +381,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   }
 
   function handleReset() {
-    const resetFilters = { _status: 'active' };
+    const resetFilters: Record<string, string> = {};
     setFilters(resetFilters);
     loadData(1, resetFilters);
   }
@@ -475,8 +471,8 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         <div className="filter-field">
           <label>{t('students.searchStatus')}</label>
           <select
-            value={filters._status ?? ''}
-            onChange={(e) => updateFilter('_status', e.target.value)}
+            value={filters.status ?? ''}
+            onChange={(e) => updateFilter('status', e.target.value)}
           >
             <option value="">{t('students.allStatus')}</option>
             {STATUS_OPTIONS.map((opt) => (
