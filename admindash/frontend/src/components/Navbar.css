@@ -73,9 +73,15 @@
   gap: 1rem;
 }
 
-.navbar-site-label {
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
+.navbar-user-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.navbar-tenant-name {
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
 .navbar-site-select,
@@ -138,7 +144,7 @@
     display: none;
   }
 
-  .navbar-site-label {
+  .navbar-tenant-name {
     display: none;
   }
 }
