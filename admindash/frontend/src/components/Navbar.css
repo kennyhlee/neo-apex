@@ -96,30 +96,37 @@
   border-color: var(--accent);
 }
 
-.navbar-user {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
 .navbar-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #378ADD;
-  color: var(--text-inverse);
+  background: var(--tint-blue-bg, #EBF5FF);
+  border: 1px solid var(--border-primary, #E5E7EB);
+  color: var(--tint-blue-text, #378ADD);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.navbar-username {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-primary);
+.navbar-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.navbar-logout:hover {
+  color: var(--danger);
+  background: var(--danger-muted);
 }
 
 @media (max-width: 768px) {

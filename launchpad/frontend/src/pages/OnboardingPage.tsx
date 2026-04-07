@@ -68,7 +68,24 @@ export default function OnboardingPage({ user, onboarding, papermiteUrl, onCompl
     <div className="onboard">
       <div className="onboard__header">
         <h1 className="onboard__brand">Launchpad</h1>
-        <button className="onboard__logout" onClick={onLogout}>Sign Out</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text-secondary)" }}>
+          <span>{user.tenant_name}</span>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--tint-blue-bg)", border: "1px solid var(--border-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "var(--tint-blue-text)" }}>
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+          <button
+            className="onboard__logout"
+            onClick={onLogout}
+            title="Sign out"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, border: "none", borderRadius: "50%", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", padding: 0 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="onboard__content">
         <h2 className="onboard__title">Welcome! Let's get you set up.</h2>

@@ -93,10 +93,24 @@ function AppShell({ user, onLogout }: { user: User; onLogout: () => void }) {
             <Link to="/settings/users" style={{ fontSize: 14, color: "var(--text-secondary)", textDecoration: "none" }}>Users</Link>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 14, color: "var(--text-secondary)" }}>
-          <span>{user.name}</span>
-          <span style={{ fontSize: 12, padding: "2px 8px", background: "var(--tint-blue-bg)", color: "var(--tint-blue-text)", borderRadius: 12 }}>{user.role}</span>
-          <button onClick={onLogout} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-tertiary)", fontFamily: "var(--font-sans)" }}>Sign out</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text-secondary)" }}>
+          <span>{user.tenant_name}</span>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--tint-blue-bg)", border: "1px solid var(--border-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "var(--tint-blue-text)" }}>
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+          <button
+            onClick={onLogout}
+            title="Sign out"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, border: "none", borderRadius: "50%", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer" }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = "var(--danger-muted)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
         </div>
       </header>
       <main style={{ flex: 1, padding: 32, maxWidth: 1000, width: "100%", margin: "0 auto" }}>
