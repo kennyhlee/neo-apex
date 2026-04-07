@@ -35,11 +35,6 @@ export interface Guardian {
   relationship?: string;
 }
 
-export interface Tenant {
-  id: string;
-  name: string;
-}
-
 export interface StudentsResponse {
   data: Student[];
   total: number;

@@ -1,37 +1,13 @@
-import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
-import { fetchTenants } from '../api/client.ts';
-import type { Tenant } from '../types/models.ts';
 import type { Locale } from '../i18n/translations.ts';
 import './Navbar.css';
 
-const DEFAULT_TENANT = 'acmechildcenter';
-
-interface NavbarProps {
-  currentTenant: string;
-  onTenantChange: (tenantId: string) => void;
-}
-
-export default function Navbar({ currentTenant, onTenantChange }: NavbarProps) {
+export default function Navbar() {
   const { t, locale, setLocale } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [tenants, setTenants] = useState<Tenant[]>([
-    { id: DEFAULT_TENANT, name: DEFAULT_TENANT },
-  ]);
-
-  useEffect(() => {
-    fetchTenants()
-      .then((res) => {
-        const list = (res.tenants || [])
-          .map((tn) => ({ id: tn.id, name: tn.name || tn.id }))
-          .filter((tn) => tn.id);
-        if (list.length) setTenants(list);
-      })
-      .catch(() => {});
-  }, []);
 
   const navItems = [
     { to: '/home', label: t('nav.home') },
@@ -42,6 +18,7 @@ export default function Navbar({ currentTenant, onTenantChange }: NavbarProps) {
 
   const displayName = user?.name ?? 'User';
   const avatarInitial = displayName.charAt(0).toUpperCase();
+  const tenantName = user?.tenant_name ?? '';
 
   function handleLogout() {
     logout();
@@ -73,18 +50,7 @@ export default function Navbar({ currentTenant, onTenantChange }: NavbarProps) {
         </ul>
 
         <div className="navbar-right">
-          <span className="navbar-site-label">{t('nav.currentSite')}</span>
-          <select
-            className="navbar-site-select"
-            value={currentTenant}
-            onChange={(e) => onTenantChange(e.target.value)}
-          >
-            {tenants.map((tn) => (
-              <option key={tn.id} value={tn.id}>
-                {tn.name}
-              </option>
-            ))}
-          </select>
+          <span className="navbar-site-label">{tenantName}</span>
 
           <select
             className="navbar-lang-select"
