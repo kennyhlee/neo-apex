@@ -90,7 +90,8 @@ def get_model(tenant_id: str, user=Depends(get_current_user)):
     rows = resp.json().get("data", [])
     if not rows:
         return None
-    return rows[0].get("model_definition")
+    md = rows[0].get("model_definition")
+    return json.loads(md) if isinstance(md, str) else md
 
 
 @router.get("/tenants/{tenant_id}/model/info")
@@ -112,7 +113,7 @@ def get_model_info(tenant_id: str, user=Depends(get_current_user)):
         return None
     model = rows[0]
     return {
-        "model_definition": model.get("model_definition"),
+        "model_definition": json.loads(model["model_definition"]) if isinstance(model.get("model_definition"), str) else model.get("model_definition"),
         "version": model.get("_version"),
         "change_id": model.get("_change_id"),
         "created_at": model.get("_created_at"),

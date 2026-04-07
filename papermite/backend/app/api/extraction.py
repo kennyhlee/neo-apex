@@ -1,4 +1,6 @@
 """Schema and model endpoints."""
+import json
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -25,7 +27,11 @@ def _get_active_model(tenant_id: str) -> dict | None:
     rows = resp.json().get("data", [])
     if not rows:
         return None
-    return rows[0]
+    record = rows[0]
+    md = record.get("model_definition")
+    if isinstance(md, str):
+        record["model_definition"] = json.loads(md)
+    return record
 
 
 @router.get("/schema")

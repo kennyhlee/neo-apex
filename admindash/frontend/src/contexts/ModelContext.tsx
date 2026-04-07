@@ -28,7 +28,8 @@ export function ModelProvider({ children }: { children: ReactNode }) {
       const sql = `SELECT * FROM data WHERE entity_type = '${entityType}' AND _status = 'active'`;
       const result = await postQuery(tenantId, 'models', sql);
       if (!result.data.length) throw new Error('Model not configured');
-      const modelDef = result.data[0].model_definition as unknown as ModelDefinition;
+      const raw = result.data[0].model_definition;
+      const modelDef = (typeof raw === 'string' ? JSON.parse(raw) : raw) as ModelDefinition;
       setCache((prev) => ({ ...prev, [entityType]: modelDef }));
       return modelDef;
     },

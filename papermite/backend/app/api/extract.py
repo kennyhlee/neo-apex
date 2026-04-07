@@ -1,4 +1,5 @@
 """Document field extraction endpoint for cross-project add-student-entry flow."""
+import json
 import shutil
 from pathlib import Path
 
@@ -31,7 +32,11 @@ def get_active_model(tenant_id: str) -> dict | None:
     rows = resp.json().get("data", [])
     if not rows:
         return None
-    return rows[0]
+    record = rows[0]
+    md = record.get("model_definition")
+    if isinstance(md, str):
+        record["model_definition"] = json.loads(md)
+    return record
 
 
 @router.post("/extract/{tenant_id}/{entity_type}")
