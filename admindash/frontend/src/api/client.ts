@@ -24,7 +24,7 @@ export async function postQuery(
 ): Promise<{ data: Record<string, unknown>[]; total: number }> {
   const resp = await fetch(`${DATACORE_API_BASE}/api/query`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ tenant_id: tenantId, table, sql }),
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -40,8 +40,29 @@ export async function archiveEntities(
     `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}/archive`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ entity_ids: entityIds }),
+    },
+  );
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+export async function updateStudent(
+  tenantId: string,
+  entityId: string,
+  baseData: Record<string, unknown>,
+  customFields: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const resp = await fetch(
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/${entityId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        base_data: baseData,
+        custom_fields: customFields,
+      }),
     },
   );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -57,7 +78,7 @@ export async function createStudent(
     `${DATACORE_API_BASE}/api/entities/${tenantId}/student`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
         base_data: baseData,
         custom_fields: customFields,
@@ -91,6 +112,7 @@ export async function fetchNextStudentId(
 ): Promise<NextIdResponse> {
   const resp = await fetch(
     `${DATACORE_API_BASE}/api/entities/${tenantId}/student/next-id`,
+    { headers: authHeaders() },
   );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
@@ -104,7 +126,7 @@ export async function checkDuplicateStudents(
     `${DATACORE_API_BASE}/api/entities/${tenantId}/student/duplicate-check`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(data),
     },
   );
