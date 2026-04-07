@@ -16,14 +16,22 @@ router = APIRouter()
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
 
 
-def _get_active_model(tenant_id: str) -> dict | None:
-    """Fetch the combined active model from DataCore API."""
-    resp = httpx.get(f"{settings.datacore_api_url}/models/{tenant_id}")
-    if resp.status_code == 404:
-        return None
+def get_active_model(tenant_id: str) -> dict | None:
+    """Fetch the combined active model from DataCore unified query API."""
+    resp = httpx.post(
+        f"{settings.datacore_api_url}/api/query",
+        json={
+            "tenant_id": tenant_id,
+            "table": "models",
+            "sql": "SELECT * FROM data WHERE _status = 'active'",
+        },
+    )
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Failed to fetch model from DataCore")
-    return resp.json()
+    rows = resp.json().get("data", [])
+    if not rows:
+        return None
+    return rows[0]
 
 
 @router.post("/extract/{tenant_id}/{entity_type}")
@@ -44,7 +52,7 @@ def extract_document_fields(
             detail=f"Unsupported file format: {suffix}. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
         )
 
-    model = _get_active_model(tenant_id)
+    model = get_active_model(tenant_id)
     if model is None:
         raise HTTPException(
             status_code=404,
