@@ -191,8 +191,6 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Filter state — _status defaults to 'active'
   const [filters, setFilters] = useState<Record<string, string>>({ _status: 'active' });
-  const filtersRef = useRef(filters);
-  filtersRef.current = filters;
 
   // Column popover state
   const [showColumnPopover, setShowColumnPopover] = useState(false);
@@ -247,7 +245,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     async (p: number, currentFilters?: Record<string, string>) => {
       setLoading(true);
       setError(null);
-      const f = currentFilters ?? filtersRef.current;
+      const f = currentFilters ?? filters;
       try {
         // Build WHERE clauses
         const conditions: string[] = ["entity_type = 'student'"];
@@ -310,7 +308,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         setLoading(false);
       }
     },
-    [tenant, prefs.sortBy, prefs.sortDir, prefs.pageSize, activeHighlight],
+    [tenant, filters, prefs.sortBy, prefs.sortDir, prefs.pageSize, activeHighlight],
   );
 
   // Fetch on mount and when deps change
