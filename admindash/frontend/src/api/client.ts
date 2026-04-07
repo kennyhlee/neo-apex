@@ -31,6 +31,23 @@ export async function postQuery(
   return resp.json();
 }
 
+export async function archiveEntities(
+  tenantId: string,
+  entityType: string,
+  entityIds: string[],
+): Promise<{ archived: number }> {
+  const resp = await fetch(
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}/archive`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entity_ids: entityIds }),
+    },
+  );
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
 export async function createStudent(
   tenantId: string,
   baseData: Record<string, unknown>,
