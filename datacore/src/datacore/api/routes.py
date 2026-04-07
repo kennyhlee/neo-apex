@@ -258,6 +258,22 @@ def register_routes(app: FastAPI, store: Store) -> None:
                 count += 1
         return {"archived": count}
 
+    @app.put("/api/entities/{tenant_id}/{entity_type}/{entity_id}")
+    def update_entity(
+        tenant_id: str, entity_type: str, entity_id: str, body: CreateEntityRequest
+    ):
+        try:
+            result = store.put_entity(
+                tenant_id=tenant_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                base_data=dict(body.base_data),
+                custom_fields=body.custom_fields,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return result
+
     @app.post("/api/entities/{tenant_id}/{entity_type}")
     def create_entity(
         tenant_id: str, entity_type: str, body: CreateEntityRequest
