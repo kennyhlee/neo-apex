@@ -24,13 +24,20 @@ def _registry_url(path: str) -> str:
 def get_tenant_profile(tenant_id: str, user=Depends(require_role("admin", "staff"))):
     if user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
-    resp = httpx.get(_datacore_url(f"/tenants/{tenant_id}"))
-    if resp.status_code == 404:
-        return {"tenant_id": tenant_id, "name": user["tenant_name"]}
+    resp = httpx.post(
+        _datacore_url("/api/query"),
+        json={
+            "tenant_id": tenant_id,
+            "table": "tenants",
+            "sql": "SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'",
+        },
+    )
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Failed to fetch tenant")
-    entity = resp.json()
-    data = {**entity.get("base_data", {}), **entity.get("custom_fields", {})}
+    rows = resp.json().get("data", [])
+    if not rows:
+        return {"tenant_id": tenant_id, "name": user["tenant_name"]}
+    data = rows[0]
     data["tenant_id"] = tenant_id
     return data
 
@@ -42,10 +49,17 @@ def update_tenant_profile(tenant_id: str, body: dict, user=Depends(require_role(
     body.pop("name", None)
     body.pop("tenant_id", None)
 
-    existing_resp = httpx.get(_datacore_url(f"/tenants/{tenant_id}"))
-    if existing_resp.status_code == 200:
-        existing = existing_resp.json()
-        base_data = {**existing.get("base_data", {}), **body}
+    existing_resp = httpx.post(
+        _datacore_url("/api/query"),
+        json={
+            "tenant_id": tenant_id,
+            "table": "tenants",
+            "sql": "SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'",
+        },
+    )
+    if existing_resp.status_code == 200 and existing_resp.json().get("data"):
+        existing = existing_resp.json()["data"][0]
+        base_data = {**existing, **body}
     else:
         base_data = {"tenant_id": tenant_id, **body}
 
@@ -62,25 +76,40 @@ def update_tenant_profile(tenant_id: str, body: dict, user=Depends(require_role(
 def get_model(tenant_id: str, user=Depends(get_current_user)):
     if user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
-    resp = httpx.get(_datacore_url(f"/models/{tenant_id}/tenant"))
-    if resp.status_code == 404:
-        return None
+    resp = httpx.post(
+        _datacore_url("/api/query"),
+        json={
+            "tenant_id": tenant_id,
+            "table": "models",
+            "sql": "SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'",
+        },
+    )
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Failed to fetch model")
-    model = resp.json()
-    return model.get("model_definition")
+    rows = resp.json().get("data", [])
+    if not rows:
+        return None
+    return rows[0].get("model_definition")
 
 
 @router.get("/tenants/{tenant_id}/model/info")
 def get_model_info(tenant_id: str, user=Depends(get_current_user)):
     if user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
-    resp = httpx.get(_datacore_url(f"/models/{tenant_id}/tenant"))
-    if resp.status_code == 404:
-        return None
+    resp = httpx.post(
+        _datacore_url("/api/query"),
+        json={
+            "tenant_id": tenant_id,
+            "table": "models",
+            "sql": "SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'",
+        },
+    )
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Failed to fetch model")
-    model = resp.json()
+    rows = resp.json().get("data", [])
+    if not rows:
+        return None
+    model = rows[0]
     return {
         "model_definition": model.get("model_definition"),
         "version": model.get("_version"),
