@@ -37,7 +37,13 @@ def get_tenant_profile(tenant_id: str, user=Depends(require_role("admin", "staff
     rows = resp.json().get("data", [])
     if not rows:
         return {"tenant_id": tenant_id, "name": user["tenant_name"]}
-    return {**rows[0], "tenant_id": tenant_id}
+    row = rows[0]
+    skip_keys = {"_status", "_version", "_created_at", "_updated_at", "_change_id",
+                  "entity_type", "entity_id", "base_data", "custom_fields", "vector"}
+    data = {k: v for k, v in row.items()
+            if k not in skip_keys and v is not None and not k.startswith("_")}
+    data["tenant_id"] = tenant_id
+    return data
 
 
 @router.put("/tenants/{tenant_id}")
@@ -58,8 +64,12 @@ def update_tenant_profile(tenant_id: str, body: dict, user=Depends(require_role(
     result = existing_resp.json()
     if existing_resp.status_code == 200 and result.get("data"):
         existing = result["data"][0]
-        internal_keys = {"_status", "_version", "_created_at", "_updated_at", "_change_id", "entity_type", "entity_id"}
-        base_data = {k: v for k, v in existing.items() if k not in internal_keys}
+        # Only keep fields that have real values — strip internal metadata,
+        # encoded columns, vectors, and null fields from the flattened row
+        skip_keys = {"_status", "_version", "_created_at", "_updated_at", "_change_id",
+                      "entity_type", "entity_id", "base_data", "custom_fields", "vector"}
+        base_data = {k: v for k, v in existing.items()
+                     if k not in skip_keys and v is not None and not k.startswith("_")}
         base_data.update(body)
     else:
         base_data = {"tenant_id": tenant_id, **body}
