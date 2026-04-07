@@ -27,11 +27,27 @@ def _get_active_model(tenant_id: str) -> dict | None:
     rows = resp.json().get("data", [])
     if not rows:
         return None
-    record = rows[0]
-    md = record.get("model_definition")
-    if isinstance(md, str):
-        record["model_definition"] = json.loads(md)
-    return record
+
+    # Reassemble combined model definition keyed by entity_type,
+    # matching the shape the old GET /api/models/{tenant_id} returned
+    model_definition = {}
+    for row in rows:
+        entity_type = row.get("entity_type")
+        md = row.get("model_definition")
+        if isinstance(md, str):
+            md = json.loads(md)
+        if entity_type and md:
+            clean = {k: v for k, v in md.items() if not k.startswith("_")}
+            model_definition[entity_type] = clean
+
+    latest = max(rows, key=lambda r: r.get("_version", 0))
+    return {
+        "tenant_id": tenant_id,
+        "model_definition": model_definition,
+        "version": max(r.get("_version", 0) for r in rows),
+        "status": "active",
+        "created_at": max(r.get("_created_at", "") for r in rows),
+    }
 
 
 @router.get("/schema")

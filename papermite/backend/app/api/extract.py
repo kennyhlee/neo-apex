@@ -32,11 +32,21 @@ def get_active_model(tenant_id: str) -> dict | None:
     rows = resp.json().get("data", [])
     if not rows:
         return None
-    record = rows[0]
-    md = record.get("model_definition")
-    if isinstance(md, str):
-        record["model_definition"] = json.loads(md)
-    return record
+
+    # Reassemble combined model definition keyed by entity_type
+    model_definition = {}
+    for row in rows:
+        entity_type = row.get("entity_type")
+        md = row.get("model_definition")
+        if isinstance(md, str):
+            md = json.loads(md)
+        if entity_type and md:
+            clean = {k: v for k, v in md.items() if not k.startswith("_")}
+            model_definition[entity_type] = clean
+
+    return {
+        "model_definition": model_definition,
+    }
 
 
 @router.post("/extract/{tenant_id}/{entity_type}")
