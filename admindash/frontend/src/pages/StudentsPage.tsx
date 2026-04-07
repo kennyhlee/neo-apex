@@ -242,10 +242,10 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Load data
   const loadData = useCallback(
-    async (p: number, currentFilters?: Record<string, string>) => {
+    async (p: number, currentFilters: Record<string, string>) => {
       setLoading(true);
       setError(null);
-      const f = currentFilters ?? filters;
+      const f = currentFilters;
       try {
         // Build WHERE clauses
         const conditions: string[] = ["entity_type = 'student'"];
@@ -308,14 +308,15 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         setLoading(false);
       }
     },
-    [tenant, filters, prefs.sortBy, prefs.sortDir, prefs.pageSize, activeHighlight],
+    [tenant, prefs.sortBy, prefs.sortDir, prefs.pageSize, activeHighlight],
   );
 
-  // Fetch on mount and when deps change
+  // Fetch on mount and when sort/page-size prefs change
   useEffect(() => {
     if (modelLoaded) {
-      loadData(1);
+      loadData(1, filters);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelLoaded, loadData]);
 
   // Close column popover on outside click
@@ -340,7 +341,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   }
 
   function handleSearch() {
-    loadData(1);
+    loadData(1, filters);
   }
 
   function handleReset() {
@@ -468,7 +469,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           page={page}
           pageSize={prefs.pageSize}
           loading={loading}
-          onPageChange={(p) => loadData(p)}
+          onPageChange={(p) => loadData(p, filters)}
           rowKey={(row) => String(row.entity_id ?? '')}
           sortBy={prefs.sortBy === 'last_name' ? 'name' : prefs.sortBy}
           sortDir={prefs.sortDir}
