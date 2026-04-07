@@ -395,6 +395,35 @@ class Store:
         row["custom_fields"] = toon.decode(row["custom_fields"]) if row["custom_fields"] else {}
         return row
 
+    def archive_entity(
+        self, tenant_id: str, entity_type: str, entity_id: str
+    ) -> bool:
+        """Set _status to 'archived' on the active version of an entity.
+
+        Returns True if an active entity was found and archived, False otherwise.
+        """
+        table_name = self._entities_table_name(tenant_id)
+        if table_name not in self._table_names():
+            return False
+
+        table = self._db.open_table(table_name)
+        where = (
+            f"entity_type = '{entity_type}' "
+            f"AND entity_id = '{entity_id}' "
+            f"AND _status = 'active'"
+        )
+        active_rows = table.search().where(where).to_list()
+        if not active_rows:
+            return False
+
+        now = self._now()
+        table.delete(where)
+        for row in active_rows:
+            row["_status"] = "archived"
+            row["_updated_at"] = now
+        table.add(active_rows)
+        return True
+
     def get_entity_history(
         self, tenant_id: str, entity_type: str, entity_id: str
     ) -> list[dict]:

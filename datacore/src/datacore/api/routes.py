@@ -308,6 +308,17 @@ def register_routes(app: FastAPI, store: Store) -> None:
             raise HTTPException(status_code=404, detail="Model not found")
         return result
 
+    class ArchiveRequest(BaseModel):
+        entity_ids: list[str]
+
+    @app.post("/api/entities/{tenant_id}/{entity_type}/archive")
+    def archive_entities(tenant_id: str, entity_type: str, body: ArchiveRequest):
+        count = 0
+        for eid in body.entity_ids:
+            if store.archive_entity(tenant_id, entity_type, eid):
+                count += 1
+        return {"archived": count}
+
     @app.post("/api/entities/{tenant_id}/{entity_type}")
     def create_entity(
         tenant_id: str, entity_type: str, body: CreateEntityRequest
