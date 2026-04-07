@@ -110,9 +110,11 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
     let render: ((row: DataRow) => React.ReactNode) | undefined;
     if (field.name === 'enrollment_status' || field.name === '_status' || field.name === 'status') {
       render = (row: DataRow) => <StatusBadge status={String(row._status ?? row.enrollment_status ?? row.status ?? '-')} />;
-    } else if (field.type === 'selection') {
+    } else if (field.type === 'selection' || field.type === 'bool') {
       render = (row: DataRow) => {
-        const val = formatSelectionValue(row[field.name]);
+        const raw = row[field.name];
+        if (raw == null) return '-';
+        const val = field.type === 'bool' ? (raw ? 'Yes' : 'No') : formatSelectionValue(raw);
         return val === '-' ? val : <StatusBadge status={val} />;
       };
     }
@@ -140,9 +142,11 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
     cols.push({
       key: field.name,
       label: formatFieldLabel(field.name),
-      render: field.type === 'selection'
+      render: (field.type === 'selection' || field.type === 'bool')
         ? (row: DataRow) => {
-            const val = formatSelectionValue(row[field.name]);
+            const raw = row[field.name];
+            if (raw == null) return '-';
+            const val = field.type === 'bool' ? (raw ? 'Yes' : 'No') : formatSelectionValue(raw);
             return val === '-' ? val : <StatusBadge status={val} />;
           }
         : undefined,
