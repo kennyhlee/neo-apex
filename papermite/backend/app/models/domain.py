@@ -52,7 +52,11 @@ class Student(BaseEntity):
     middle_name: Optional[str] = None
     preferred_name: Optional[str] = None
     dob: Optional[_dt.date] = None
-    grade_level: Optional[str] = None
+    grade_level: List[str] = Field(
+        default_factory=lambda: [
+            "TK", "Kinder", "1st", "2nd", "3rd", "4th", "5th",
+        ]
+    )
     email: Optional[EmailStr] = None
     gender: List[str] = Field(
         default_factory=lambda: [

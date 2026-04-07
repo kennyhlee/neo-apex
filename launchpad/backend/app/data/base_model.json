@@ -17,7 +17,7 @@
       {"name": "middle_name", "type": "str", "required": false},
       {"name": "preferred_name", "type": "str", "required": false},
       {"name": "dob", "type": "date", "required": false},
-      {"name": "grade_level", "type": "str", "required": false},
+      {"name": "grade_level", "type": "selection", "required": false, "options": ["TK", "Kinder", "1st", "2nd", "3rd", "4th", "5th"]},
       {"name": "email", "type": "email", "required": false},
       {"name": "gender", "type": "selection", "required": false, "options": ["Male", "Female", "Non-binary", "Prefer not to say"]},
       {"name": "status", "type": "selection", "required": false, "options": ["Active", "Inactive", "Enrolled", "Withdrawn", "Graduated", "Waitlisted", "Suspended", "Transferred"]},
