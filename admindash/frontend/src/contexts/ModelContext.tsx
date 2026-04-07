@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { fetchStudentModel } from '../api/client.ts';
+import { postQuery } from '../api/client.ts';
 import type { ModelDefinition } from '../types/models.ts';
 
 interface ModelCache {
@@ -25,8 +25,10 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     async (tenantId: string, entityType: string): Promise<ModelDefinition> => {
       if (cache[entityType]) return cache[entityType];
 
-      const resp = await fetchStudentModel(tenantId);
-      const modelDef = resp.model_definition;
+      const sql = `SELECT * FROM data WHERE entity_type = '${entityType}' AND _status = 'active'`;
+      const result = await postQuery(tenantId, 'models', sql);
+      if (!result.data.length) throw new Error('Model not configured');
+      const modelDef = result.data[0].model_definition as unknown as ModelDefinition;
       setCache((prev) => ({ ...prev, [entityType]: modelDef }));
       return modelDef;
     },
