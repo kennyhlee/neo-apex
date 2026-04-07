@@ -12,11 +12,12 @@
 
 .students-toolbar {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
-.students-toolbar button {
+.students-toolbar-primary {
   font-family: var(--font-sans);
   font-size: 0.85rem;
   font-weight: 500;
@@ -29,9 +30,164 @@
   transition: all 0.2s;
 }
 
-.students-toolbar button:hover {
+.students-toolbar-primary:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
+}
+
+.students-selection-count {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.students-menu-toggle {
+  position: relative;
+}
+
+.students-menu-btn {
+  font-family: var(--font-sans);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.students-menu-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.students-menu-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  margin-top: 0.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-elevated);
+  padding: 0.4rem 0;
+  min-width: 200px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.students-menu-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  padding: 0.4rem 0.75rem 0.2rem;
+}
+
+.students-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+}
+
+.students-menu-item:hover {
+  background: var(--accent-glow);
+}
+
+.students-menu-item:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.students-menu-item:disabled:hover {
+  background: none;
+}
+
+.students-menu-item-danger {
+  color: var(--danger);
+}
+
+.students-menu-divider {
+  height: 1px;
+  background: var(--border-primary);
+  margin: 0.3rem 0;
+}
+
+.students-menu-column-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+}
+
+.students-menu-column-option:hover {
+  background: var(--accent-glow);
+}
+
+.students-menu-column-option input[type="checkbox"] {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+/* Archive confirmation dialog */
+.students-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.students-confirm-dialog {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  min-width: 300px;
+  box-shadow: var(--shadow-elevated);
+}
+
+.students-confirm-dialog p {
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.students-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.students-confirm-actions button {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.students-confirm-danger {
+  background: var(--danger) !important;
+  color: var(--text-inverse) !important;
+  border-color: var(--danger) !important;
 }
 
 .student-name-cell {
@@ -82,48 +238,4 @@
   background: var(--danger-muted);
   border-radius: var(--radius-md);
   margin-top: 1rem;
-}
-
-.students-column-toggle {
-  position: relative;
-  margin-left: auto;
-}
-
-.students-column-popover {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 100;
-  margin-top: 0.25rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-elevated);
-  padding: 0.5rem;
-  min-width: 180px;
-  max-height: 300px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.students-column-option {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--text-primary);
-  padding: 0.25rem 0.4rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.students-column-option:hover {
-  background: var(--accent-glow);
-}
-
-.students-column-option input[type="checkbox"] {
-  width: 0.9rem;
-  height: 0.9rem;
 }

@@ -5,7 +5,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
-import { postQuery } from '../api/client.ts';
+import { postQuery, archiveEntities } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -226,13 +226,20 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   // Filter state — _status defaults to 'active'
   const [filters, setFilters] = useState<Record<string, string>>({ _status: 'active' });
 
-  // Column popover state
-  const [showColumnPopover, setShowColumnPopover] = useState(false);
-  const columnToggleRef = useRef<HTMLDivElement>(null);
-
   // Highlight state from navigation
   const highlightEntityId = (location.state as { highlightEntityId?: string } | null)?.highlightEntityId ?? null;
   const [activeHighlight, setActiveHighlight] = useState<string | null>(highlightEntityId);
+
+  // Selection state (controlled, passed to DataTable)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Three-dot menu state
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Archive confirmation
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   // Model loading
   useEffect(() => {
@@ -282,13 +289,13 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
       const f = currentFilters;
       try {
         // Build WHERE clauses
-        const conditions: string[] = ["entity_type = 'student'"];
+        const conditions: string[] = ["entity_type = 'student'", "_status = 'active'"];
 
         for (const [key, value] of Object.entries(f)) {
           if (!value) continue;
           const safeVal = value.replace(/'/g, "''");
           if (key === '_status') {
-            if (value !== 'all') conditions.push(`_status = '${safeVal}'`);
+            // already filtered to active above; skip unless explicitly overridden
           } else {
             conditions.push(`${key} ILIKE '%${safeVal}%'`);
           }
@@ -353,21 +360,18 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelLoaded, loadData]);
 
-  // Close column popover on outside click
+  // Close menu on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        columnToggleRef.current &&
-        !columnToggleRef.current.contains(e.target as Node)
-      ) {
-        setShowColumnPopover(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
       }
     }
-    if (showColumnPopover) {
+    if (showMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showColumnPopover]);
+  }, [showMenu]);
 
   // Filter handlers
   function updateFilter(key: string, value: string) {
@@ -398,6 +402,21 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   function handlePageSizeChange(size: number) {
     hasUserChangedPageSize.current = true;
     updatePrefs({ pageSize: size as 10 | 20 | 30 | 40 | 50 });
+  }
+
+  async function handleArchive() {
+    if (selectedIds.size === 0) return;
+    setShowArchiveConfirm(false);
+    setArchiving(true);
+    try {
+      await archiveEntities(tenant, 'student', [...selectedIds]);
+      setSelectedIds(new Set());
+      loadData(1, filters);
+    } catch (err) {
+      setError(`Failed to archive students: ${err}`);
+    } finally {
+      setArchiving(false);
+    }
   }
 
   // Row class for highlight
@@ -467,19 +486,56 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
       </FilterForm>
 
       <div className="students-toolbar">
-        <button>{t('students.batchExport')}</button>
-        <button>{t('students.batchActions')}</button>
-        <button onClick={() => navigate('/students/add')}>
+        <button className="students-toolbar-primary" onClick={() => navigate('/students/add')}>
           {t('students.addStudent')}
         </button>
-        <div className="students-column-toggle" ref={columnToggleRef}>
-          <button onClick={() => setShowColumnPopover((prev) => !prev)}>
-            {t('students.columnSettings')}
+
+        <div style={{ flex: 1 }} />
+
+        {selectedIds.size > 0 && (
+          <span className="students-selection-count">
+            {selectedIds.size} selected
+          </span>
+        )}
+
+        <div className="students-menu-toggle" ref={menuRef}>
+          <button
+            className="students-menu-btn"
+            onClick={() => setShowMenu((prev) => !prev)}
+            aria-label="More actions"
+          >
+            ⋮
           </button>
-          {showColumnPopover && (
-            <div className="students-column-popover">
+          {showMenu && (
+            <div className="students-menu-popover">
+              {selectedIds.size > 0 && (
+                <>
+                  <div className="students-menu-section-label">Actions</div>
+                  <button
+                    className="students-menu-item"
+                    disabled={selectedIds.size !== 1}
+                    onClick={() => { setShowMenu(false); alert('Edit page coming soon'); }}
+                  >
+                    Edit Selected
+                  </button>
+                  <button
+                    className="students-menu-item students-menu-item-danger"
+                    onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
+                  >
+                    Delete Selected
+                  </button>
+                  <button
+                    className="students-menu-item"
+                    onClick={() => { setShowMenu(false); alert('Export coming soon'); }}
+                  >
+                    Export Selected
+                  </button>
+                  <div className="students-menu-divider" />
+                </>
+              )}
+              <div className="students-menu-section-label">Columns</div>
               {columns.map((col) => (
-                <label key={col.key} className="students-column-option">
+                <label key={col.key} className="students-menu-column-option">
                   <input
                     type="checkbox"
                     checked={!prefs.hiddenColumns.includes(col.key)}
@@ -492,6 +548,21 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           )}
         </div>
       </div>
+
+      {/* Archive confirmation dialog */}
+      {showArchiveConfirm && (
+        <div className="students-confirm-overlay" onClick={() => setShowArchiveConfirm(false)}>
+          <div className="students-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>Delete {selectedIds.size} student(s)?</p>
+            <div className="students-confirm-actions">
+              <button onClick={() => setShowArchiveConfirm(false)}>Cancel</button>
+              <button className="students-confirm-danger" onClick={handleArchive} disabled={archiving}>
+                {archiving ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error ? (
         <div className="student-error">{error}</div>
@@ -512,6 +583,8 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           onPageSizeChange={handlePageSizeChange}
           hiddenColumns={prefs.hiddenColumns}
           rowClassName={rowClassName}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
         />
       )}
     </div>
