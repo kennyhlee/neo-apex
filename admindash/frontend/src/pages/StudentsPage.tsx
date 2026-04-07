@@ -43,6 +43,22 @@ function formatFieldLabel(key: string): string {
 }
 
 /**
+ * Format a cell value that may be a JSON-encoded array (e.g. '["Male"]') into
+ * a comma-separated string (e.g. "Male").
+ */
+function formatSelectionValue(val: unknown): string {
+  if (val == null) return '-';
+  const s = String(val);
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr)) return arr.join(', ') || '-';
+    } catch { /* not JSON */ }
+  }
+  return s || '-';
+}
+
+/**
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Special rendering for name and status fields.
  */
@@ -91,13 +107,18 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
       email: 'students.email',
     };
 
+    let render: ((row: DataRow) => React.ReactNode) | undefined;
+    if (field.name === 'enrollment_status' || field.name === '_status') {
+      render = (row: DataRow) => <StatusBadge status={String(row._status ?? row.enrollment_status ?? '-')} />;
+    } else if (field.type === 'selection') {
+      render = (row: DataRow) => formatSelectionValue(row[field.name]);
+    }
+
     cols.push({
       key: field.name,
       label: formatFieldLabel(field.name),
       i18nKey: i18nMap[field.name],
-      render: field.name === 'enrollment_status' || field.name === '_status'
-        ? (row: DataRow) => <StatusBadge status={String(row._status ?? row.enrollment_status ?? '-')} />
-        : undefined,
+      render,
     });
   }
 
@@ -116,6 +137,9 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
     cols.push({
       key: field.name,
       label: formatFieldLabel(field.name),
+      render: field.type === 'selection'
+        ? (row: DataRow) => formatSelectionValue(row[field.name])
+        : undefined,
     });
   }
 
