@@ -55,9 +55,6 @@ cd admindash/frontend && npm run build    # TypeScript check + Vite build
 cd admindash/frontend && npm run lint     # ESLint
 ```
 
-### Test Login
-Credentials: `jane@acme.edu` / `admin123` (seeded by DataCore's `seed_test_user`)
-
 ## Service Ports
 
 Defined in `services.json` at repo root. All services read from this file.

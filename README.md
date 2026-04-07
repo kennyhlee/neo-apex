@@ -155,5 +155,3 @@ cd papermite/frontend && npm run dev
 # 6. AdminDash frontend (port 5600)
 cd admindash/frontend && npm run dev
 ```
-
-Test login: `jane@acme.edu` / `admin123`

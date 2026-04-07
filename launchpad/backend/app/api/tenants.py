@@ -25,7 +25,7 @@ def get_tenant_profile(tenant_id: str, user=Depends(require_role("admin", "staff
     if user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
     resp = httpx.post(
-        _datacore_url("/api/query"),
+        _datacore_url("/query"),
         json={
             "tenant_id": tenant_id,
             "table": "tenants",
@@ -48,7 +48,7 @@ def update_tenant_profile(tenant_id: str, body: dict, user=Depends(require_role(
     body.pop("tenant_id", None)
 
     existing_resp = httpx.post(
-        _datacore_url("/api/query"),
+        _datacore_url("/query"),
         json={
             "tenant_id": tenant_id,
             "table": "tenants",
@@ -78,7 +78,7 @@ def get_model(tenant_id: str, user=Depends(get_current_user)):
     if user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
     resp = httpx.post(
-        _datacore_url("/api/query"),
+        _datacore_url("/query"),
         json={
             "tenant_id": tenant_id,
             "table": "models",
@@ -99,7 +99,7 @@ def get_model_info(tenant_id: str, user=Depends(get_current_user)):
     if user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
     resp = httpx.post(
-        _datacore_url("/api/query"),
+        _datacore_url("/query"),
         json={
             "tenant_id": tenant_id,
             "table": "models",

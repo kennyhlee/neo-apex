@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { User, OnboardingStatus, EntityModelDefinition } from "../types/models";
-import { getTenantModel, getTenantProfile, updateTenantProfile, markOnboardingStep, useDefaultModel, getStoredToken, getOnboardingStatus } from "../api/client";
+import { getTenantModel, getTenantProfile, updateTenantProfile, markOnboardingStep, useDefaultModel, getExchangeCode, getOnboardingStatus } from "../api/client";
 import DynamicEntityForm from "../components/DynamicEntityForm";
 import "./OnboardingPage.css";
 
@@ -41,10 +41,10 @@ export default function OnboardingPage({ user, onboarding, papermiteUrl, onCompl
     }
   }, [user.tenant_id]);
 
-  const handleModelSetup = () => {
-    const token = getStoredToken();
+  const handleModelSetup = async () => {
+    const code = await getExchangeCode();
     const returnUrl = `${window.location.origin}?model_setup=complete`;
-    window.location.href = `${papermiteUrl}/upload?tenant_id=${user.tenant_id}&token=${encodeURIComponent(token || "")}&return_url=${encodeURIComponent(returnUrl)}`;
+    window.location.href = `${papermiteUrl}/upload?tenant_id=${user.tenant_id}&code=${encodeURIComponent(code)}&return_url=${encodeURIComponent(returnUrl)}`;
   };
 
   const handleUseDefault = async () => {

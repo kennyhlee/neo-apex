@@ -62,6 +62,14 @@ export default function LandingPage({ user }: Props) {
         </p>
       </div>
 
+      {returnUrl && (
+        <div style={{ marginBottom: 16 }}>
+          <a href={returnUrl} className="btn btn--sm" style={{ textDecoration: "none" }}>
+            &larr; Back
+          </a>
+        </div>
+      )}
+
       <TenantInfo user={user} />
 
       {model && model.model_definition ? (
@@ -227,6 +235,7 @@ export default function LandingPage({ user }: Props) {
           </span>
         </div>
       </div>
+
     </div>
   );
 }

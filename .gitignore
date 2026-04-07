@@ -226,3 +226,4 @@ uv.lock
 sampledoc/
 .logs
 *.swp
+.superpowers/

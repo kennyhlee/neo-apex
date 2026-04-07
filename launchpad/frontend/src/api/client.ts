@@ -16,6 +16,13 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+export async function getExchangeCode(): Promise<string> {
+  const res = await authFetch(`${BASE_URL}/exchange-code`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to get exchange code");
+  const data = await res.json();
+  return data.code;
+}
+
 export async function authFetch(url: string, init?: RequestInit): Promise<Response> {
   const token = getStoredToken();
   const headers = new Headers(init?.headers);
