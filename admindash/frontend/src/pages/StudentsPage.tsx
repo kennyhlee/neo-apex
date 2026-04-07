@@ -108,8 +108,8 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
     };
 
     let render: ((row: DataRow) => React.ReactNode) | undefined;
-    if (field.name === 'enrollment_status' || field.name === '_status') {
-      render = (row: DataRow) => <StatusBadge status={String(row._status ?? row.enrollment_status ?? '-')} />;
+    if (field.name === 'enrollment_status' || field.name === '_status' || field.name === 'status') {
+      render = (row: DataRow) => <StatusBadge status={String(row._status ?? row.enrollment_status ?? row.status ?? '-')} />;
     } else if (field.type === 'selection') {
       render = (row: DataRow) => formatSelectionValue(row[field.name]);
     }
@@ -124,7 +124,7 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
 
   // Status column from _status (always present in query response)
   // Add if not already included from base_fields
-  if (!cols.some((c) => c.key === 'enrollment_status' || c.key === '_status')) {
+  if (!cols.some((c) => c.key === 'enrollment_status' || c.key === '_status' || c.key === 'status')) {
     cols.push({
       key: '_status',
       label: 'Status',
