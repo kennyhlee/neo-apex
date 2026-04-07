@@ -6,8 +6,9 @@ import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
-import { postQuery, archiveEntities } from '../api/client.ts';
+import { postQuery, archiveEntities, updateStudent } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
+import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
@@ -243,6 +244,14 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
+  // Edit modal state
+  const [editingEntity, setEditingEntity] = useState<DataRow | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Coming soon dialog
+  const [showComingSoon, setShowComingSoon] = useState(false);
+
   // Model loading
   useEffect(() => {
     getModel(tenant, 'student').then(() => setModelLoaded(true)).catch(() => setModelLoaded(true));
@@ -418,6 +427,23 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     }
   }
 
+  async function handleEditSave(baseData: Record<string, unknown>, customFields: Record<string, unknown>) {
+    if (!editingEntity) return;
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      const entityId = String(editingEntity.entity_id);
+      await updateStudent(tenant, entityId, baseData, customFields);
+      setEditingEntity(null);
+      setSelectedIds(new Set());
+      loadData(page, filters);
+    } catch (err) {
+      setEditError(`Failed to update student: ${err}`);
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
   // Row class for highlight
   function rowClassName(row: DataRow): string {
     if (activeHighlight && String(row.entity_id) === activeHighlight) {
@@ -512,8 +538,16 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
                   <div className="students-menu-section-label">Actions</div>
                   <button
                     className="students-menu-item"
-                    disabled={selectedIds.size !== 1}
-                    onClick={() => { setShowMenu(false); alert('Edit page coming soon'); }}
+                    onClick={() => {
+                      setShowMenu(false);
+                      if (selectedIds.size === 1) {
+                        const entityId = [...selectedIds][0];
+                        const row = data.find((r) => String(r.entity_id) === entityId);
+                        if (row) setEditingEntity(row);
+                      } else {
+                        setShowComingSoon(true);
+                      }
+                    }}
                   >
                     Edit Selected
                   </button>
@@ -558,6 +592,43 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
               <button className="students-confirm-danger" onClick={handleArchive} disabled={archiving}>
                 {archiving ? 'Deleting...' : 'Delete'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit student modal */}
+      {editingEntity && model && (
+        <div className="students-confirm-overlay" onClick={() => { setEditingEntity(null); setEditError(null); }}>
+          <div className="students-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="students-edit-modal-header">
+              <h3>Edit Student</h3>
+              <span className="students-edit-modal-subtitle">
+                {String(editingEntity.first_name ?? '')} {String(editingEntity.last_name ?? '')}
+              </span>
+            </div>
+            <div className="students-edit-modal-body">
+              <DynamicForm
+                modelDefinition={model}
+                initialValues={editingEntity as Record<string, unknown>}
+                readOnlyFields={['student_id', 'first_name', 'last_name', 'middle_name', 'family_id']}
+                onSubmit={handleEditSave}
+                onCancel={() => { setEditingEntity(null); setEditError(null); }}
+                submitting={editSubmitting}
+                error={editError}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coming soon dialog for batch edit */}
+      {showComingSoon && (
+        <div className="students-confirm-overlay" onClick={() => setShowComingSoon(false)}>
+          <div className="students-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>Batch edit is coming soon.</p>
+            <div className="students-confirm-actions">
+              <button onClick={() => setShowComingSoon(false)}>OK</button>
             </div>
           </div>
         </div>
