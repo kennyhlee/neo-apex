@@ -41,11 +41,16 @@ def _get_active_model(tenant_id: str) -> dict | None:
             model_definition[entity_type] = clean
 
     latest = max(rows, key=lambda r: r.get("_version", 0))
+    latest_md = latest.get("model_definition")
+    if isinstance(latest_md, str):
+        latest_md = json.loads(latest_md)
     return {
         "tenant_id": tenant_id,
         "model_definition": model_definition,
         "version": max(r.get("_version", 0) for r in rows),
         "status": "active",
+        "source_filename": latest_md.get("_source_filename", "") if latest_md else "",
+        "created_by": latest_md.get("_created_by", "") if latest_md else "",
         "created_at": max(r.get("_created_at", "") for r in rows),
     }
 
