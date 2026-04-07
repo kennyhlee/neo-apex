@@ -29,6 +29,9 @@ interface DataTableProps<T> {
   hiddenColumns?: string[];
   // Row styling
   rowClassName?: (row: T) => string;
+  // Selection
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,9 +51,12 @@ export default function DataTable<T extends Record<string, any>>({
   onPageSizeChange,
   hiddenColumns,
   rowClassName,
+  selectedIds: controlledSelectedIds,
+  onSelectionChange,
 }: DataTableProps<T>) {
   const { t } = useTranslation();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set());
+  const selectedIds = controlledSelectedIds ?? internalSelectedIds;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const hiddenSet = hiddenColumns ? new Set(hiddenColumns) : null;
@@ -61,23 +67,29 @@ export default function DataTable<T extends Record<string, any>>({
   const allOnPageSelected =
     data.length > 0 && data.every((row) => selectedIds.has(rowKey(row)));
 
-  function toggleAll() {
-    if (allOnPageSelected) {
-      const next = new Set(selectedIds);
-      data.forEach((row) => next.delete(rowKey(row)));
-      setSelectedIds(next);
+  function updateSelection(next: Set<string>) {
+    if (onSelectionChange) {
+      onSelectionChange(next);
     } else {
-      const next = new Set(selectedIds);
-      data.forEach((row) => next.add(rowKey(row)));
-      setSelectedIds(next);
+      setInternalSelectedIds(next);
     }
+  }
+
+  function toggleAll() {
+    const next = new Set(selectedIds);
+    if (allOnPageSelected) {
+      data.forEach((row) => next.delete(rowKey(row)));
+    } else {
+      data.forEach((row) => next.add(rowKey(row)));
+    }
+    updateSelection(next);
   }
 
   function toggleRow(id: string) {
     const next = new Set(selectedIds);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    setSelectedIds(next);
+    updateSelection(next);
   }
 
   const startRecord = total === 0 ? 0 : (page - 1) * pageSize + 1;
