@@ -37,9 +37,7 @@ def get_tenant_profile(tenant_id: str, user=Depends(require_role("admin", "staff
     rows = resp.json().get("data", [])
     if not rows:
         return {"tenant_id": tenant_id, "name": user["tenant_name"]}
-    data = rows[0]
-    data["tenant_id"] = tenant_id
-    return data
+    return {**rows[0], "tenant_id": tenant_id}
 
 
 @router.put("/tenants/{tenant_id}")
@@ -57,9 +55,12 @@ def update_tenant_profile(tenant_id: str, body: dict, user=Depends(require_role(
             "sql": "SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'",
         },
     )
-    if existing_resp.status_code == 200 and existing_resp.json().get("data"):
-        existing = existing_resp.json()["data"][0]
-        base_data = {**existing, **body}
+    result = existing_resp.json()
+    if existing_resp.status_code == 200 and result.get("data"):
+        existing = result["data"][0]
+        internal_keys = {"_status", "_version", "_created_at", "_updated_at", "_change_id", "entity_type", "entity_id"}
+        base_data = {k: v for k, v in existing.items() if k not in internal_keys}
+        base_data.update(body)
     else:
         base_data = {"tenant_id": tenant_id, **body}
 
