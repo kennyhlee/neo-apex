@@ -98,6 +98,10 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
       // Consumed by composite name column
       continue;
     }
+    if (field.name.startsWith('_')) {
+      // Internal fields — not shown in table
+      continue;
+    }
 
     const i18nMap: Record<string, string> = {
       student_id: 'students.studentId',
@@ -134,6 +138,7 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
   }
 
   for (const field of model.custom_fields) {
+    if (field.name.startsWith('_')) continue;
     cols.push({
       key: field.name,
       label: formatFieldLabel(field.name),
