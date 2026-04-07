@@ -111,7 +111,10 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
     if (field.name === 'enrollment_status' || field.name === '_status' || field.name === 'status') {
       render = (row: DataRow) => <StatusBadge status={String(row._status ?? row.enrollment_status ?? row.status ?? '-')} />;
     } else if (field.type === 'selection') {
-      render = (row: DataRow) => formatSelectionValue(row[field.name]);
+      render = (row: DataRow) => {
+        const val = formatSelectionValue(row[field.name]);
+        return val === '-' ? val : <StatusBadge status={val} />;
+      };
     }
 
     cols.push({
@@ -138,7 +141,10 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
       key: field.name,
       label: formatFieldLabel(field.name),
       render: field.type === 'selection'
-        ? (row: DataRow) => formatSelectionValue(row[field.name])
+        ? (row: DataRow) => {
+            const val = formatSelectionValue(row[field.name]);
+            return val === '-' ? val : <StatusBadge status={val} />;
+          }
         : undefined,
     });
   }
