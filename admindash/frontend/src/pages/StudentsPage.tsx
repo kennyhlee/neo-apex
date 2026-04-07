@@ -26,7 +26,7 @@ const STATUS_OPTIONS = [
 ];
 
 /** Fields that get a dedicated Status dropdown instead of a dynamic input */
-const SKIP_DYNAMIC_FIELDS = new Set(['enrollment_status', '_status', 'status']);
+const SKIP_DYNAMIC_FIELDS = new Set(['_status', 'status']);
 
 interface StudentsPageProps {
   tenant: string;
