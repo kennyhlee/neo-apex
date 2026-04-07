@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
+import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
 import { postQuery, archiveEntities } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
@@ -214,6 +215,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   const location = useLocation();
   const { user } = useAuth();
   const { getModel, getCachedModel } = useModel();
+  const { invalidateStudentCount } = useDashboard();
 
   // Data state
   const [data, setData] = useState<DataRow[]>([]);
@@ -411,6 +413,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     try {
       await archiveEntities(tenant, 'student', [...selectedIds]);
       setSelectedIds(new Set());
+      invalidateStudentCount();
       loadData(1, filters);
     } catch (err) {
       setError(`Failed to archive students: ${err}`);
