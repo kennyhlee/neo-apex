@@ -71,6 +71,24 @@ export default function LoginPage() {
           {t('login.noAccount')}{' '}
           <a href="#">{t('login.register')}</a>
         </div>
+        <div className="login-platform">
+          <svg width="140" height="24" viewBox="0 0 140 24" fill="none">
+            <circle cx="6" cy="16" r="1.4" fill="#7C3AED" opacity="0.3"/>
+            <circle cx="16" cy="12" r="1.4" fill="#7C3AED" opacity="0.4"/>
+            <circle cx="26" cy="9" r="1.4" fill="#7C3AED" opacity="0.45"/>
+            <circle cx="36" cy="8" r="1.5" fill="#7C3AED" opacity="0.5"/>
+            <circle cx="46" cy="8.5" r="1.5" fill="#6B4ED8" opacity="0.55"/>
+            <circle cx="56" cy="10" r="1.5" fill="#5A5FBB" opacity="0.6"/>
+            <circle cx="66" cy="12" r="1.5" fill="#4A6BA5" opacity="0.65"/>
+            <circle cx="76" cy="13" r="1.4" fill="#3B6FA0" opacity="0.7"/>
+            <circle cx="86" cy="12.5" r="1.4" fill="#2B6DB5" opacity="0.75"/>
+            <circle cx="96" cy="11" r="1.4" fill="#2B6DB5" opacity="0.8"/>
+            <path d="M108 8L122 3L116 15L112 10L108 8Z" fill="url(#pg-ad)" stroke="#2B6DB5" strokeWidth="0.5" strokeLinejoin="round"/>
+            <path d="M122 3L112 10" stroke="#2B6DB5" strokeWidth="0.5" opacity="0.25"/>
+            <defs><linearGradient id="pg-ad" x1="108" y1="3" x2="118" y2="15"><stop stopColor="#7C3AED"/><stop offset="1" stopColor="#2B6DB5"/></linearGradient></defs>
+          </svg>
+          <span>by floatify</span>
+        </div>
       </div>
     </div>
   );

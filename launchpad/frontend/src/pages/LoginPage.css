@@ -16,3 +16,5 @@
 .auth-footer { text-align: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-subtle); font-size: 14px; color: var(--text-secondary); }
 .auth-link { background: none; border: none; color: var(--accent); font-weight: 600; cursor: pointer; font-size: 14px; font-family: var(--font-sans); }
 .auth-link:hover { text-decoration: underline; }
+.auth-platform { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border-subtle); font-family: var(--font-sans); font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: lowercase; }
+.auth-platform span { font-size: 14px; background: linear-gradient(90deg, #7C3AED, #2B6DB5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }

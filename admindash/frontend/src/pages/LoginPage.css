@@ -151,6 +151,27 @@
   text-decoration: underline;
 }
 
+.login-platform {
+  margin-top: 0;
+  padding: 16px 2.5rem;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.login-platform span {
+  font-size: 14px;
+  background: linear-gradient(90deg, #7C3AED, #2B6DB5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 @media (max-width: 520px) {
   .login-columns {
     grid-template-columns: 1fr;

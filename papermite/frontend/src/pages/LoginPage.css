@@ -171,7 +171,10 @@
 }
 
 .login__footer {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   margin-top: 32px;
   padding-top: 20px;
   border-top: 1px solid var(--border-subtle);
@@ -179,9 +182,12 @@
 
 .login__footer span {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  text-transform: lowercase;
+  background: linear-gradient(90deg, #7C3AED, #2B6DB5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
