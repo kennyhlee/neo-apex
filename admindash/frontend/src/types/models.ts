@@ -45,9 +45,6 @@ export interface StudentsResponse {
   total: number;
 }
 
-export interface TenantsResponse {
-  tenants: { id: string; name?: string }[];
-}
 
 export interface ModelFieldDefinition {
   name: string;
@@ -80,14 +77,6 @@ export interface ExtractResponse {
   fields: Record<string, string>;
 }
 
-export interface QueryStudentsParams {
-  _status?: string;
-  sort_by?: string;
-  sort_dir?: 'asc' | 'desc';
-  limit?: number;
-  offset?: number;
-  [field: string]: string | number | undefined;
-}
 
 export interface QueryStudentsResponse {
   data: Record<string, unknown>[];

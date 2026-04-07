@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { runQuery } from '../api/client.ts';
+import { postQuery } from '../api/client.ts';
 
 const TTL_MS = 60 * 60 * 1000; // 60 minutes
 
@@ -30,8 +30,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
       try {
         const sql = "SELECT COUNT(*) as count FROM data WHERE entity_type = 'student' AND _status = 'active'";
-        const result = await runQuery(tenantId, 'entities', sql);
-        const count = Number(result.rows[0]?.count ?? 0);
+        const result = await postQuery(tenantId, 'entities', sql);
+        const count = Number(result.data[0]?.count ?? 0);
         setCache({ value: count, fetchedAt: Date.now() });
         return count;
       } catch {

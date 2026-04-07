@@ -1,10 +1,6 @@
 import type {
-  TenantsResponse,
-  ModelResponse,
   CreateEntityResponse,
   ExtractResponse,
-  QueryStudentsParams,
-  QueryStudentsResponse,
   NextIdResponse,
   DuplicateCheckRequest,
   DuplicateCheckResponse,
@@ -21,19 +17,16 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function fetchTenants(): Promise<TenantsResponse> {
-  const resp = await fetch(`${DATACORE_API_BASE}/api/tenants`);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
-}
-
-export async function fetchStudentModel(
+export async function postQuery(
   tenantId: string,
-): Promise<ModelResponse> {
-  const resp = await fetch(
-    `${DATACORE_API_BASE}/api/models/${tenantId}/student`,
-  );
-  if (resp.status === 404) throw new Error('Student model not configured');
+  table: 'entities' | 'models' | 'tenants',
+  sql: string,
+): Promise<{ data: Record<string, unknown>[]; total: number }> {
+  const resp = await fetch(`${DATACORE_API_BASE}/api/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tenant_id: tenantId, table, sql }),
+  });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
 }
@@ -71,41 +64,6 @@ export async function extractStudentFromDocument(
       headers: authHeaders(),
       body: formData,
     },
-  );
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
-}
-
-export interface QueryResult {
-  rows: Record<string, unknown>[];
-  total: number;
-}
-
-export async function runQuery(
-  tenantId: string,
-  tableType: string,
-  sql: string,
-): Promise<QueryResult> {
-  const params = new URLSearchParams({ sql });
-  const resp = await fetch(
-    `${DATACORE_API_BASE}/api/query/${tenantId}/${tableType}?${params}`,
-  );
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
-}
-
-export async function queryStudents(
-  tenantId: string,
-  params: QueryStudentsParams = {},
-): Promise<QueryStudentsResponse> {
-  const searchParams = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value != null && value !== '') {
-      searchParams.set(key, String(value));
-    }
-  }
-  const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/query?${searchParams}`,
   );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
