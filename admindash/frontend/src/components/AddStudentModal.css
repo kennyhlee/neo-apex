@@ -79,3 +79,14 @@
   margin-bottom: 1rem;
   font-size: 0.82rem;
 }
+
+.add-modal-cancel-btn {
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}

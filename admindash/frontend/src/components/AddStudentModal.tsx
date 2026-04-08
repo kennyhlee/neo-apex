@@ -171,7 +171,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
           <div className="add-modal-body">
             <div className="add-modal-error">{modelError}</div>
             <button
-              className="add-student-back-btn"
+              className="add-modal-cancel-btn"
               onClick={onClose}
             >
               {t('common.cancel')}
