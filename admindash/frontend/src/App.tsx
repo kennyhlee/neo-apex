@@ -9,7 +9,6 @@ import HomePage from './pages/HomePage.tsx';
 import StudentsPage from './pages/StudentsPage.tsx';
 import LeadPage from './pages/LeadPage.tsx';
 import ProgramPage from './pages/ProgramPage.tsx';
-import AddStudentPage from './pages/AddStudentPage.tsx';
 import './App.css';
 
 function AppRoutes() {
@@ -38,10 +37,6 @@ function AppRoutes() {
                 <main className="app-main">
                   <Routes>
                     <Route path="/home" element={<HomePage tenant={tenant} />} />
-                    <Route
-                      path="/students/add"
-                      element={<AddStudentPage tenant={tenant} />}
-                    />
                     <Route
                       path="/students"
                       element={<StudentsPage tenant={tenant} />}
