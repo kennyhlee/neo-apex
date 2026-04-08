@@ -159,7 +159,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
 
   return (
     <div className="students-confirm-overlay">
-      <div className="add-modal">
+      <div className="add-modal" onClick={(e) => e.stopPropagation()}>
         <div className="add-modal-header">
           <h3>{t('addStudent.title')}</h3>
         </div>
