@@ -85,7 +85,8 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const { student_id: _, ...submitData } = baseData;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { student_id, ...submitData } = baseData;
       const result = await createStudent(tenant, submitData, customFields);
       invalidateStudentCount();
       setSuccessMessage(t('addStudent.success'));
