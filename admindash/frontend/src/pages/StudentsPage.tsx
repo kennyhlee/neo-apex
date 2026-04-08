@@ -536,39 +536,38 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           </button>
           {showMenu && (
             <div className="students-menu-popover">
-              {selectedIds.size > 0 && (
-                <>
-                  <div className="students-menu-section-label">Actions</div>
-                  <button
-                    className="students-menu-item"
-                    onClick={() => {
-                      setShowMenu(false);
-                      if (selectedIds.size === 1) {
-                        const entityId = [...selectedIds][0];
-                        const row = data.find((r) => String(r.entity_id) === entityId);
-                        if (row) setEditingEntity(row);
-                      } else {
-                        setShowComingSoon(true);
-                      }
-                    }}
-                  >
-                    Edit Selected
-                  </button>
-                  <button
-                    className="students-menu-item students-menu-item-danger"
-                    onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
-                  >
-                    Delete Selected
-                  </button>
-                  <button
-                    className="students-menu-item"
-                    onClick={() => { setShowMenu(false); alert('Export coming soon'); }}
-                  >
-                    Export Selected
-                  </button>
-                  <div className="students-menu-divider" />
-                </>
-              )}
+              <div className="students-menu-section-label">Actions</div>
+              <button
+                className="students-menu-item"
+                disabled={selectedIds.size === 0}
+                onClick={() => {
+                  setShowMenu(false);
+                  if (selectedIds.size === 1) {
+                    const entityId = [...selectedIds][0];
+                    const row = data.find((r) => String(r.entity_id) === entityId);
+                    if (row) setEditingEntity(row);
+                  } else {
+                    setShowComingSoon(true);
+                  }
+                }}
+              >
+                Edit Selected
+              </button>
+              <button
+                className="students-menu-item students-menu-item-danger"
+                disabled={selectedIds.size === 0}
+                onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
+              >
+                Delete Selected
+              </button>
+              <button
+                className="students-menu-item"
+                disabled={selectedIds.size === 0}
+                onClick={() => { setShowMenu(false); alert('Export coming soon'); }}
+              >
+                Export Selected
+              </button>
+              <div className="students-menu-divider" />
               <div className="students-menu-section-label">Columns</div>
               {columns.map((col) => (
                 <label key={col.key} className="students-menu-column-option">
