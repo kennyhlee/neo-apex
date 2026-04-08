@@ -29,7 +29,9 @@ def _build_field_prompt(entity_type: str, all_fields: list) -> str:
     return (
         f"Extract the following {entity_type} fields from the document.\n"
         f"Return a JSON object with field names as keys and extracted values.\n"
-        f"Only include fields where you find a value in the document.\n"
+        f"Only include fields where you find a clear value in the document.\n"
+        f"OMIT any field whose value is not found — do NOT use placeholders "
+        f"like '<unknown>', 'N/A', 'unknown', or empty strings.\n"
         f"Do NOT invent data.\n\n"
         f"Fields:\n" + "\n".join(field_lines)
     )
