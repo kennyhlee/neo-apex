@@ -1,0 +1,81 @@
+/* Add Student Modal — wider than edit modal for tabbed interface */
+.add-modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: 0;
+  width: 92%;
+  max-width: 780px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-elevated);
+}
+
+.add-modal-header {
+  padding: 1.25rem 1.5rem 0;
+}
+
+.add-modal-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+}
+
+.add-modal-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border-primary);
+  padding: 0 1.5rem;
+}
+
+.add-modal-tab {
+  padding: 0.6rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.add-modal-tab:hover {
+  color: var(--text-primary);
+}
+
+.add-modal-tab.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.add-modal-body {
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.add-modal-success {
+  background: rgba(99, 153, 34, 0.1);
+  color: var(--color-success);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.add-modal-error {
+  background: rgba(212, 83, 126, 0.1);
+  color: var(--color-danger);
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.add-modal-id-warning {
+  background: rgba(229, 160, 13, 0.1);
+  color: var(--color-warning, #e5a00d);
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.82rem;
+}
