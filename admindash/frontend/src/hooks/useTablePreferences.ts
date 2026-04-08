@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 const VALID_PAGE_SIZES = [10, 20, 30, 40, 50] as const;
 type ValidPageSize = (typeof VALID_PAGE_SIZES)[number];
@@ -67,6 +67,16 @@ export function useTablePreferences(
   const [prefs, setPrefs] = useState<TablePreferences>(() =>
     loadPreferences(userId, tenantId, currentColumns),
   );
+
+  // Re-load preferences when columns, user, or tenant change
+  const prevKey = useRef(`${userId}_${tenantId}_${currentColumns.join(',')}`);
+  useEffect(() => {
+    const key = `${userId}_${tenantId}_${currentColumns.join(',')}`;
+    if (key !== prevKey.current && currentColumns.length > 0) {
+      prevKey.current = key;
+      setPrefs(loadPreferences(userId, tenantId, currentColumns));
+    }
+  }, [userId, tenantId, currentColumns]);
 
   const updatePrefs = useCallback(
     (updates: Partial<TablePreferences>) => {
