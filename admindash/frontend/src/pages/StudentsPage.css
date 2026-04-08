@@ -117,6 +117,10 @@
   color: var(--danger);
 }
 
+.students-menu-item-danger:disabled {
+  color: var(--text-tertiary);
+}
+
 .students-menu-divider {
   height: 1px;
   background: var(--border-primary);
