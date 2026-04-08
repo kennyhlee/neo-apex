@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DATACORE_URL } from '../config.ts';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
@@ -11,6 +11,7 @@ import DataTable, { type Column } from '../components/DataTable.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
+import AddStudentModal from '../components/AddStudentModal.tsx';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
 
@@ -212,7 +213,6 @@ function getDynamicFilterFields(model: ModelDefinition | undefined): ModelFieldD
 
 export default function StudentsPage({ tenant }: StudentsPageProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const { getModel, getCachedModel } = useModel();
@@ -251,6 +251,9 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Coming soon dialog
   const [showComingSoon, setShowComingSoon] = useState(false);
+
+  // Add student modal
+  const [showAddModal, setShowAddModal] = useState(false);
 
   // Model loading
   useEffect(() => {
@@ -511,7 +514,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
       </FilterForm>
 
       <div className="students-toolbar">
-        <button className="students-toolbar-primary" onClick={() => navigate('/students/add')}>
+        <button className="students-toolbar-primary" onClick={() => setShowAddModal(true)}>
           {t('students.addStudent')}
         </button>
 
@@ -632,6 +635,19 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add student modal */}
+      {showAddModal && (
+        <AddStudentModal
+          tenant={tenant}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={(entityId) => {
+            setShowAddModal(false);
+            setActiveHighlight(entityId);
+            loadData(page, filters);
+          }}
+        />
       )}
 
       {error ? (
