@@ -54,11 +54,14 @@ def register_routes(app: FastAPI, store: Store) -> None:
 
     @app.put("/api/tenants/{tenant_id}")
     def put_tenant(tenant_id: str, body: TenantRequest):
-        name = body.base_data.get("name")
-        abbrev = derive_abbrev(name, tenant_id)
-        base_data = {**body.base_data, "_abbrev": abbrev}
-
         existing = store.get_active_entity(tenant_id, "tenant", tenant_id)
+
+        # Lock _abbrev at creation time — never re-derive on updates
+        if existing:
+            abbrev = existing["base_data"].get("_abbrev", derive_abbrev(body.base_data.get("name"), tenant_id))
+        else:
+            abbrev = derive_abbrev(body.base_data.get("name"), tenant_id)
+        base_data = {**body.base_data, "_abbrev": abbrev}
         try:
             result = store.put_entity(
                 tenant_id=tenant_id,
