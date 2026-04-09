@@ -64,6 +64,7 @@ SEQUENCES_SCHEMA = pa.schema([
     pa.field("entity_type", pa.string()),
     pa.field("year", pa.string()),
     pa.field("counter", pa.int64()),
+    pa.field("entity_abbrev", pa.string()),
 ])
 
 GLOBAL_SCHEMA = pa.schema([
@@ -127,7 +128,23 @@ class Store:
 
     def _open_or_create(self, table_name: str, schema: pa.Schema):
         if table_name in self._table_names():
-            return self._db.open_table(table_name)
+            table = self._db.open_table(table_name)
+            # Migrate if schema has new columns
+            existing_names = set(table.schema.names)
+            expected_names = set(schema.names)
+            missing = expected_names - existing_names
+            if missing:
+                rows = table.search().to_list()
+                for col in missing:
+                    field = schema.field(col)
+                    default = "" if field.type == pa.string() else 0
+                    for row in rows:
+                        row[col] = default
+                self._db.drop_table(table_name)
+                table = self._db.create_table(table_name, schema=schema)
+                if rows:
+                    table.add(rows)
+            return table
         return self._db.create_table(table_name, schema=schema)
 
     def _get_max_version(self, table, where: str) -> int:
@@ -572,11 +589,11 @@ class Store:
 
     # ── sequences (lightweight counters) ───────────────────────────
 
-    def get_sequence(self, tenant_id: str, entity_type: str, year: str) -> int:
-        """Get the current sequence counter, or 0 if not set."""
+    def get_sequence(self, tenant_id: str, entity_type: str, year: str) -> dict:
+        """Get the current sequence record, or defaults if not set."""
         table_name = self._sequences_table_name(tenant_id)
         if table_name not in self._table_names():
-            return 0
+            return {"counter": 0, "entity_abbrev": ""}
         table = self._db.open_table(table_name)
         rows = (
             table.search()
@@ -584,11 +601,12 @@ class Store:
             .to_list()
         )
         if not rows:
-            return 0
-        return rows[0]["counter"]
+            return {"counter": 0, "entity_abbrev": ""}
+        return {"counter": rows[0]["counter"], "entity_abbrev": rows[0].get("entity_abbrev", "")}
 
     def increment_sequence(
-        self, tenant_id: str, entity_type: str, year: str
+        self, tenant_id: str, entity_type: str, year: str,
+        entity_abbrev: str = "",
     ) -> int:
         """Increment and return the sequence counter for entity_type + year."""
         table_name = self._sequences_table_name(tenant_id)
@@ -596,6 +614,7 @@ class Store:
         where = f"entity_type = '{entity_type}' AND year = '{year}'"
         rows = table.search().where(where).to_list()
         current = rows[0]["counter"] if rows else 0
+        abbrev = entity_abbrev or (rows[0].get("entity_abbrev", "") if rows else "")
         new_counter = current + 1
         if rows:
             table.delete(where)
@@ -603,6 +622,7 @@ class Store:
             "entity_type": entity_type,
             "year": year,
             "counter": new_counter,
+            "entity_abbrev": abbrev,
         }])
         return new_counter
 

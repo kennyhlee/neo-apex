@@ -2,16 +2,16 @@
 
 
 def test_get_sequence_no_table(store):
-    """Returns 0 when no sequences table exists."""
+    """Returns defaults when no sequences table exists."""
     result = store.get_sequence("t1", "student", "2026")
-    assert result == 0
+    assert result == {"counter": 0, "entity_abbrev": ""}
 
 
 def test_get_sequence_no_matching_row(store):
-    """Returns 0 when table exists but no matching row."""
+    """Returns defaults when table exists but no matching row."""
     store.increment_sequence("t1", "student", "2026")
     result = store.get_sequence("t1", "student", "2027")
-    assert result == 0
+    assert result == {"counter": 0, "entity_abbrev": ""}
 
 
 def test_increment_sequence_first_call(store):
@@ -33,7 +33,7 @@ def test_get_sequence_after_increments(store):
     store.increment_sequence("t1", "student", "2026")
     store.increment_sequence("t1", "student", "2026")
     result = store.get_sequence("t1", "student", "2026")
-    assert result == 2
+    assert result["counter"] == 2
 
 
 def test_sequences_independent_per_year(store):
@@ -42,8 +42,8 @@ def test_sequences_independent_per_year(store):
     store.increment_sequence("t1", "student", "2026")
     store.increment_sequence("t1", "student", "2027")
 
-    assert store.get_sequence("t1", "student", "2026") == 2
-    assert store.get_sequence("t1", "student", "2027") == 1
+    assert store.get_sequence("t1", "student", "2026")["counter"] == 2
+    assert store.get_sequence("t1", "student", "2027")["counter"] == 1
 
 
 def test_sequences_independent_per_entity_type(store):
@@ -52,8 +52,8 @@ def test_sequences_independent_per_entity_type(store):
     store.increment_sequence("t1", "student", "2026")
     store.increment_sequence("t1", "staff", "2026")
 
-    assert store.get_sequence("t1", "student", "2026") == 2
-    assert store.get_sequence("t1", "staff", "2026") == 1
+    assert store.get_sequence("t1", "student", "2026")["counter"] == 2
+    assert store.get_sequence("t1", "staff", "2026")["counter"] == 1
 
 
 def test_sequences_tenant_isolation(store):
@@ -61,5 +61,22 @@ def test_sequences_tenant_isolation(store):
     store.increment_sequence("t1", "student", "2026")
     store.increment_sequence("t1", "student", "2026")
 
-    assert store.get_sequence("t1", "student", "2026") == 2
-    assert store.get_sequence("t2", "student", "2026") == 0
+    assert store.get_sequence("t1", "student", "2026")["counter"] == 2
+    assert store.get_sequence("t2", "student", "2026")["counter"] == 0
+
+
+def test_entity_abbrev_stored_and_retrieved(store):
+    """entity_abbrev is persisted with the sequence record."""
+    store.increment_sequence("t1", "student", "2026", entity_abbrev="ST")
+    result = store.get_sequence("t1", "student", "2026")
+    assert result["entity_abbrev"] == "ST"
+    assert result["counter"] == 1
+
+
+def test_entity_abbrev_preserved_on_increment(store):
+    """entity_abbrev is preserved across increments when not re-specified."""
+    store.increment_sequence("t1", "student", "2026", entity_abbrev="ST")
+    store.increment_sequence("t1", "student", "2026")
+    result = store.get_sequence("t1", "student", "2026")
+    assert result["entity_abbrev"] == "ST"
+    assert result["counter"] == 2

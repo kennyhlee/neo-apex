@@ -17,6 +17,10 @@ DUPLICATE_CHECK_THRESHOLD = float(
     os.environ.get("DATACORE_DUPLICATE_CHECK_THRESHOLD", "0.75")
 )
 
+DEFAULT_ABBREVS = {
+    "student": "ST",
+}
+
 
 class CreateEntityRequest(BaseModel):
     base_data: dict
@@ -28,22 +32,23 @@ class TenantRequest(BaseModel):
     custom_fields: dict | None = None
 
 
-def _max_student_seq(store: Store, tenant_id: str, prefix: str) -> int:
-    """Scan active students to find the highest sequence number for a prefix."""
+def _max_entity_seq(store: Store, tenant_id: str, entity_type: str, prefix: str) -> int:
+    """Scan active entities to find the highest sequence number for a prefix."""
     import re
     table_name = store._entities_table_name(tenant_id)
     if table_name not in store._table_names():
         return 0
     table = store._db.open_table(table_name)
     rows = table.search().where(
-        "entity_type = 'student' AND _status = 'active'"
+        f"entity_type = '{entity_type}' AND _status = 'active'"
     ).to_list()
+    id_field = f"{entity_type}_id"
     pattern = re.compile(re.escape(prefix) + r"(\d+)$")
     max_seq = 0
     for row in rows:
         bd = toon.decode(row["base_data"]) if row.get("base_data") else {}
-        sid = bd.get("student_id", "")
-        m = pattern.match(sid)
+        eid = bd.get(id_field, "")
+        m = pattern.match(eid)
         if m:
             max_seq = max(max_seq, int(m.group(1)))
     return max_seq
@@ -85,18 +90,21 @@ def register_routes(app: FastAPI, store: Store) -> None:
         abbrev = tenant["base_data"].get("_abbrev", tenant_id[:3].upper())
         year = str(datetime.now(timezone.utc).year)
         yy = year[-2:]
-        prefix = f"{abbrev}-ST{yy}"
+
+        seq_record = store.get_sequence(tenant_id, "student", year)
+        entity_abbrev = seq_record["entity_abbrev"] or DEFAULT_ABBREVS.get("student", "ST")
+        prefix = f"{abbrev}-{entity_abbrev}{yy}"
 
         # Use the higher of sequence counter and actual max ID in data
-        counter_seq = store.get_sequence(tenant_id, "student", year)
-        data_seq = _max_student_seq(store, tenant_id, prefix)
+        counter_seq = seq_record["counter"]
+        data_seq = _max_entity_seq(store, tenant_id, "student", prefix)
         next_seq = max(counter_seq, data_seq) + 1
         next_id = f"{prefix}{next_seq:04d}"
 
         return {
             "next_id": next_id,
             "tenant_abbrev": abbrev,
-            "entity_abbrev": "ST",
+            "entity_abbrev": entity_abbrev,
             "sequence": next_seq,
             "approximate": True,
         }
@@ -284,20 +292,24 @@ def register_routes(app: FastAPI, store: Store) -> None:
         entity_id = uuid.uuid4().hex[:12]
         base_data = dict(body.base_data)
 
-        # Auto-assign sequential student_id at creation time
-        needs_auto_id = entity_type == "student" and not base_data.get("student_id")
+        # Auto-assign sequential ID for entity types with a default abbreviation
+        id_field = f"{entity_type}_id"
+        needs_auto_id = entity_type in DEFAULT_ABBREVS and not base_data.get(id_field)
         auto_id_seq = None
+        entity_abbrev = None
         if needs_auto_id:
             tenant_info = store.get_active_entity(tenant_id, "tenant", tenant_id)
             if tenant_info:
                 abbrev = tenant_info["base_data"].get("_abbrev", tenant_id[:3].upper())
                 year = str(datetime.now(timezone.utc).year)
                 yy = year[-2:]
-                prefix = f"{abbrev}-ST{yy}"
-                counter_seq = store.get_sequence(tenant_id, "student", year)
-                data_seq = _max_student_seq(store, tenant_id, prefix)
+                seq_record = store.get_sequence(tenant_id, entity_type, year)
+                entity_abbrev = seq_record["entity_abbrev"] or DEFAULT_ABBREVS.get(entity_type, entity_type[:2])
+                prefix = f"{abbrev}-{entity_abbrev}{yy}"
+                counter_seq = seq_record["counter"]
+                data_seq = _max_entity_seq(store, tenant_id, entity_type, prefix)
                 auto_id_seq = max(counter_seq, data_seq) + 1
-                base_data["student_id"] = f"{prefix}{auto_id_seq:04d}"
+                base_data[id_field] = f"{prefix}{auto_id_seq:04d}"
 
         try:
             result = store.put_entity(
@@ -312,9 +324,9 @@ def register_routes(app: FastAPI, store: Store) -> None:
 
         # Sync sequence counter to match the assigned ID
         if auto_id_seq is not None:
-            current = store.get_sequence(tenant_id, "student", year)
+            current = store.get_sequence(tenant_id, entity_type, year)["counter"]
             while current < auto_id_seq:
-                store.increment_sequence(tenant_id, "student", year)
+                store.increment_sequence(tenant_id, entity_type, year, entity_abbrev=entity_abbrev)
                 current += 1
 
         return JSONResponse(status_code=201, content=result)
