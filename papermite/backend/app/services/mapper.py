@@ -131,7 +131,8 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
                         options = merged
                     else:
                         options = list(default_opts)
-                    multiple = multiple if multiple is not None else False
+                    # Domain model annotation is the source of truth for cardinality
+                    multiple = (model_field.json_schema_extra or {}).get("multiple", False)
             elif model_field and isinstance(model_field.annotation, type) and issubclass(model_field.annotation, Enum):
                 field_type = "selection"
                 options = [e.value for e in model_field.annotation]
@@ -170,7 +171,7 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
                 mappings.append(FieldMapping(
                     field_name=field_name, value=default_opts, source="base_model",
                     required=True, field_type="selection",
-                    options=list(default_opts), multiple=False,
+                    options=list(default_opts), multiple=(model_field.json_schema_extra or {}).get("multiple", False),
                 ))
                 continue
 
@@ -257,7 +258,7 @@ def _consolidate_entities(entities: list[EntityResult]) -> list[EntityResult]:
                             new_opts.append(opt)
                             existing_opts.add(opt)
                     merged.field_mappings[idx] = existing_mapping.model_copy(
-                        update={"options": new_opts, "multiple": True}
+                        update={"options": new_opts}
                     )
 
     return list(by_type.values())

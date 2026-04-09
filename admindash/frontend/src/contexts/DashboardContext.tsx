@@ -11,15 +11,20 @@ interface CachedCount {
 interface DashboardContextValue {
   getStudentCount: (tenantId: string) => Promise<number | null>;
   invalidateStudentCount: () => void;
+  getProgramCount: (tenantId: string) => Promise<number | null>;
+  invalidateProgramCount: () => void;
 }
 
 const DashboardContext = createContext<DashboardContextValue>({
   getStudentCount: () => Promise.resolve(null),
   invalidateStudentCount: () => {},
+  getProgramCount: () => Promise.resolve(null),
+  invalidateProgramCount: () => {},
 });
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
   const [cache, setCache] = useState<CachedCount | null>(null);
+  const [programCache, setProgramCache] = useState<CachedCount | null>(null);
 
   const getStudentCount = useCallback(
     async (tenantId: string): Promise<number | null> => {
@@ -45,8 +50,30 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setCache(null);
   }, []);
 
+  const getProgramCount = useCallback(
+    async (tenantId: string): Promise<number | null> => {
+      if (programCache && Date.now() - programCache.fetchedAt < TTL_MS) {
+        return programCache.value;
+      }
+      try {
+        const sql = "SELECT COUNT(*) as count FROM data WHERE entity_type = 'program' AND _status = 'active'";
+        const result = await postQuery(tenantId, 'entities', sql);
+        const count = Number(result.data[0]?.count ?? 0);
+        setProgramCache({ value: count, fetchedAt: Date.now() });
+        return count;
+      } catch {
+        return null;
+      }
+    },
+    [programCache],
+  );
+
+  const invalidateProgramCount = useCallback(() => {
+    setProgramCache(null);
+  }, []);
+
   return (
-    <DashboardContext.Provider value={{ getStudentCount, invalidateStudentCount }}>
+    <DashboardContext.Provider value={{ getStudentCount, invalidateStudentCount, getProgramCount, invalidateProgramCount }}>
       {children}
     </DashboardContext.Provider>
   );

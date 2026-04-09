@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import {
-  createStudent,
+  createEntity,
   extractStudentFromDocument,
-  fetchNextStudentId,
+  fetchNextEntityId,
   checkDuplicateStudents,
 } from '../api/client.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
@@ -54,7 +54,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
 
     Promise.all([
       getModel(tenant, 'student'),
-      fetchNextStudentId(tenant).catch(() => null),
+      fetchNextEntityId(tenant, 'student').catch(() => null),
     ])
       .then(([def, nextId]) => {
         setModelDef(def);
@@ -87,7 +87,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { student_id, ...submitData } = baseData;
-      const result = await createStudent(tenant, submitData, customFields);
+      const result = await createEntity(tenant, 'student', submitData, customFields);
       invalidateStudentCount();
       setSuccessMessage(t('addStudent.success'));
       setTimeout(() => onSuccess(result.entity_id), 1200);
