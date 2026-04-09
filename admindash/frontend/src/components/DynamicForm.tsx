@@ -135,7 +135,11 @@ function renderField(
 
     case 'selection':
       if (field.multiple) {
-        const selected = Array.isArray(value) ? (value as string[]) : [];
+        // Multi-select: checkboxes
+        // Legacy handling: string value → treat as single-element array
+        const selected = Array.isArray(value)
+          ? (value as string[])
+          : (typeof value === 'string' && value ? [value] : []);
         return (
           <div className="dynamic-form-multi-select">
             {(field.options || []).map((opt) => (
@@ -157,21 +161,30 @@ function renderField(
           </div>
         );
       }
-      return (
-        <select
-          className={`${errorClass}${isReadOnly ? ' dynamic-form-input-readonly' : ''}`}
-          value={strValue}
-          onChange={(e) => onChange(field.name, e.target.value)}
-          disabled={isReadOnly}
-        >
-          <option value="">--</option>
-          {(field.options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      );
+      {
+        // Single-select: radio buttons
+        // Legacy handling: array value → use first element
+        const radioValue = Array.isArray(value)
+          ? (value[0] != null ? String(value[0]) : '')
+          : strValue;
+        return (
+          <div className="dynamic-form-radio-group">
+            {(field.options || []).map((opt) => (
+              <label key={opt} className="dynamic-form-radio-label">
+                <input
+                  type="radio"
+                  name={field.name}
+                  value={opt}
+                  checked={radioValue === opt}
+                  onChange={() => onChange(field.name, opt)}
+                  disabled={isReadOnly}
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
+        );
+      }
 
     default:
       return (
