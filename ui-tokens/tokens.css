@@ -33,6 +33,8 @@
   --danger-muted: rgba(212, 83, 126, 0.08);
   --info: #378ADD;
   --info-muted: rgba(55, 138, 221, 0.08);
+  --warning: #EF9F27;
+  --warning-muted: rgba(239, 159, 39, 0.1);
 
   /* Tinted pairs */
   --tint-blue-bg: #E6F1FB;
