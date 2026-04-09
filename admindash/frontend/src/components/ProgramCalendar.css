@@ -283,6 +283,14 @@
   min-width: 160px;
   top: 0;
   left: 100%;
+  max-width: 220px;
+}
+
+/* Prevent right-edge overflow for cells in last 2 columns */
+.calendar-month-cell:nth-child(7n+6) .calendar-month-popover,
+.calendar-month-cell:nth-child(7n+7) .calendar-month-popover {
+  left: auto;
+  right: 100%;
 }
 
 .calendar-month-popover-header {

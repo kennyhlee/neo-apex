@@ -79,7 +79,7 @@
 }
 
 .programs-view-btn-active:hover {
-  background: var(--accent);
+  background: var(--accent-hover);
   color: var(--text-inverse);
 }
 
@@ -199,6 +199,7 @@
   align-items: center;
   justify-content: center;
   z-index: 200;
+  animation: fadeIn 0.15s ease;
 }
 
 .programs-confirm-dialog {
@@ -259,6 +260,7 @@
   align-items: center;
   justify-content: center;
   z-index: 200;
+  animation: fadeIn 0.15s ease;
 }
 
 .programs-edit-dialog {

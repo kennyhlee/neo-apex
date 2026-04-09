@@ -57,6 +57,16 @@ function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
+/** Stable color assignment based on entity_id or name. */
+function getTintForProgram(prog: DataRow): { bg: string; text: string } {
+  const key = String(prog.entity_id ?? prog.name ?? '');
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return TINT_PAIRS[hash % TINT_PAIRS.length];
+}
+
 /** Returns true if date falls within [start, end] (inclusive, day-level). */
 function isInRange(date: Date, start: Date, end: Date): boolean {
   const d = date.getTime();
@@ -197,7 +207,7 @@ export default function ProgramWeekView({
               </div>
               <div className="calendar-week-body">
                 {programsOnDay.map(({ program, index }) => {
-                  const tint = TINT_PAIRS[index % TINT_PAIRS.length];
+                  const tint = getTintForProgram(program);
                   const label = String(program.name ?? program.program_id ?? '').trim() || '(unnamed)';
                   return (
                     <button
