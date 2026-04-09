@@ -203,6 +203,126 @@
   min-width: 160px;
 }
 
+/* ─── Month View (MonthView component class names) ───────────────── */
+
+.calendar-month-container {
+  display: flex;
+  flex-direction: column;
+}
+
+/* calendar-nav-label: same style as calendar-nav-title */
+.calendar-nav-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 200px;
+  text-align: center;
+}
+
+/* calendar-month-day-header: day-of-week label row */
+.calendar-month-day-header {
+  background: var(--bg-tertiary);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 0.4rem 0.25rem;
+  letter-spacing: 0.04em;
+}
+
+/* calendar-month-cell-padding: out-of-month padding cells */
+.calendar-month-cell-padding {
+  background: var(--bg-tertiary);
+}
+
+/* calendar-month-cell-number: day number inside a cell */
+.calendar-month-cell-number {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.calendar-month-cell-number-today {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* calendar-month-cell-chips: container for chips inside a cell */
+.calendar-month-cell-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* calendar-chip-more: "+N more" overflow button */
+.calendar-chip-more {
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-sans);
+  text-align: left;
+}
+
+.calendar-chip-more:hover {
+  color: var(--accent);
+}
+
+/* calendar-month-popover: overflow popover for a cell */
+.calendar-month-popover {
+  position: absolute;
+  z-index: 150;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-elevated);
+  border-radius: var(--radius-md);
+  padding: 0.5rem;
+  min-width: 160px;
+  top: 0;
+  left: 100%;
+}
+
+.calendar-month-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+
+.calendar-month-popover-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.calendar-month-popover-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text-tertiary);
+  line-height: 1;
+  padding: 0 0.2rem;
+}
+
+.calendar-month-popover-close:hover {
+  color: var(--text-primary);
+}
+
+.calendar-month-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* calendar-chip-popover: chip inside the popover */
+.calendar-chip-popover {
+  width: 100%;
+}
+
 /* ─── Empty State ─────────────────────────────────────────────────── */
 
 .calendar-empty-state {

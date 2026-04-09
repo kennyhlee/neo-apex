@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './ProgramCalendar.css';
@@ -39,9 +39,12 @@ function getWeekStart(date: Date): Date {
 
 /** Parses a string value to a Date, or returns null. */
 function parseDateValue(value: unknown): Date | null {
-  if (!value) return null;
-  const s = String(value);
-  const d = new Date(s);
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+  const d = new Date(value);
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -73,6 +76,12 @@ export default function ProgramWeekView({
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() =>
     getWeekStart(weekStart ?? new Date()),
   );
+
+  // Sync external weekStart prop to internal state
+  const externalWeekStart = weekStart;
+  useEffect(() => {
+    if (externalWeekStart) setCurrentWeekStart(getWeekStart(externalWeekStart));
+  }, [externalWeekStart]);
 
   // The 7 days of the current week (Mon–Sun)
   const weekDays = useMemo<Date[]>(() => {

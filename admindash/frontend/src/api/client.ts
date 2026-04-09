@@ -48,14 +48,15 @@ export async function archiveEntities(
   return resp.json();
 }
 
-export async function updateStudent(
+export async function updateEntity(
   tenantId: string,
+  entityType: string,
   entityId: string,
   baseData: Record<string, unknown>,
   customFields: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/${entityId}`,
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}/${entityId}`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -69,13 +70,14 @@ export async function updateStudent(
   return resp.json();
 }
 
-export async function createStudent(
+export async function createEntity(
   tenantId: string,
+  entityType: string,
   baseData: Record<string, unknown>,
   customFields: Record<string, unknown>,
 ): Promise<CreateEntityResponse> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/student`,
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -107,11 +109,12 @@ export async function extractStudentFromDocument(
   return resp.json();
 }
 
-export async function fetchNextStudentId(
+export async function fetchNextEntityId(
   tenantId: string,
+  entityType: string,
 ): Promise<NextIdResponse> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/next-id`,
+    `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}/next-id`,
     { headers: authHeaders() },
   );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

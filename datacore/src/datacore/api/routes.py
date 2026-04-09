@@ -14,11 +14,12 @@ from datacore.store import Store, derive_abbrev
 from datacore.query import QueryEngine, TableNotFoundError
 
 DUPLICATE_CHECK_THRESHOLD = float(
-    os.environ.get("DATACORE_DUPLICATE_CHECK_THRESHOLD", "0.75")
+    os.environ.get("DATACORE_DUPLICATE_CHECK_THRESHOLD", "0.80")
 )
 
 DEFAULT_ABBREVS = {
     "student": "ST",
+    "program": "PR",
 }
 
 

@@ -279,7 +279,7 @@ export default function ProgramMonthView({
                       })
                     }
                   >
-                    +{hiddenCount} more
+                    {t('program.calendarMore').replace('{count}', String(hiddenCount))}
                   </button>
                 )}
               </div>

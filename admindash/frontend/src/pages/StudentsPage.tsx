@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
-import { postQuery, archiveEntities, updateStudent } from '../api/client.ts';
+import { postQuery, archiveEntities, updateEntity } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
@@ -436,7 +436,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     setEditError(null);
     try {
       const entityId = String(editingEntity.entity_id);
-      await updateStudent(tenant, entityId, baseData, customFields);
+      await updateEntity(tenant, 'student', entityId, baseData, customFields);
       setEditingEntity(null);
       setSelectedIds(new Set());
       loadData(page, filters);

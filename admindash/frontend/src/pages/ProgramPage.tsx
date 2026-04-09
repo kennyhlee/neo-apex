@@ -10,7 +10,6 @@ import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
-// ProgramWeekView and ProgramMonthView will be created in Tasks 5 and 6
 import ProgramWeekView from '../components/ProgramWeekView.tsx';
 import ProgramMonthView from '../components/ProgramMonthView.tsx';
 import './ProgramPage.css';
@@ -486,7 +485,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               <button
                 className="programs-menu-item"
                 disabled={selectedIds.size === 0}
-                onClick={() => { setShowMenu(false); alert('Export coming soon'); }}
+                onClick={() => { setShowMenu(false); setShowComingSoon(true); }}
               >
                 Export Selected
               </button>
