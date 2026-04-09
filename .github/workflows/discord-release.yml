@@ -11,31 +11,41 @@ jobs:
       - name: Post to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_NAME: ${{ github.event.release.name || github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_PUBLISHED_AT: ${{ github.event.release.published_at }}
         run: |
           # Truncate body to 4000 chars (Discord embed limit is 4096)
-          BODY=$(echo '${{ toJSON(github.event.release.body) }}' | head -c 4000)
+          BODY=$(echo "$RELEASE_BODY" | head -c 4000)
 
           # Pick color based on prerelease
-          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+          if [ "$RELEASE_PRERELEASE" = "true" ]; then
             COLOR=16776960  # yellow
           else
             COLOR=7506394   # green
           fi
 
-          cat <<PAYLOAD > /tmp/discord.json
-          {
-            "embeds": [{
-              "title": "${{ github.event.release.name || github.event.release.tag_name }}",
-              "url": "${{ github.event.release.html_url }}",
-              "color": ${COLOR},
-              "description": ${BODY},
-              "footer": {
-                "text": "NeoApex • ${{ github.event.release.tag_name }}"
-              },
-              "timestamp": "${{ github.event.release.published_at }}"
-            }]
-          }
-          PAYLOAD
+          # Build JSON payload safely with jq
+          jq -n \
+            --arg title "$RELEASE_NAME" \
+            --arg url "$RELEASE_URL" \
+            --argjson color "$COLOR" \
+            --arg desc "$BODY" \
+            --arg footer "NeoApex • $RELEASE_TAG" \
+            --arg ts "$RELEASE_PUBLISHED_AT" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                color: $color,
+                description: $desc,
+                footer: { text: $footer },
+                timestamp: $ts
+              }]
+            }' > /tmp/discord.json
 
           curl -f -H "Content-Type: application/json" \
             -d @/tmp/discord.json \
