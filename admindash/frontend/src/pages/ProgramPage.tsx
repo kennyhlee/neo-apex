@@ -412,20 +412,8 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
     <div className="programs-page" ref={containerRef}>
       <h1>{t('program.title')}</h1>
 
-      <div className="programs-toolbar">
-        <button className="programs-toolbar-primary" onClick={handleOpenAddModal}>
-          {t('program.addProgram')}
-        </button>
-
-        <div className="programs-toolbar-spacer" />
-
-        {selectedIds.size > 0 && (
-          <span className="programs-selected-count">
-            {selectedIds.size} selected
-          </span>
-        )}
-
-        {/* View toggle */}
+      {/* View toggle — always visible */}
+      <div className="programs-view-toggle-bar">
         <div className="programs-view-toggle">
           <button
             className={activeView === 'list' ? 'programs-view-btn programs-view-btn-active' : 'programs-view-btn'}
@@ -445,64 +433,6 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
           >
             {t('program.viewMonth')}
           </button>
-        </div>
-
-        {/* Three-dot action menu */}
-        <div className="programs-menu-toggle" ref={menuRef}>
-          <button
-            className="programs-menu-btn"
-            onClick={() => setShowMenu((prev) => !prev)}
-            aria-label="More actions"
-          >
-            ⋮
-          </button>
-          {showMenu && (
-            <div className="programs-menu-popover">
-              <div className="programs-menu-section-label">Actions</div>
-              <button
-                className="programs-menu-item"
-                disabled={selectedIds.size === 0}
-                onClick={() => {
-                  setShowMenu(false);
-                  if (selectedIds.size === 1) {
-                    const entityId = [...selectedIds][0];
-                    const row = data.find((r) => String(r.entity_id) === entityId);
-                    if (row) setEditingEntity(row);
-                  } else {
-                    setShowComingSoon(true);
-                  }
-                }}
-              >
-                Edit Selected
-              </button>
-              <button
-                className="programs-menu-item programs-menu-item-danger"
-                disabled={selectedIds.size === 0}
-                onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
-              >
-                Delete Selected
-              </button>
-              <button
-                className="programs-menu-item"
-                disabled={selectedIds.size === 0}
-                onClick={() => { setShowMenu(false); setShowComingSoon(true); }}
-              >
-                Export Selected
-              </button>
-              <div className="programs-menu-divider" />
-              <div className="programs-menu-section-label">Columns</div>
-              {columns.map((col) => (
-                <label key={col.key} className="programs-menu-column-option">
-                  <input
-                    type="checkbox"
-                    checked={!prefs.hiddenColumns.includes(col.key)}
-                    onChange={() => toggleColumn(col.key)}
-                  />
-                  {col.i18nKey ? t(col.i18nKey) : col.label}
-                </label>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -608,6 +538,78 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               </div>
             ))}
           </FilterForm>
+
+          <div className="programs-toolbar">
+            <button className="programs-toolbar-primary" onClick={handleOpenAddModal}>
+              {t('program.addProgram')}
+            </button>
+
+            <div className="programs-toolbar-spacer" />
+
+            {selectedIds.size > 0 && (
+              <span className="programs-selected-count">
+                {selectedIds.size} selected
+              </span>
+            )}
+
+            {/* Three-dot action menu */}
+            <div className="programs-menu-toggle" ref={menuRef}>
+              <button
+                className="programs-menu-btn"
+                onClick={() => setShowMenu((prev) => !prev)}
+                aria-label="More actions"
+              >
+                ⋮
+              </button>
+              {showMenu && (
+                <div className="programs-menu-popover">
+                  <div className="programs-menu-section-label">Actions</div>
+                  <button
+                    className="programs-menu-item"
+                    disabled={selectedIds.size === 0}
+                    onClick={() => {
+                      setShowMenu(false);
+                      if (selectedIds.size === 1) {
+                        const entityId = [...selectedIds][0];
+                        const row = data.find((r) => String(r.entity_id) === entityId);
+                        if (row) setEditingEntity(row);
+                      } else {
+                        setShowComingSoon(true);
+                      }
+                    }}
+                  >
+                    Edit Selected
+                  </button>
+                  <button
+                    className="programs-menu-item programs-menu-item-danger"
+                    disabled={selectedIds.size === 0}
+                    onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
+                  >
+                    Delete Selected
+                  </button>
+                  <button
+                    className="programs-menu-item"
+                    disabled={selectedIds.size === 0}
+                    onClick={() => { setShowMenu(false); setShowComingSoon(true); }}
+                  >
+                    Export Selected
+                  </button>
+                  <div className="programs-menu-divider" />
+                  <div className="programs-menu-section-label">Columns</div>
+                  {columns.map((col) => (
+                    <label key={col.key} className="programs-menu-column-option">
+                      <input
+                        type="checkbox"
+                        checked={!prefs.hiddenColumns.includes(col.key)}
+                        onChange={() => toggleColumn(col.key)}
+                      />
+                      {col.i18nKey ? t(col.i18nKey) : col.label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           {error ? (
             <div className="programs-error">{error}</div>
