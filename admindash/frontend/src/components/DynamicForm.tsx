@@ -160,8 +160,7 @@ function renderField(
             ))}
           </div>
         );
-      }
-      {
+      } else {
         // Single-select: radio buttons
         // Legacy handling: array value → use first element
         const radioValue = Array.isArray(value)

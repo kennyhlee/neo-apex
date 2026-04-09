@@ -45,8 +45,7 @@ export default function FieldInput({ field, value, onChange, readOnly }: Props) 
             ))}
           </div>
         );
-      }
-      {
+      } else {
         // Single-select: radio buttons
         // Legacy handling: array value → use first element
         const radioValue = Array.isArray(value)
