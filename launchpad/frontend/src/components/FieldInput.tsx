@@ -20,22 +20,56 @@ export default function FieldInput({ field, value, onChange, readOnly }: Props) 
       );
     case "selection":
       if (field.multiple) {
-        const selected = Array.isArray(value) ? value as string[] : [];
+        // Multi-select: checkboxes
+        // Legacy handling: string value → treat as single-element array
+        const selected = Array.isArray(value)
+          ? value as string[]
+          : (typeof value === "string" && value ? [value] : []);
         return (
-          <select multiple value={selected} onChange={e => {
-            const opts = Array.from(e.target.selectedOptions, o => o.value);
-            onChange(opts);
-          }} disabled={readOnly} className="auth-input" style={{ minHeight: 80 }}>
-            {(field.options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {(field.options || []).map(opt => (
+              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt)}
+                  onChange={e => {
+                    const next = e.target.checked
+                      ? [...selected, opt]
+                      : selected.filter(s => s !== opt);
+                    onChange(next);
+                  }}
+                  disabled={readOnly}
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
         );
       }
-      return (
-        <select value={strVal} onChange={e => onChange(e.target.value)} disabled={readOnly} className="auth-input">
-          <option value="">Select...</option>
-          {(field.options || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
-        </select>
-      );
+      {
+        // Single-select: radio buttons
+        // Legacy handling: array value → use first element
+        const radioValue = Array.isArray(value)
+          ? (value[0] != null ? String(value[0]) : "")
+          : strVal;
+        return (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {(field.options || []).map(opt => (
+              <label key={opt} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                <input
+                  type="radio"
+                  name={field.name}
+                  value={opt}
+                  checked={radioValue === opt}
+                  onChange={() => onChange(opt)}
+                  disabled={readOnly}
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
+        );
+      }
     case "number":
       return <input type="number" value={strVal} onChange={e => onChange(e.target.value ? Number(e.target.value) : "")} readOnly={readOnly} className="auth-input" />;
     case "date":
