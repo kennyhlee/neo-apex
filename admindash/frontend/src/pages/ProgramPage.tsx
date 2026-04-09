@@ -204,6 +204,9 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
+  // View-only detail modal (from calendar click)
+  const [viewingEntity, setViewingEntity] = useState<DataRow | null>(null);
+
   // View toggle
   const [activeView, setActiveView] = useState<'list' | 'week' | 'month'>('list');
   const [weekStartDate, setWeekStartDate] = useState<Date | undefined>(undefined);
@@ -476,6 +479,46 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
         </div>
       )}
 
+      {/* View-only program detail (from calendar click) */}
+      {viewingEntity && model && (
+        <div className="programs-edit-overlay" onClick={() => setViewingEntity(null)}>
+          <div className="programs-edit-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="programs-edit-dialog-header">
+              <h3>{String(viewingEntity.name ?? viewingEntity.program_id ?? 'Program')}</h3>
+              <span className="programs-edit-dialog-subtitle">
+                {String(viewingEntity.program_id ?? '')}
+              </span>
+            </div>
+            <div className="programs-edit-dialog-body">
+              <div className="programs-detail-grid">
+                {[...model.base_fields, ...model.custom_fields].map((field) => {
+                  const raw = viewingEntity[field.name];
+                  let display = '-';
+                  if (raw != null && raw !== '') {
+                    if (field.type === 'bool') {
+                      display = raw ? 'Yes' : 'No';
+                    } else if (field.type === 'selection') {
+                      display = formatSelectionValue(raw);
+                    } else {
+                      display = String(raw);
+                    }
+                  }
+                  return (
+                    <div className="programs-detail-field" key={field.name}>
+                      <div className="programs-detail-label">{formatFieldLabel(field.name)}</div>
+                      <div className="programs-detail-value">{display}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="programs-confirm-actions" style={{ marginTop: '1rem' }}>
+                <button onClick={() => setViewingEntity(null)}>{t('common.close')}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Coming soon dialog for batch edit */}
       {showComingSoon && (
         <div className="programs-confirm-overlay" onClick={() => setShowComingSoon(false)}>
@@ -640,7 +683,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
         <ProgramWeekView
           programs={data}
           model={model}
-          onEditProgram={setEditingEntity}
+          onEditProgram={setViewingEntity}
           weekStart={weekStartDate}
         />
       )}
@@ -649,7 +692,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
         <ProgramMonthView
           programs={data}
           model={model}
-          onEditProgram={setEditingEntity}
+          onEditProgram={setViewingEntity}
           onSwitchToWeek={(date: Date) => {
             setActiveView('week');
             setWeekStartDate(date);
