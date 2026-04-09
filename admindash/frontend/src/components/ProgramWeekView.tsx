@@ -67,6 +67,31 @@ function getTintForProgram(prog: DataRow): { bg: string; text: string } {
   return TINT_PAIRS[hash % TINT_PAIRS.length];
 }
 
+/** Day name lookup: JS getDay() (0=Sun) → day name strings. */
+const JS_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * Parse a days_of_week field value into a Set of JS day indices (0=Sun..6=Sat).
+ * Handles JSON arrays like '["Monday","Tuesday"]', comma-separated, or single values.
+ * Returns null if no valid days found (meaning: show on all days).
+ */
+function parseDaysOfWeek(value: unknown): Set<number> | null {
+  if (value == null || value === '') return null;
+  let dayNames: string[] = [];
+  const s = String(value).trim();
+  if (s.startsWith('[')) {
+    try { dayNames = JSON.parse(s); } catch { dayNames = [s]; }
+  } else {
+    dayNames = s.split(',').map((d) => d.trim());
+  }
+  const indices = new Set<number>();
+  for (const name of dayNames) {
+    const idx = JS_DAY_NAMES.findIndex((d) => d.toLowerCase() === name.toLowerCase());
+    if (idx >= 0) indices.add(idx);
+  }
+  return indices.size > 0 ? indices : null;
+}
+
 /** Returns true if date falls within [start, end] (inclusive, day-level). */
 function isInRange(date: Date, start: Date, end: Date): boolean {
   const d = date.getTime();
@@ -159,6 +184,10 @@ export default function ProgramWeekView({
       const program = programs[i];
       const startDate = parseDateValue(program[startField.name]);
       if (!startDate) continue;
+
+      // Check days_of_week constraint
+      const allowedDays = parseDaysOfWeek(program.days_of_week);
+      if (allowedDays && !allowedDays.has(day.getDay())) continue;
 
       if (endField) {
         const endDate = parseDateValue(program[endField.name]);

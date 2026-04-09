@@ -92,6 +92,31 @@ function formatMonthLabel(year: number, month: number): string {
   return new Date(year, month, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
 }
 
+/** Day name lookup: JS getDay() (0=Sun) → day name strings. */
+const JS_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * Parse a days_of_week field value into a Set of JS day indices (0=Sun..6=Sat).
+ * Handles JSON arrays like '["Monday","Tuesday"]', comma-separated, or single values.
+ * Returns null if no valid days found (meaning: show on all days).
+ */
+function parseDaysOfWeek(value: unknown): Set<number> | null {
+  if (value == null || value === '') return null;
+  let dayNames: string[] = [];
+  const s = String(value).trim();
+  if (s.startsWith('[')) {
+    try { dayNames = JSON.parse(s); } catch { dayNames = [s]; }
+  } else {
+    dayNames = s.split(',').map((d) => d.trim());
+  }
+  const indices = new Set<number>();
+  for (const name of dayNames) {
+    const idx = JS_DAY_NAMES.findIndex((d) => d.toLowerCase() === name.toLowerCase());
+    if (idx >= 0) indices.add(idx);
+  }
+  return indices.size > 0 ? indices : null;
+}
+
 /** Returns true if two dates represent the same calendar day. */
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -173,6 +198,11 @@ export default function ProgramMonthView({
       return programs.filter((prog) => {
         const start = parseLocalDate(prog[startField.name]);
         if (!start) return false;
+
+        // Check days_of_week constraint
+        const allowedDays = parseDaysOfWeek(prog.days_of_week);
+        if (allowedDays && !allowedDays.has(cell.getDay())) return false;
+
         const end = endField ? parseLocalDate(prog[endField.name]) : null;
         return isDateInRange(cell, start, end);
       });
