@@ -101,12 +101,14 @@ class Program(BaseEntity):
     grade_levels: List[str] = Field(
         default_factory=lambda: [
             "TK", "Kinder", "1st", "2nd", "3rd", "4th", "5th",
-        ]
+        ],
+        json_schema_extra={"multiple": True},
     )
     days_of_week: List[str] = Field(
         default_factory=lambda: [
             "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
-        ]
+        ],
+        json_schema_extra={"multiple": True},
     )
     start_date: Optional[_dt.date] = None
     end_date: Optional[_dt.date] = None
