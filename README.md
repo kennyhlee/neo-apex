@@ -15,6 +15,32 @@ Multi-service education/enrollment management platform.
 
 **Port convention:** Each service owns a 100-port block in the `55xx-58xx` range (avoids Chrome-blocked ports and common macOS/dev tool conflicts). Frontend = `X00`, backend = `X10`. Future services continue the pattern: `59xx`, `60xx`, etc.
 
+## Architecture
+
+### Data Model Lifecycle
+
+Entity models (Student, Program, Family, etc.) are defined as typed Python classes in Papermite (`papermite/backend/app/models/domain.py`). These Pydantic models are only used during **data ingestion** — when Papermite extracts structured data from uploaded documents, it validates and transforms the data against these typed models.
+
+Once ingested, Papermite pushes the data and model definitions to DataCore as generic JSON. From that point forward:
+
+- **DataCore** stores entity data and model definitions as versioned JSON blobs in LanceDB. It does not import or enforce Python model classes — storage is schema-flexible.
+- **Model definitions** are stored per-tenant with version history (`{tenant_id}_models` table). Each version tracks the entity types, base fields, and custom fields as a JSON structure.
+- **All downstream services** (AdminDash, LaunchPad) consume entity data as JSON from DataCore's query API. They do not reference the Python model definitions.
+
+```
+Documents → [Papermite] → Typed Pydantic models (validation & extraction)
+                              ↓
+                         Generic JSON
+                              ↓
+                        [DataCore] → Versioned JSON storage (LanceDB)
+                              ↓
+                   JSON API responses
+                      ↓           ↓
+               [AdminDash]   [LaunchPad]
+```
+
+This design means the typed Python models are an ingestion-time concern only. The rest of the platform operates on DataCore's versioned JSON schema, which supports per-tenant customization and field evolution without redeployment.
+
 ## Configuration
 
 ### services.json

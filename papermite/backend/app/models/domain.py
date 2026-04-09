@@ -87,7 +87,33 @@ class Program(BaseEntity):
     entity_type: str = "PROGRAM"
     program_id: str = ""
     name: str = ""
+    description: Optional[str] = None
     school_year: str = ""
+    status: List[str] = Field(
+        default_factory=lambda: [
+            "Active",
+            "Upcoming",
+            "Completed",
+            "Cancelled",
+        ]
+    )
+    capacity: Optional[int] = None
+    grade_levels: List[str] = Field(
+        default_factory=lambda: [
+            "TK", "Kinder", "1st", "2nd", "3rd", "4th", "5th",
+        ]
+    )
+    days_of_week: List[str] = Field(
+        default_factory=lambda: [
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+        ]
+    )
+    start_date: Optional[_dt.date] = None
+    end_date: Optional[_dt.date] = None
+    start_time: Optional[_dt.time] = None
+    end_time: Optional[_dt.time] = None
+    location: Optional[str] = None
+    fee: Optional[float] = None
 
 
 class Enrollment(BaseEntity):
