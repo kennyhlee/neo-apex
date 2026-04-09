@@ -80,9 +80,12 @@ def register_routes(app: FastAPI, store: Store) -> None:
         status = 200 if existing else 201
         return JSONResponse(status_code=status, content=result)
 
-    @app.get("/api/entities/{tenant_id}/student/next-id")
-    def next_student_id(tenant_id: str):
-        """Preview the next student ID without incrementing the counter."""
+    @app.get("/api/entities/{tenant_id}/{entity_type}/next-id")
+    def next_entity_id(tenant_id: str, entity_type: str):
+        """Preview the next auto-generated ID for an entity type."""
+        if entity_type not in DEFAULT_ABBREVS:
+            raise HTTPException(status_code=400, detail=f"Auto-ID not supported for '{entity_type}'")
+
         tenant = store.get_active_entity(tenant_id, "tenant", tenant_id)
         if tenant is None:
             raise HTTPException(status_code=404, detail="Tenant not set up")
@@ -91,13 +94,13 @@ def register_routes(app: FastAPI, store: Store) -> None:
         year = str(datetime.now(timezone.utc).year)
         yy = year[-2:]
 
-        seq_record = store.get_sequence(tenant_id, "student", year)
-        entity_abbrev = seq_record["entity_abbrev"] or DEFAULT_ABBREVS.get("student", "ST")
+        seq_record = store.get_sequence(tenant_id, entity_type, year)
+        entity_abbrev = seq_record["entity_abbrev"] or DEFAULT_ABBREVS.get(entity_type, entity_type[:2])
         prefix = f"{abbrev}-{entity_abbrev}{yy}"
 
         # Use the higher of sequence counter and actual max ID in data
         counter_seq = seq_record["counter"]
-        data_seq = _max_entity_seq(store, tenant_id, "student", prefix)
+        data_seq = _max_entity_seq(store, tenant_id, entity_type, prefix)
         next_seq = max(counter_seq, data_seq) + 1
         next_id = f"{prefix}{next_seq:04d}"
 
