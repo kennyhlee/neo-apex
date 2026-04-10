@@ -1,16 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
+import CalendarChip from './CalendarChip.tsx';
 import './ProgramCalendar.css';
 
 type DataRow = Record<string, unknown>;
-
-const TINT_PAIRS = [
-  { bg: 'var(--tint-blue-bg)', text: 'var(--tint-blue-text)' },
-  { bg: 'var(--tint-green-bg)', text: 'var(--tint-green-text)' },
-  { bg: 'var(--tint-amber-bg)', text: 'var(--tint-amber-text)' },
-  { bg: 'var(--tint-pink-bg)', text: 'var(--tint-pink-text)' },
-];
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -55,16 +49,6 @@ function isSameDay(a: Date, b: Date): boolean {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
-}
-
-/** Stable color assignment based on entity_id or name. */
-function getTintForProgram(prog: DataRow): { bg: string; text: string } {
-  const key = String(prog.entity_id ?? prog.name ?? '');
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) {
-    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-  }
-  return TINT_PAIRS[hash % TINT_PAIRS.length];
 }
 
 /** Day name lookup: JS getDay() (0=Sun) → day name strings. */
@@ -235,21 +219,13 @@ export default function ProgramWeekView({
                 <span className="calendar-week-day-num">{day.getDate()}</span>
               </div>
               <div className="calendar-week-body">
-                {programsOnDay.map(({ program, index }) => {
-                  const tint = getTintForProgram(program);
-                  const label = String(program.name ?? program.program_id ?? '').trim() || '(unnamed)';
-                  return (
-                    <button
-                      key={String(program.entity_id ?? index)}
-                      className="calendar-chip"
-                      style={{ backgroundColor: tint.bg, color: tint.text }}
-                      onClick={() => onEditProgram(program)}
-                      title={label}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+                {programsOnDay.map(({ program, index }) => (
+                  <CalendarChip
+                    key={String(program.entity_id ?? index)}
+                    program={program}
+                    onEdit={onEditProgram}
+                  />
+                ))}
               </div>
             </div>
           );

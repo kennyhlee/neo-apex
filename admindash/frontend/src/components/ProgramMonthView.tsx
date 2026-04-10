@@ -1,16 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
+import CalendarChip from './CalendarChip.tsx';
 import './ProgramCalendar.css';
 
 type DataRow = Record<string, unknown>;
-
-const TINT_PAIRS = [
-  { bg: 'var(--tint-blue-bg)', text: 'var(--tint-blue-text)' },
-  { bg: 'var(--tint-green-bg)', text: 'var(--tint-green-text)' },
-  { bg: 'var(--tint-amber-bg)', text: 'var(--tint-amber-text)' },
-  { bg: 'var(--tint-pink-bg)', text: 'var(--tint-pink-text)' },
-];
 
 const MAX_CHIPS = 3;
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -209,17 +203,6 @@ export default function ProgramMonthView({
     });
   }, [grid, programs, startField, endField]);
 
-  // Color assignment: stable per program entity_id or name
-  function getTintForProgram(prog: DataRow, index: number): { bg: string; text: string } {
-    // Use a stable hash based on entity_id or name
-    const key = String(prog.entity_id ?? prog.name ?? index);
-    let hash = 0;
-    for (let i = 0; i < key.length; i++) {
-      hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-    }
-    return TINT_PAIRS[hash % TINT_PAIRS.length];
-  }
-
   // Empty state: no date fields in model
   if (!startField) {
     return (
@@ -281,21 +264,13 @@ export default function ProgramMonthView({
 
               {/* Program chips */}
               <div className="calendar-month-cell-chips">
-                {visiblePrograms.map((prog, chipIdx) => {
-                  const tint = getTintForProgram(prog, chipIdx);
-                  const label = String(prog.name ?? prog.program_id ?? 'Program');
-                  return (
-                    <button
-                      key={String(prog.entity_id ?? chipIdx)}
-                      className="calendar-chip"
-                      style={{ backgroundColor: tint.bg, color: tint.text }}
-                      onClick={() => onEditProgram(prog)}
-                      title={label}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+                {visiblePrograms.map((prog, chipIdx) => (
+                  <CalendarChip
+                    key={String(prog.entity_id ?? chipIdx)}
+                    program={prog}
+                    onEdit={onEditProgram}
+                  />
+                ))}
 
                 {/* "+N more" button */}
                 {hiddenCount > 0 && (
@@ -330,25 +305,18 @@ export default function ProgramMonthView({
                     </button>
                   </div>
                   <div className="calendar-month-popover-list">
-                    {morePopover.programs.map((prog, progIdx) => {
-                      const tint = getTintForProgram(prog, progIdx);
-                      const label = String(prog.name ?? prog.program_id ?? 'Program');
-                      return (
-                        <button
-                          key={String(prog.entity_id ?? progIdx)}
-                          className="calendar-chip calendar-chip-popover"
-                          style={{ backgroundColor: tint.bg, color: tint.text }}
-                          onClick={() => {
-                            setMorePopover(null);
-                            onSwitchToWeek(cell);
-                            onEditProgram(prog);
-                          }}
-                          title={label}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
+                    {morePopover.programs.map((prog, progIdx) => (
+                      <CalendarChip
+                        key={String(prog.entity_id ?? progIdx)}
+                        program={prog}
+                        onEdit={(p) => {
+                          setMorePopover(null);
+                          onSwitchToWeek(cell);
+                          onEditProgram(p);
+                        }}
+                        extraClassName="calendar-chip-popover"
+                      />
+                    ))}
                   </div>
                 </div>
               )}

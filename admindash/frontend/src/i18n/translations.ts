@@ -144,6 +144,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'program.calendarNoDateFields': 'No date fields found in the program model. Add date fields via Papermite to use the calendar view.',
     'program.calendarToday': 'Today',
     'program.calendarMore': '+{count} more',
+    'program.calendarTooltipWhen': 'When',
+    'program.calendarTooltipWhere': 'Where',
+    'program.calendarTooltipStatus': 'Status',
+    'program.calendarTooltipDays': 'Days',
 
     // Lead
     'lead.title': 'Lead Management',
@@ -332,6 +336,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'program.calendarNoDateFields': '\u8bfe\u7a0b\u6a21\u578b\u4e2d\u672a\u627e\u5230\u65e5\u671f\u5b57\u6bb5\u3002\u8bf7\u901a\u8fc7 Papermite \u6dfb\u52a0\u65e5\u671f\u5b57\u6bb5\u4ee5\u4f7f\u7528\u65e5\u5386\u89c6\u56fe\u3002',
     'program.calendarToday': '\u4eca\u5929',
     'program.calendarMore': '+{count} \u66f4\u591a',
+    'program.calendarTooltipWhen': '\u65f6\u95f4',
+    'program.calendarTooltipWhere': '\u5730\u70b9',
+    'program.calendarTooltipStatus': '\u72b6\u6001',
+    'program.calendarTooltipDays': '\u661f\u671f',
 
     // Lead
     'lead.title': '\u5ba2\u6237\u7ba1\u7406',

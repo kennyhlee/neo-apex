@@ -112,12 +112,29 @@
   border-radius: 4px;
   cursor: pointer;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .calendar-chip:hover {
   opacity: 0.8;
+}
+
+.calendar-chip-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-chip-time {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 400;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
 }
 
 /* ─── Month View ──────────────────────────────────────────────────── */
@@ -329,6 +346,54 @@
 /* calendar-chip-popover: chip inside the popover */
 .calendar-chip-popover {
   width: 100%;
+}
+
+/* ─── Chip Tooltip ───────────────────────────────────────────────── */
+
+.calendar-chip-tooltip {
+  position: absolute;
+  z-index: 200;
+  max-width: 260px;
+  min-width: 180px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated);
+  padding: 0.55rem 0.7rem;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.calendar-chip-tooltip-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.35rem;
+  word-break: break-word;
+}
+
+.calendar-chip-tooltip-row {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.1rem 0;
+}
+
+.calendar-chip-tooltip-label {
+  flex: 0 0 auto;
+  min-width: 42px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  padding-top: 0.1rem;
+}
+
+.calendar-chip-tooltip-value {
+  flex: 1 1 auto;
+  color: var(--text-secondary);
+  word-break: break-word;
 }
 
 /* ─── Empty State ─────────────────────────────────────────────────── */
