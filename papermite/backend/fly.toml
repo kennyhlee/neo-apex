@@ -1,0 +1,43 @@
+# Fly.io configuration for papermite-api
+#
+# Public customer-facing service. Fronted by Cloudflare at
+# https://api.papermite.floatify.com. Cloudflare IP allowlist middleware
+# enforces origin protection.
+#
+# Papermite does document extraction (poppler + libmagic via Dockerfile),
+# so memory is higher than the other backends.
+#
+# Production env vars (set via `flyctl secrets set`):
+#   - ENVIRONMENT=production
+#   - CORS_ALLOWED_ORIGINS=https://papermite.floatify.com,https://admin.floatify.com
+#   - PAPERMITE_DATACORE_AUTH_URL=http://datacore.internal:5800/auth
+#   - PAPERMITE_DATACORE_API_URL=http://datacore.internal:5800/api
+#   - VOYAGE_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY (whatever the AI pipeline needs)
+
+app = "papermite-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "backend/Dockerfile"
+
+[env]
+  PORT = "5710"
+
+[http_service]
+  internal_port = 5710
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1gb"
