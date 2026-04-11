@@ -207,27 +207,27 @@ start_service() {
     datacore)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/datacore"
-      uv run uvicorn datacore.api.server:app --host 127.0.0.1 --port "$port" > "$log_file" 2>&1 &
+      TRUST_ALL_IPS=1 uv run uvicorn datacore.api.server:app --host 127.0.0.1 --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
     launchpad-backend)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/launchpad/backend"
       source "$SCRIPT_DIR/launchpad/.venv/bin/activate" 2>/dev/null || true
-      uvicorn app.main:app --port "$port" > "$log_file" 2>&1 &
+      TRUST_ALL_IPS=1 uvicorn app.main:app --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
     papermite-backend)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/papermite/backend"
       source "$SCRIPT_DIR/papermite/.venv/bin/activate" 2>/dev/null || true
-      uvicorn app.main:app --port "$port" > "$log_file" 2>&1 &
+      TRUST_ALL_IPS=1 uvicorn app.main:app --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
     admindash-backend)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/admindash"
-      uv run uvicorn app.main:app --app-dir backend --port "$port" > "$log_file" 2>&1 &
+      TRUST_ALL_IPS=1 uv run uvicorn app.main:app --app-dir backend --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
     launchpad-frontend)
