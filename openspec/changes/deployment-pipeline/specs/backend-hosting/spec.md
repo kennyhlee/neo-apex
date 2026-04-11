@@ -9,7 +9,7 @@ The system SHALL host each of `datacore`, `launchpad` backend, `papermite` backe
 - **THEN** the `datacore` Fly.io app continues running its previous version without any restart or configuration change
 
 #### Scenario: Admindash backend deploy does not restart other backends
-- **WHEN** the release pipeline deploys `admindash-backend` to Fly.io
+- **WHEN** the release pipeline deploys `admindash-api` to Fly.io
 - **THEN** the `datacore`, `launchpad-api`, and `papermite-api` Fly.io apps continue running their previous versions without any restart or configuration change
 
 #### Scenario: Each app has its own fly.toml
@@ -29,18 +29,18 @@ The `datacore` Fly.io app SHALL NOT have any public HTTP service defined in its 
 - **THEN** the request reaches the `datacore` app over Fly's private WireGuard network and receives a response
 
 #### Scenario: Admindash backend reaches DataCore internally
-- **WHEN** the `admindash-backend` Fly.io app makes an HTTP request to `http://datacore.internal:5800/auth/me`
+- **WHEN** the `admindash-api` Fly.io app makes an HTTP request to `http://datacore.internal:5800/auth/me`
 - **THEN** the request reaches the `datacore` app over Fly's private WireGuard network and receives a response
 
 ### Requirement: Public backends only accept traffic from Cloudflare
 
-The `launchpad-api`, `papermite-api`, and `admindash-backend` Fly.io apps SHALL reject any HTTP request whose source IP is not within the current Cloudflare published IP ranges. Rejected requests MUST return HTTP 403.
+The `launchpad-api`, `papermite-api`, and `admindash-api` Fly.io apps SHALL reject any HTTP request whose source IP is not within the current Cloudflare published IP ranges. Rejected requests MUST return HTTP 403.
 
 #### Scenario: Cloudflare-proxied request to launchpad-api succeeds
 - **WHEN** a client makes a request to `https://api.launchpad.floatify.com/health` via Cloudflare
 - **THEN** Cloudflare forwards the request to the Fly.io origin, the origin sees a Cloudflare source IP, and the app returns a normal response
 
-#### Scenario: Cloudflare-proxied request to admindash-backend succeeds
+#### Scenario: Cloudflare-proxied request to admindash-api succeeds
 - **WHEN** a client makes a request to `https://api.admin.floatify.com/api/health` via Cloudflare
 - **THEN** Cloudflare forwards the request to the Fly.io origin, the origin sees a Cloudflare source IP, and the app returns a normal response
 
@@ -78,14 +78,14 @@ The `datacore` Fly.io app SHALL have a persistent volume mounted at the LanceDB 
 
 ### Requirement: Backends use production service URLs via environment variables
 
-In production, each backend SHALL resolve sibling service URLs from environment variables set in its Fly.io app secrets, not from `services.json` defaults. `launchpad`, `papermite`, and `admindash` backends MUST reach `datacore` via `datacore.internal` (private network) and MUST NOT reach `datacore` via any public URL. Similarly, `admindash-backend` MUST reach `papermite-api` via the appropriate internal hostname (`papermite-api.internal` if available, or otherwise the same private network mechanism) and MUST NOT call Papermite via its public URL.
+In production, each backend SHALL resolve sibling service URLs from environment variables set in its Fly.io app secrets, not from `services.json` defaults. `launchpad`, `papermite`, and `admindash` backends MUST reach `datacore` via `datacore.internal` (private network) and MUST NOT reach `datacore` via any public URL. Similarly, `admindash-api` MUST reach `papermite-api` via the appropriate internal hostname (`papermite-api.internal` if available, or otherwise the same private network mechanism) and MUST NOT call Papermite via its public URL.
 
 #### Scenario: Launchpad reaches DataCore via internal DNS
 - **WHEN** the `launchpad-api` app starts in production
 - **THEN** its effective DataCore URL is `http://datacore.internal:5800` (or equivalent, as set in its Fly secrets)
 
 #### Scenario: Admindash backend reaches DataCore via internal DNS
-- **WHEN** the `admindash-backend` app starts in production
+- **WHEN** the `admindash-api` app starts in production
 - **THEN** its effective DataCore URL is `http://datacore.internal:5800` (or equivalent, as set in its Fly secrets)
 
 #### Scenario: services.json fallback is not used in production

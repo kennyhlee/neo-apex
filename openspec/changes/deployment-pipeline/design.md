@@ -14,11 +14,11 @@ This change depends on the parallel `admindash-backend-api` change being impleme
 
 **Goals:**
 
-- Each module can be deployed independently on its own release cadence — a new `papermite` release must never require redeploying `datacore`, `launchpad`, `admindash`, or `admindash-backend`
+- Each module can be deployed independently on its own release cadence — a new `papermite` release must never require redeploying `datacore`, `launchpad`, `admindash`, or `admindash-api`
 - Deploys are triggered by a single, low-ambiguity action (publishing a GitHub Release with a module-prefixed tag) with a manual approval gate before anything ships
 - Production is publicly accessible over HTTPS on `floatify.com` subdomains with TLS managed by the hosting platform (no certbot, no renewal scripts)
 - The DataCore service, which holds all tenant data and mints auth tokens, is not reachable from the public internet at all
-- All four backends (`datacore`, `launchpad-api`, `papermite-api`, `admindash-backend`) are deployed as Fly.io apps; the three public ones (`launchpad-api`, `papermite-api`, `admindash-backend`) are reachable only via Cloudflare's IP ranges so the WAF cannot be bypassed
+- All four backends (`datacore`, `launchpad-api`, `papermite-api`, `admindash-api`) are deployed as Fly.io apps; the three public ones (`launchpad-api`, `papermite-api`, `admindash-api`) are reachable only via Cloudflare's IP ranges so the WAF cannot be bypassed
 - Admindash is a public customer-facing product surface — school administrators must be able to log in from any browser, anywhere, with their school-issued credentials, the same way customers reach `launchpad.floatify.com` or `papermite.floatify.com`
 - Secrets scoped per app and per environment so that any single leaked token has bounded blast radius
 - Monthly cost stays under ~$30 for a 2-person team
@@ -42,7 +42,7 @@ This change depends on the parallel `admindash-backend-api` change being impleme
 
 ### Decision 1: Fly.io for backends, Cloudflare Pages for frontends
 
-**Choice:** Host the four Python FastAPI backends (`datacore`, `launchpad-api`, `papermite-api`, `admindash-backend`) on Fly.io, one app per service. Host the three React frontends on Cloudflare Pages, one project per frontend. Use Cloudflare DNS (already in place for `floatify.com`) to route traffic.
+**Choice:** Host the four Python FastAPI backends (`datacore`, `launchpad-api`, `papermite-api`, `admindash-api`) on Fly.io, one app per service. Host the three React frontends on Cloudflare Pages, one project per frontend. Use Cloudflare DNS (already in place for `floatify.com`) to route traffic.
 
 **Alternatives considered:**
 
@@ -56,14 +56,14 @@ This change depends on the parallel `admindash-backend-api` change being impleme
 
 ### Decision 2: DataCore on Fly's private network only
 
-**Choice:** Configure the `datacore` Fly.io app with no public HTTP service. It is reachable only via Fly's internal `datacore.internal` DNS from sibling Fly apps in the same organization. `launchpad-api`, `papermite-api`, and `admindash-backend` are all configured with `DATACORE_URL=http://datacore.internal:5800` (or the per-service equivalent env var) in production.
+**Choice:** Configure the `datacore` Fly.io app with no public HTTP service. It is reachable only via Fly's internal `datacore.internal` DNS from sibling Fly apps in the same organization. `launchpad-api`, `papermite-api`, and `admindash-api` are all configured with `DATACORE_URL=http://datacore.internal:5800` (or the per-service equivalent env var) in production.
 
 **Alternatives considered:**
 
 - **Public DataCore behind Cloudflare + WAF rules** — adds a WAF layer but still exposes the auth/storage origin to credential stuffing, zero-day scanning, and DDoS. A WAF is defense in depth, not a substitute for network isolation.
 - **Cloudflare Tunnel terminating at DataCore** — airtight, but adds a `cloudflared` sidecar to maintain inside the container and complicates intra-Fly routing for sibling backends.
 
-**Rationale:** DataCore holds every JWT secret and every tenant's data. The only callers that legitimately need to reach it are the three sibling backends running in the same Fly org. Making it unreachable from the public internet eliminates an entire category of risk (credential stuffing, API fuzzing, zero-day scanners) for zero architectural cost. The admindash frontend, which historically called DataCore directly from the browser, no longer does so once `admindash-backend-api` lands — admindash now talks only to `admindash-backend`, which talks to `datacore.internal`. This decision is safe to make because the prerequisite frontend retargeting is the responsibility of the parallel `admindash-backend-api` change.
+**Rationale:** DataCore holds every JWT secret and every tenant's data. The only callers that legitimately need to reach it are the three sibling backends running in the same Fly org. Making it unreachable from the public internet eliminates an entire category of risk (credential stuffing, API fuzzing, zero-day scanners) for zero architectural cost. The admindash frontend, which historically called DataCore directly from the browser, no longer does so once `admindash-backend-api` lands — admindash now talks only to `admindash-api`, which talks to `datacore.internal`. This decision is safe to make because the prerequisite frontend retargeting is the responsibility of the parallel `admindash-backend-api` change.
 
 ### Decision 3: Release trigger = GitHub Release with module-prefixed tag
 
@@ -80,7 +80,7 @@ This change depends on the parallel `admindash-backend-api` change being impleme
 
 ### Decision 4: Per-app scoped Fly.io deploy tokens, stored as per-module GitHub secrets
 
-**Choice:** Generate four separate Fly.io deploy tokens (`flyctl tokens create deploy -a datacore`, `-a launchpad-api`, `-a papermite-api`, `-a admindash-backend`) and store them as `FLY_API_TOKEN_DATACORE`, `FLY_API_TOKEN_LAUNCHPAD`, `FLY_API_TOKEN_PAPERMITE`, `FLY_API_TOKEN_ADMINDASH` in GitHub repo secrets. The per-module deploy job references only the matching token.
+**Choice:** Generate four separate Fly.io deploy tokens (`flyctl tokens create deploy -a datacore`, `-a launchpad-api`, `-a papermite-api`, `-a admindash-api`) and store them as `FLY_API_TOKEN_DATACORE`, `FLY_API_TOKEN_LAUNCHPAD`, `FLY_API_TOKEN_PAPERMITE`, `FLY_API_TOKEN_ADMINDASH` in GitHub repo secrets. The per-module deploy job references only the matching token.
 
 **Alternatives considered:**
 
@@ -102,15 +102,15 @@ This change depends on the parallel `admindash-backend-api` change being impleme
 
 ### Decision 6: Admindash is a public customer-facing surface, NOT behind Cloudflare Access
 
-**Choice:** `admin.floatify.com` (the admindash frontend) and `api.admin.floatify.com` (the new admindash-backend) are deployed as public surfaces on the same footing as `launchpad.floatify.com` / `api.launchpad.floatify.com` and `papermite.floatify.com` / `api.papermite.floatify.com`. Authentication is the standard DataCore JWT flow proxied through `admindash-backend` (per the `admindash-backend-api` change). There is no Cloudflare Access policy in front of admindash.
+**Choice:** `admin.floatify.com` (the admindash frontend) and `api.admin.floatify.com` (the new admindash-api) are deployed as public surfaces on the same footing as `launchpad.floatify.com` / `api.launchpad.floatify.com` and `papermite.floatify.com` / `api.papermite.floatify.com`. Authentication is the standard DataCore JWT flow proxied through `admindash-api` (per the `admindash-backend-api` change). There is no Cloudflare Access policy in front of admindash.
 
 **Why this is a reversal of an earlier decision:** An earlier draft of this design proposed putting Cloudflare Access in front of `admin.floatify.com`. That was based on the assumption that admindash is an internal Floatify ops tool used by 1–2 employees. During review the user clarified that admindash is the **school operations product** used by school administrator customers — it is the primary interface that school staff at every Floatify-customer school use to manage their students, programs, and enrollment. It is customer-facing software, not internal tooling. Cloudflare Access SSO requires every user to be in a Floatify-controlled identity provider allowlist (Google Workspace or GitHub org), which does not fit a multi-tenant customer-facing product where each school's admin signs in with their school-issued credentials. The Cloudflare Access decision was therefore removed.
 
 **Alternatives considered (and rejected):**
 
 - **Cloudflare Access with per-tenant SSO providers** — technically possible but operationally a nightmare; every customer school would need to be onboarded into the Cloudflare Access policy, and the school's admin login flow would diverge from launchpad and papermite.
-- **No perimeter protection at all** — what we're going with. The standard DataCore JWT auth, the same Cloudflare IP allowlist on `admindash-backend` that we use on the other public backends, strict CORS, strict CSP, and rate limiting are the layers. This matches how `launchpad-api` and `papermite-api` are protected.
-- **Defer admindash deployment entirely until a separate "admin RBAC + audit" change lands** — would push the deployment-pipeline timeline back significantly. The phase 1 admindash-backend (the proxy from `admindash-backend-api`) is enough to deploy securely; richer RBAC and audit can land in subsequent changes without changing the deployment topology.
+- **No perimeter protection at all** — what we're going with. The standard DataCore JWT auth, the same Cloudflare IP allowlist on `admindash-api` that we use on the other public backends, strict CORS, strict CSP, and rate limiting are the layers. This matches how `launchpad-api` and `papermite-api` are protected.
+- **Defer admindash deployment entirely until a separate "admin RBAC + audit" change lands** — would push the deployment-pipeline timeline back significantly. The phase 1 admindash-api (the proxy from `admindash-backend-api`) is enough to deploy securely; richer RBAC and audit can land in subsequent changes without changing the deployment topology.
 
 **Rationale:** Customer-facing products cannot be gated by employee-SSO. Treating admindash like launchpad and papermite (public, JWT-authenticated, Cloudflare-fronted, strict CORS/CSP, IP-allowlisted backend origin) is consistent with the rest of the customer-facing surface and is the only correct posture given the actual user base.
 
@@ -157,7 +157,7 @@ This change depends on the parallel `admindash-backend-api` change being impleme
 
 ### Decision 11: CORS fail-closed in production
 
-**Choice:** Every backend (`datacore`, `launchpad-api`, `papermite-api`, `admindash-backend`) reads `CORS_ALLOWED_ORIGINS` from its environment. In production, this variable is set to an explicit comma-separated list (e.g., `admindash-backend` gets `https://admin.floatify.com`; `launchpad-api` gets `https://launchpad.floatify.com`). If the variable is missing or empty, the backend **refuses to start** rather than falling back to `*`.
+**Choice:** Every backend (`datacore`, `launchpad-api`, `papermite-api`, `admindash-api`) reads `CORS_ALLOWED_ORIGINS` from its environment. In production, this variable is set to an explicit comma-separated list (e.g., `admindash-api` gets `https://admin.floatify.com`; `launchpad-api` gets `https://launchpad.floatify.com`). If the variable is missing or empty, the backend **refuses to start** rather than falling back to `*`.
 
 **Rationale:** A misconfigured wildcard CORS in production would let any third-party site steal JWTs from logged-in users' browsers. Fail-closed is strictly safer than fail-open.
 
@@ -179,14 +179,14 @@ This is a greenfield deployment — there is nothing running in production to mi
 
 1. **Prerequisite**: The parallel `admindash-backend-api` change must be implemented and merged so that an `admindash/backend/` FastAPI service exists locally. This change does not need to wait for that one to be deployed anywhere — only for it to exist as committed code on `main`.
 2. **Preparation (no user-visible changes)**
-   - Provision Fly.io organization and apps (`datacore`, `launchpad-api`, `papermite-api`, `admindash-backend`)
+   - Provision Fly.io organization and apps (`datacore`, `launchpad-api`, `papermite-api`, `admindash-api`)
    - Create Cloudflare Pages projects (`launchpad-frontend`, `papermite-frontend`, `admindash`), with custom domains not yet cut over
    - Add GitHub repo secrets and the `production` environment with reviewer policy
    - Land PRs for Dockerfiles, `fly.toml`, `_headers`, workflow YAML, and per-service production env var documentation
 3. **First deploy (hidden from users)**
    - Cut a release tag for each module (e.g., `datacore-v0.1.0`) and walk each through the deploy workflow end-to-end
    - Verify Fly.io apps come up healthy on their temporary `*.fly.dev` URLs and Cloudflare Pages builds serve on their temporary `*.pages.dev` URLs
-   - Run smoke tests against the temporary URLs, including admindash → admindash-backend → DataCore via the internal network
+   - Run smoke tests against the temporary URLs, including admindash → admindash-api → DataCore via the internal network
 4. **DNS cutover**
    - Add Cloudflare DNS records for the six production subdomains (`launchpad`, `api.launchpad`, `papermite`, `api.papermite`, `admin`, `api.admin`), pointing at the Fly and Pages endpoints
    - Verify TLS for all six
@@ -206,9 +206,9 @@ This is a greenfield deployment — there is nothing running in production to mi
 1. **Which Fly.io region?** Default to `iad` (US East) unless the user's primary market is elsewhere. Confirm during implementation.
 2. **Semantic versioning per module or date-based?** SemVer (`datacore-v1.2.3`) is the plan; confirm before locking the tag regex in the workflow.
 3. **Should `workflow_dispatch` redeploys require a different approval level than release-triggered deploys?** Phase 1 uses the same `production` environment for both; revisit if emergency redeploys become frequent.
-4. **Should `admindash-backend` use Fly's scale-to-zero?** It's a customer-facing backend so cold-start latency matters more than for an internal tool, but real usage volume is low in phase 1. Default to scale-to-zero with a `min_machines_running = 1` if cold starts are user-visible after first deploy.
+4. **Should `admindash-api` use Fly's scale-to-zero?** It's a customer-facing backend so cold-start latency matters more than for an internal tool, but real usage volume is low in phase 1. Default to scale-to-zero with a `min_machines_running = 1` if cold starts are user-visible after first deploy.
 
 ## Resolved during review
 
-- **How does admindash talk to DataCore once DataCore is on a private network?** Resolved: the parallel `admindash-backend-api` change introduces an `admindash/backend/` proxy. Admindash calls only `admindash-backend`, which calls `datacore.internal`. No browser code reaches DataCore.
+- **How does admindash talk to DataCore once DataCore is on a private network?** Resolved: the parallel `admindash-backend-api` change introduces an `admindash/backend/` proxy. Admindash calls only `admindash-api`, which calls `datacore.internal`. No browser code reaches DataCore.
 - **Cloudflare Access identity provider for admindash (Google Workspace vs GitHub)?** Removed from scope: admindash is a customer-facing product, not an internal tool, and Cloudflare Access is no longer applied to admindash. If a future Floatify-internal ops dashboard is built, this question returns for that surface.

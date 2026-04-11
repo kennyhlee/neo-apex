@@ -46,18 +46,18 @@ Every deploy job in the release pipeline (both release-triggered and dispatch-tr
 
 ### Requirement: Per-app scoped deploy tokens
 
-The release pipeline SHALL use a separate Fly.io deploy token for each backend app (`datacore`, `launchpad-api`, `papermite-api`, `admindash-backend`). Each deploy job MUST reference only the token for the module it deploys; a deploy job for one module MUST NOT have access to tokens for other modules.
+The release pipeline SHALL use a separate Fly.io deploy token for each backend app (`datacore`, `launchpad-api`, `papermite-api`, `admindash-api`). Each deploy job MUST reference only the token for the module it deploys; a deploy job for one module MUST NOT have access to tokens for other modules.
 
 #### Scenario: Leaked DataCore token cannot deploy Launchpad or Admindash
 - **WHEN** the `FLY_API_TOKEN_DATACORE` secret is compromised
-- **THEN** the attacker can at most deploy arbitrary code to the `datacore` Fly.io app and cannot deploy to `launchpad-api`, `papermite-api`, or `admindash-backend`
+- **THEN** the attacker can at most deploy arbitrary code to the `datacore` Fly.io app and cannot deploy to `launchpad-api`, `papermite-api`, or `admindash-api`
 
 #### Scenario: Deploy job uses only its own token
 - **WHEN** the `deploy-launchpad` job runs
 - **THEN** the job references `${{ secrets.FLY_API_TOKEN_LAUNCHPAD }}` as the Fly.io token and does not reference `FLY_API_TOKEN_DATACORE`, `FLY_API_TOKEN_PAPERMITE`, or `FLY_API_TOKEN_ADMINDASH`
 
 #### Scenario: Admindash deploy uses its own token
-- **WHEN** the `deploy-admindash-backend` job runs
+- **WHEN** the `deploy-admindash-api` job runs
 - **THEN** the job references `${{ secrets.FLY_API_TOKEN_ADMINDASH }}` as the Fly.io token and does not reference any other module's Fly.io token
 
 ### Requirement: Image build once, reuse for rollback
@@ -82,11 +82,11 @@ For frontend deploys (`launchpad` frontend, `papermite` frontend, `admindash`), 
 
 ### Requirement: Module tags with both backend and frontend halves deploy both
 
-For modules that have both a Fly.io backend app and a Cloudflare Pages frontend project — `launchpad` (backend `launchpad-api`, frontend `launchpad-frontend`), `papermite` (backend `papermite-api`, frontend `papermite-frontend`), and `admindash` (backend `admindash-backend`, frontend `admindash`) — a single module-prefixed release tag SHALL deploy both halves in the same workflow run. Each half is its own job inside the release workflow, but a single tag triggers them together.
+For modules that have both a Fly.io backend app and a Cloudflare Pages frontend project — `launchpad` (backend `launchpad-api`, frontend `launchpad-frontend`), `papermite` (backend `papermite-api`, frontend `papermite-frontend`), and `admindash` (backend `admindash-api`, frontend `admindash`) — a single module-prefixed release tag SHALL deploy both halves in the same workflow run. Each half is its own job inside the release workflow, but a single tag triggers them together.
 
 #### Scenario: Admindash release deploys both backend and frontend
 - **WHEN** a GitHub Release is published for tag `admindash-v0.5.0`
-- **THEN** the release pipeline runs both `deploy-admindash-backend` (Fly.io) and `deploy-admindash` (Cloudflare Pages) jobs, and does not run any other module's deploy jobs
+- **THEN** the release pipeline runs both `deploy-admindash-api` (Fly.io) and `deploy-admindash` (Cloudflare Pages) jobs, and does not run any other module's deploy jobs
 
 #### Scenario: DataCore release deploys only the backend
 - **WHEN** a GitHub Release is published for tag `datacore-v1.2.0`
