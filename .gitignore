@@ -221,8 +221,6 @@ uploads/
 # OS
 .DS_Store
 
-# Lockfiles (uv)
-uv.lock
 sampledoc/
 .logs
 *.swp
