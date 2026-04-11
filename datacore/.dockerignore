@@ -1,0 +1,23 @@
+# Virtualenv and caches
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Local data and logs
+data/
+*.log
+.DS_Store
+
+# Tests and development tooling
+tests/
+docs/
+openspec/
+.logs/
+*.md
+
+# Editor junk
+.vscode
+.idea
