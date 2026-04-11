@@ -6,10 +6,9 @@ import type {
   DuplicateCheckResponse,
 } from '../types/models.ts';
 
-import { DATACORE_URL, PAPERMITE_BACKEND_URL } from '../config.ts';
+import { ADMINDASH_API_URL } from '../config.ts';
 
-const DATACORE_API_BASE = DATACORE_URL;
-const PAPERMITE_API_BASE = PAPERMITE_BACKEND_URL;
+const API_BASE = ADMINDASH_API_URL;
 const TOKEN_KEY = 'neoapex_token';
 
 function authHeaders(): Record<string, string> {
@@ -22,7 +21,7 @@ export async function postQuery(
   table: 'entities' | 'models' | 'tenants',
   sql: string,
 ): Promise<{ data: Record<string, unknown>[]; total: number }> {
-  const resp = await fetch(`${DATACORE_API_BASE}/api/query`, {
+  const resp = await fetch(`${API_BASE}/api/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ tenant_id: tenantId, table, sql }),
@@ -37,7 +36,7 @@ export async function archiveEntities(
   entityIds: string[],
 ): Promise<{ archived: number }> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}/archive`,
+    `${API_BASE}/api/entities/${tenantId}/${entityType}/archive`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -56,7 +55,7 @@ export async function updateEntity(
   customFields: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}/${entityId}`,
+    `${API_BASE}/api/entities/${tenantId}/${entityType}/${entityId}`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -77,7 +76,7 @@ export async function createEntity(
   customFields: Record<string, unknown>,
 ): Promise<CreateEntityResponse> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}`,
+    `${API_BASE}/api/entities/${tenantId}/${entityType}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -98,7 +97,7 @@ export async function extractStudentFromDocument(
   const formData = new FormData();
   formData.append('file', file);
   const resp = await fetch(
-    `${PAPERMITE_API_BASE}/api/extract/${tenantId}/student`,
+    `${API_BASE}/api/extract/${tenantId}/student`,
     {
       method: 'POST',
       headers: authHeaders(),
@@ -114,7 +113,7 @@ export async function fetchNextEntityId(
   entityType: string,
 ): Promise<NextIdResponse> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/${entityType}/next-id`,
+    `${API_BASE}/api/entities/${tenantId}/${entityType}/next-id`,
     { headers: authHeaders() },
   );
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -126,7 +125,7 @@ export async function checkDuplicateStudents(
   data: DuplicateCheckRequest,
 ): Promise<DuplicateCheckResponse> {
   const resp = await fetch(
-    `${DATACORE_API_BASE}/api/entities/${tenantId}/student/duplicate-check`,
+    `${API_BASE}/api/entities/${tenantId}/student/duplicate-check`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },

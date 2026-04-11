@@ -5,6 +5,5 @@ function svcUrl(key: string): string {
   return `http://${svc.host}:${svc.port}`;
 }
 
-export const DATACORE_URL = import.meta.env.VITE_DATACORE_URL || svcUrl("datacore");
-export const DATACORE_AUTH_URL = import.meta.env.VITE_DATACORE_AUTH_URL || `${DATACORE_URL}/auth`;
-export const PAPERMITE_BACKEND_URL = import.meta.env.VITE_PAPERMITE_BACKEND_URL || svcUrl("papermite-backend");
+export const ADMINDASH_API_URL =
+  import.meta.env.VITE_ADMINDASH_API_URL || svcUrl("admindash-backend");
