@@ -24,9 +24,26 @@ def _svc_url(key: str) -> str:
 
 
 def _cors_origins() -> list[str]:
+    environment = os.environ.get("ENVIRONMENT", "development")
     env_origins = os.environ.get("CORS_ALLOWED_ORIGINS")
+
+    if environment == "production":
+        if not env_origins:
+            raise RuntimeError(
+                "CORS_ALLOWED_ORIGINS is required in production and must not be empty"
+            )
+        origins = [o.strip() for o in env_origins.split(",") if o.strip()]
+        if "*" in origins:
+            raise RuntimeError(
+                "wildcard '*' in CORS_ALLOWED_ORIGINS is not permitted in production"
+            )
+        return origins
+
+    # Dev mode: env var wins if set
     if env_origins:
         return [o.strip() for o in env_origins.split(",") if o.strip()]
+
+    # Dev mode fallback: derive from services.json
     origins = []
     for k in _services:
         if k.endswith("-frontend"):
