@@ -9,7 +9,7 @@ NeoApex is an education/enrollment management platform. Active services:
 - **datacore** — Central storage (LanceDB), query engine, and auth server (JWT/bcrypt). All other services depend on this.
 - **launchpad** — Tenant lifecycle, onboarding, and user management. Python backend + React frontend. Customer-facing entry point.
 - **papermite** — Document ingestion gateway. Upload documents → AI extraction → model definition finalization. Python backend + React frontend.
-- **admindash** — Operations dashboard. React SPA only (no backend). Calls DataCore and Papermite APIs directly.
+- **admindash** — School operations product for school administrators. React frontend (port 5600) + Python FastAPI backend (port 5610). The backend proxies authenticated requests to DataCore and Papermite.
 - **ui-tokens** — Shared CSS design tokens package.
 
 Placeholder directories (empty): `apexflow`, `enrollx`, `familyhub`, `sampledoc`.
@@ -48,11 +48,14 @@ cd papermite/frontend && npm run build    # TypeScript check + Vite build
 cd papermite/frontend && npm run lint     # ESLint
 ```
 
-**AdminDash** (React frontend only):
+**AdminDash** (Python backend + React frontend):
 ```bash
-cd admindash/frontend && npm run dev      # Frontend dev
-cd admindash/frontend && npm run build    # TypeScript check + Vite build
-cd admindash/frontend && npm run lint     # ESLint
+cd admindash && uv sync --extra dev                                   # Install backend deps
+cd admindash && uv run uvicorn app.main:app --app-dir backend --port 5610 --reload  # Backend dev
+cd admindash && uv run pytest backend/tests/ -v                       # Backend tests
+cd admindash/frontend && npm run dev                                  # Frontend dev
+cd admindash/frontend && npm run build                                # TypeScript check + Vite build
+cd admindash/frontend && npm run lint                                 # ESLint
 ```
 
 ## Service Ports
@@ -64,6 +67,7 @@ Defined in `services.json` at repo root. All services read from this file.
 | LaunchPad frontend | 5500 |
 | LaunchPad backend | 5510 |
 | AdminDash frontend | 5600 |
+| AdminDash backend | 5610 |
 | Papermite frontend | 5700 |
 | Papermite backend | 5710 |
 | DataCore backend | 5800 |
@@ -84,7 +88,7 @@ Centralized in DataCore (`datacore/src/datacore/auth/`). Single JWT issuer. All 
 - DataCore owns all persistent storage (LanceDB with tenant-scoped tables, version history)
 - Papermite currently reads/writes model definitions via direct LanceDB access (migration to DataCore HTTP API planned)
 - LaunchPad manages users and onboarding via DataCore's registry table
-- AdminDash reads entities and models from DataCore API, extracts from Papermite API
+- AdminDash frontend talks only to its own backend (`admindash-backend`) on port 5610. The backend proxies entity/query operations to DataCore and document extract to Papermite, with JWT validation delegated to DataCore.
 
 ### Multi-Tenancy
 All data tenant-scoped. Tenant ID embedded in JWT. API routes enforce tenant match (`user.tenant_id == request.tenant_id`). Tenant entity must exist in DataCore before dependent operations.

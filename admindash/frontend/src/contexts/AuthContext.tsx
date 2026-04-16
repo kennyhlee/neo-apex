@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import type { TestUser } from '../types/models.ts';
-import { DATACORE_AUTH_URL } from '../config.ts';
+import { ADMINDASH_API_URL } from '../config.ts';
 const TOKEN_KEY = 'neoapex_token';
 
 interface AuthState {
@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setReady(true);
       return;
     }
-    fetch(`${DATACORE_AUTH_URL}/me`, {
+    fetch(`${ADMINDASH_API_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => {
@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const resp = await fetch(`${DATACORE_AUTH_URL}/login`, {
+      const resp = await fetch(`${ADMINDASH_API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

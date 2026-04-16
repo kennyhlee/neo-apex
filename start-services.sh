@@ -49,6 +49,7 @@ read_port() {
 DATACORE_PORT=$(read_port "datacore")
 LAUNCHPAD_BE_PORT=$(read_port "launchpad-backend")
 PAPERMITE_BE_PORT=$(read_port "papermite-backend")
+ADMINDASH_BE_PORT=$(read_port "admindash-backend")
 LAUNCHPAD_FE_PORT=$(read_port "launchpad-frontend")
 PAPERMITE_FE_PORT=$(read_port "papermite-frontend")
 ADMINDASH_FE_PORT=$(read_port "admindash-frontend")
@@ -58,6 +59,7 @@ SERVICES=(
   "datacore:$DATACORE_PORT:backend"
   "launchpad-backend:$LAUNCHPAD_BE_PORT:backend"
   "papermite-backend:$PAPERMITE_BE_PORT:backend"
+  "admindash-backend:$ADMINDASH_BE_PORT:backend"
   "launchpad-frontend:$LAUNCHPAD_FE_PORT:frontend"
   "papermite-frontend:$PAPERMITE_FE_PORT:frontend"
   "admindash-frontend:$ADMINDASH_FE_PORT:frontend"
@@ -220,6 +222,12 @@ start_service() {
       cd "$SCRIPT_DIR/papermite/backend"
       source "$SCRIPT_DIR/papermite/.venv/bin/activate" 2>/dev/null || true
       uvicorn app.main:app --port "$port" > "$log_file" 2>&1 &
+      cd "$SCRIPT_DIR"
+      ;;
+    admindash-backend)
+      info "Starting $name on port $port..."
+      cd "$SCRIPT_DIR/admindash"
+      uv run uvicorn app.main:app --app-dir backend --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
     launchpad-frontend)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DATACORE_URL } from '../config.ts';
+import { ADMINDASH_API_URL } from '../config.ts';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
@@ -351,7 +351,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         setPage(p);
       } catch (err) {
         setError(
-          `Failed to load students. Is the datacore API at ${DATACORE_URL} running? (${err})`,
+          `Failed to load students. Is the admindash backend at ${ADMINDASH_API_URL} running? (${err})`,
         );
         setData([]);
         setTotal(0);
