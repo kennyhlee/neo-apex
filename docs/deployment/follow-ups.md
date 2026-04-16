@@ -22,7 +22,7 @@ Deferred hardening and nice-to-haves. These are intentionally out of scope for t
 
 - **LanceDB off-site backup to Cloudflare R2** — Fly.io volume snapshots are phase 1 insurance but are single-provider. A scheduled GitHub Action should tar the LanceDB directory and upload to an R2 bucket daily. Restore procedure documented and tested quarterly.
 
-- **Multi-region Fly.io topology** — currently single-region (`iad`). If uptime requirements tighten, replicate the backends to a second region. DataCore would need a different strategy (LanceDB replication is not trivial).
+- **Multi-region Fly.io topology** — currently single-region (`sjc`). If uptime requirements tighten, replicate the backends to a second region. DataCore would need a different strategy (LanceDB replication is not trivial).
 
 - **Staging environment** — a second Fly.io org + Cloudflare Pages branch deployments would give us a place to test deploys before hitting production. Currently deploys go straight to prod after approval.
 

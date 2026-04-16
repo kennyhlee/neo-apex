@@ -85,7 +85,7 @@ flyctl logs --app papermite-api
 flyctl logs --app admindash-api
 ```
 
-Add `--region iad` if you have multi-region. Add `-i` for interactive follow.
+Add `--region sjc` if you have multi-region. Add `-i` for interactive follow.
 
 ### Cloudflare Pages frontends
 

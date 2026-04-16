@@ -45,10 +45,10 @@ Last updated: 2026-04-11
 
 | Name | Type | Host | Public URL | Private DNS |
 |---|---|---|---|---|
-| `datacore` | Python/FastAPI backend | Fly.io (`iad`) | **none** | `datacore.internal:5800` |
-| `launchpad-api` | Python/FastAPI backend | Fly.io (`iad`) | `api.launchpad.floatify.com` | `launchpad-api.internal:5510` |
-| `papermite-api` | Python/FastAPI backend | Fly.io (`iad`) | `api.papermite.floatify.com` | `papermite-api.internal:5710` |
-| `admindash-api` | Python/FastAPI backend | Fly.io (`iad`, scale-to-zero) | `api.admin.floatify.com` | `admindash-api.internal:5610` |
+| `datacore` | Python/FastAPI backend | Fly.io (`sjc`) | **none** | `datacore.internal:5800` |
+| `launchpad-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.launchpad.floatify.com` | `launchpad-api.internal:5510` |
+| `papermite-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.papermite.floatify.com` | `papermite-api.internal:5710` |
+| `admindash-api` | Python/FastAPI backend | Fly.io (`sjc`, scale-to-zero) | `api.admin.floatify.com` | `admindash-api.internal:5610` |
 | `launchpad-frontend` | React SPA (static) | Cloudflare Pages | `launchpad.floatify.com` | — |
 | `papermite-frontend` | React SPA (static) | Cloudflare Pages | `papermite.floatify.com` | — |
 | `admindash` | React SPA (static) | Cloudflare Pages | `admin.floatify.com` | — |

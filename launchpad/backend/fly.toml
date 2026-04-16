@@ -12,7 +12,7 @@
 # (any API keys the service needs)
 
 app = "launchpad-api"
-primary_region = "iad"
+primary_region = "sjc"
 
 [build]
   dockerfile = "backend/Dockerfile"

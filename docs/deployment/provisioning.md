@@ -60,7 +60,7 @@ Each command should print `New app created: <name>`. If you get a name collision
 ```bash
 flyctl volumes create datacore_data \
   --app datacore \
-  --region iad \
+  --region sjc \
   --size 3 \
   --snapshot-retention 7
 ```
@@ -71,7 +71,7 @@ Confirm:
 flyctl volumes list --app datacore
 ```
 
-Expected: one volume named `datacore_data`, 3GB, region `iad`.
+Expected: one volume named `datacore_data`, 3GB, region `sjc`.
 
 ## Step 5: Set production secrets on each Fly.io app
 

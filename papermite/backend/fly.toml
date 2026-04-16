@@ -15,7 +15,7 @@
 #   - VOYAGE_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY (whatever the AI pipeline needs)
 
 app = "papermite-api"
-primary_region = "iad"
+primary_region = "sjc"
 
 [build]
   dockerfile = "backend/Dockerfile"

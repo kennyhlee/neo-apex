@@ -10,7 +10,7 @@
 # R2 is a follow-up (see docs/deployment/follow-ups.md).
 
 app = "datacore"
-primary_region = "iad"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"

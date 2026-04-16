@@ -17,7 +17,7 @@
 # sibling app in the same org. No public URL used.
 
 app = "admindash-api"
-primary_region = "iad"
+primary_region = "sjc"
 
 [build]
   dockerfile = "backend/Dockerfile"
