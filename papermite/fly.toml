@@ -38,6 +38,17 @@ primary_region = "sjc"
     timeout = "5s"
     path = "/api/health"
 
+# Internal-only TCP service exposing port 5710 so sibling Fly apps can
+# reach papermite via `http://papermite-api.flycast:5710` without going
+# through the public http_service TLS pipeline. admindash-api uses this
+# path for document extraction.
+[[services]]
+  protocol = "tcp"
+  internal_port = 5710
+
+  [[services.ports]]
+    port = 5710
+
 [[vm]]
   size = "shared-cpu-2x"
   memory = "1gb"
