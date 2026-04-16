@@ -30,4 +30,4 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 EXPOSE 5800
 
 # DataCore's entrypoint is datacore.api.server:app (matches start-services.sh)
-CMD ["uvicorn", "datacore.api.server:app", "--host", "0.0.0.0", "--port", "5800"]
+CMD ["uvicorn", "datacore.api.server:app", "--host", "::", "--port", "5800"]
