@@ -122,7 +122,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: launchpad
-          file: launchpad/backend/Dockerfile
+          file: launchpad/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/launchpad-api:${{ needs.parse-tag.outputs.tag }}
 
@@ -135,7 +135,7 @@ jobs:
         run: |
           flyctl deploy \
             --image ghcr.io/${{ github.repository_owner }}/launchpad-api:${{ needs.parse-tag.outputs.tag }} \
-            --config launchpad/backend/fly.toml \
+            --config launchpad/fly.toml \
             --app launchpad-api
 
       - name: Deploy summary
@@ -196,7 +196,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: papermite
-          file: papermite/backend/Dockerfile
+          file: papermite/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/papermite-api:${{ needs.parse-tag.outputs.tag }}
 
@@ -209,7 +209,7 @@ jobs:
         run: |
           flyctl deploy \
             --image ghcr.io/${{ github.repository_owner }}/papermite-api:${{ needs.parse-tag.outputs.tag }} \
-            --config papermite/backend/fly.toml \
+            --config papermite/fly.toml \
             --app papermite-api
 
       - name: Deploy summary
@@ -270,7 +270,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: admindash
-          file: admindash/backend/Dockerfile
+          file: admindash/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/admindash-api:${{ needs.parse-tag.outputs.tag }}
 
@@ -283,7 +283,7 @@ jobs:
         run: |
           flyctl deploy \
             --image ghcr.io/${{ github.repository_owner }}/admindash-api:${{ needs.parse-tag.outputs.tag }} \
-            --config admindash/backend/fly.toml \
+            --config admindash/fly.toml \
             --app admindash-api
 
       - name: Deploy summary

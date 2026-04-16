@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1.6
-# Build context: papermite/ (NOT papermite/backend/)
-# Build with: docker build -t papermite-api-test -f papermite/backend/Dockerfile papermite/
+# Build context: papermite/ (this Dockerfile lives at papermite/Dockerfile)
 FROM python:3.11-slim AS runtime
 
 # System deps:

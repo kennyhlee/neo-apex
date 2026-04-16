@@ -18,7 +18,7 @@ app = "papermite-api"
 primary_region = "sjc"
 
 [build]
-  dockerfile = "backend/Dockerfile"
+  dockerfile = "Dockerfile"
 
 [env]
   PORT = "5710"

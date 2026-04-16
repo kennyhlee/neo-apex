@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1.6
-# Build context: launchpad/ (NOT launchpad/backend/)
-# Build with: docker build -t launchpad-api-test -f launchpad/backend/Dockerfile launchpad/
+# Build context: admindash/ (this Dockerfile lives at admindash/Dockerfile)
 FROM python:3.11-slim AS runtime
 
 RUN apt-get update \
@@ -14,19 +13,15 @@ RUN useradd --create-home --shell /bin/bash app
 USER app
 WORKDIR /app
 
-# pyproject.toml + uv.lock live at launchpad/ (the build context root)
 COPY --chown=app:app pyproject.toml uv.lock ./
-
-# The Python package lives at launchpad/backend/app per hatch config
 COPY --chown=app:app backend/app ./backend/app
 
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
-    PORT=5510
+    PORT=5610
 
-EXPOSE 5510
+EXPOSE 5610
 
-# From /app, uvicorn needs --app-dir backend to find app.main
-CMD ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "5510"]
+CMD ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "5610"]

@@ -127,21 +127,16 @@ flyctl secrets set --app admindash-api \
 
 This verifies the `fly.toml` files are valid and the Dockerfiles build on Fly's remote builders.
 
+Each service's `fly.toml` and `Dockerfile` live at the service root alongside `pyproject.toml`, so `flyctl deploy` picks everything up automatically — just `cd` into the service dir.
+
 ```bash
-cd /path/to/NeoApex
-
-# datacore (build context = datacore/)
-flyctl deploy --config datacore/fly.toml --app datacore --dockerfile datacore/Dockerfile datacore/
-
-# launchpad-api (build context = launchpad/)
-flyctl deploy --config launchpad/backend/fly.toml --app launchpad-api --dockerfile launchpad/backend/Dockerfile launchpad/
-
-# papermite-api
-flyctl deploy --config papermite/backend/fly.toml --app papermite-api --dockerfile papermite/backend/Dockerfile papermite/
-
-# admindash-api
-flyctl deploy --config admindash/backend/fly.toml --app admindash-api --dockerfile admindash/backend/Dockerfile admindash/
+cd /path/to/NeoApex/datacore && flyctl deploy && cd -
+cd /path/to/NeoApex/launchpad && flyctl deploy && cd -
+cd /path/to/NeoApex/papermite && flyctl deploy && cd -
+cd /path/to/NeoApex/admindash && flyctl deploy && cd -
 ```
+
+Deploy `datacore` first — the three public backends reach it via `datacore.internal` and will fail their first boot if it isn't up yet.
 
 Each deploy should end with a healthy machine status.
 
