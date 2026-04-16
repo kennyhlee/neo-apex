@@ -61,6 +61,11 @@ _CF_NETWORKS: list[ipaddress._BaseNetwork] = _parse_networks(
     CLOUDFLARE_IPV4_RANGES + CLOUDFLARE_IPV6_RANGES
 )
 
+# Paths exempted from the IP allowlist. Fly.io's internal health checker
+# probes the machine directly (not through Cloudflare), so blocking it would
+# mark the machine unhealthy and fail deploys.
+_EXEMPT_PATHS: frozenset[str] = frozenset({"/api/health"})
+
 
 def _is_cloudflare_ip(ip_str: str) -> bool:
     try:
@@ -109,6 +114,9 @@ class CloudflareIPMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         if self.trust_all_ips:
+            return await call_next(request)
+
+        if request.url.path in _EXEMPT_PATHS:
             return await call_next(request)
 
         client_ip = _client_ip_from_request(request)

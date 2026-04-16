@@ -14,6 +14,10 @@ def _make_app(trust_all_ips: bool = False) -> TestClient:
     def test_route():
         return {"ok": True}
 
+    @app.get("/api/health")
+    def health_route():
+        return {"status": "ok"}
+
     return TestClient(app)
 
 
@@ -64,3 +68,13 @@ def test_first_ip_in_xff_chain_is_used(monkeypatch):
         headers={"x-forwarded-for": "173.245.48.1, 10.0.0.1, 10.0.0.2"},
     )
     assert resp.status_code == 200
+
+
+def test_health_endpoint_bypasses_ip_allowlist(monkeypatch):
+    # Fly.io's internal health check does not originate from a Cloudflare IP.
+    # /api/health must be reachable without an XFF header from the Fly proxy.
+    monkeypatch.delenv("TRUST_ALL_IPS", raising=False)
+    client = _make_app(trust_all_ips=False)
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
