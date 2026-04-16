@@ -97,8 +97,8 @@ Replace `<your-voyage-api-key>` with the actual key from `~/.zshrc` or your pass
 flyctl secrets set --app launchpad-api \
   ENVIRONMENT=production \
   CORS_ALLOWED_ORIGINS="https://launchpad.floatify.com" \
-  LAUNCHPAD_DATACORE_AUTH_URL="http://datacore.internal:5800/auth" \
-  LAUNCHPAD_DATACORE_API_URL="http://datacore.internal:5800/api"
+  LAUNCHPAD_DATACORE_AUTH_URL="http://datacore.flycast:5800/auth" \
+  LAUNCHPAD_DATACORE_API_URL="http://datacore.flycast:5800/api"
 ```
 
 **papermite-api**
@@ -107,8 +107,8 @@ flyctl secrets set --app launchpad-api \
 flyctl secrets set --app papermite-api \
   ENVIRONMENT=production \
   CORS_ALLOWED_ORIGINS="https://papermite.floatify.com,https://admin.floatify.com" \
-  PAPERMITE_DATACORE_AUTH_URL="http://datacore.internal:5800/auth" \
-  PAPERMITE_DATACORE_API_URL="http://datacore.internal:5800/api" \
+  PAPERMITE_DATACORE_AUTH_URL="http://datacore.flycast:5800/auth" \
+  PAPERMITE_DATACORE_API_URL="http://datacore.flycast:5800/api" \
   ANTHROPIC_API_KEY="<your-anthropic-key>" \
   OPENAI_API_KEY="<your-openai-key>"
 ```
@@ -119,8 +119,8 @@ flyctl secrets set --app papermite-api \
 flyctl secrets set --app admindash-api \
   ADMINDASH_ENVIRONMENT=production \
   ADMINDASH_CORS_ALLOWED_ORIGINS="https://admin.floatify.com" \
-  ADMINDASH_DATACORE_URL="http://datacore.internal:5800" \
-  ADMINDASH_PAPERMITE_BACKEND_URL="http://papermite-api.internal:5710"
+  ADMINDASH_DATACORE_URL="http://datacore.flycast:5800" \
+  ADMINDASH_PAPERMITE_BACKEND_URL="http://papermite-api.flycast:5710"
 ```
 
 ## Step 6: Do a first manual deploy of each Fly.io app
@@ -136,15 +136,15 @@ cd /path/to/NeoApex/papermite && flyctl deploy && cd -
 cd /path/to/NeoApex/admindash && flyctl deploy && cd -
 ```
 
-Deploy `datacore` first — the three public backends reach it via `datacore.internal` and will fail their first boot if it isn't up yet.
+Deploy `datacore` first — the three public backends reach it via `datacore.flycast` and will fail their first boot if it isn't up yet.
 
 Each deploy should end with a healthy machine status.
 
 Verify internal connectivity:
 
 ```bash
-# SSH into launchpad-api and hit datacore.internal
-flyctl ssh console --app launchpad-api -C "curl -s http://datacore.internal:5800/health"
+# SSH into launchpad-api and hit datacore.flycast
+flyctl ssh console --app launchpad-api -C "curl -s http://datacore.flycast:5800/health"
 ```
 
 Expected: `{"status":"ok"}`.

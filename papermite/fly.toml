@@ -10,8 +10,8 @@
 # Production env vars (set via `flyctl secrets set`):
 #   - ENVIRONMENT=production
 #   - CORS_ALLOWED_ORIGINS=https://papermite.floatify.com,https://admin.floatify.com
-#   - PAPERMITE_DATACORE_AUTH_URL=http://datacore.internal:5800/auth
-#   - PAPERMITE_DATACORE_API_URL=http://datacore.internal:5800/api
+#   - PAPERMITE_DATACORE_AUTH_URL=http://datacore.flycast:5800/auth
+#   - PAPERMITE_DATACORE_API_URL=http://datacore.flycast:5800/api
 #   - VOYAGE_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY (whatever the AI pipeline needs)
 
 app = "papermite-api"

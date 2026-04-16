@@ -45,10 +45,10 @@ Last updated: 2026-04-11
 
 | Name | Type | Host | Public URL | Private DNS |
 |---|---|---|---|---|
-| `datacore` | Python/FastAPI backend | Fly.io (`sjc`) | **none** | `datacore.internal:5800` |
-| `launchpad-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.launchpad.floatify.com` | `launchpad-api.internal:5510` |
-| `papermite-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.papermite.floatify.com` | `papermite-api.internal:5710` |
-| `admindash-api` | Python/FastAPI backend | Fly.io (`sjc`, scale-to-zero) | `api.admin.floatify.com` | `admindash-api.internal:5610` |
+| `datacore` | Python/FastAPI backend | Fly.io (`sjc`) | **none** | `datacore.flycast:5800` |
+| `launchpad-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.launchpad.floatify.com` | `launchpad-api.flycast:5510` |
+| `papermite-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.papermite.floatify.com` | `papermite-api.flycast:5710` |
+| `admindash-api` | Python/FastAPI backend | Fly.io (`sjc`, scale-to-zero) | `api.admin.floatify.com` | `admindash-api.flycast:5610` |
 | `launchpad-frontend` | React SPA (static) | Cloudflare Pages | `launchpad.floatify.com` | — |
 | `papermite-frontend` | React SPA (static) | Cloudflare Pages | `papermite.floatify.com` | — |
 | `admindash` | React SPA (static) | Cloudflare Pages | `admin.floatify.com` | — |
@@ -70,9 +70,9 @@ Last updated: 2026-04-11
 2. SPA makes `fetch("https://api.admin.floatify.com/api/query", ...)` with `Authorization: Bearer <jwt>`
 3. Cloudflare receives the request, proxies it to the `admindash-api` Fly.io origin
 4. `admindash-api`'s `CloudflareIPMiddleware` sees a Cloudflare source IP and allows the request
-5. `admindash-api`'s `require_authenticated_user` dependency calls `http://datacore.internal:5800/auth/me` with the bearer token
+5. `admindash-api`'s `require_authenticated_user` dependency calls `http://datacore.flycast:5800/auth/me` with the bearer token
 6. DataCore validates the JWT (signing secret present locally), returns the user object
-7. `admindash-api` forwards the `/api/query` body to `http://datacore.internal:5800/api/query` with the original Authorization header
+7. `admindash-api` forwards the `/api/query` body to `http://datacore.flycast:5800/api/query` with the original Authorization header
 8. DataCore executes the query, returns the result
 9. `admindash-api` returns the result verbatim to the browser
 

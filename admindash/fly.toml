@@ -11,10 +11,11 @@
 # Production env vars (set via `flyctl secrets set`):
 #   - ENVIRONMENT=production
 #   - CORS_ALLOWED_ORIGINS=https://admin.floatify.com
-#   - ADMINDASH_DATACORE_URL=http://datacore.internal:5800
-#   - ADMINDASH_PAPERMITE_BACKEND_URL=http://papermite-api.internal:5710
-# Note: papermite-api.internal is the Fly private DNS for the papermite-api
-# sibling app in the same org. No public URL used.
+#   - ADMINDASH_DATACORE_URL=http://datacore.flycast:5800
+#   - ADMINDASH_PAPERMITE_BACKEND_URL=http://papermite-api.flycast:5710
+# Note: the .flycast suffix resolves to a Fly internal IPv4 anycast
+# address for sibling apps in the same org — chosen over .internal
+# (which is IPv6-only) because uvicorn binds 0.0.0.0 by default.
 
 app = "admindash-api"
 primary_region = "sjc"

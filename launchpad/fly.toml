@@ -7,15 +7,15 @@
 # In production, the app reads these env vars (set via `flyctl secrets set`):
 #   - ENVIRONMENT=production
 #   - CORS_ALLOWED_ORIGINS=https://launchpad.floatify.com
-#   - LAUNCHPAD_DATACORE_AUTH_URL=http://datacore.internal:5800/auth
-#   - LAUNCHPAD_DATACORE_API_URL=http://datacore.internal:5800/api
+#   - LAUNCHPAD_DATACORE_AUTH_URL=http://datacore.flycast:5800/auth
+#   - LAUNCHPAD_DATACORE_API_URL=http://datacore.flycast:5800/api
 # (any API keys the service needs)
 
 app = "launchpad-api"
 primary_region = "sjc"
 
 [build]
-  dockerfile = "backend/Dockerfile"
+  dockerfile = "Dockerfile"
 
 [env]
   PORT = "5510"

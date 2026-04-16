@@ -24,4 +24,4 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 
 EXPOSE 5610
 
-CMD ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "::", "--port", "5610"]
+CMD ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "5610"]

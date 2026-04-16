@@ -1,6 +1,10 @@
 # Deployment Pipeline Implementation Plan
 
-> **Post-landing update (2026-04-16):** the Phase 2 provisioning uncovered a Fly.io path-resolution issue — `[build].dockerfile` in `fly.toml` is resolved relative to the fly.toml's directory, not the working directory, so keeping `fly.toml` at `<svc>/backend/fly.toml` with `dockerfile = "backend/Dockerfile"` broke local `flyctl deploy`. As a fix, `fly.toml`, `Dockerfile`, and `.dockerignore` for launchpad, papermite, and admindash were moved up one level from `<svc>/backend/` to `<svc>/`. The plan content below still references the old paths for historical accuracy; consult the live files and `docs/deployment/provisioning.md` for the current layout.
+> **Post-landing update (2026-04-16):** the Phase 2 provisioning surfaced two issues:
+> 1. `[build].dockerfile` in `fly.toml` is resolved relative to the fly.toml's directory, not the working directory — so `fly.toml` at `<svc>/backend/fly.toml` with `dockerfile = "backend/Dockerfile"` broke local `flyctl deploy`. Fix: moved `fly.toml`, `Dockerfile`, and `.dockerignore` for launchpad, papermite, and admindash up one level to `<svc>/`.
+> 2. Fly's `<app>.internal` suffix resolves to IPv6-only addresses, but uvicorn binds `0.0.0.0` (IPv4) — so `curl http://datacore.internal` from a sibling machine got connection-refused. Fix: switched all inter-app URLs (secrets + docs) to `<app>.flycast`, which resolves to Fly's IPv4 private anycast.
+>
+> The plan content below still references the original paths and `.internal` hostnames for historical accuracy; consult the live files, `docs/deployment/provisioning.md`, and `docs/deployment/architecture.md` for the current layout.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

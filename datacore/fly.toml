@@ -2,7 +2,7 @@
 #
 # IMPORTANT: datacore is private-network-only. There is NO [http_service]
 # block. Sibling Fly apps in the same org reach datacore via Fly's internal
-# DNS at `datacore.internal:5800`. There is no public DNS record pointing
+# DNS at `datacore.flycast:5800`. There is no public DNS record pointing
 # at this app, and it has no Cloudflare in front of it.
 #
 # The persistent volume stores the LanceDB data. Daily snapshots are retained
