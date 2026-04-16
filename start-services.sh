@@ -230,6 +230,12 @@ start_service() {
       TRUST_ALL_IPS=1 uv run uvicorn app.main:app --app-dir backend --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
+    admindash-backend)
+      info "Starting $name on port $port..."
+      cd "$SCRIPT_DIR/admindash"
+      uv run uvicorn app.main:app --app-dir backend --port "$port" > "$log_file" 2>&1 &
+      cd "$SCRIPT_DIR"
+      ;;
     launchpad-frontend)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/launchpad/frontend"
