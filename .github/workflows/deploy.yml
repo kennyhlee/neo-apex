@@ -1,0 +1,324 @@
+name: Deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      module:
+        description: 'Module to (re)deploy'
+        required: true
+        type: choice
+        options:
+          - datacore
+          - launchpad
+          - papermite
+          - admindash
+      version:
+        description: 'Release tag to deploy (must already exist as a GitHub Release)'
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-${{ github.event.release.tag_name || format('{0}-{1}', github.event.inputs.module, github.event.inputs.version) }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  parse-tag:
+    name: Parse release tag
+    runs-on: ubuntu-latest
+    outputs:
+      module: ${{ steps.parse.outputs.module }}
+      version: ${{ steps.parse.outputs.version }}
+      tag: ${{ steps.parse.outputs.tag }}
+    steps:
+      - name: Parse tag or dispatch input
+        id: parse
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODULE="${{ github.event.inputs.module }}"
+            VERSION="${{ github.event.inputs.version }}"
+            TAG="${VERSION}"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+            if [[ "$TAG" =~ ^(datacore|launchpad|papermite|admindash)-v(.+)$ ]]; then
+              MODULE="${BASH_REMATCH[1]}"
+              VERSION="${BASH_REMATCH[2]}"
+            else
+              echo "::error::Release tag '$TAG' does not match <module>-v<semver> pattern"
+              exit 1
+            fi
+          fi
+          echo "module=$MODULE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Parsed: module=$MODULE version=$VERSION tag=$TAG"
+
+  deploy-datacore:
+    name: Deploy datacore (Fly.io)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'datacore'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push datacore image (release event only)
+        if: github.event_name == 'release'
+        uses: docker/build-push-action@v5
+        with:
+          context: datacore
+          file: datacore/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/datacore:${{ needs.parse-tag.outputs.tag }}
+
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_DATACORE }}
+        run: |
+          flyctl deploy \
+            --image ghcr.io/${{ github.repository_owner }}/datacore:${{ needs.parse-tag.outputs.tag }} \
+            --config datacore/fly.toml \
+            --app datacore
+
+      - name: Deploy summary
+        run: |
+          echo "## Deployed datacore ${{ needs.parse-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "Image: ghcr.io/${{ github.repository_owner }}/datacore:${{ needs.parse-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy-launchpad-api:
+    name: Deploy launchpad-api (Fly.io)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'launchpad'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push launchpad-api image (release event only)
+        if: github.event_name == 'release'
+        uses: docker/build-push-action@v5
+        with:
+          context: launchpad
+          file: launchpad/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/launchpad-api:${{ needs.parse-tag.outputs.tag }}
+
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_LAUNCHPAD }}
+        run: |
+          flyctl deploy \
+            --image ghcr.io/${{ github.repository_owner }}/launchpad-api:${{ needs.parse-tag.outputs.tag }} \
+            --config launchpad/fly.toml \
+            --app launchpad-api
+
+      - name: Deploy summary
+        run: |
+          echo "## Deployed launchpad-api ${{ needs.parse-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy-launchpad-frontend:
+    name: Deploy launchpad-frontend (Cloudflare Pages)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'launchpad'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: launchpad/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: launchpad/frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: launchpad/frontend
+        env:
+          VITE_API_BASE_URL: https://api.launchpad.floatify.com
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy launchpad/frontend/dist --project-name=launchpad-frontend --branch=main
+
+  deploy-papermite-api:
+    name: Deploy papermite-api (Fly.io)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'papermite'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push papermite-api image (release event only)
+        if: github.event_name == 'release'
+        uses: docker/build-push-action@v5
+        with:
+          context: papermite
+          file: papermite/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/papermite-api:${{ needs.parse-tag.outputs.tag }}
+
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PAPERMITE }}
+        run: |
+          flyctl deploy \
+            --image ghcr.io/${{ github.repository_owner }}/papermite-api:${{ needs.parse-tag.outputs.tag }} \
+            --config papermite/fly.toml \
+            --app papermite-api
+
+      - name: Deploy summary
+        run: |
+          echo "## Deployed papermite-api ${{ needs.parse-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy-papermite-frontend:
+    name: Deploy papermite-frontend (Cloudflare Pages)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'papermite'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: papermite/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: papermite/frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: papermite/frontend
+        env:
+          VITE_API_BASE_URL: https://api.papermite.floatify.com
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy papermite/frontend/dist --project-name=papermite-frontend --branch=main
+
+  deploy-admindash-api:
+    name: Deploy admindash-api (Fly.io)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'admindash'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push admindash-api image (release event only)
+        if: github.event_name == 'release'
+        uses: docker/build-push-action@v5
+        with:
+          context: admindash
+          file: admindash/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/admindash-api:${{ needs.parse-tag.outputs.tag }}
+
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ADMINDASH }}
+        run: |
+          flyctl deploy \
+            --image ghcr.io/${{ github.repository_owner }}/admindash-api:${{ needs.parse-tag.outputs.tag }} \
+            --config admindash/fly.toml \
+            --app admindash-api
+
+      - name: Deploy summary
+        run: |
+          echo "## Deployed admindash-api ${{ needs.parse-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy-admindash-frontend:
+    name: Deploy admindash frontend (Cloudflare Pages)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'admindash'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admindash/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: admindash/frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: admindash/frontend
+        env:
+          VITE_ADMINDASH_API_URL: https://api.admin.floatify.com
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy admindash/frontend/dist --project-name=admindash --branch=main

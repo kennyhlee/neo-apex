@@ -15,11 +15,34 @@ from datacore.api.unified_routes import register_unified_routes
 
 
 def _load_cors_origins() -> list[str]:
-    """Build CORS allowed origins from services.json or env var override."""
+    """Build CORS allowed origins from env var or services.json.
+
+    In production mode (ENVIRONMENT=production), CORS_ALLOWED_ORIGINS is
+    required and must not contain '*'. Missing or wildcard → RuntimeError.
+
+    In development mode, falls back to services.json-derived frontend origins
+    when CORS_ALLOWED_ORIGINS is unset.
+    """
+    environment = os.environ.get("ENVIRONMENT", "development")
     env_origins = os.environ.get("CORS_ALLOWED_ORIGINS")
+
+    if environment == "production":
+        if not env_origins:
+            raise RuntimeError(
+                "CORS_ALLOWED_ORIGINS is required in production and must not be empty"
+            )
+        origins = [o.strip() for o in env_origins.split(",") if o.strip()]
+        if "*" in origins:
+            raise RuntimeError(
+                "wildcard '*' in CORS_ALLOWED_ORIGINS is not permitted in production"
+            )
+        return origins
+
+    # Dev mode: env var wins if set
     if env_origins:
         return [o.strip() for o in env_origins.split(",") if o.strip()]
 
+    # Dev mode fallback: derive from services.json
     config_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "services.json"
     if not config_path.exists():
         return []
@@ -53,5 +76,9 @@ def create_app(store: Store) -> FastAPI:
     register_registry_routes(app, store)
     register_auth_routes(app, store)
     register_unified_routes(app, store)
+
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
 
     return app

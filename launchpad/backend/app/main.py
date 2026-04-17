@@ -1,14 +1,24 @@
 """FastAPI application entry point for Launchpad."""
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth, tenants, users
 from app.config import settings
+from app.middleware.cloudflare_ip import CloudflareIPMiddleware
 
 app = FastAPI(
     title="Launchpad",
     description="Tenant lifecycle and identity service for the NeoApex platform",
     version="0.1.0",
+)
+
+# Cloudflare IP allowlist — only applied when not running behind trust-all env.
+# In dev, start-services.sh sets TRUST_ALL_IPS=1.
+app.add_middleware(
+    CloudflareIPMiddleware,
+    trust_all_ips=os.environ.get("TRUST_ALL_IPS") == "1",
 )
 
 app.add_middleware(

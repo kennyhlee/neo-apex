@@ -1,0 +1,17 @@
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+data/
+uploads/
+*.log
+.DS_Store
+tests/
+docs/
+openspec/
+.logs/
+*.md
+.vscode
+.idea

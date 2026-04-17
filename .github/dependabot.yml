@@ -1,0 +1,75 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # Python backends
+  - package-ecosystem: "pip"
+    directory: "/datacore"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "datacore"
+
+  - package-ecosystem: "pip"
+    directory: "/launchpad"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "launchpad"
+
+  - package-ecosystem: "pip"
+    directory: "/papermite"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "papermite"
+
+  - package-ecosystem: "pip"
+    directory: "/admindash"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "admindash"
+
+  # Frontend projects
+  - package-ecosystem: "npm"
+    directory: "/launchpad/frontend"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "launchpad"
+
+  - package-ecosystem: "npm"
+    directory: "/papermite/frontend"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "papermite"
+
+  - package-ecosystem: "npm"
+    directory: "/admindash/frontend"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "admindash"

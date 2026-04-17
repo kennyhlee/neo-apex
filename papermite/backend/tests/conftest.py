@@ -1,6 +1,5 @@
-"""Pytest fixtures for admindash backend tests."""
+"""Pytest fixtures for papermite backend tests."""
 import pytest
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)
@@ -14,15 +13,3 @@ def _bypass_cloudflare_middleware(monkeypatch):
     calling monkeypatch.delenv("TRUST_ALL_IPS", raising=False).
     """
     monkeypatch.setenv("TRUST_ALL_IPS", "1")
-
-
-@pytest.fixture
-def client():
-    """Provides a TestClient against the FastAPI app.
-
-    Imports inside the fixture so test_cors.py can manipulate env vars
-    before the app is constructed.
-    """
-    from app.main import app
-    with TestClient(app) as c:
-        yield c
