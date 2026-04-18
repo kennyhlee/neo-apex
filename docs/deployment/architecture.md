@@ -10,7 +10,7 @@ Last updated: 2026-04-11
                                                    ▼
                           ┌─────────────────────────────────────────────┐
                           │                  Cloudflare                 │
-                          │  DNS │ TLS │ WAF │ Pages (static frontends) │
+                          │  DNS │ TLS │ WAF │ Workers (static frontends) │
                           └─────────────────────────────────────────────┘
                                  │                        │
                                  │                        │
@@ -18,10 +18,10 @@ Last updated: 2026-04-11
            │                     │                │       │        │
            ▼                     ▼                ▼       ▼        ▼
      ┌─────────┐         ┌─────────┐       ┌─────────┐ ┌─────┐ ┌──────────┐
-     │ launch  │         │papermite│       │ admin   │ │CF   │ │ CF Pages │
-     │  pad    │         │ frontend│       │  dash   │ │Pages│ │ (3 sites)│
-     │frontend │         │(Pages)  │       │ (Pages) │ │     │ │          │
-     │(Pages)  │         └─────────┘       └─────────┘ └─────┘ └──────────┘
+     │ launch  │         │papermite│       │ admin   │ │CF   │ │CF Workers│
+     │  pad    │         │ frontend│       │  dash   │ │Wrkr │ │ (3 sites)│
+     │frontend │         │(Worker) │       │(Worker) │ │     │ │          │
+     │(Worker) │         └─────────┘       └─────────┘ └─────┘ └──────────┘
      └─────────┘
            │                     │                │
            │ fetch("/api/…")     │                │
@@ -49,9 +49,9 @@ Last updated: 2026-04-11
 | `launchpad-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.launchpad.floatify.com` | `launchpad-api.flycast:5510` |
 | `papermite-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.papermite.floatify.com` | `papermite-api.flycast:5710` |
 | `admindash-api` | Python/FastAPI backend | Fly.io (`sjc`, scale-to-zero) | `api.admin.floatify.com` | `admindash-api.flycast:5610` |
-| `launchpad-frontend` | React SPA (static) | Cloudflare Pages | `launchpad.floatify.com` | — |
-| `papermite-frontend` | React SPA (static) | Cloudflare Pages | `papermite.floatify.com` | — |
-| `admindash` | React SPA (static) | Cloudflare Pages | `admin.floatify.com` | — |
+| `launchpad-frontend` | React SPA (static) | Cloudflare Workers (Static Assets) | `launchpad.floatify.com` | — |
+| `papermite-frontend` | React SPA (static) | Cloudflare Workers (Static Assets) | `papermite.floatify.com` | — |
+| `admindash` | React SPA (static) | Cloudflare Workers (Static Assets) | `admin.floatify.com` | — |
 
 ## Trust boundaries and security layers
 
@@ -66,7 +66,7 @@ Last updated: 2026-04-11
 
 ## Data flow for a typical admindash request
 
-1. Browser at `https://admin.floatify.com` → Cloudflare Pages serves the SPA
+1. Browser at `https://admin.floatify.com` → Cloudflare Worker (Static Assets) serves the SPA
 2. SPA makes `fetch("https://api.admin.floatify.com/api/query", ...)` with `Authorization: Bearer <jwt>`
 3. Cloudflare receives the request, proxies it to the `admindash-api` Fly.io origin
 4. `admindash-api`'s `CloudflareIPMiddleware` sees a Cloudflare source IP and allows the request
@@ -84,7 +84,7 @@ Last updated: 2026-04-11
 | Fly.io: `launchpad-api` (shared-cpu-1x, 512MB, min=1) | ~$5–8 |
 | Fly.io: `papermite-api` (shared-cpu-2x, 1GB, min=1) | ~$8–15 |
 | Fly.io: `admindash-api` (shared-cpu-1x, 256MB, min=0, scale-to-zero) | ~$0.50–3 |
-| Cloudflare (Pages, DNS, TLS, WAF basics) | Free |
+| Cloudflare (Workers Static Assets, DNS, TLS, WAF basics) | Free |
 | GHCR (private image storage) | Free at this scale |
 | **Total** | **~$18–35** |
 
@@ -92,6 +92,6 @@ Last updated: 2026-04-11
 
 See [`release-runbook.md`](./release-runbook.md) for how to cut a release and approve a deploy.
 
-See [`provisioning.md`](./provisioning.md) for first-time setup of Fly.io apps, Cloudflare Pages projects, DNS records, and GitHub Environment/secrets.
+See [`provisioning.md`](./provisioning.md) for first-time setup of Fly.io apps, Cloudflare Worker projects, DNS records, and GitHub Environment/secrets.
 
 See [`follow-ups.md`](./follow-ups.md) for deferred hardening work.

@@ -24,7 +24,7 @@ Deferred hardening and nice-to-haves. These are intentionally out of scope for t
 
 - **Multi-region Fly.io topology** — currently single-region (`sjc`). If uptime requirements tighten, replicate the backends to a second region. DataCore would need a different strategy (LanceDB replication is not trivial).
 
-- **Staging environment** — a second Fly.io org + Cloudflare Pages branch deployments would give us a place to test deploys before hitting production. Currently deploys go straight to prod after approval.
+- **Staging environment** — a second Fly.io org + Cloudflare Worker preview deployments (non-production branches) would give us a place to test deploys before hitting production. Currently deploys go straight to prod after approval.
 
 - **GHCR image cleanup** — the registry grows unbounded as releases accumulate. A scheduled cleanup workflow should prune images older than N days, keeping the last K releases per module.
 

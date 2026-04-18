@@ -143,7 +143,7 @@ jobs:
           echo "## Deployed launchpad-api ${{ needs.parse-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
 
   deploy-launchpad-frontend:
-    name: Deploy launchpad-frontend (Cloudflare Pages)
+    name: Deploy launchpad-frontend (Cloudflare Workers)
     needs: parse-tag
     if: needs.parse-tag.outputs.module == 'launchpad'
     runs-on: ubuntu-latest
@@ -168,12 +168,13 @@ jobs:
           VITE_API_BASE_URL: https://api.launchpad.floatify.com
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy launchpad/frontend/dist --project-name=launchpad-frontend --branch=main
+          workingDirectory: launchpad/frontend
+          command: deploy
 
   deploy-papermite-api:
     name: Deploy papermite-api (Fly.io)
@@ -217,7 +218,7 @@ jobs:
           echo "## Deployed papermite-api ${{ needs.parse-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
 
   deploy-papermite-frontend:
-    name: Deploy papermite-frontend (Cloudflare Pages)
+    name: Deploy papermite-frontend (Cloudflare Workers)
     needs: parse-tag
     if: needs.parse-tag.outputs.module == 'papermite'
     runs-on: ubuntu-latest
@@ -242,12 +243,13 @@ jobs:
           VITE_API_BASE_URL: https://api.papermite.floatify.com
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy papermite/frontend/dist --project-name=papermite-frontend --branch=main
+          workingDirectory: papermite/frontend
+          command: deploy
 
   deploy-admindash-api:
     name: Deploy admindash-api (Fly.io)
@@ -291,7 +293,7 @@ jobs:
           echo "## Deployed admindash-api ${{ needs.parse-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
 
   deploy-admindash-frontend:
-    name: Deploy admindash frontend (Cloudflare Pages)
+    name: Deploy admindash frontend (Cloudflare Workers)
     needs: parse-tag
     if: needs.parse-tag.outputs.module == 'admindash'
     runs-on: ubuntu-latest
@@ -316,9 +318,10 @@ jobs:
           VITE_ADMINDASH_API_URL: https://api.admin.floatify.com
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy admindash/frontend/dist --project-name=admindash --branch=main
+          workingDirectory: admindash/frontend
+          command: deploy
