@@ -165,7 +165,8 @@ jobs:
       - name: Build
         working-directory: launchpad/frontend
         env:
-          VITE_API_BASE_URL: https://api.launchpad.floatify.com
+          VITE_LAUNCHPAD_BACKEND_URL: https://api.launchpad.floatify.com
+          VITE_PAPERMITE_FRONTEND_URL: https://papermite.floatify.com
         run: npm run build
 
       - name: Deploy to Cloudflare Workers
@@ -240,7 +241,7 @@ jobs:
       - name: Build
         working-directory: papermite/frontend
         env:
-          VITE_API_BASE_URL: https://api.papermite.floatify.com
+          VITE_PAPERMITE_BACKEND_URL: https://api.papermite.floatify.com
         run: npm run build
 
       - name: Deploy to Cloudflare Workers

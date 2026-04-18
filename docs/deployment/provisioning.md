@@ -153,33 +153,54 @@ Expected: `{"status":"ok"}`.
 
 Cloudflare's unified UI now creates new git-connected static sites as **Workers with Static Assets** (the successor to classic Pages — the URL path shows `workers/services/view/...`, not `workers-and-pages/view/...`). Each frontend has a `wrangler.jsonc` committed at `<svc>/frontend/wrangler.jsonc` that declares the project name, compatibility date, and SPA fallback.
 
-In the Cloudflare dashboard → **Workers & Pages** → **Create** → **Import an existing Git repository**:
+In the Cloudflare dashboard → **Workers & Pages** → **Create** → **Import an existing Git repository**.
 
-Create three projects. Field names reflect the current (2026) UI:
+### Shared settings (all three projects)
 
-1. **launchpad-frontend**
-   - Repo: `kennyhlee/neo-apex`
-   - Project name: `launchpad-frontend` (must match `name` in `launchpad/frontend/wrangler.jsonc`)
-   - Production branch: `main`
-   - Build command: `npm run build`
-   - Deploy command: `npx wrangler deploy`
-   - Advanced → Path: `launchpad/frontend`
-   - Advanced → API token / token name: leave blank (the `CLOUDFLARE_API_TOKEN` variable set below supplies auth)
-   - Variables:
-     - `CLOUDFLARE_API_TOKEN` = token from Step 11 (needs `Account → Cloudflare Pages → Edit`, `User → User Details → Read`, `Account → Account Settings → Read`)
-     - `CLOUDFLARE_ACCOUNT_ID` = your Cloudflare account ID
-     - `VITE_API_BASE_URL` = `https://api.launchpad.floatify.com`
-     - (add any other `VITE_*` values the app needs)
+| Field | Value |
+|---|---|
+| Repo | `kennyhlee/neo-apex` |
+| Production branch | `main` |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Advanced → API token / token name | *leave blank* (auth comes from the `CLOUDFLARE_API_TOKEN` variable below) |
+| Advanced → Build for non-production branches | optional (enable if you want PR preview builds) |
 
-2. **papermite-frontend**
-   - Same settings, Path: `papermite/frontend`
-   - `VITE_API_BASE_URL` = `https://api.papermite.floatify.com`
+### Required variables by category
 
-3. **admindash**
-   - Path: `admindash/frontend`
-   - `VITE_ADMINDASH_API_URL` = `https://api.admin.floatify.com`
+Each project needs variables from three categories. Create them as **Plain text** variables unless marked otherwise.
 
-Trigger the first deploy from `main`. Verify each is reachable at its temporary `*.workers.dev` URL.
+**A. Build-time auth (lets wrangler upload the built assets):**
+
+| Variable | Value | Notes |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | token from Step 11 | **Mark as secret.** Needs `Account → Cloudflare Pages → Edit`, `User → User Details → Read`, `Account → Account Settings → Read`. |
+| `CLOUDFLARE_ACCOUNT_ID` | your account ID (e.g. `05bb53d613d01716216725225fea1a12`) | Plain text. |
+
+These two are **identical across all three Worker projects** — you're deploying all of them into the same Cloudflare account.
+
+**B. Build-time Vite vars (baked into the bundle by `npm run build`):**
+
+| Project | Variable | Value | Purpose |
+|---|---|---|---|
+| `launchpad-frontend` | `VITE_LAUNCHPAD_BACKEND_URL` | `https://api.launchpad.floatify.com` | Base URL the SPA uses to call its own backend. |
+| `launchpad-frontend` | `VITE_PAPERMITE_FRONTEND_URL` | `https://papermite.floatify.com` | Used for cross-app navigation links from launchpad to papermite. |
+| `papermite-frontend` | `VITE_PAPERMITE_BACKEND_URL` | `https://api.papermite.floatify.com` | Base URL the SPA uses to call its own backend. |
+| `admindash` | `VITE_ADMINDASH_API_URL` | `https://api.admin.floatify.com` | Base URL the SPA uses to call its own backend. |
+
+Vite replaces `import.meta.env.VITE_*` references in the source at build time, so these values are embedded in the JS bundle served to users — they are not secrets. Getting the **name** wrong (e.g. `VITE_API_BASE_URL` instead of `VITE_LAUNCHPAD_BACKEND_URL`) silently falls back to the dev default (`http://localhost:5510`) and the production site will fail to reach its API.
+
+### Per-project config
+
+| Project | Advanced → Path | Must match `name` in wrangler.jsonc |
+|---|---|---|
+| `launchpad-frontend` | `launchpad/frontend` | `launchpad-frontend` |
+| `papermite-frontend` | `papermite/frontend` | `papermite-frontend` |
+| `admindash` | `admindash/frontend` | `admindash` |
+
+### First deploy
+
+Create `launchpad-frontend` first, trigger its initial build from `main`, and confirm the temporary `*.workers.dev` URL loads before creating the other two — that catches any token or path issue once, not three times. Repeat for papermite and admindash.
 
 > **Why Workers and not Pages?** Cloudflare is consolidating static-site hosting onto Workers with Static Assets. Existing Pages projects keep working, but the "new Pages project" flow now actually creates a Worker. `wrangler.jsonc` in the repo makes the setup reproducible and unblocks CI-driven deploys (Step 13).
 
