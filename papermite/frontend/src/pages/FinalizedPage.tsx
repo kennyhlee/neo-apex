@@ -3,7 +3,6 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type {
   ExtractionResult,
   FinalizePreviewResponse,
-  FinalizeCommitResponse,
   ModelDefinition,
   TestUser,
 } from "../types/models";
@@ -246,7 +245,7 @@ export default function FinalizedPage({ user }: Props) {
           tenant_id: user.tenant_id,
           version: isUnchanged ? existingVersion : existingVersion + 1,
           entity_count: draft.entities.length,
-          model_definition: modelDef as ModelDefinition,
+          model_definition: modelDef as unknown as ModelDefinition,
           source_filename: isUnchanged ? (existingMeta.source_filename || draft.filename) : draft.filename,
           created_by: isUnchanged ? existingMeta.created_by : user.name,
           created_at: isUnchanged ? existingMeta.created_at : undefined,
