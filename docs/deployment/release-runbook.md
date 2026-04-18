@@ -36,7 +36,7 @@ The release event triggers the Deploy workflow (`.github/workflows/deploy.yml`),
 2. Enters the `production` GitHub Environment — waiting for reviewer approval
 3. Builds the Docker image (for backends) and pushes to GHCR
 4. Runs `flyctl deploy` against the target Fly.io app
-5. For modules with a frontend, builds and deploys to Cloudflare Pages in parallel
+5. For modules with a frontend, builds and deploys to Cloudflare Workers (Static Assets) in parallel
 
 ## Approving a deploy
 
@@ -70,9 +70,9 @@ flyctl deploy --image ghcr.io/kennyhlee/datacore:datacore-v1.1.9 --config dataco
 
 This requires `flyctl` authenticated with a token that has deploy rights. Bypasses the GitHub Environment approval — use only in emergencies.
 
-### Option 3: Rollback a frontend via Cloudflare Pages dashboard
+### Option 3: Rollback a frontend via Cloudflare dashboard
 
-Cloudflare dashboard → `launchpad-frontend` (or whichever) → **Deployments** → find the previous deployment → **Rollback to this deployment**.
+Cloudflare dashboard → **Workers & Pages** → `launchpad-frontend` (or whichever) → **Deployments** → find the previous deployment → **Rollback to this deployment**.
 
 ## Reading logs
 
@@ -87,9 +87,9 @@ flyctl logs --app admindash-api
 
 Add `--region sjc` if you have multi-region. Add `-i` for interactive follow.
 
-### Cloudflare Pages frontends
+### Cloudflare Workers frontends
 
-Cloudflare dashboard → each Pages project → **Deployments** → click a deployment → **Build output** tab.
+Cloudflare dashboard → **Workers & Pages** → each Worker project → **Deployments** → click a deployment → **Build output** tab. Runtime logs are in the **Logs** tab.
 
 ### GitHub Actions
 

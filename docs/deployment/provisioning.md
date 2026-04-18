@@ -149,41 +149,49 @@ flyctl ssh console --app launchpad-api -C "curl -s http://datacore.flycast:5800/
 
 Expected: `{"status":"ok"}`.
 
-## Step 7: Create Cloudflare Pages projects
+## Step 7: Create Cloudflare Workers projects (Static Assets)
 
-In the Cloudflare dashboard → **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**:
+Cloudflare's unified UI now creates new git-connected static sites as **Workers with Static Assets** (the successor to classic Pages — the URL path shows `workers/services/view/...`, not `workers-and-pages/view/...`). Each frontend has a `wrangler.jsonc` committed at `<svc>/frontend/wrangler.jsonc` that declares the project name, compatibility date, and SPA fallback.
 
-Create three projects:
+In the Cloudflare dashboard → **Workers & Pages** → **Create** → **Import an existing Git repository**:
+
+Create three projects. Field names reflect the current (2026) UI:
 
 1. **launchpad-frontend**
    - Repo: `kennyhlee/neo-apex`
+   - Project name: `launchpad-frontend` (must match `name` in `launchpad/frontend/wrangler.jsonc`)
    - Production branch: `main`
    - Build command: `npm run build`
-   - Build output directory: `dist`
-   - Root directory: `launchpad/frontend`
-   - Production environment variables:
+   - Deploy command: `npx wrangler deploy`
+   - Advanced → Path: `launchpad/frontend`
+   - Advanced → API token / token name: leave blank (the `CLOUDFLARE_API_TOKEN` variable set below supplies auth)
+   - Variables:
+     - `CLOUDFLARE_API_TOKEN` = token from Step 11 (needs `Account → Cloudflare Pages → Edit`, `User → User Details → Read`, `Account → Account Settings → Read`)
+     - `CLOUDFLARE_ACCOUNT_ID` = your Cloudflare account ID
      - `VITE_API_BASE_URL` = `https://api.launchpad.floatify.com`
-     - (add any other VITE_* values the app needs)
+     - (add any other `VITE_*` values the app needs)
 
 2. **papermite-frontend**
-   - Same settings, root directory: `papermite/frontend`
+   - Same settings, Path: `papermite/frontend`
    - `VITE_API_BASE_URL` = `https://api.papermite.floatify.com`
 
 3. **admindash**
-   - Root directory: `admindash/frontend`
+   - Path: `admindash/frontend`
    - `VITE_ADMINDASH_API_URL` = `https://api.admin.floatify.com`
 
-Let each project do its first build from `main`. Verify each is reachable at its temporary `*.pages.dev` URL.
+Trigger the first deploy from `main`. Verify each is reachable at its temporary `*.workers.dev` URL.
 
-## Step 8: Add custom domains to each Cloudflare Pages project
+> **Why Workers and not Pages?** Cloudflare is consolidating static-site hosting onto Workers with Static Assets. Existing Pages projects keep working, but the "new Pages project" flow now actually creates a Worker. `wrangler.jsonc` in the repo makes the setup reproducible and unblocks CI-driven deploys (Step 13).
 
-In each Pages project → **Custom domains** → **Set up a custom domain**:
+## Step 8: Add custom domains to each Worker project
+
+In each project → **Settings** → **Domains & Routes** → **Add Custom Domain**:
 
 - `launchpad-frontend` → `launchpad.floatify.com`
 - `papermite-frontend` → `papermite.floatify.com`
 - `admindash` → `admin.floatify.com`
 
-Cloudflare will automatically create the CNAME records and provision TLS certificates.
+Cloudflare auto-creates the DNS records and provisions TLS certificates.
 
 ## Step 9: Add Cloudflare DNS records for the Fly.io backends
 
@@ -235,14 +243,22 @@ flyctl tokens create deploy --app admindash-api --name github-actions-admindash-
 In Cloudflare dashboard → **My Profile** → **API Tokens** → **Create Token** → **Custom token**:
 
 - Name: `neo-apex-deploy`
-- Permissions:
+- Permissions (all three are required for `wrangler deploy` on Workers with Static Assets):
   - `Account` → `Cloudflare Pages` → `Edit`
-- Account Resources: include the specific account
+  - `User` → `User Details` → `Read`
+  - `Account` → `Account Settings` → `Read`
+- Account Resources: `Include` → your specific account
 - Zone Resources: none needed
 - Click **Continue to summary** → **Create Token**
 - Copy the token — you will never see it again
 
-Also copy your Cloudflare **Account ID** from the Pages dashboard (right side).
+Also copy your Cloudflare **Account ID** from the Workers & Pages dashboard (right sidebar).
+
+The same token feeds three callers, so generate once and reuse:
+
+1. Each Cloudflare Worker project's `CLOUDFLARE_API_TOKEN` variable (Step 7 — already set if you did Step 11 first).
+2. The GitHub Environment secret `CLOUDFLARE_API_TOKEN` (Step 12).
+3. Your local `flyctl`/`wrangler` shell if you ever deploy by hand (optional).
 
 ## Step 12: Create the GitHub `production` environment with required reviewer
 

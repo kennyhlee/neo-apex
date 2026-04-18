@@ -1,0 +1,18 @@
+// Cloudflare Workers config for the launchpad frontend.
+//
+// Deployed as a Worker with Static Assets (Cloudflare's successor to
+// classic Pages). The built Vite bundle in ./dist is served from
+// Cloudflare's edge. `not_found_handling = "single-page-application"`
+// returns index.html for unknown paths so React Router handles routing.
+//
+// Build-time env vars (e.g. VITE_API_BASE_URL) are configured in the
+// Cloudflare dashboard, not here — they affect the bundle produced by
+// `npm run build`, which is the Deploy command's upstream step.
+{
+  "name": "launchpad-frontend",
+  "compatibility_date": "2026-04-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

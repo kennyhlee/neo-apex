@@ -123,7 +123,6 @@ function AppShell({ user, onLogout }: { user: TestUser; onLogout: () => void }) 
 export default function App() {
   const [user, setUser] = useState<TestUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [backendError, setBackendError] = useState(false);
 
   useEffect(() => {
     // Check for exchange code from launchpad
@@ -164,7 +163,6 @@ export default function App() {
   const handleLogin = (token: string, loggedInUser: TestUser) => {
     storeToken(token);
     setUser(loggedInUser);
-    setBackendError(false);
   };
 
   const handleLogout = () => {

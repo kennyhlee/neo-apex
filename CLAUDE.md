@@ -95,15 +95,15 @@ All data tenant-scoped. Tenant ID embedded in JWT. API routes enforce tenant mat
 
 ## Deployment
 
-NeoApex deploys to Fly.io (Python backends) and Cloudflare Pages (React frontends) via a GitHub Actions release-tag-triggered pipeline.
+NeoApex deploys to Fly.io (Python backends) and Cloudflare Workers with Static Assets (React frontends) via a GitHub Actions release-tag-triggered pipeline.
 
-**Topology:** `datacore` is on Fly's private network only. `launchpad-api`, `papermite-api`, and `admindash-api` are public Fly.io apps fronted by Cloudflare with an IP allowlist middleware. The three frontends are on Cloudflare Pages at `launchpad.floatify.com`, `papermite.floatify.com`, and `admin.floatify.com`. The API endpoints are at `api.<name>.floatify.com`.
+**Topology:** `datacore` is on Fly's private network only. `launchpad-api`, `papermite-api`, and `admindash-api` are public Fly.io apps fronted by Cloudflare with an IP allowlist middleware. The three frontends are Cloudflare Workers (Static Assets) at `launchpad.floatify.com`, `papermite.floatify.com`, and `admin.floatify.com`. The API endpoints are at `api.<name>.floatify.com`.
 
 **Release trigger:** publish a GitHub Release with a module-prefixed tag (`datacore-v*`, `launchpad-v*`, `papermite-v*`, `admindash-v*`). The `.github/workflows/deploy.yml` workflow parses the tag, dispatches to per-module deploy jobs, and requires manual approval via the `production` GitHub Environment before any deploy step runs.
 
 **Docs:**
 - [`docs/deployment/architecture.md`](docs/deployment/architecture.md) — topology diagram, trust boundaries, cost estimates
-- [`docs/deployment/provisioning.md`](docs/deployment/provisioning.md) — one-time setup runbook (Fly.io account, Cloudflare Pages, DNS, secrets, first deploy)
+- [`docs/deployment/provisioning.md`](docs/deployment/provisioning.md) — one-time setup runbook (Fly.io account, Cloudflare Workers, DNS, secrets, first deploy)
 - [`docs/deployment/release-runbook.md`](docs/deployment/release-runbook.md) — cutting releases, approving deploys, rolling back
 - [`docs/deployment/follow-ups.md`](docs/deployment/follow-ups.md) — deferred hardening and nice-to-haves
 
