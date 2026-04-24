@@ -214,19 +214,32 @@ In each project → **Settings** → **Domains & Routes** → **Add Custom Domai
 
 Cloudflare auto-creates the DNS records and provisions TLS certificates.
 
+> ⚠️ **Never use a wildcard Workers Route like `*.floatify.com/*`.** A wildcard catches every subdomain on the zone — including the `api.*.floatify.com` hostnames added in Step 9 — and whichever Worker it's bound to will return 404 for paths it doesn't know about. Always scope routes to specific hostnames (`launchpad.floatify.com/*`, `papermite.floatify.com/*`, `admin.floatify.com/*`, and, if you have a landing page, `floatify.com/*` + `www.floatify.com/*`). Leaving `api.*.floatify.com` **unbound** is what lets Cloudflare proxy those requests straight through to Fly.io.
+
 ## Step 9: Add Cloudflare DNS records for the Fly.io backends
 
-In Cloudflare dashboard → `floatify.com` → **DNS** → **Records**:
+> ⚠️ **Check Workers Routes before you start.** Go to Cloudflare dashboard → `floatify.com` → **Workers Routes** and make sure there is **no wildcard route** like `*.floatify.com/*` bound to any Worker. A wildcard catches every subdomain on the zone — including `api.launchpad.floatify.com` etc. — and the bound Worker will return 404 for API paths it doesn't know about. Routes should be scoped to specific hostnames:
+>
+> - `floatify.com/*`, `www.floatify.com/*` → landing-page Worker (if you have one)
+> - `launchpad.floatify.com/*` → `launchpad-frontend`
+> - `papermite.floatify.com/*` → `papermite-frontend`
+> - `admin.floatify.com/*` → `admindash` frontend
+>
+> Leaving `api.*.floatify.com` **unbound** is what lets Cloudflare proxy those requests straight through to Fly.
 
-Create three **CNAME** records (proxied, orange cloud on):
+### 9.1 Create the CNAMEs
+
+In Cloudflare dashboard → `floatify.com` → **DNS** → **Records**, create three **CNAME** records:
 
 | Name | Target | Proxy |
 |---|---|---|
-| `api.launchpad` | `launchpad-api.fly.dev` | ☁️ Proxied |
-| `api.papermite` | `papermite-api.fly.dev` | ☁️ Proxied |
-| `api.admin` | `admindash-api.fly.dev` | ☁️ Proxied |
+| `api.launchpad` | `launchpad-api.fly.dev` | ☁️ Proxied (orange cloud) |
+| `api.papermite` | `papermite-api.fly.dev` | ☁️ Proxied (orange cloud) |
+| `api.admin` | `admindash-api.fly.dev` | ☁️ Proxied (orange cloud) |
 
-Then tell Fly.io about the custom domains so it can issue certificates:
+### 9.2 Issue Fly.io certs (gray-cloud trick)
+
+Tell Fly.io about the custom hostnames so it can issue origin certs:
 
 ```bash
 flyctl certs add api.launchpad.floatify.com --app launchpad-api
@@ -234,13 +247,50 @@ flyctl certs add api.papermite.floatify.com --app papermite-api
 flyctl certs add api.admin.floatify.com --app admindash-api
 ```
 
-Wait for each to show `Ready` (can take a few minutes):
+Check status:
 
 ```bash
 flyctl certs list --app launchpad-api
 flyctl certs list --app papermite-api
 flyctl certs list --app admindash-api
 ```
+
+Certs will likely show **`Not verified`** with a message like *"DNS records do not match the expected values."* This is expected when the CNAME is orange-clouded — public DNS resolves to Cloudflare IPs, so Fly's HTTP-01 challenge can't reach the origin.
+
+**Fix: temporarily un-proxy the CNAMEs for cert issuance, then re-proxy.**
+
+1. In Cloudflare DNS, flip all three `api.*` CNAMEs from **orange cloud → gray cloud (DNS only)**.
+2. Wait ~30–60s for DNS propagation, then nudge Fly:
+
+   ```bash
+   flyctl certs check api.launchpad.floatify.com --app launchpad-api
+   flyctl certs check api.papermite.floatify.com --app papermite-api
+   flyctl certs check api.admin.floatify.com --app admindash-api
+   ```
+
+3. Re-run `flyctl certs list --app <app>` until each shows `Status: Ready` (or `Issued` with `Configured: true`). Takes 1–3 minutes each.
+4. Flip the CNAMEs **back to orange cloud (Proxied)** in Cloudflare DNS.
+
+> Fly renews via the ACME alt-chain after initial issuance, so you don't need to repeat the gray-cloud dance for renewals. If a future renewal ever fails, temporarily gray-cloud → let it renew → re-proxy.
+
+### 9.3 Verify end-to-end
+
+**Set Cloudflare SSL/TLS mode to `Full (strict)`** (Cloudflare dashboard → SSL/TLS → Overview). `Flexible` causes redirect loops; `Full` (non-strict) silently accepts bad origin certs.
+
+Test the full proxy chain (Cloudflare edge → Fly origin):
+
+```bash
+curl -sS https://api.launchpad.floatify.com/api/health
+curl -sS https://api.papermite.floatify.com/api/health
+curl -sS https://api.admin.floatify.com/api/health
+```
+
+Expect `{"status":"ok"}` from all three.
+
+- `404` with `server: cloudflare` HTML body → a Workers Route is intercepting (see 9's warning — check `Workers Routes`).
+- `403 {"detail":"Forbidden"}` → `/api/health` should be in the Cloudflare IP allowlist middleware's exempt paths; if it isn't, something regressed in `app/middleware/cloudflare_ip.py`.
+- `525` / `526` → Cloudflare can't validate Fly's origin cert. Confirm SSL/TLS mode is **Full (strict)** and the cert showed `Ready`.
+- Connection reset / timeout → orange cloud hasn't fully propagated. Wait 1–2 min.
 
 ## Step 10: Generate Fly.io deploy tokens (scoped per app)
 
