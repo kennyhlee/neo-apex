@@ -176,6 +176,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: launchpad/frontend
           command: deploy
+          wranglerVersion: '4'
 
   deploy-papermite-api:
     name: Deploy papermite-api (Fly.io)
@@ -251,6 +252,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: papermite/frontend
           command: deploy
+          wranglerVersion: '4'
 
   deploy-admindash-api:
     name: Deploy admindash-api (Fly.io)
@@ -326,3 +328,4 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: admindash/frontend
           command: deploy
+          wranglerVersion: '4'
