@@ -339,7 +339,11 @@ Configure:
 
 - **Required reviewers**: add yourself (and any teammate you trust)
 - **Wait timer**: 0 minutes
-- **Deployment branches**: restrict to `main`
+- **Deployment branches and tags**: select **Selected branches and tags** and add **both** of the following rules:
+  - **Branch** → `main` (allows manual `workflow_dispatch` runs from main, e.g. for rollbacks)
+  - **Tag** → `*-v*` (allows release-event runs whose ref is the module-prefixed tag — `datacore-v*`, `launchpad-v*`, `papermite-v*`, `admindash-v*`)
+
+  > ⚠️ A branch rule alone is **not** sufficient. The deploy workflow is triggered by `release` events whose `github.ref` is a tag like `refs/tags/datacore-v0.1.0`, not a branch. Without a matching tag rule, GitHub blocks the deploy with `Tag "<tag>" is not allowed to deploy to production due to environment protection rules.`
 
 Then add the environment secrets (Settings → Environments → production → Environment secrets → Add secret):
 
