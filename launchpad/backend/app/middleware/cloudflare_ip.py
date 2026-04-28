@@ -81,20 +81,23 @@ def _is_cloudflare_ip(ip_str: str) -> bool:
 
 
 def _client_ip_from_request(request: Request) -> str | None:
-    """Extract the client IP from the X-Forwarded-For header.
+    """Extract the IP of the immediate upstream that connected to fly-proxy.
 
-    Cloudflare sets X-Forwarded-For to a comma-separated chain ending at the
-    original client. The FIRST entry is the original client IP; subsequent
-    entries are intermediate proxies. We check the FIRST entry.
+    Behind Cloudflare → Fly, fly-proxy sets `Fly-Client-IP` to the IP that
+    opened the connection to it — i.e. the Cloudflare edge IP for proxied
+    traffic. fly-proxy overwrites this header on every request, so it can't
+    be spoofed by an attacker hitting Fly directly.
 
-    If no XFF header is present, fall back to the TCP source IP from the ASGI
-    scope — but in production behind Cloudflare this should always be set.
+    NOT `X-Forwarded-For[0]`: Cloudflare puts the original client IP there
+    (the user's residential IP), so it's never in CF ranges and every
+    proxied request gets a 403.
+
+    NOT `CF-Connecting-IP`: also the original client IP, and an attacker
+    can spoof it by hitting Fly directly — defeating this allowlist.
     """
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        first = xff.split(",")[0].strip()
-        if first:
-            return first
+    fly_client_ip = request.headers.get("fly-client-ip")
+    if fly_client_ip:
+        return fly_client_ip.strip()
 
     client = request.client
     if client:
