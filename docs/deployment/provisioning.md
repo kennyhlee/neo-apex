@@ -153,33 +153,54 @@ Expected: `{"status":"ok"}`.
 
 Cloudflare's unified UI now creates new git-connected static sites as **Workers with Static Assets** (the successor to classic Pages — the URL path shows `workers/services/view/...`, not `workers-and-pages/view/...`). Each frontend has a `wrangler.jsonc` committed at `<svc>/frontend/wrangler.jsonc` that declares the project name, compatibility date, and SPA fallback.
 
-In the Cloudflare dashboard → **Workers & Pages** → **Create** → **Import an existing Git repository**:
+In the Cloudflare dashboard → **Workers & Pages** → **Create** → **Import an existing Git repository**.
 
-Create three projects. Field names reflect the current (2026) UI:
+### Shared settings (all three projects)
 
-1. **launchpad-frontend**
-   - Repo: `kennyhlee/neo-apex`
-   - Project name: `launchpad-frontend` (must match `name` in `launchpad/frontend/wrangler.jsonc`)
-   - Production branch: `main`
-   - Build command: `npm run build`
-   - Deploy command: `npx wrangler deploy`
-   - Advanced → Path: `launchpad/frontend`
-   - Advanced → API token / token name: leave blank (the `CLOUDFLARE_API_TOKEN` variable set below supplies auth)
-   - Variables:
-     - `CLOUDFLARE_API_TOKEN` = token from Step 11 (needs `Account → Cloudflare Pages → Edit`, `User → User Details → Read`, `Account → Account Settings → Read`)
-     - `CLOUDFLARE_ACCOUNT_ID` = your Cloudflare account ID
-     - `VITE_API_BASE_URL` = `https://api.launchpad.floatify.com`
-     - (add any other `VITE_*` values the app needs)
+| Field | Value |
+|---|---|
+| Repo | `kennyhlee/neo-apex` |
+| Production branch | `main` |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Advanced → API token / token name | *leave blank* (auth comes from the `CLOUDFLARE_API_TOKEN` variable below) |
+| Advanced → Build for non-production branches | optional (enable if you want PR preview builds) |
 
-2. **papermite-frontend**
-   - Same settings, Path: `papermite/frontend`
-   - `VITE_API_BASE_URL` = `https://api.papermite.floatify.com`
+### Required variables by category
 
-3. **admindash**
-   - Path: `admindash/frontend`
-   - `VITE_ADMINDASH_API_URL` = `https://api.admin.floatify.com`
+Each project needs variables from three categories. Create them as **Plain text** variables unless marked otherwise.
 
-Trigger the first deploy from `main`. Verify each is reachable at its temporary `*.workers.dev` URL.
+**A. Build-time auth (lets wrangler upload the built assets):**
+
+| Variable | Value | Notes |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | token from Step 11 | **Mark as secret.** Needs `Account → Cloudflare Pages → Edit`, `User → User Details → Read`, `Account → Account Settings → Read`. |
+| `CLOUDFLARE_ACCOUNT_ID` | your account ID (e.g. `05bb53d613d01716216725225fea1a12`) | Plain text. |
+
+These two are **identical across all three Worker projects** — you're deploying all of them into the same Cloudflare account.
+
+**B. Build-time Vite vars (baked into the bundle by `npm run build`):**
+
+| Project | Variable | Value | Purpose |
+|---|---|---|---|
+| `launchpad-frontend` | `VITE_LAUNCHPAD_BACKEND_URL` | `https://api.launchpad.floatify.com` | Base URL the SPA uses to call its own backend. |
+| `launchpad-frontend` | `VITE_PAPERMITE_FRONTEND_URL` | `https://papermite.floatify.com` | Used for cross-app navigation links from launchpad to papermite. |
+| `papermite-frontend` | `VITE_PAPERMITE_BACKEND_URL` | `https://api.papermite.floatify.com` | Base URL the SPA uses to call its own backend. |
+| `admindash` | `VITE_ADMINDASH_API_URL` | `https://api.admin.floatify.com` | Base URL the SPA uses to call its own backend. |
+
+Vite replaces `import.meta.env.VITE_*` references in the source at build time, so these values are embedded in the JS bundle served to users — they are not secrets. Getting the **name** wrong (e.g. `VITE_API_BASE_URL` instead of `VITE_LAUNCHPAD_BACKEND_URL`) silently falls back to the dev default (`http://localhost:5510`) and the production site will fail to reach its API.
+
+### Per-project config
+
+| Project | Advanced → Path | Must match `name` in wrangler.jsonc |
+|---|---|---|
+| `launchpad-frontend` | `launchpad/frontend` | `launchpad-frontend` |
+| `papermite-frontend` | `papermite/frontend` | `papermite-frontend` |
+| `admindash` | `admindash/frontend` | `admindash` |
+
+### First deploy
+
+Create `launchpad-frontend` first, trigger its initial build from `main`, and confirm the temporary `*.workers.dev` URL loads before creating the other two — that catches any token or path issue once, not three times. Repeat for papermite and admindash.
 
 > **Why Workers and not Pages?** Cloudflare is consolidating static-site hosting onto Workers with Static Assets. Existing Pages projects keep working, but the "new Pages project" flow now actually creates a Worker. `wrangler.jsonc` in the repo makes the setup reproducible and unblocks CI-driven deploys (Step 13).
 
@@ -193,19 +214,32 @@ In each project → **Settings** → **Domains & Routes** → **Add Custom Domai
 
 Cloudflare auto-creates the DNS records and provisions TLS certificates.
 
+> ⚠️ **Never use a wildcard Workers Route like `*.floatify.com/*`.** A wildcard catches every subdomain on the zone — including the `api.*.floatify.com` hostnames added in Step 9 — and whichever Worker it's bound to will return 404 for paths it doesn't know about. Always scope routes to specific hostnames (`launchpad.floatify.com/*`, `papermite.floatify.com/*`, `admin.floatify.com/*`, and, if you have a landing page, `floatify.com/*` + `www.floatify.com/*`). Leaving `api.*.floatify.com` **unbound** is what lets Cloudflare proxy those requests straight through to Fly.io.
+
 ## Step 9: Add Cloudflare DNS records for the Fly.io backends
 
-In Cloudflare dashboard → `floatify.com` → **DNS** → **Records**:
+> ⚠️ **Check Workers Routes before you start.** Go to Cloudflare dashboard → `floatify.com` → **Workers Routes** and make sure there is **no wildcard route** like `*.floatify.com/*` bound to any Worker. A wildcard catches every subdomain on the zone — including `api.launchpad.floatify.com` etc. — and the bound Worker will return 404 for API paths it doesn't know about. Routes should be scoped to specific hostnames:
+>
+> - `floatify.com/*`, `www.floatify.com/*` → landing-page Worker (if you have one)
+> - `launchpad.floatify.com/*` → `launchpad-frontend`
+> - `papermite.floatify.com/*` → `papermite-frontend`
+> - `admin.floatify.com/*` → `admindash` frontend
+>
+> Leaving `api.*.floatify.com` **unbound** is what lets Cloudflare proxy those requests straight through to Fly.
 
-Create three **CNAME** records (proxied, orange cloud on):
+### 9.1 Create the CNAMEs
+
+In Cloudflare dashboard → `floatify.com` → **DNS** → **Records**, create three **CNAME** records:
 
 | Name | Target | Proxy |
 |---|---|---|
-| `api.launchpad` | `launchpad-api.fly.dev` | ☁️ Proxied |
-| `api.papermite` | `papermite-api.fly.dev` | ☁️ Proxied |
-| `api.admin` | `admindash-api.fly.dev` | ☁️ Proxied |
+| `api.launchpad` | `launchpad-api.fly.dev` | ☁️ Proxied (orange cloud) |
+| `api.papermite` | `papermite-api.fly.dev` | ☁️ Proxied (orange cloud) |
+| `api.admin` | `admindash-api.fly.dev` | ☁️ Proxied (orange cloud) |
 
-Then tell Fly.io about the custom domains so it can issue certificates:
+### 9.2 Issue Fly.io certs (gray-cloud trick)
+
+Tell Fly.io about the custom hostnames so it can issue origin certs:
 
 ```bash
 flyctl certs add api.launchpad.floatify.com --app launchpad-api
@@ -213,13 +247,50 @@ flyctl certs add api.papermite.floatify.com --app papermite-api
 flyctl certs add api.admin.floatify.com --app admindash-api
 ```
 
-Wait for each to show `Ready` (can take a few minutes):
+Check status:
 
 ```bash
 flyctl certs list --app launchpad-api
 flyctl certs list --app papermite-api
 flyctl certs list --app admindash-api
 ```
+
+Certs will likely show **`Not verified`** with a message like *"DNS records do not match the expected values."* This is expected when the CNAME is orange-clouded — public DNS resolves to Cloudflare IPs, so Fly's HTTP-01 challenge can't reach the origin.
+
+**Fix: temporarily un-proxy the CNAMEs for cert issuance, then re-proxy.**
+
+1. In Cloudflare DNS, flip all three `api.*` CNAMEs from **orange cloud → gray cloud (DNS only)**.
+2. Wait ~30–60s for DNS propagation, then nudge Fly:
+
+   ```bash
+   flyctl certs check api.launchpad.floatify.com --app launchpad-api
+   flyctl certs check api.papermite.floatify.com --app papermite-api
+   flyctl certs check api.admin.floatify.com --app admindash-api
+   ```
+
+3. Re-run `flyctl certs list --app <app>` until each shows `Status: Ready` (or `Issued` with `Configured: true`). Takes 1–3 minutes each.
+4. Flip the CNAMEs **back to orange cloud (Proxied)** in Cloudflare DNS.
+
+> Fly renews via the ACME alt-chain after initial issuance, so you don't need to repeat the gray-cloud dance for renewals. If a future renewal ever fails, temporarily gray-cloud → let it renew → re-proxy.
+
+### 9.3 Verify end-to-end
+
+**Set Cloudflare SSL/TLS mode to `Full (strict)`** (Cloudflare dashboard → SSL/TLS → Overview). `Flexible` causes redirect loops; `Full` (non-strict) silently accepts bad origin certs.
+
+Test the full proxy chain (Cloudflare edge → Fly origin):
+
+```bash
+curl -sS https://api.launchpad.floatify.com/api/health
+curl -sS https://api.papermite.floatify.com/api/health
+curl -sS https://api.admin.floatify.com/api/health
+```
+
+Expect `{"status":"ok"}` from all three.
+
+- `404` with `server: cloudflare` HTML body → a Workers Route is intercepting (see 9's warning — check `Workers Routes`).
+- `403 {"detail":"Forbidden"}` → `/api/health` should be in the Cloudflare IP allowlist middleware's exempt paths; if it isn't, something regressed in `app/middleware/cloudflare_ip.py`.
+- `525` / `526` → Cloudflare can't validate Fly's origin cert. Confirm SSL/TLS mode is **Full (strict)** and the cert showed `Ready`.
+- Connection reset / timeout → orange cloud hasn't fully propagated. Wait 1–2 min.
 
 ## Step 10: Generate Fly.io deploy tokens (scoped per app)
 
