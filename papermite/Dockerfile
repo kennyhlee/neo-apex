@@ -7,11 +7,16 @@ FROM python:3.11-slim AS runtime
 # - poppler-utils: PDF → text for docling
 # - libmagic1: file type detection
 # - build-essential + pkg-config: some Python deps need a compiler at install time
+# - libgl1 + libglib2.0-0: OpenCV runtime libs (pulled in transitively by
+#   docling → easyocr → cv2). Without libgl1, `import cv2` fails with
+#   "libGL.so.1: cannot open shared object file" at first PDF extract.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     curl \
+    libgl1 \
+    libglib2.0-0 \
     libmagic1 \
     pkg-config \
     poppler-utils \
