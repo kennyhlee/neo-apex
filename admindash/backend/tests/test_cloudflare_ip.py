@@ -103,3 +103,34 @@ def test_health_endpoint_bypasses_ip_allowlist(monkeypatch):
     resp = client.get("/api/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+def test_fly_internal_ipv4_via_fly_client_ip_is_allowed(monkeypatch):
+    """Sibling apps reach this service via .flycast; fly-proxy sets fly-client-ip
+    to the source machine's address on Fly's internal network (172.16.0.0/12).
+    These IPs are not internet-routable, so they are safe to allowlist.
+    """
+    monkeypatch.delenv("TRUST_ALL_IPS", raising=False)
+    client = _make_app(trust_all_ips=False)
+    resp = client.get("/test", headers={"fly-client-ip": "172.16.9.98"})
+    assert resp.status_code == 200
+
+
+def test_fly_6pn_ipv6_via_fly_client_ip_is_allowed(monkeypatch):
+    """Fly's 6PN IPv6 private network (fdaa::/16) is the IPv6 counterpart to
+    172.16.0.0/12 and is the source for sibling-app traffic in some cases.
+    """
+    monkeypatch.delenv("TRUST_ALL_IPS", raising=False)
+    client = _make_app(trust_all_ips=False)
+    resp = client.get("/test", headers={"fly-client-ip": "fdaa:0:1::1"})
+    assert resp.status_code == 200
+
+
+def test_non_fly_rfc1918_is_still_rejected(monkeypatch):
+    """Only Fly's specific internal range (172.16.0.0/12) is trusted, not all
+    of RFC1918. A request claiming to come from 10.0.0.1 must still be rejected.
+    """
+    monkeypatch.delenv("TRUST_ALL_IPS", raising=False)
+    client = _make_app(trust_all_ips=False)
+    resp = client.get("/test", headers={"fly-client-ip": "10.0.0.1"})
+    assert resp.status_code == 403

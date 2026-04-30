@@ -1,9 +1,16 @@
-"""Cloudflare IP allowlist middleware.
+"""Trusted-ingress IP allowlist middleware.
 
-Rejects requests whose source IP is not within Cloudflare's published IP
-ranges with HTTP 403. This prevents attackers from bypassing the Cloudflare
-WAF by finding the Fly.io origin IP via certificate transparency logs or
-historical DNS.
+Rejects requests whose source IP is not within a trusted ingress range with
+HTTP 403. Two classes of source are trusted:
+
+1. Cloudflare edge IPs — public traffic that came in via the WAF. Prevents
+   attackers from bypassing the WAF by finding the Fly.io origin IP via
+   certificate transparency logs or historical DNS.
+2. Fly internal network ranges (172.16.0.0/12, fdaa::/16) — sibling-app
+   traffic via .flycast / .internal. fly-proxy sets fly-client-ip to the
+   source machine's address on Fly's private network. These ranges are not
+   internet-routable, so an external attacker cannot present them to
+   fly-proxy from the public internet.
 
 IMPORTANT: This file is COPY-PASTED across launchpad/backend/app/middleware/,
 papermite/backend/app/middleware/, and admindash/backend/app/middleware/.
@@ -52,13 +59,28 @@ CLOUDFLARE_IPV6_RANGES: list[str] = [
     "2c0f:f248::/32",
 ]
 
+# Fly's internal networks. Sibling apps reach this service via .flycast or
+# .internal; fly-proxy sets fly-client-ip to the source machine's address in
+# one of these ranges. Not routable from the public internet, so an external
+# attacker cannot present them to fly-proxy.
+FLY_INTERNAL_IPV4_RANGES: list[str] = [
+    "172.16.0.0/12",
+]
+
+FLY_INTERNAL_IPV6_RANGES: list[str] = [
+    "fdaa::/16",
+]
+
 
 def _parse_networks(ranges: Iterable[str]) -> list[ipaddress._BaseNetwork]:
     return [ipaddress.ip_network(r) for r in ranges]
 
 
-_CF_NETWORKS: list[ipaddress._BaseNetwork] = _parse_networks(
-    CLOUDFLARE_IPV4_RANGES + CLOUDFLARE_IPV6_RANGES
+_TRUSTED_NETWORKS: list[ipaddress._BaseNetwork] = _parse_networks(
+    CLOUDFLARE_IPV4_RANGES
+    + CLOUDFLARE_IPV6_RANGES
+    + FLY_INTERNAL_IPV4_RANGES
+    + FLY_INTERNAL_IPV6_RANGES
 )
 
 # Paths exempted from the IP allowlist. Fly.io's internal health checker
@@ -67,12 +89,12 @@ _CF_NETWORKS: list[ipaddress._BaseNetwork] = _parse_networks(
 _EXEMPT_PATHS: frozenset[str] = frozenset({"/api/health"})
 
 
-def _is_cloudflare_ip(ip_str: str) -> bool:
+def _is_trusted_ip(ip_str: str) -> bool:
     try:
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return False
-    for network in _CF_NETWORKS:
+    for network in _TRUSTED_NETWORKS:
         if ip.version != network.version:
             continue
         if ip in network:
@@ -106,7 +128,7 @@ def _client_ip_from_request(request: Request) -> str | None:
 
 
 class CloudflareIPMiddleware(BaseHTTPMiddleware):
-    """Reject requests whose source IP is not within Cloudflare's IP ranges."""
+    """Reject requests whose source IP is not in a trusted ingress range."""
 
     def __init__(self, app: ASGIApp, trust_all_ips: bool = False) -> None:
         super().__init__(app)
@@ -123,10 +145,10 @@ class CloudflareIPMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client_ip = _client_ip_from_request(request)
-        if client_ip is None or not _is_cloudflare_ip(client_ip):
+        if client_ip is None or not _is_trusted_ip(client_ip):
             return JSONResponse(
                 status_code=403,
-                content={"detail": "Source IP not in Cloudflare range"},
+                content={"detail": "Source IP not in trusted ingress range"},
             )
 
         return await call_next(request)
