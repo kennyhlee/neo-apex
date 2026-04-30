@@ -1,7 +1,9 @@
 """AI extraction service using pydantic-ai."""
+from pathlib import Path
+
 from app.models.domain import ENTITY_CLASSES
 from app.models.extraction import RawExtraction
-from pydantic_ai import Agent
+from pydantic_ai import Agent, BinaryContent
 
 
 def _schema_context() -> str:
@@ -38,4 +40,25 @@ def extract_entities(text: str, model_id: str) -> RawExtraction:
     """Extract all entity types from document text using an AI agent."""
     agent = Agent(model_id, output_type=RawExtraction, system_prompt=SYSTEM_PROMPT)
     result = agent.run_sync(f"Extract entities from this document:\n\n{text}")
+    return result.output
+
+
+def extract_entities_from_pdf(file_path: Path, model_id: str) -> RawExtraction:
+    """Extract entities directly from a PDF using a vision-capable LLM.
+
+    Single-call alternative to parse_document + extract_entities. Sends the PDF
+    bytes directly to the model so visual layout (tables, form-field labels) is
+    preserved end-to-end. Used when settings.parser_backend == "claude_merged".
+
+    The caller is responsible for ensuring `model_id` is a vision-capable model
+    (Anthropic Claude or OpenAI GPT-4o family). Ollama and text-only models
+    will fail at the model layer with a clear error.
+    """
+    agent = Agent(model_id, output_type=RawExtraction, system_prompt=SYSTEM_PROMPT)
+    result = agent.run_sync(
+        [
+            "Extract entities from this document:",
+            BinaryContent(data=file_path.read_bytes(), media_type="application/pdf"),
+        ]
+    )
     return result.output

@@ -63,6 +63,12 @@ class Settings(BaseSettings):
         "openai:gpt-5",
         "ollama:llama3.2",
     ]
+    # PDF processing strategy. "local" runs docling for parse + LLM for extract
+    # (2 steps, free parser, ~3+ min on real PDFs, OOM-prone). "claude_merged"
+    # sends the PDF directly to a vision-capable LLM in one call (fast, no
+    # local ML deps). The selected `model_id` (from the upload form) is used
+    # by the merged path; ensure it's a vision-capable model in that mode.
+    parser_backend: str = "local"
     upload_dir: Path = Path(__file__).parent.parent / "uploads"
     port: int = _services.get("papermite-backend", {}).get("port", 6210)
     cors_origins: list[str] = _cors_origins()
