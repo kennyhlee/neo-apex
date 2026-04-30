@@ -109,9 +109,12 @@ flyctl secrets set --app papermite-api \
   CORS_ALLOWED_ORIGINS="https://papermite.floatify.com,https://admin.floatify.com" \
   PAPERMITE_DATACORE_AUTH_URL="http://datacore.flycast:5800/auth" \
   PAPERMITE_DATACORE_API_URL="http://datacore.flycast:5800/api" \
+  PAPERMITE_PARSER_BACKEND="claude_merged" \
   ANTHROPIC_API_KEY="<your-anthropic-key>" \
   OPENAI_API_KEY="<your-openai-key>"
 ```
+
+> **Why `PAPERMITE_PARSER_BACKEND=claude_merged`?** PDF processing is dispatched in `services/processor.py`. The default `local` backend uses docling (OOM-prone on 4 GB+ machines, blows past Cloudflare's 100s request ceiling on real PDFs). `claude_merged` sends the PDF directly to a vision-capable LLM (Anthropic by default — Sonnet 4.6 / Haiku 4.5) in one call, returning structured extractions in 2–10 s. It uses the `ANTHROPIC_API_KEY` already set above. To revert to docling: `flyctl secrets unset PAPERMITE_PARSER_BACKEND --app papermite-api`.
 
 **admindash-api**
 
@@ -139,6 +142,17 @@ cd /path/to/NeoApex/admindash && flyctl deploy && cd -
 Deploy `datacore` first — the three public backends reach it via `datacore.flycast` and will fail their first boot if it isn't up yet.
 
 Each deploy should end with a healthy machine status.
+
+> **Default machine sizes** (declared in each `fly.toml`, picked up automatically by `flyctl deploy`):
+>
+> | App | Size | Memory | Notes |
+> |---|---|---|---|
+> | `datacore` | shared-cpu-1x | 512 MB | Private network only |
+> | `launchpad-api` | shared-cpu-1x | 512 MB | `auto_stop_machines = true` |
+> | `papermite-api` | shared-cpu-2x | **2 GB** | Comfortable for `claude_merged` (RSS sits at ~600–900 MB just from the docling-deps import baseline). Drop to 512 MB once the docling code + dep is removed. **Caveat:** DOCX uploads still call `DocumentConverter()` and may OOM at 2 GB — flag as PDF/TXT-only in the UI until the cleanup PR lands. |
+> | `admindash-api` | shared-cpu-1x | 256 MB | `min_machines_running = 0` (scale-to-zero) |
+>
+> **Beta-tier scaling:** All four apps are configured for a single machine in their fly.toml. Fly defaults to `count = 1` on first deploy. Production HA later: `flyctl scale count 2 --app <app>`.
 
 Verify internal connectivity:
 
@@ -181,14 +195,19 @@ These two are **identical across all three Worker projects** — you're deployin
 
 **B. Build-time Vite vars (baked into the bundle by `npm run build`):**
 
-| Project | Variable | Value | Purpose |
-|---|---|---|---|
-| `launchpad-frontend` | `VITE_LAUNCHPAD_BACKEND_URL` | `https://api.launchpad.floatify.com` | Base URL the SPA uses to call its own backend. |
-| `launchpad-frontend` | `VITE_PAPERMITE_FRONTEND_URL` | `https://papermite.floatify.com` | Used for cross-app navigation links from launchpad to papermite. |
-| `papermite-frontend` | `VITE_PAPERMITE_BACKEND_URL` | `https://api.papermite.floatify.com` | Base URL the SPA uses to call its own backend. |
-| `admindash` | `VITE_ADMINDASH_API_URL` | `https://api.admin.floatify.com` | Base URL the SPA uses to call its own backend. |
+These are **already committed in the repo** as `.env.production` files — Vite auto-loads them when `vite build` runs. **You do not need to set them in the Cloudflare dashboard.**
 
-Vite replaces `import.meta.env.VITE_*` references in the source at build time, so these values are embedded in the JS bundle served to users — they are not secrets. Getting the **name** wrong (e.g. `VITE_API_BASE_URL` instead of `VITE_LAUNCHPAD_BACKEND_URL`) silently falls back to the dev default (`http://localhost:5510`) and the production site will fail to reach its API.
+| File | Contents |
+|---|---|
+| `launchpad/frontend/.env.production` | `VITE_LAUNCHPAD_BACKEND_URL=https://api.launchpad.floatify.com`<br>`VITE_PAPERMITE_FRONTEND_URL=https://papermite.floatify.com` |
+| `papermite/frontend/.env.production` | `VITE_PAPERMITE_BACKEND_URL=https://api.papermite.floatify.com` |
+| `admindash/frontend/.env.production` | `VITE_ADMINDASH_API_URL=https://api.admin.floatify.com` |
+
+These URLs are not secrets — Vite inlines them as string literals into the public JS bundle that any browser can `curl` and read. Committing them keeps the production config in version control (auditable, reviewable in PRs) and removes a class of "dashboard variable silently went missing on rebuild" bug that bit launchpad and papermite during initial provisioning.
+
+> **If you find pre-existing `VITE_*` build vars in a Worker project's dashboard:** safe to delete. They're either redundant (same value as `.env.production`) or actively misleading (e.g., a stale `VITE_API_BASE_URL` left over from old planning docs — no source code reads that name). The committed `.env.production` is the source of truth.
+
+> **Per-environment overrides** (e.g., when you add staging) use Vite's standard mechanism: `.env.staging` next to `.env.production`, then `vite build --mode staging`. No dashboard config needed.
 
 ### Per-project config
 
