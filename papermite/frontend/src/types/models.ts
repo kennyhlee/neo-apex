@@ -31,7 +31,6 @@ export interface ExtractionResult {
   tenant_id: string;
   filename: string;
   entities: EntityResult[];
-  raw_text: string;
   status: "pending_review" | "finalized";
 }
 

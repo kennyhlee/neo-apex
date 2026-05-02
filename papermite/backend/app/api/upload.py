@@ -44,8 +44,8 @@ def upload_document(
 
     try:
         # Pipeline: process (parse+extract per configured backend) → map
-        raw_extraction, text = process_document(file_path, model_id)
-        result = map_extraction(raw_extraction, tenant_id, file.filename, text)
+        raw_extraction, _text = process_document(file_path, model_id)
+        result = map_extraction(raw_extraction, tenant_id, file.filename)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

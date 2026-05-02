@@ -177,7 +177,6 @@ export function modelToExtraction(
     tenant_id: model.tenant_id,
     filename: model.source_filename,
     entities,
-    raw_text: "",
     status: "pending_review",
   };
 }

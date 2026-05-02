@@ -264,7 +264,7 @@ def _consolidate_entities(entities: list[EntityResult]) -> list[EntityResult]:
     return list(by_type.values())
 
 
-def map_extraction(raw: RawExtraction, tenant_id: str, filename: str, raw_text: str) -> ExtractionResult:
+def map_extraction(raw: RawExtraction, tenant_id: str, filename: str) -> ExtractionResult:
     """Map a RawExtraction into an ExtractionResult with field provenance."""
     entities: list[EntityResult] = []
 
@@ -296,5 +296,4 @@ def map_extraction(raw: RawExtraction, tenant_id: str, filename: str, raw_text: 
         tenant_id=tenant_id,
         filename=filename,
         entities=entities,
-        raw_text=raw_text,
     )
