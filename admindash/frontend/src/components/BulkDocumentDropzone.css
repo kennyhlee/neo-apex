@@ -1,0 +1,53 @@
+/* admindash/frontend/src/components/BulkDocumentDropzone.css */
+.bulk-doc-dropzone-wrapper { max-width: 800px; }
+
+.bulk-doc-dropzone {
+  border: 2px dashed var(--color-border, #d1d5db);
+  border-radius: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--color-bg-subtle, #f9fafb);
+  transition: border-color 120ms, background 120ms;
+}
+
+.bulk-doc-dropzone:hover,
+.bulk-doc-dropzone--dragging {
+  border-color: var(--color-primary, #2563eb);
+  background: var(--color-primary-subtle, #eff6ff);
+}
+
+.bulk-doc-dropzone__title {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 4px 0;
+}
+
+.bulk-doc-dropzone__hint {
+  font-size: 14px;
+  color: var(--color-text-muted, #6b7280);
+  margin: 0;
+}
+
+.bulk-doc-dropzone__error {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--color-error-subtle, #fef2f2);
+  color: var(--color-error, #b91c1c);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.bulk-doc-dropzone__actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bulk-doc-dropzone__actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--color-border, #d1d5db);
+  cursor: pointer;
+}

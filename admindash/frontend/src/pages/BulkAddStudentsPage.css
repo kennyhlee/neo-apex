@@ -1,0 +1,56 @@
+.bulk-add-page {
+  padding: 24px 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.bulk-add-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.bulk-add-page__header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.bulk-add-page__btn-primary,
+.bulk-add-page__btn-secondary {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border, #d1d5db);
+}
+
+.bulk-add-page__btn-primary {
+  background: var(--color-primary, #2563eb);
+  color: white;
+  border-color: var(--color-primary, #2563eb);
+}
+
+.bulk-add-page__btn-secondary {
+  background: var(--color-bg, white);
+  color: var(--color-text, #111827);
+}
+
+.bulk-add-page--error .bulk-add-page__no-model {
+  background: var(--color-bg-subtle, #f9fafb);
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.bulk-add-page__toolbar {
+  display: flex; gap: 8px;
+  margin-bottom: 12px;
+  justify-content: flex-end;
+}
+.bulk-add-page__btn-primary:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}

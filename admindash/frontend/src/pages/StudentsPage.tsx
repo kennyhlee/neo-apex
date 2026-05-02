@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ADMINDASH_API_URL } from '../config.ts';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
@@ -214,6 +214,7 @@ function getDynamicFilterFields(model: ModelDefinition | undefined): ModelFieldD
 export default function StudentsPage({ tenant }: StudentsPageProps) {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { getModel, getCachedModel } = useModel();
   const { invalidateStudentCount } = useDashboard();
@@ -516,6 +517,12 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
       <div className="students-toolbar">
         <button className="students-toolbar-primary" onClick={() => setShowAddModal(true)}>
           {t('students.addStudent')}
+        </button>
+        <button
+          className="students-toolbar-secondary"
+          onClick={() => navigate('/students/bulk-add')}
+        >
+          {t('bulkAdd.entryButton')}
         </button>
 
         <div style={{ flex: 1 }} />
