@@ -11,6 +11,8 @@ import BulkDocumentDropzone from '../components/BulkDocumentDropzone.tsx';
 import BulkCsvDropzone from '../components/BulkCsvDropzone.tsx';
 import CsvMappingStep from '../components/CsvMappingStep.tsx';
 import ExtractionProgressBar from '../components/ExtractionProgressBar.tsx';
+import BulkReviewTable from '../components/BulkReviewTable.tsx';
+import BulkRowDrawer from '../components/BulkRowDrawer.tsx';
 import { applyMapping } from '../utils/csvMapping.ts';
 import { extractStudentBatch } from '../api/bulkAddOrchestrators.ts';
 import './BulkAddStudentsPage.css';
@@ -32,6 +34,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
   const [rows, setRows] = useState<BulkRow[]>([]);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping | null>(null);
   const [csvParsed, setCsvParsed] = useState<CsvParseResult | null>(null);
+  const [activeDrawerIndex, setActiveDrawerIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +159,35 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
+      {(phase === 'extracting' || phase === 'review') && rows.length > 0 && (
+        <BulkReviewTable
+          rows={rows}
+          modelDef={modelDef}
+          onEditRow={(rowId) => {
+            const idx = rows.findIndex((r) => r.id === rowId);
+            if (idx >= 0) setActiveDrawerIndex(idx);
+          }}
+          onDeleteRow={(rowId) => {
+            setRows((prev) => prev.filter((r) => r.id !== rowId));
+          }}
+          onRetryExtract={(rowId) => { void retryExtract(rowId); }}
+        />
+      )}
+
+      {activeDrawerIndex != null && rows[activeDrawerIndex] && (
+        <BulkRowDrawer
+          rows={rows}
+          activeRowIndex={activeDrawerIndex}
+          modelDef={modelDef}
+          onSaveRow={(rowId, baseData, customFields) => {
+            const merged = { ...baseData, ...customFields };
+            updateRow(rowId, { values: merged, status: 'ready', error: undefined });
+          }}
+          onClose={() => setActiveDrawerIndex(null)}
+          onNavigate={(newIndex) => setActiveDrawerIndex(newIndex)}
+        />
+      )}
+
       {phase === 'uploading' && mode === 'csv' && (
         <BulkCsvDropzone
           onParsed={(parsed) => {
@@ -192,9 +224,9 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
-      {/* batchId, columnMapping, retryExtract referenced by later phases */}
+      {/* batchId, columnMapping referenced by later phases */}
       <div hidden>
-        {String(batchId)} {String(columnMapping)} {String(!!retryExtract)}
+        {String(batchId)} {String(columnMapping)}
       </div>
     </div>
   );

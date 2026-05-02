@@ -1,0 +1,52 @@
+.bulk-review-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.bulk-review-table th, .bulk-review-table td {
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  padding: 8px 12px; text-align: left;
+}
+.bulk-review-table th {
+  background: var(--color-bg-subtle, #f9fafb);
+  font-weight: 500;
+}
+.bulk-review-table__source {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+}
+.bulk-review-table__error-pill {
+  background: var(--color-error-subtle, #fef2f2);
+  color: var(--color-error, #b91c1c);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.bulk-review-table__issue-count {
+  background: var(--color-warning-subtle, #fef3c7);
+  color: var(--color-warning, #92400e);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.bulk-review-table__ok { color: var(--color-text-muted, #9ca3af); }
+.bulk-review-table__actions { white-space: nowrap; }
+.bulk-review-table__actions button {
+  padding: 4px 8px;
+  margin-right: 4px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border, #d1d5db);
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+}
+.bulk-review-table__delete { color: var(--color-error, #b91c1c); }
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.status-pill--extracting, .status-pill--creating { background: var(--color-info-subtle, #eff6ff); color: var(--color-info, #1d4ed8); }
+.status-pill--ready, .status-pill--pending { background: var(--color-bg-subtle, #f3f4f6); color: var(--color-text, #374151); }
+.status-pill--has_errors { background: var(--color-warning-subtle, #fef3c7); color: var(--color-warning, #92400e); }
+.status-pill--created { background: var(--color-success-subtle, #d1fae5); color: var(--color-success, #065f46); }
+.status-pill--failed, .status-pill--extract_failed { background: var(--color-error-subtle, #fef2f2); color: var(--color-error, #b91c1c); }
