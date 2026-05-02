@@ -7,6 +7,7 @@ import Footer from './components/Footer.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import HomePage from './pages/HomePage.tsx';
 import StudentsPage from './pages/StudentsPage.tsx';
+import BulkAddStudentsPage from './pages/BulkAddStudentsPage.tsx';
 import LeadPage from './pages/LeadPage.tsx';
 import ProgramPage from './pages/ProgramPage.tsx';
 import './App.css';
@@ -40,6 +41,10 @@ function AppRoutes() {
                     <Route
                       path="/students"
                       element={<StudentsPage tenant={tenant} />}
+                    />
+                    <Route
+                      path="/students/bulk-add"
+                      element={<BulkAddStudentsPage tenant={tenant} />}
                     />
                     <Route path="/leads" element={<LeadPage />} />
                     <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
