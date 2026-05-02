@@ -32,10 +32,11 @@ from app.services.extractor import (
 
 
 def _docling_parse(file_path: Path) -> str:
-    """Parse a document with docling and return its markdown text."""
-    suffix = file_path.suffix.lower()
-    if suffix == ".txt":
-        return file_path.read_text(encoding="utf-8")
+    """Parse a document with docling and return its markdown text.
+
+    Caller is responsible for routing `.txt` files away from this helper —
+    use `_read_text_or_parse` for the dispatch-aware path.
+    """
     converter = DocumentConverter()
     result = converter.convert(str(file_path))
     return result.document.export_to_markdown()

@@ -34,6 +34,8 @@ Deferred hardening and nice-to-haves. These are intentionally out of scope for t
 
 - **papermite image size optimization** — the papermite Docker image is ~5.8GB due to torch + transformers + docling. Options: use a slimmer base (torch-slim), multi-stage build with minimal runtime layer, audit transitive deps to see if torch is really needed or can be replaced. Large images slow down Fly.io deploys and rollbacks.
 
+- **papermite-api memory scale-back to 2GB** — `papermite-api` was scaled 2GB → 4GB on 2026-04-30 in response to a docling/RapidOCR OOM on the `/api/extract` path. The root cause shipped in `papermite-v0.3.0` (extraction_pipeline consolidation) and the runtime path is now docling-free for PDFs when `PAPERMITE_PARSER_BACKEND=claude_merged` (current production setting). After a soak window of stable PDF traffic with no DOCX-driven memory spikes, `papermite-api` should be safe to scale back to 2GB via `flyctl scale memory 2048 --app papermite-api` and a `papermite/fly.toml` update. DOCX uploads still load docling, so monitor specifically for DOCX-driven RSS spikes before scaling down.
+
 ## Platform evolution
 
 - **Floatify-internal ops dashboard** — a separate surface (e.g., `ops.floatify.com`) for Floatify employees to monitor across all tenant schools, debug customer issues, and support engineering. This is where Cloudflare Access SSO belongs (not on admindash, which is customer-facing). Gets its own deployment change.
