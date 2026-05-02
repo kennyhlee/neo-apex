@@ -3,13 +3,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useTranslation } from '../hooks/useTranslation.ts';
-import type { Phase, BulkRow, BatchMode, ColumnMapping } from '../types/bulkAdd.ts';
-import { newBatchId } from '../types/bulkAdd.ts';
+import type { Phase, BulkRow, BatchMode, ColumnMapping, CsvParseResult } from '../types/bulkAdd.ts';
+import { newBatchId, newRowId } from '../types/bulkAdd.ts';
 import type { ModelDefinition } from '../types/models.ts';
-import type { CsvParseResult } from '../types/bulkAdd.ts';
 import BulkModeSelector from '../components/BulkModeSelector.tsx';
 import BulkDocumentDropzone from '../components/BulkDocumentDropzone.tsx';
 import BulkCsvDropzone from '../components/BulkCsvDropzone.tsx';
+import CsvMappingStep from '../components/CsvMappingStep.tsx';
+import { applyMapping } from '../utils/csvMapping.ts';
 import './BulkAddStudentsPage.css';
 
 interface BulkAddStudentsPageProps {
@@ -114,10 +115,32 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
-      {/* batchId, rows, setRows, columnMapping, setColumnMapping, csvParsed referenced by later phases */}
+      {phase === 'mapping' && mode === 'csv' && csvParsed && (
+        <CsvMappingStep
+          headers={csvParsed.headers}
+          modelDef={modelDef}
+          onApply={(mapping) => {
+            const mappedRows = applyMapping(csvParsed.rows, csvParsed.headers, mapping, modelDef);
+            const newRows: BulkRow[] = mappedRows.map((values, i) => ({
+              id: newRowId(),
+              source: `CSV row ${i + 2}`, // +2: header is row 1, first data row is row 2
+              values,
+              status: 'ready',
+            }));
+            setRows(newRows);
+            setColumnMapping(mapping);
+            setPhase('review');
+          }}
+          onCancel={() => {
+            setCsvParsed(null);
+            setPhase('uploading');
+          }}
+        />
+      )}
+
+      {/* batchId, rows, columnMapping referenced by later phases */}
       <div hidden>
-        {String(batchId)} {String(rows.length)} {String(setRows)}
-        {String(columnMapping)} {String(setColumnMapping)} {String(csvParsed)}
+        {String(batchId)} {String(rows.length)} {String(columnMapping)}
       </div>
     </div>
   );

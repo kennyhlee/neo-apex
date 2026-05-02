@@ -167,6 +167,13 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.dropzone.csvHint': 'Accepted: CSV — up to {cap} data rows',
     'bulkAdd.errors.tooManyDocuments': 'Too many files. The limit is {cap} files per batch.',
     'bulkAdd.errors.unsupportedFiles': 'Unsupported file type(s): {names}. Use PDF, DOCX, or TXT.',
+    'bulkAdd.mapping.title': 'Map CSV columns to fields',
+    'bulkAdd.mapping.subtitle': 'Auto-matched columns are pre-filled. Map the rest or skip.',
+    'bulkAdd.mapping.csvHeader': 'CSV column',
+    'bulkAdd.mapping.modelField': 'Maps to',
+    'bulkAdd.mapping.skip': '— Skip —',
+    'bulkAdd.mapping.apply': 'Apply mapping',
+    'bulkAdd.mapping.missingRequired': 'Required fields not mapped: {fields}',
 
     // Common
     'common.loading': 'Loading...',
@@ -375,6 +382,13 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.dropzone.csvHint': '\u652f\u6301\uff1aCSV\uff0c\u6700\u591a {cap} \u884c\u6570\u636e',
     'bulkAdd.errors.tooManyDocuments': '\u6587\u4ef6\u6570\u91cf\u8fc7\u591a\uff0c\u6bcf\u6279\u6700\u591a {cap} \u4e2a\u6587\u4ef6\u3002',
     'bulkAdd.errors.unsupportedFiles': '\u4e0d\u652f\u6301\u7684\u6587\u4ef6\u7c7b\u578b\uff1a{names}\u3002\u8bf7\u4f7f\u7528 PDF\u3001DOCX \u6216 TXT\u3002',
+    'bulkAdd.mapping.title': '\u5c06 CSV \u5217\u6620\u5c04\u5230\u5b57\u6bb5',
+    'bulkAdd.mapping.subtitle': '\u5df2\u81ea\u52a8\u5339\u914d\u7684\u5217\u5df2\u9884\u586b\uff0c\u5176\u4ed6\u5217\u8bf7\u624b\u52a8\u6620\u5c04\u6216\u8df3\u8fc7\u3002',
+    'bulkAdd.mapping.csvHeader': 'CSV \u5217',
+    'bulkAdd.mapping.modelField': '\u6620\u5c04\u5230',
+    'bulkAdd.mapping.skip': '\u2014 \u8df3\u8fc7 \u2014',
+    'bulkAdd.mapping.apply': '\u5e94\u7528\u6620\u5c04',
+    'bulkAdd.mapping.missingRequired': '\u672a\u6620\u5c04\u7684\u5fc5\u586b\u5b57\u6bb5\uff1a{fields}',
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',
