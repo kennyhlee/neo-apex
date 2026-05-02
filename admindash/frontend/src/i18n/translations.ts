@@ -197,6 +197,12 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.drawer.next': 'Next',
     'bulkAdd.drawer.discardPrompt': 'Discard unsaved changes?',
     'bulkAdd.drawer.discard': 'Discard',
+    'bulkAdd.resume.title': 'Unfinished batch found',
+    'bulkAdd.resume.rowCount': '{n} rows',
+    'bulkAdd.resume.resume': 'Resume',
+    'bulkAdd.resume.discardThis': 'Discard',
+    'bulkAdd.resume.discardAll': 'Discard all',
+    'bulkAdd.resume.othersLabel': '{n} other unfinished batches',
 
     // Common
     'common.loading': 'Loading...',
@@ -435,6 +441,12 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.drawer.next': '\u4e0b\u4e00\u6761',
     'bulkAdd.drawer.discardPrompt': '\u653e\u5f03\u672a\u4fdd\u5b58\u7684\u4fee\u6539\uff1f',
     'bulkAdd.drawer.discard': '\u653e\u5f03',
+    'bulkAdd.resume.title': '\u53d1\u73b0\u672a\u5b8c\u6210\u7684\u6279\u6b21',
+    'bulkAdd.resume.rowCount': '{n} \u6761',
+    'bulkAdd.resume.resume': '\u7ee7\u7eed',
+    'bulkAdd.resume.discardThis': '\u4e22\u5f03',
+    'bulkAdd.resume.discardAll': '\u5168\u90e8\u4e22\u5f03',
+    'bulkAdd.resume.othersLabel': '{n} \u4e2a\u5176\u4ed6\u672a\u5b8c\u6210\u7684\u6279\u6b21',
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',
