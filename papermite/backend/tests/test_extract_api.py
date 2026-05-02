@@ -39,8 +39,8 @@ def _upload(tenant_id, entity_type, filename, content, content_type="application
 
 
 def test_unsupported_file_format():
-    """Non-PDF/PNG/JPG/JPEG files return 422."""
-    resp = _upload("t1", "student", "doc.docx", b"data", "application/msword")
+    """Image formats are no longer supported (PDF/DOCX/TXT only)."""
+    resp = _upload("t1", "student", "doc.png", b"data", "image/png")
     assert resp.status_code == 422
     assert "Unsupported" in resp.json()["detail"]
 
@@ -81,11 +81,8 @@ def test_successful_extraction():
     }
     with (
         patch("app.api.extract.get_active_model", return_value=fake_model),
-        patch("app.api.extract.parse_document", return_value="Student: Jane Doe"),
-        patch(
-            "app.api.extract.extract_fields",
-            return_value={"first_name": "Jane", "last_name": "Doe"},
-        ),
+        patch("app.api.extract.extract_for_entity",
+              return_value={"first_name": "Jane", "last_name": "Doe"}),
     ):
         resp = _upload("t1", "student", "app.pdf", b"%PDF-fake")
     assert resp.status_code == 200
@@ -109,11 +106,7 @@ def test_partial_extraction_is_success():
     }
     with (
         patch("app.api.extract.get_active_model", return_value=fake_model),
-        patch("app.api.extract.parse_document", return_value="Applicant: Jane"),
-        patch(
-            "app.api.extract.extract_fields",
-            return_value={"first_name": "Jane"},
-        ),
+        patch("app.api.extract.extract_for_entity", return_value={"first_name": "Jane"}),
     ):
         resp = _upload("t1", "student", "app.pdf", b"%PDF-fake")
     assert resp.status_code == 200
@@ -124,3 +117,57 @@ def test_tenant_mismatch():
     """Returns 403 when tenant_id doesn't match user."""
     resp = _upload("wrong_tenant", "student", "app.pdf", b"%PDF-fake")
     assert resp.status_code == 403
+
+
+def test_docx_is_accepted():
+    """DOCX is now in ALLOWED_EXTENSIONS."""
+    fake_model = {
+        "model_definition": {
+            "student": {"base_fields": [], "custom_fields": []},
+        }
+    }
+    with (
+        patch("app.api.extract.get_active_model", return_value=fake_model),
+        patch("app.api.extract.extract_for_entity", return_value={}),
+    ):
+        resp = _upload(
+            "t1", "student", "app.docx", b"PK fake",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    assert resp.status_code == 200
+
+
+def test_txt_is_accepted():
+    """TXT is now in ALLOWED_EXTENSIONS."""
+    fake_model = {
+        "model_definition": {
+            "student": {"base_fields": [], "custom_fields": []},
+        }
+    }
+    with (
+        patch("app.api.extract.get_active_model", return_value=fake_model),
+        patch("app.api.extract.extract_for_entity", return_value={}),
+    ):
+        resp = _upload(
+            "t1", "student", "app.txt", b"plain text", content_type="text/plain",
+        )
+    assert resp.status_code == 200
+
+
+def test_extract_response_includes_parser_backend_header(monkeypatch):
+    """Response carries the active parser_backend for debuggability."""
+    monkeypatch.setattr("app.config.settings.parser_backend", "claude_merged")
+
+    fake_model = {
+        "model_definition": {
+            "student": {"base_fields": [], "custom_fields": []},
+        }
+    }
+    with (
+        patch("app.api.extract.get_active_model", return_value=fake_model),
+        patch("app.api.extract.extract_for_entity", return_value={}),
+    ):
+        resp = _upload("t1", "student", "app.pdf", b"%PDF-fake")
+
+    assert resp.status_code == 200
+    assert resp.headers["X-Papermite-Parser-Backend"] == "claude_merged"

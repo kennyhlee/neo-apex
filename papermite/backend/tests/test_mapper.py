@@ -11,7 +11,7 @@ def test_map_family():
             "primary_phone": "(555) 111-2222",
         }],
     )
-    result = map_extraction(raw, "t1", "test.pdf", "raw text")
+    result = map_extraction(raw, "t1", "test.pdf")
     family_entities = [e for e in result.entities if e.entity_type == "FAMILY"]
     assert len(family_entities) == 1
     fam = family_entities[0]
@@ -31,7 +31,7 @@ def test_map_contact_guardian():
             "relationship": "mother",
         }],
     )
-    result = map_extraction(raw, "t1", "test.pdf", "raw text")
+    result = map_extraction(raw, "t1", "test.pdf")
     contact_entities = [e for e in result.entities if e.entity_type == "CONTACT"]
     assert len(contact_entities) == 1
     c = contact_entities[0]
@@ -51,7 +51,7 @@ def test_map_contact_medical():
             "address": "456 Health Ave, Springfield",
         }],
     )
-    result = map_extraction(raw, "t1", "test.pdf", "raw text")
+    result = map_extraction(raw, "t1", "test.pdf")
     contact_entities = [e for e in result.entities if e.entity_type == "CONTACT"]
     assert len(contact_entities) == 1
     c = contact_entities[0]
@@ -70,7 +70,7 @@ def test_map_no_guardian_entity_type():
             "student_id": "S1",
         }],
     )
-    result = map_extraction(raw, "t1", "test.pdf", "raw text")
+    result = map_extraction(raw, "t1", "test.pdf")
     entity_types = {e.entity_type for e in result.entities}
     assert "GUARDIAN" not in entity_types
     assert "EMERGENCY_CONTACT" not in entity_types
@@ -89,7 +89,7 @@ def test_map_contact_custom_fields():
             "preferred_language": "Spanish",
         }],
     )
-    result = map_extraction(raw, "t1", "test.pdf", "raw text")
+    result = map_extraction(raw, "t1", "test.pdf")
     c = [e for e in result.entities if e.entity_type == "CONTACT"][0]
     assert any(m.field_name == "preferred_language" and m.source == "custom_field" for m in c.field_mappings)
 
@@ -105,7 +105,7 @@ def test_student_selection_fields_are_single_select():
             "status": ["Active"],
         }],
     )
-    result = map_extraction(raw, "t1", "test.pdf", "raw text")
+    result = map_extraction(raw, "t1", "test.pdf")
     student = [e for e in result.entities if e.entity_type == "STUDENT"][0]
 
     for field_name in ("grade_level", "gender", "status"):
@@ -123,7 +123,7 @@ def test_program_multi_select_fields():
             "grade_levels": ["1st", "2nd"],
         }],
     )
-    result = map_extraction(raw, "t1", "test.pdf", "raw text")
+    result = map_extraction(raw, "t1", "test.pdf")
     program = [e for e in result.entities if e.entity_type == "PROGRAM"][0]
 
     for field_name in ("days_of_week", "grade_levels"):
@@ -151,7 +151,7 @@ def test_consolidator_preserves_single_select_cardinality():
             },
         ],
     )
-    result = map_extraction(raw, "t1", "test.pdf", "raw text")
+    result = map_extraction(raw, "t1", "test.pdf")
     student = [e for e in result.entities if e.entity_type == "STUDENT"][0]
     gender_mapping = next(m for m in student.field_mappings if m.field_name == "gender")
     # After consolidation, gender should still be single-select
@@ -159,3 +159,9 @@ def test_consolidator_preserves_single_select_cardinality():
     # But options should be merged
     assert "Female" in gender_mapping.options
     assert "Male" in gender_mapping.options
+
+
+def test_extraction_result_has_no_raw_text_field():
+    """raw_text was removed in the extract-pipeline consolidation."""
+    from app.models.extraction import ExtractionResult
+    assert "raw_text" not in ExtractionResult.model_fields

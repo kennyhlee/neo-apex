@@ -118,7 +118,7 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
         # treat as selection fields
         if key in schema_fields:
             model_field = model_class.model_fields.get(key)
-            if model_field and model_field.annotation is List[str]:
+            if model_field and model_field.annotation == List[str]:
                 field_type = "selection"
                 default_opts = model_field.default_factory() if model_field.default_factory else None
                 if isinstance(default_opts, list) and default_opts:
@@ -164,7 +164,7 @@ def _map_entity(raw: dict[str, Any], model_class: type) -> tuple[dict[str, Any],
             continue
 
         # Selection fields with List[str] defaults get their predefined options
-        if model_field.annotation is List[str] and model_field.default_factory:
+        if model_field.annotation == List[str] and model_field.default_factory:
             default_opts = model_field.default_factory()
             if isinstance(default_opts, list) and default_opts:
                 base_data[field_name] = default_opts
@@ -264,7 +264,7 @@ def _consolidate_entities(entities: list[EntityResult]) -> list[EntityResult]:
     return list(by_type.values())
 
 
-def map_extraction(raw: RawExtraction, tenant_id: str, filename: str, raw_text: str) -> ExtractionResult:
+def map_extraction(raw: RawExtraction, tenant_id: str, filename: str) -> ExtractionResult:
     """Map a RawExtraction into an ExtractionResult with field provenance."""
     entities: list[EntityResult] = []
 
@@ -296,5 +296,4 @@ def map_extraction(raw: RawExtraction, tenant_id: str, filename: str, raw_text: 
         tenant_id=tenant_id,
         filename=filename,
         entities=entities,
-        raw_text=raw_text,
     )

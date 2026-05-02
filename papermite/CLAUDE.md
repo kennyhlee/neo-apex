@@ -23,15 +23,18 @@ Papermite is the **data ingestion gateway** for NeoApex. Tenant admins upload po
 
 ### Backend (FastAPI)
 
-**Processing pipeline**: Upload → Parse (Docling) → Extract (pydantic-ai Agent) → Map (base vs custom field classification + type inference) → Review → Preview → Confirm (LanceDB)
+**Processing pipeline**: Upload → (parse + extract via `extraction_pipeline`) → Map (base vs custom field classification + type inference) → Review → Preview → Confirm (LanceDB). The pipeline dispatches on `PAPERMITE_PARSER_BACKEND`: `local` parses with docling and prompts a text LLM; `claude_merged` skips docling and sends PDF bytes directly to a vision-capable LLM (Claude/GPT-4o family) via pydantic-ai `BinaryContent`.
 
 **API routes** registered in `app/main.py`, all under `/api`:
 - `auth.py` — `GET /me`, `require_tenant_admin()` guard
-- `upload.py` — `POST /tenants/{tenant_id}/upload` (file → parse → extract → map)
+- `upload.py` — `POST /tenants/{tenant_id}/upload` (file → `extract_for_discovery` → map). Response carries `X-Papermite-Parser-Backend`.
+- `extract.py` — `POST /extract/{tenant_id}/{entity_type}` (file → `extract_for_entity` → filtered field map). Response carries `X-Papermite-Parser-Backend`.
 - `extraction.py` — `GET /schema`, `GET /config/models`, `GET /tenants/{tenant_id}/model`
 - `finalize.py` — `POST /tenants/{tenant_id}/finalize/preview` (dry run) and `/commit` (two-step: preview then confirm)
 
 **Key design decisions**:
+- `services/extraction_pipeline.py`: Shared parse+extract dispatcher. Two entrypoints — `extract_for_discovery(file_path, model_id)` returns a `RawExtraction` for the multi-entity upload flow (used by `/api/upload`); `extract_for_entity(file_path, model_id, entity_type, model_definition)` returns a filtered field map for a single entity (used by `/api/extract`). Honors `PAPERMITE_PARSER_BACKEND` for PDF dispatch (`local` → docling text path; `claude_merged` → Claude vision path).
+- `services/extractor.py`: Text- and vision-based extractors invoked by the pipeline — `extract_entities` / `extract_entities_from_pdf` for discovery, `extract_fields` / `extract_fields_from_pdf` for targeted single-entity extraction. Vision variants accept PDFs directly via `BinaryContent` so layout (tables, form-field labels) is preserved end-to-end.
 - `models/domain.py`: Entity classes (Student, Family, Contact, Program, etc.) with `ENTITY_CLASSES` dict for schema introspection. All extend `BaseEntity` with `custom_fields: Dict[str, Any]`. Family is a household/billing unit. Contact replaces Guardian/EmergencyContact/MedicalContact with a `role` field (guardian | emergency_contact | medical_contact) and flat `student_id` for per-student associations.
 - `models/extraction.py`: `RawExtraction` uses dicts (not strict Pydantic) so AI-extracted extra fields aren't dropped. `FieldMapping` tracks provenance (field_name, value, source, required, field_type, options, multiple).
 - `services/mapper.py`: Fields in `model_class.model_fields` → `base_model` (required=True default); everything else → `custom_field` (required=False default). `_infer_field_type()` does best-effort type detection from field name patterns (e.g. `dob` → `date`, `email` → `email`). `_extract_options()` pulls selection options from list/dict/CSV values. `_consolidate_entities()` merges multiple entities of the same type into one (union of fields, merged options).
@@ -60,7 +63,7 @@ Papermite is the **data ingestion gateway** for NeoApex. Tenant admins upload po
 **Page behaviors**:
 - **Landing**: Shows active model card (version badge, timestamp, updated-by name, entity types, field counts) with Edit Model / Upload New Document actions. No model → upload prompt.
 - **Upload**: File upload with LLM model selector. Cancel button navigates back. Confirmation dialog when replacing existing model.
-- **Review**: Two modes — upload flow (full editing + Show Source) and edit flow (no source button, Finalize disabled until changes detected). Change detection compares field names, sources, required flags, types, and selection options against original.
+- **Review**: Two modes — upload flow (full editing) and edit flow (Finalize disabled until changes detected). Change detection compares field names, sources, required flags, types, and selection options against original.
 - **Finalize**: Preview-first flow — calls `/preview` on load (no DB write). Shows entity summary tables with type-aware sample data. User must click "Confirm & Save" to commit or "Cancel" to discard. React Strict Mode double-fire guarded with useRef.
 
 **State**: Page-level React state only, no global store. IndexedDB for cross-page draft persistence.

@@ -2,8 +2,12 @@ import { useState, useRef } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './DocumentUpload.css';
 
-const ACCEPTED_FORMATS = ['.pdf', '.png', '.jpg', '.jpeg'];
-const ACCEPTED_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
+const ACCEPTED_FORMATS = ['.pdf', '.docx', '.txt'];
+const ACCEPTED_MIME = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+];
 
 interface DocumentUploadProps {
   onExtracted: (fields: Record<string, string>) => void;

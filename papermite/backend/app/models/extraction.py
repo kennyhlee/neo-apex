@@ -38,5 +38,4 @@ class ExtractionResult(BaseModel):
     tenant_id: str
     filename: str
     entities: list[EntityResult]
-    raw_text: str
     status: Literal["pending_review", "finalized"] = "pending_review"

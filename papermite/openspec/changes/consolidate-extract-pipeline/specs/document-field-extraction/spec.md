@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: POST document extraction endpoint
 Papermite SHALL expose `POST /api/extract/{tenant_id}/{entity_type}` to accept a file upload and return extracted field values. The endpoint SHALL invoke the shared `extraction_pipeline.extract_for_entity` to perform parsing and extraction, and SHALL therefore honor `PAPERMITE_PARSER_BACKEND` for backend selection.
 

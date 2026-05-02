@@ -33,7 +33,6 @@ export default function ReviewPage() {
   const [searchParams] = useSearchParams();
   const returnUrl = searchParams.get("return_url");
   const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
-  const [showSource, setShowSource] = useState(false);
   const originalRef = useRef<ExtractionResult | null>(null);
 
   const isEditMode = extraction?.extraction_id.startsWith("edit-") ?? false;
@@ -92,7 +91,7 @@ export default function ReviewPage() {
   );
 
   return (
-    <div className={`review ${showSource ? "review--with-source" : ""}`}>
+    <div className="review">
       <div className="review__main">
         <div className="page-header">
           <div className="page-header__eyebrow">
@@ -135,14 +134,6 @@ export default function ReviewPage() {
             &larr; Back
           </button>
           <div className="review__toolbar-right">
-            {!isEditMode && (
-              <button
-                className={`btn btn--sm ${showSource ? "btn--primary" : ""}`}
-                onClick={() => setShowSource(!showSource)}
-              >
-                {showSource ? "Hide" : "Show"} Source
-              </button>
-            )}
             <button
               className="btn btn--primary"
               onClick={handleFinalize}
@@ -171,21 +162,6 @@ export default function ReviewPage() {
           ))}
         </div>
       </div>
-
-      {showSource && !isEditMode && (
-        <div className="review__source">
-          <div className="review__source-header">
-            <span>Source Document</span>
-            <button
-              className="btn btn--sm"
-              onClick={() => setShowSource(false)}
-            >
-              &times;
-            </button>
-          </div>
-          <pre className="review__source-text">{extraction.raw_text}</pre>
-        </div>
-      )}
     </div>
   );
 }
