@@ -2,7 +2,7 @@
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 
 from app.api.auth import require_admin
 from app.config import settings
@@ -19,6 +19,7 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 @router.post("/tenants/{tenant_id}/upload", response_model=ExtractionResult)
 def upload_document(
     tenant_id: str,
+    response: Response,
     file: UploadFile = File(...),
     model_id: str = Form(default=settings.default_model),
     user: UserRecord = Depends(require_admin),
@@ -46,6 +47,7 @@ def upload_document(
         # Run discovery extraction → map to ExtractionResult
         raw_extraction = extract_for_discovery(file_path, model_id)
         result = map_extraction(raw_extraction, tenant_id, file.filename)
+        response.headers["X-Papermite-Parser-Backend"] = settings.parser_backend
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

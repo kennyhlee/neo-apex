@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 
 from app.api.auth import require_admin
 from app.config import settings
@@ -52,6 +52,7 @@ def get_active_model(tenant_id: str) -> dict | None:
 def extract_document_fields(
     tenant_id: str,
     entity_type: str,
+    response: Response,
     file: UploadFile = File(...),
     user: UserRecord = Depends(require_admin),
 ):
@@ -95,6 +96,7 @@ def extract_document_fields(
             model_definition=model_definition,
         )
 
+        response.headers["X-Papermite-Parser-Backend"] = settings.parser_backend
         return {"fields": fields}
 
     except HTTPException:

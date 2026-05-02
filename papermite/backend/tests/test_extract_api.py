@@ -152,3 +152,22 @@ def test_txt_is_accepted():
             "t1", "student", "app.txt", b"plain text", content_type="text/plain",
         )
     assert resp.status_code == 200
+
+
+def test_extract_response_includes_parser_backend_header(monkeypatch):
+    """Response carries the active parser_backend for debuggability."""
+    monkeypatch.setattr("app.config.settings.parser_backend", "claude_merged")
+
+    fake_model = {
+        "model_definition": {
+            "student": {"base_fields": [], "custom_fields": []},
+        }
+    }
+    with (
+        patch("app.api.extract.get_active_model", return_value=fake_model),
+        patch("app.api.extract.extract_for_entity", return_value={}),
+    ):
+        resp = _upload("t1", "student", "app.pdf", b"%PDF-fake")
+
+    assert resp.status_code == 200
+    assert resp.headers["X-Papermite-Parser-Backend"] == "claude_merged"

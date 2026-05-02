@@ -47,7 +47,7 @@ def extract_entities(text: str, model_id: str) -> RawExtraction:
 def extract_entities_from_pdf(file_path: Path, model_id: str) -> RawExtraction:
     """Extract entities directly from a PDF using a vision-capable LLM.
 
-    Single-call alternative to parse_document + extract_entities. Sends the PDF
+    Single-call alternative to docling parse + extract_entities. Sends the PDF
     bytes directly to the model so visual layout (tables, form-field labels) is
     preserved end-to-end. Used when settings.parser_backend == "claude_merged".
 
@@ -103,8 +103,8 @@ def _filter_extracted_fields(
     in the model definition (each has at least a `"name"`).
 
     Note: falsy-but-meaningful values like 0 and False are preserved — only
-    None and "" are filtered. This matches the upstream `field_extractor`
-    semantics carried forward verbatim.
+    None and "" are filtered. Filter semantics inherited from the legacy
+    field_extractor module (now consolidated here).
     """
     known_fields = {f["name"] for f in all_fields}
     return {
