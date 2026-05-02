@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { ModelFieldDefinition, ModelDefinition } from '../types/models.ts';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { validateField } from '../utils/validateField.ts';
 import './DynamicForm.css';
 
 interface DynamicFormProps {
@@ -12,38 +13,6 @@ interface DynamicFormProps {
   submitting?: boolean;
   error?: string | null;
   submitButtonText?: string;
-}
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^[+]?[\d\s\-().]{7,}$/;
-
-function validateField(field: ModelFieldDefinition, value: unknown): string | null {
-  const strValue = value != null ? String(value) : '';
-  const isEmpty = strValue.trim() === '';
-
-  if (field.type === 'bool') return null; // booleans always valid
-  if (field.type === 'selection' && field.multiple) {
-    const arr = Array.isArray(value) ? value : [];
-    if (field.required && arr.length === 0) return 'Required';
-    return null;
-  }
-
-  if (field.required && isEmpty) return 'Required';
-  if (isEmpty) return null; // optional and empty is fine
-
-  switch (field.type) {
-    case 'number':
-      if (isNaN(Number(strValue))) return 'Must be a number';
-      break;
-    case 'email':
-      if (!EMAIL_RE.test(strValue)) return 'Invalid email';
-      break;
-    case 'phone':
-      if (!PHONE_RE.test(strValue)) return 'Invalid phone number';
-      break;
-  }
-
-  return null;
 }
 
 function renderField(
