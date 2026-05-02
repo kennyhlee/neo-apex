@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { fetchAvailableModels } from '../api/client.ts';
 import './DocumentUpload.css';
 
 const ACCEPTED_FORMATS = ['.pdf', '.docx', '.txt'];
@@ -20,7 +21,23 @@ export default function DocumentUpload({ onExtracted, onUpload }: DocumentUpload
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [defaultModel, setDefaultModel] = useState<string | null>(null);
+  const [modelLoadFailed, setModelLoadFailed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAvailableModels()
+      .then((data) => {
+        if (!cancelled) setDefaultModel(data.default);
+      })
+      .catch(() => {
+        if (!cancelled) setModelLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const validateFile = (file: File): boolean => {
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -89,7 +106,13 @@ export default function DocumentUpload({ onExtracted, onUpload }: DocumentUpload
         )}
       </div>
       {error && <div className="document-upload-error">{error}</div>}
-      <p className="document-upload-model">Extraction model: claude-haiku-4-5</p>
+      {defaultModel ? (
+        <p className="document-upload-model">Extraction model: {defaultModel}</p>
+      ) : modelLoadFailed ? (
+        <p className="document-upload-model">Extraction model: (unknown)</p>
+      ) : (
+        <p className="document-upload-model">Extraction model: loading…</p>
+      )}
     </div>
   );
 }
