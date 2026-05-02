@@ -18,6 +18,8 @@ import { applyMapping } from '../utils/csvMapping.ts';
 import { extractStudentBatch, bulkCreateStudents } from '../api/bulkAddOrchestrators.ts';
 import { saveDraft, deleteDraft, findActiveDraftsForTenant, buildDraftId } from '../db/bulkAddDrafts.ts';
 import PreSubmitGate, { type GateConfirmation } from '../components/PreSubmitGate.tsx';
+import PostSubmitSummary from '../components/PostSubmitSummary.tsx';
+import CreatedStudentsDisclosure from '../components/CreatedStudentsDisclosure.tsx';
 import type { BatchDraft } from '../types/bulkAdd.ts';
 import './BulkAddStudentsPage.css';
 
@@ -41,6 +43,27 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
   const [activeDrawerIndex, setActiveDrawerIndex] = useState<number | null>(null);
   const [resumeDrafts, setResumeDrafts] = useState<BatchDraft[] | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
+
+  const successRows = rows.filter((r) => r.status === 'created');
+  const failedRows = rows.filter((r) => r.status === 'failed');
+  const allDone = phase === 'post_submit' && failedRows.length === 0;
+
+  const handleRetryFailed = () => {
+    // Re-route through the gate against just the failed rows.
+    const failedIds = failedRows.map((r) => r.id);
+    setRows((prev) =>
+      prev.map((r) => (failedIds.includes(r.id) ? { ...r, status: 'pending', error: undefined } : r)),
+    );
+    setPhase('review');
+    setGateOpen(true);
+  };
+
+  const handleDone = () => {
+    if (allDone) {
+      void deleteDraft(buildDraftId(tenant, batchId));
+    }
+    navigate('/students');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -345,6 +368,40 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
           }}
           onRetryExtract={(rowId) => { void retryExtract(rowId); }}
         />
+      )}
+
+      {phase === 'post_submit' && (
+        <>
+          <PostSubmitSummary
+            successCount={successRows.length}
+            failedCount={failedRows.length}
+            onRetryFailed={handleRetryFailed}
+            onDone={handleDone}
+          />
+          {failedRows.length > 0 && (
+            <BulkReviewTable
+              rows={failedRows}
+              modelDef={modelDef}
+              onEditRow={(rowId) => {
+                const idx = rows.findIndex((r) => r.id === rowId);
+                if (idx >= 0) setActiveDrawerIndex(idx);
+              }}
+              onDeleteRow={(rowId) => {
+                const deletedIdx = rows.findIndex((r) => r.id === rowId);
+                setRows((prev) => prev.filter((r) => r.id !== rowId));
+                if (activeDrawerIndex != null && deletedIdx >= 0) {
+                  if (deletedIdx === activeDrawerIndex) {
+                    setActiveDrawerIndex(null);
+                  } else if (deletedIdx < activeDrawerIndex) {
+                    setActiveDrawerIndex(activeDrawerIndex - 1);
+                  }
+                }
+              }}
+              onRetryExtract={() => { /* not applicable in post_submit */ }}
+            />
+          )}
+          <CreatedStudentsDisclosure rows={successRows} defaultOpen={allDone} />
+        </>
       )}
 
       {gateOpen && (

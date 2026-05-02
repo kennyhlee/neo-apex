@@ -1,0 +1,28 @@
+/* admindash/frontend/src/components/PostSubmitSummary.css */
+.post-submit-summary {
+  background: var(--color-bg-subtle, #f9fafb);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px;
+}
+.post-submit-summary__counts { display: flex; gap: 12px; }
+.post-submit-summary__success {
+  font-weight: 500; color: var(--color-success, #065f46);
+}
+.post-submit-summary__failed {
+  font-weight: 500; color: var(--color-error, #b91c1c);
+}
+.post-submit-summary__actions { display: flex; gap: 8px; }
+.post-submit-summary__btn-retry,
+.post-submit-summary__btn-done {
+  padding: 6px 12px; border-radius: 6px; cursor: pointer;
+}
+.post-submit-summary__btn-retry {
+  background: var(--color-warning, #d97706);
+  color: white; border: 1px solid var(--color-warning, #d97706);
+}
+.post-submit-summary__btn-done {
+  background: var(--color-primary, #2563eb);
+  color: white; border: 1px solid var(--color-primary, #2563eb);
+}

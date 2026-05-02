@@ -1,0 +1,12 @@
+/* admindash/frontend/src/components/CreatedStudentsDisclosure.css */
+.created-disclosure { margin: 12px 0; }
+.created-disclosure summary { cursor: pointer; font-weight: 500; }
+.created-disclosure ul { list-style: none; padding: 12px 0; margin: 0; }
+.created-disclosure li {
+  display: grid;
+  grid-template-columns: 1fr 120px 1fr;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.created-disclosure__id { font-family: monospace; }
+.created-disclosure__source { color: var(--color-text-muted, #6b7280); }

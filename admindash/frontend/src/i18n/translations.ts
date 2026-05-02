@@ -219,6 +219,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.gate.choiceSaveAnyway': 'Save anyway',
     'bulkAdd.gate.choiceEdit': 'Cancel & edit',
     'bulkAdd.gate.edit': 'Edit',
+    'bulkAdd.postSubmit.success': '{n} students created',
+    'bulkAdd.postSubmit.failed': '{n} failed',
+    'bulkAdd.postSubmit.retryFailed': 'Retry failed ({n})',
+    'bulkAdd.postSubmit.done': 'Done & return to Students',
+    'bulkAdd.disclosure.label': '{n} students created — click to view IDs',
 
     // Common
     'common.loading': 'Loading...',
@@ -479,6 +484,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.gate.choiceSaveAnyway': '\u4ecd\u7136\u521b\u5efa',
     'bulkAdd.gate.choiceEdit': '\u53d6\u6d88\u5e76\u7f16\u8f91',
     'bulkAdd.gate.edit': '\u7f16\u8f91',
+    'bulkAdd.postSubmit.success': '\u5df2\u521b\u5efa {n} \u540d\u5b66\u751f',
+    'bulkAdd.postSubmit.failed': '{n} \u6761\u5931\u8d25',
+    'bulkAdd.postSubmit.retryFailed': '\u91cd\u8bd5\u5931\u8d25\u9879\uff08{n}\uff09',
+    'bulkAdd.postSubmit.done': '\u5b8c\u6210\u5e76\u8fd4\u56de\u5b66\u751f\u5217\u8868',
+    'bulkAdd.disclosure.label': '\u5df2\u521b\u5efa {n} \u540d\u5b66\u751f \u2014 \u70b9\u51fb\u67e5\u770b ID',
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',
