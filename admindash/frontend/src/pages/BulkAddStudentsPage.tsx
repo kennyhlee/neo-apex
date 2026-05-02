@@ -15,8 +15,9 @@ import BulkReviewTable from '../components/BulkReviewTable.tsx';
 import BulkRowDrawer from '../components/BulkRowDrawer.tsx';
 import ResumeBatchPrompt from '../components/ResumeBatchPrompt.tsx';
 import { applyMapping } from '../utils/csvMapping.ts';
-import { extractStudentBatch } from '../api/bulkAddOrchestrators.ts';
+import { extractStudentBatch, bulkCreateStudents } from '../api/bulkAddOrchestrators.ts';
 import { saveDraft, deleteDraft, findActiveDraftsForTenant, buildDraftId } from '../db/bulkAddDrafts.ts';
+import PreSubmitGate, { type GateConfirmation } from '../components/PreSubmitGate.tsx';
 import type { BatchDraft } from '../types/bulkAdd.ts';
 import './BulkAddStudentsPage.css';
 
@@ -39,6 +40,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
   const [csvParsed, setCsvParsed] = useState<CsvParseResult | null>(null);
   const [activeDrawerIndex, setActiveDrawerIndex] = useState<number | null>(null);
   const [resumeDrafts, setResumeDrafts] = useState<BatchDraft[] | null>(null);
+  const [gateOpen, setGateOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +148,59 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         }
       },
     });
+  };
+
+  const handleCreateAll = () => {
+    if (rows.length === 0) return;
+    setGateOpen(true);
+  };
+
+  const submitFromGate = async (c: GateConfirmation) => {
+    setGateOpen(false);
+    setPhase('submitting');
+
+    const creating = c.rowIdsToCreate;
+    setRows((prev) =>
+      prev.map((r) => (creating.includes(r.id) ? { ...r, status: 'creating' } : r)),
+    );
+
+    // Build payloads — strip empty student_id (matches AddStudentModal:89 behavior).
+    const baseFieldNames = new Set(modelDef!.base_fields.map((f) => f.name));
+    const customFieldNames = new Set(modelDef!.custom_fields.map((f) => f.name));
+    const payloads = creating
+      .map((id) => rows.find((r) => r.id === id))
+      .filter((r): r is BulkRow => r != null)
+      .map((r) => {
+        const baseData: Record<string, unknown> = {};
+        const customFields: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(r.values)) {
+          if (k === 'student_id' && (v == null || String(v).trim() === '')) continue;
+          if (baseFieldNames.has(k)) baseData[k] = v;
+          else if (customFieldNames.has(k)) customFields[k] = v;
+        }
+        return { rowId: r.id, baseData, customFields };
+      });
+
+    await bulkCreateStudents({
+      tenantId: tenant,
+      payloads,
+      onRowResult: (rowId, outcome) => {
+        if (outcome.kind === 'created') {
+          updateRow(rowId, {
+            status: 'created',
+            assignedStudentId: outcome.assignedStudentId,
+            error: undefined,
+          });
+        } else {
+          updateRow(rowId, {
+            status: 'failed',
+            error: { source: 'create', message: outcome.error },
+          });
+        }
+      },
+    });
+
+    setPhase('post_submit');
   };
 
   // Task 8.3: Rebuild rows against the current model on resume (drops orphaned values).
@@ -256,6 +311,19 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
+      {phase === 'review' && (
+        <div className="bulk-add-page__toolbar">
+          <button
+            className="bulk-add-page__btn-primary"
+            disabled={rows.length === 0}
+            title={rows.length === 0 ? t('bulkAdd.toolbar.noRows') : undefined}
+            onClick={handleCreateAll}
+          >
+            {t('bulkAdd.toolbar.createAll').replace('{n}', String(rows.length))}
+          </button>
+        </div>
+      )}
+
       {(phase === 'extracting' || phase === 'review') && rows.length > 0 && (
         <BulkReviewTable
           rows={rows}
@@ -276,6 +344,24 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
             }
           }}
           onRetryExtract={(rowId) => { void retryExtract(rowId); }}
+        />
+      )}
+
+      {gateOpen && (
+        <PreSubmitGate
+          rows={rows.filter((r) =>
+            r.status === 'ready' || r.status === 'has_errors' ||
+            r.status === 'failed' || r.status === 'pending'
+          )}
+          modelDef={modelDef}
+          tenantId={tenant}
+          onCancel={() => setGateOpen(false)}
+          onConfirm={(c) => { void submitFromGate(c); }}
+          onCancelAndEdit={(rowId) => {
+            setGateOpen(false);
+            const idx = rows.findIndex((r) => r.id === rowId);
+            if (idx >= 0) setActiveDrawerIndex(idx);
+          }}
         />
       )}
 
@@ -329,10 +415,6 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
-      {/* batchId, columnMapping referenced by later phases */}
-      <div hidden>
-        {String(batchId)} {String(columnMapping)}
-      </div>
     </div>
   );
 }

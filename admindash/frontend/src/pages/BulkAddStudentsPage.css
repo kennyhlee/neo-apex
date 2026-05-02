@@ -45,3 +45,12 @@
   text-align: center;
   color: var(--color-text-muted, #6b7280);
 }
+
+.bulk-add-page__toolbar {
+  display: flex; gap: 8px;
+  margin-bottom: 12px;
+  justify-content: flex-end;
+}
+.bulk-add-page__btn-primary:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
