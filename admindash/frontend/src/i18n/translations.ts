@@ -153,6 +153,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'lead.title': 'Lead Management',
 
     // Bulk Add Students
+    'bulkAdd.entryButton': 'Bulk add',
     'bulkAdd.title': 'Bulk Add Students',
     'bulkAdd.noModelConfigured': 'Student model is not configured. Please set up the student model in Papermite first.',
     'bulkAdd.backToStudents': 'Back to Students',
@@ -421,6 +422,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'lead.title': '\u5ba2\u6237\u7ba1\u7406',
 
     // Bulk Add Students
+    'bulkAdd.entryButton': '\u6279\u91cf\u6dfb\u52a0',
     'bulkAdd.title': '\u6279\u91cf\u6dfb\u52a0\u5b66\u751f',
     'bulkAdd.noModelConfigured': '\u5b66\u751f\u6a21\u578b\u672a\u914d\u7f6e\u3002\u8bf7\u5148\u5728 Papermite \u4e2d\u8bbe\u7f6e\u5b66\u751f\u6a21\u578b\u3002',
     'bulkAdd.backToStudents': '\u8fd4\u56de\u5b66\u751f\u5217\u8868',
