@@ -152,6 +152,22 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Lead
     'lead.title': 'Lead Management',
 
+    // Bulk Add Students
+    'bulkAdd.title': 'Bulk Add Students',
+    'bulkAdd.noModelConfigured': 'Student model is not configured. Please set up the student model in Papermite first.',
+    'bulkAdd.backToStudents': 'Back to Students',
+    'bulkAdd.modeSelectPrompt': 'Choose how you want to add students.',
+    'bulkAdd.modeSelect.documents': 'Upload Documents',
+    'bulkAdd.modeSelect.documentsDesc': 'Upload enrollment forms or student records (PDF, DOCX, TXT). Information is extracted automatically.',
+    'bulkAdd.modeSelect.csv': 'Upload CSV',
+    'bulkAdd.modeSelect.csvDesc': 'Upload a spreadsheet with student data. Map columns to fields before importing.',
+    'bulkAdd.dropzone.docsTitle': 'Drop files here or click to browse',
+    'bulkAdd.dropzone.docsHint': 'Accepted: PDF, DOCX, TXT — up to {cap} files',
+    'bulkAdd.dropzone.csvTitle': 'Drop a CSV file here or click to browse',
+    'bulkAdd.dropzone.csvHint': 'Accepted: CSV — up to {cap} data rows',
+    'bulkAdd.errors.tooManyDocuments': 'Too many files. The limit is {cap} files per batch.',
+    'bulkAdd.errors.unsupportedFiles': 'Unsupported file type(s): {names}. Use PDF, DOCX, or TXT.',
+
     // Common
     'common.loading': 'Loading...',
     'common.save': 'Save',
@@ -343,6 +359,22 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Lead
     'lead.title': '\u5ba2\u6237\u7ba1\u7406',
+
+    // Bulk Add Students
+    'bulkAdd.title': '\u6279\u91cf\u6dfb\u52a0\u5b66\u751f',
+    'bulkAdd.noModelConfigured': '\u5b66\u751f\u6a21\u578b\u672a\u914d\u7f6e\u3002\u8bf7\u5148\u5728 Papermite \u4e2d\u8bbe\u7f6e\u5b66\u751f\u6a21\u578b\u3002',
+    'bulkAdd.backToStudents': '\u8fd4\u56de\u5b66\u751f\u5217\u8868',
+    'bulkAdd.modeSelectPrompt': '\u8bf7\u9009\u62e9\u6dfb\u52a0\u5b66\u751f\u7684\u65b9\u5f0f\u3002',
+    'bulkAdd.modeSelect.documents': '\u4e0a\u4f20\u6587\u4ef6',
+    'bulkAdd.modeSelect.documentsDesc': '\u4e0a\u4f20\u5165\u5b66\u8868\u6216\u5b66\u751f\u8d44\u6599\uff08PDF\u3001DOCX\u3001TXT\uff09\uff0c\u7cfb\u7edf\u5c06\u81ea\u52a8\u63d0\u53d6\u4fe1\u606f\u3002',
+    'bulkAdd.modeSelect.csv': '\u4e0a\u4f20 CSV',
+    'bulkAdd.modeSelect.csvDesc': '\u4e0a\u4f20\u542b\u5b66\u751f\u6570\u636e\u7684\u8868\u683c\uff0c\u5bfc\u5165\u524d\u9700\u5c06\u5217\u6620\u5c04\u5230\u5b57\u6bb5\u3002',
+    'bulkAdd.dropzone.docsTitle': '\u62d6\u653e\u6587\u4ef6\u5230\u6b64\u5904\u6216\u70b9\u51fb\u6d4f\u89c8',
+    'bulkAdd.dropzone.docsHint': '\u652f\u6301\uff1aPDF\u3001DOCX\u3001TXT\uff0c\u6700\u591a {cap} \u4e2a\u6587\u4ef6',
+    'bulkAdd.dropzone.csvTitle': '\u62d6\u653e CSV \u6587\u4ef6\u5230\u6b64\u5904\u6216\u70b9\u51fb\u6d4f\u89c8',
+    'bulkAdd.dropzone.csvHint': '\u652f\u6301\uff1aCSV\uff0c\u6700\u591a {cap} \u884c\u6570\u636e',
+    'bulkAdd.errors.tooManyDocuments': '\u6587\u4ef6\u6570\u91cf\u8fc7\u591a\uff0c\u6bcf\u6279\u6700\u591a {cap} \u4e2a\u6587\u4ef6\u3002',
+    'bulkAdd.errors.unsupportedFiles': '\u4e0d\u652f\u6301\u7684\u6587\u4ef6\u7c7b\u578b\uff1a{names}\u3002\u8bf7\u4f7f\u7528 PDF\u3001DOCX \u6216 TXT\u3002',
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',

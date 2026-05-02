@@ -6,6 +6,10 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import type { Phase, BulkRow, BatchMode, ColumnMapping } from '../types/bulkAdd.ts';
 import { newBatchId } from '../types/bulkAdd.ts';
 import type { ModelDefinition } from '../types/models.ts';
+import type { CsvParseResult } from '../types/bulkAdd.ts';
+import BulkModeSelector from '../components/BulkModeSelector.tsx';
+import BulkDocumentDropzone from '../components/BulkDocumentDropzone.tsx';
+import BulkCsvDropzone from '../components/BulkCsvDropzone.tsx';
 import './BulkAddStudentsPage.css';
 
 interface BulkAddStudentsPageProps {
@@ -24,6 +28,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
   const [batchId] = useState<string>(() => newBatchId());
   const [rows, setRows] = useState<BulkRow[]>([]);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping | null>(null);
+  const [csvParsed, setCsvParsed] = useState<CsvParseResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,16 +79,45 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
       </header>
 
       {phase === 'mode_select' && (
-        <div className="bulk-add-page__mode-select-placeholder">
-          <p>{t('bulkAdd.modeSelectPrompt')}</p>
-        </div>
+        <BulkModeSelector
+          onPick={(picked) => {
+            setMode(picked);
+            setPhase('uploading');
+          }}
+        />
       )}
 
-      {/* Suppress unused-var warnings while later phases land incrementally.
-          Removed entirely when Phase 4's BulkModeSelector replaces this branch. */}
+      {phase === 'uploading' && mode === 'documents' && (
+        <BulkDocumentDropzone
+          onSelect={(files) => {
+            // Phase 6 wires extractStudentBatch here. For this commit, log + stay
+            // in uploading so the page is testable end-to-end.
+            console.log('Documents picked:', files.map((f) => f.name));
+          }}
+          onCancel={() => {
+            setPhase('mode_select');
+            setMode(null);
+          }}
+        />
+      )}
+
+      {phase === 'uploading' && mode === 'csv' && (
+        <BulkCsvDropzone
+          onParsed={(parsed) => {
+            setCsvParsed(parsed);
+            setPhase('mapping');
+          }}
+          onCancel={() => {
+            setPhase('mode_select');
+            setMode(null);
+          }}
+        />
+      )}
+
+      {/* batchId, rows, setRows, columnMapping, setColumnMapping, csvParsed referenced by later phases */}
       <div hidden>
-        {String(mode)} {String(batchId)} {String(rows.length)} {String(columnMapping)}
-        {String(setMode)} {String(setRows)} {String(setColumnMapping)} {String(setPhase)}
+        {String(batchId)} {String(rows.length)} {String(setRows)}
+        {String(columnMapping)} {String(setColumnMapping)} {String(csvParsed)}
       </div>
     </div>
   );
