@@ -1,8 +1,7 @@
 """Tests for extractor.py — discovery + targeted, text + vision."""
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from app.services.extractor import extract_fields
+from app.services.extractor import extract_fields, extract_fields_from_pdf
 
 
 def test_extract_fields_returns_known_fields_only():
@@ -73,9 +72,6 @@ def test_extract_fields_filters_none_and_empty():
     assert result == {"first_name": "Jane"}
 
 
-from app.services.extractor import extract_fields_from_pdf
-
-
 def test_extract_fields_from_pdf_returns_filtered_dict(tmp_path):
     """Vision-based targeted extraction filters to known fields, drops empty."""
     model_definition = {
@@ -106,9 +102,9 @@ def test_extract_fields_from_pdf_returns_filtered_dict(tmp_path):
 
         result = extract_fields_from_pdf(
             file_path=pdf_file,
-            model_id="anthropic:claude-sonnet-4-6",
             entity_type="student",
             model_definition=model_definition,
+            model_id="anthropic:claude-sonnet-4-6",
         )
 
     assert result == {"first_name": "Jane", "last_name": "Doe"}
@@ -120,9 +116,9 @@ def test_extract_fields_from_pdf_unknown_entity_returns_empty(tmp_path):
 
     result = extract_fields_from_pdf(
         file_path=pdf_file,
-        model_id="anthropic:claude-sonnet-4-6",
         entity_type="missing",
         model_definition={"student": {"base_fields": [], "custom_fields": []}},
+        model_id="anthropic:claude-sonnet-4-6",
     )
 
     assert result == {}

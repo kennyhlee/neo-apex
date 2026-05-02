@@ -68,7 +68,7 @@ def extract_entities_from_pdf(file_path: Path, model_id: str) -> RawExtraction:
 # ─── Targeted field extraction (text-based) ───────────────────────
 
 
-def _build_field_prompt(entity_type: str, all_fields: list) -> str:
+def _build_field_prompt(entity_type: str, all_fields: list[dict[str, Any]]) -> str:
     """Build an extraction prompt from the model's field definitions."""
     if not all_fields:
         return ""
@@ -93,7 +93,19 @@ def _build_field_prompt(entity_type: str, all_fields: list) -> str:
     )
 
 
-def _filter_extracted_fields(raw: dict, all_fields: list) -> dict:
+def _filter_extracted_fields(
+    raw: dict[str, Any], all_fields: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Drop hallucinated keys, None values, and empty strings.
+
+    A "known field" is any element of `all_fields` whose `"name"` matches a
+    key in `raw`. `all_fields` is a list of field-definition dicts as stored
+    in the model definition (each has at least a `"name"`).
+
+    Note: falsy-but-meaningful values like 0 and False are preserved — only
+    None and "" are filtered. This matches the upstream `field_extractor`
+    semantics carried forward verbatim.
+    """
     known_fields = {f["name"] for f in all_fields}
     return {
         k: v
@@ -105,7 +117,7 @@ def _filter_extracted_fields(raw: dict, all_fields: list) -> dict:
 def extract_fields(
     text: str,
     entity_type: str,
-    model_definition: dict,
+    model_definition: dict[str, Any],
     model_id: str,
 ) -> dict[str, Any]:
     """Extract field values from document text, guided by entity model definition.
@@ -131,9 +143,9 @@ def extract_fields(
 
 def extract_fields_from_pdf(
     file_path: Path,
-    model_id: str,
     entity_type: str,
-    model_definition: dict,
+    model_definition: dict[str, Any],
+    model_id: str,
 ) -> dict[str, Any]:
     """Vision-based targeted field extraction.
 
