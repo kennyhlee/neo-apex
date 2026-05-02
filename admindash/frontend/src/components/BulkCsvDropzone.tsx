@@ -27,11 +27,12 @@ export default function BulkCsvDropzone({ onParsed, onCancel }: Props) {
         setError(outcome.error.message);
       } else {
         onParsed(outcome.result);
-        // Reset input value so the same filename can be picked again to retrigger.
-        if (inputRef.current) inputRef.current.value = '';
       }
     } finally {
       setParsing(false);
+      // Reset input value so the same filename can be picked again to retrigger,
+      // even if parsing failed.
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
 

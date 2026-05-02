@@ -49,6 +49,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
   const successRows = rows.filter((r) => r.status === 'created');
   const failedRows = rows.filter((r) => r.status === 'failed');
   const allDone = phase === 'post_submit' && failedRows.length === 0;
+  const drawerRows = phase === 'post_submit' ? failedRows : rows;
 
   const handleRetryFailed = () => {
     // Re-route through the gate against just the failed rows.
@@ -425,11 +426,11 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
               rows={failedRows}
               modelDef={modelDef}
               onEditRow={(rowId) => {
-                const idx = rows.findIndex((r) => r.id === rowId);
+                const idx = failedRows.findIndex((r) => r.id === rowId);
                 if (idx >= 0) setActiveDrawerIndex(idx);
               }}
               onDeleteRow={(rowId) => {
-                const deletedIdx = rows.findIndex((r) => r.id === rowId);
+                const deletedIdx = failedRows.findIndex((r) => r.id === rowId);
                 setRows((prev) => prev.filter((r) => r.id !== rowId));
                 if (activeDrawerIndex != null && deletedIdx >= 0) {
                   if (deletedIdx === activeDrawerIndex) {
@@ -464,12 +465,14 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
-      {activeDrawerIndex != null && rows[activeDrawerIndex] && (
+      {activeDrawerIndex != null && drawerRows[activeDrawerIndex] && (
         <BulkRowDrawer
-          rows={rows}
+          rows={drawerRows}
           activeRowIndex={activeDrawerIndex}
           modelDef={modelDef}
           onSaveRow={(rowId, baseData, customFields) => {
+            const target = rows.find((r) => r.id === rowId);
+            if (!target || target.status === 'created') return; // refuse to mutate created rows
             const merged = { ...baseData, ...customFields };
             updateRow(rowId, { values: merged, status: 'ready', error: undefined });
           }}
