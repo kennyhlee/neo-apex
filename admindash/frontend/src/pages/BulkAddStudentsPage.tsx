@@ -1,5 +1,5 @@
 // admindash/frontend/src/pages/BulkAddStudentsPage.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useTranslation } from '../hooks/useTranslation.ts';
@@ -31,6 +31,8 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { getModel } = useModel();
+
+  const createdAtRef = useRef<string | null>(null);
 
   const [modelDef, setModelDef] = useState<ModelDefinition | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
@@ -82,6 +84,10 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
     if (mode == null) return;
 
     const handle = window.setTimeout(() => {
+      if (createdAtRef.current == null) {
+        createdAtRef.current = new Date().toISOString();
+      }
+      const createdAt = createdAtRef.current;
       const draft: BatchDraft = {
         id: buildDraftId(tenant, batchId),
         tenantId: tenant,
@@ -93,7 +99,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
           file: undefined,
         })),
         columnMapping: columnMapping ?? undefined,
-        createdAt: new Date().toISOString(),
+        createdAt,
         updatedAt: new Date().toISOString(),
       };
       void saveDraft(draft);
@@ -321,6 +327,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
           drafts={resumeDrafts}
           onCancel={() => setResumeDrafts(null)}
           onResume={(draft) => {
+            createdAtRef.current = draft.createdAt;
             setRows(rebuildRowsForCurrentModel(draft.rows, modelDef));
             setMode(draft.mode);
             setColumnMapping(draft.columnMapping ?? null);
@@ -332,9 +339,12 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
             setResumeDrafts((prev) => prev?.filter((d) => d.id !== draft.id) ?? null);
           }}
           onDiscardAll={() => {
-            const ids = resumeDrafts.map((d) => d.id);
-            void Promise.all(ids.map((id) => deleteDraft(id)));
-            setResumeDrafts(null);
+            setResumeDrafts((prev) => {
+              if (prev) {
+                void Promise.all(prev.map((d) => deleteDraft(d.id)));
+              }
+              return null;
+            });
           }}
         />
       )}

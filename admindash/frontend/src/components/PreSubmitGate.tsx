@@ -73,6 +73,9 @@ export default function PreSubmitGate({
         case 'eligible_clean': ready.push(row); break;
         case 'eligible_match': duplicates.push({ row, matches: out.matches }); break;
         case 'skipped':
+          // Row is created by default; the 'skipped' bucket is informational
+          // (missing dup-check fields means we couldn't run the duplicate check,
+          // not that the row failed validation).
           ready.push(row);
           skipped.push({ row, missingFields: out.missingFields });
           break;

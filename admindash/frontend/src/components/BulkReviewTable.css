@@ -46,7 +46,8 @@
   font-weight: 500;
 }
 .status-pill--extracting, .status-pill--creating { background: var(--color-info-subtle, #eff6ff); color: var(--color-info, #1d4ed8); }
-.status-pill--ready, .status-pill--pending { background: var(--color-bg-subtle, #f3f4f6); color: var(--color-text, #374151); }
+.status-pill--ready { background: var(--color-success-subtle, #d1fae5); color: var(--color-success, #065f46); }
+.status-pill--pending { background: var(--color-bg-subtle, #f3f4f6); color: var(--color-text, #374151); }
 .status-pill--has_errors { background: var(--color-warning-subtle, #fef3c7); color: var(--color-warning, #92400e); }
 .status-pill--created { background: var(--color-success-subtle, #d1fae5); color: var(--color-success, #065f46); }
 .status-pill--failed, .status-pill--extract_failed { background: var(--color-error-subtle, #fef2f2); color: var(--color-error, #b91c1c); }

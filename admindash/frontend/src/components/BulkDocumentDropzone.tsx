@@ -37,6 +37,8 @@ export default function BulkDocumentDropzone({ onSelect, onCancel }: Props) {
       setError(t('bulkAdd.errors.unsupportedFiles').replace('{names}', invalid.join(', ')));
     }
     if (valid.length > 0) onSelect(valid);
+    // Reset input value so the same filename can be picked again to retrigger.
+    if (inputRef.current) inputRef.current.value = '';
   };
 
   const handleDrop = (e: React.DragEvent) => {
