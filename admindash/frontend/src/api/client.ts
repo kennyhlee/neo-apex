@@ -108,6 +108,19 @@ export async function extractStudentFromDocument(
   return resp.json();
 }
 
+export interface AvailableModelsResponse {
+  default: string;
+  models: { id: string; label?: string }[];
+}
+
+export async function fetchAvailableModels(): Promise<AvailableModelsResponse> {
+  const resp = await fetch(`${API_BASE}/api/config/models`, {
+    headers: authHeaders(),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchNextEntityId(
   tenantId: string,
   entityType: string,

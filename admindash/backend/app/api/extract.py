@@ -57,3 +57,22 @@ async def extract_student(
         status_code=upstream_resp.status_code,
         media_type=upstream_resp.headers.get("content-type"),
     )
+
+
+@router.get("/config/models")
+def get_available_models(user=Depends(require_authenticated_user)):
+    """Proxy papermite's /api/config/models so admindash can read the default."""
+    try:
+        resp = httpx.get(
+            f"{settings.papermite_backend_url}/api/config/models",
+            headers={"Authorization": user["_token"]},
+            timeout=10.0,
+        )
+    except httpx.RequestError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Papermite is unreachable",
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
