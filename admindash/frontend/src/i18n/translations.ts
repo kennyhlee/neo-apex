@@ -224,6 +224,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.postSubmit.retryFailed': 'Retry failed ({n})',
     'bulkAdd.postSubmit.done': 'Done & return to Students',
     'bulkAdd.disclosure.label': '{n} students created — click to view IDs',
+    'bulkAdd.discardBatch': 'Discard batch',
+    'bulkAdd.discardConfirm': 'Discard this batch? Unsaved rows will be lost.',
+    'bulkAdd.submittingDisabled': 'Submitting…',
 
     // Common
     'common.loading': 'Loading...',
@@ -489,6 +492,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.postSubmit.retryFailed': '\u91cd\u8bd5\u5931\u8d25\u9879\uff08{n}\uff09',
     'bulkAdd.postSubmit.done': '\u5b8c\u6210\u5e76\u8fd4\u56de\u5b66\u751f\u5217\u8868',
     'bulkAdd.disclosure.label': '\u5df2\u521b\u5efa {n} \u540d\u5b66\u751f \u2014 \u70b9\u51fb\u67e5\u770b ID',
+    'bulkAdd.discardBatch': '\u4e22\u5f03\u6279\u6b21',
+    'bulkAdd.discardConfirm': '\u4e22\u5f03\u6b64\u6279\u6b21\uff1f\u672a\u4fdd\u5b58\u7684\u884c\u5c06\u4e22\u5931\u3002',
+    'bulkAdd.submittingDisabled': '\u63d0\u4ea4\u4e2d\u2026',
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',

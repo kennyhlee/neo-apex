@@ -276,12 +276,44 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
     <div className="bulk-add-page">
       <header className="bulk-add-page__header">
         <h1>{t('bulkAdd.title')}</h1>
-        <button
-          className="bulk-add-page__btn-secondary"
-          onClick={() => navigate('/students')}
-        >
-          {t('common.cancel')}
-        </button>
+        {(phase === 'mode_select' || phase === 'uploading') && (
+          <button
+            className="bulk-add-page__btn-secondary"
+            onClick={() => navigate('/students')}
+          >
+            {t('common.cancel')}
+          </button>
+        )}
+        {phase === 'extracting' && (
+          <button
+            className="bulk-add-page__btn-secondary"
+            onClick={() => {
+              // In-flight extracts are allowed to settle; we just navigate away.
+              // No IndexedDB draft has been created yet (review phase boundary).
+              navigate('/students');
+            }}
+          >
+            {t('common.cancel')}
+          </button>
+        )}
+        {(phase === 'review' || phase === 'post_submit') && (
+          <button
+            className="bulk-add-page__btn-secondary"
+            onClick={() => {
+              if (window.confirm(t('bulkAdd.discardConfirm'))) {
+                void deleteDraft(buildDraftId(tenant, batchId));
+                navigate('/students');
+              }
+            }}
+          >
+            {t('bulkAdd.discardBatch')}
+          </button>
+        )}
+        {phase === 'submitting' && (
+          <button className="bulk-add-page__btn-secondary" disabled>
+            {t('bulkAdd.submittingDisabled')}
+          </button>
+        )}
       </header>
 
       {resumeDrafts && (
