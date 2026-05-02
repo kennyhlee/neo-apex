@@ -10,7 +10,9 @@ import BulkModeSelector from '../components/BulkModeSelector.tsx';
 import BulkDocumentDropzone from '../components/BulkDocumentDropzone.tsx';
 import BulkCsvDropzone from '../components/BulkCsvDropzone.tsx';
 import CsvMappingStep from '../components/CsvMappingStep.tsx';
+import ExtractionProgressBar from '../components/ExtractionProgressBar.tsx';
 import { applyMapping } from '../utils/csvMapping.ts';
+import { extractStudentBatch } from '../api/bulkAddOrchestrators.ts';
 import './BulkAddStudentsPage.css';
 
 interface BulkAddStudentsPageProps {
@@ -40,6 +42,54 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
       });
     return () => { cancelled = true; };
   }, [tenant, getModel]);
+
+  const updateRow = (rowId: string, patch: Partial<BulkRow>) => {
+    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...patch } : r)));
+  };
+
+  const startDocumentExtraction = async (files: File[]) => {
+    const seeded: BulkRow[] = files.map((f) => ({
+      id: newRowId(),
+      source: f.name,
+      file: f,
+      values: {},
+      status: 'extracting',
+    }));
+    setRows(seeded);
+    setPhase('extracting');
+
+    const items = seeded.map((r) => ({ rowId: r.id, file: r.file as File }));
+    await extractStudentBatch({
+      tenantId: tenant,
+      files: items,
+      onRowResult: (rowId, result) => {
+        if (result.error) {
+          updateRow(rowId, { status: 'extract_failed', error: result.error });
+        } else if (result.fields) {
+          updateRow(rowId, { status: 'ready', values: { ...result.fields } });
+        }
+      },
+    });
+
+    setPhase('review');
+  };
+
+  const retryExtract = async (rowId: string) => {
+    const row = rows.find((r) => r.id === rowId);
+    if (!row || !row.file) return;
+    updateRow(rowId, { status: 'extracting', error: undefined });
+    await extractStudentBatch({
+      tenantId: tenant,
+      files: [{ rowId, file: row.file }],
+      onRowResult: (id, result) => {
+        if (result.error) {
+          updateRow(id, { status: 'extract_failed', error: result.error });
+        } else if (result.fields) {
+          updateRow(id, { status: 'ready', values: { ...result.fields } });
+        }
+      },
+    });
+  };
 
   if (modelError != null) {
     return (
@@ -90,15 +140,19 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
 
       {phase === 'uploading' && mode === 'documents' && (
         <BulkDocumentDropzone
-          onSelect={(files) => {
-            // Phase 6 wires extractStudentBatch here. For this commit, log + stay
-            // in uploading so the page is testable end-to-end.
-            console.log('Documents picked:', files.map((f) => f.name));
-          }}
+          onSelect={(files) => { void startDocumentExtraction(files); }}
           onCancel={() => {
             setPhase('mode_select');
             setMode(null);
           }}
+        />
+      )}
+
+      {phase === 'extracting' && (
+        <ExtractionProgressBar
+          total={rows.length}
+          done={rows.filter((r) => r.status === 'ready' || r.status === 'extract_failed').length}
+          failed={rows.filter((r) => r.status === 'extract_failed').length}
         />
       )}
 
@@ -138,9 +192,9 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
-      {/* batchId, rows, columnMapping referenced by later phases */}
+      {/* batchId, columnMapping, retryExtract referenced by later phases */}
       <div hidden>
-        {String(batchId)} {String(rows.length)} {String(columnMapping)}
+        {String(batchId)} {String(columnMapping)} {String(!!retryExtract)}
       </div>
     </div>
   );

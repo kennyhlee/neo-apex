@@ -174,6 +174,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.mapping.skip': '— Skip —',
     'bulkAdd.mapping.apply': 'Apply mapping',
     'bulkAdd.mapping.missingRequired': 'Required fields not mapped: {fields}',
+    'bulkAdd.progress.label': 'Extracted {done} of {total} ({failed} failed)',
 
     // Common
     'common.loading': 'Loading...',
@@ -389,6 +390,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.mapping.skip': '\u2014 \u8df3\u8fc7 \u2014',
     'bulkAdd.mapping.apply': '\u5e94\u7528\u6620\u5c04',
     'bulkAdd.mapping.missingRequired': '\u672a\u6620\u5c04\u7684\u5fc5\u586b\u5b57\u6bb5\uff1a{fields}',
+    'bulkAdd.progress.label': '\u5df2\u63d0\u53d6 {done} / {total}\uff08{failed} \u5931\u8d25\uff09',
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',
