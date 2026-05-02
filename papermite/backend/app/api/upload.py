@@ -9,7 +9,7 @@ from app.config import settings
 from app.models.registry import UserRecord
 from app.models.extraction import ExtractionResult
 from app.services.mapper import map_extraction
-from app.services.processor import process_document
+from app.services.extraction_pipeline import extract_for_discovery
 
 router = APIRouter()
 
@@ -43,8 +43,8 @@ def upload_document(
         shutil.copyfileobj(file.file, f)
 
     try:
-        # Pipeline: process (parse+extract per configured backend) → map
-        raw_extraction, _text = process_document(file_path, model_id)
+        # Run discovery extraction → map to ExtractionResult
+        raw_extraction = extract_for_discovery(file_path, model_id)
         result = map_extraction(raw_extraction, tenant_id, file.filename)
         return result
     except Exception as e:
