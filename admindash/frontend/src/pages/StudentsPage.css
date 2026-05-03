@@ -280,7 +280,8 @@
   font-family: var(--font-sans);
   font-size: 0.85rem;
   font-weight: 500;
-  padding: 0.45rem 0.85rem;
+  /* Compensate for 1px border so total box-height matches primary's borderless box. */
+  padding: calc(0.45rem - 1px) calc(0.85rem - 1px);
   border-radius: var(--radius-sm);
   background: transparent;
   color: #378ADD;
