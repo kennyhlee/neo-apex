@@ -78,11 +78,23 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
     return () => { cancelled = true; };
   }, [tenant, getModel]);
 
-  // Task 8.1: Debounced persistence to IndexedDB once review phase begins.
+  // Task 8.1 + Bug fix: Persist to IndexedDB during review/submitting/post_submit.
+  // When ALL rows are 'created' (a fully-successful batch), instead of saving,
+  // actively delete any existing draft so the resume prompt does not surface
+  // a finished batch on next page load.
   useEffect(() => {
-    // Skip persistence before review phase.
     if (phase !== 'review' && phase !== 'submitting' && phase !== 'post_submit') return;
     if (mode == null) return;
+
+    const allCreated =
+      phase === 'post_submit' &&
+      rows.length > 0 &&
+      rows.every((r) => r.status === 'created');
+
+    if (allCreated) {
+      void deleteDraft(buildDraftId(tenant, batchId));
+      return;
+    }
 
     const handle = window.setTimeout(() => {
       if (createdAtRef.current == null) {
@@ -289,47 +301,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
 
   return (
     <div className="bulk-add-page">
-      <header className="bulk-add-page__header">
-        <h1>{t('bulkAdd.title')}</h1>
-        {(phase === 'mode_select' || phase === 'uploading') && (
-          <button
-            className="bulk-add-page__btn-secondary"
-            onClick={() => navigate('/students')}
-          >
-            {t('common.cancel')}
-          </button>
-        )}
-        {phase === 'extracting' && (
-          <button
-            className="bulk-add-page__btn-secondary"
-            onClick={() => {
-              // In-flight extracts are allowed to settle; we just navigate away.
-              // No IndexedDB draft has been created yet (review phase boundary).
-              navigate('/students');
-            }}
-          >
-            {t('common.cancel')}
-          </button>
-        )}
-        {(phase === 'review' || phase === 'post_submit') && (
-          <button
-            className="bulk-add-page__btn-secondary"
-            onClick={() => {
-              if (window.confirm(t('bulkAdd.discardConfirm'))) {
-                void deleteDraft(buildDraftId(tenant, batchId));
-                navigate('/students');
-              }
-            }}
-          >
-            {t('bulkAdd.discardBatch')}
-          </button>
-        )}
-        {phase === 'submitting' && (
-          <button className="bulk-add-page__btn-secondary" disabled>
-            {t('bulkAdd.submittingDisabled')}
-          </button>
-        )}
-      </header>
+      <h1>{t('bulkAdd.title')}</h1>
 
       {resumeDrafts && (
         <ResumeBatchPrompt
@@ -385,8 +357,8 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
-      {phase === 'review' && (
-        <div className="bulk-add-page__toolbar">
+      <div className="bulk-add-page__toolbar">
+        {phase === 'review' && (
           <button
             className="bulk-add-page__btn-primary"
             disabled={rows.length === 0}
@@ -395,8 +367,37 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
           >
             {t('bulkAdd.toolbar.createAll').replace('{n}', String(rows.length))}
           </button>
-        </div>
-      )}
+        )}
+
+        <div className="bulk-add-page__toolbar-spacer" />
+
+        {(phase === 'mode_select' || phase === 'uploading' || phase === 'extracting') && (
+          <button
+            className="bulk-add-page__btn-secondary"
+            onClick={() => navigate('/students')}
+          >
+            {t('common.cancel')}
+          </button>
+        )}
+        {(phase === 'review' || phase === 'post_submit') && (
+          <button
+            className="bulk-add-page__btn-secondary"
+            onClick={() => {
+              if (window.confirm(t('bulkAdd.discardConfirm'))) {
+                void deleteDraft(buildDraftId(tenant, batchId));
+                navigate('/students');
+              }
+            }}
+          >
+            {t('bulkAdd.discardBatch')}
+          </button>
+        )}
+        {phase === 'submitting' && (
+          <button className="bulk-add-page__btn-secondary" disabled>
+            {t('bulkAdd.submittingDisabled')}
+          </button>
+        )}
+      </div>
 
       {(phase === 'extracting' || phase === 'review') && rows.length > 0 && (
         <BulkReviewTable
