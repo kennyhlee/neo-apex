@@ -30,10 +30,23 @@ export default function ResumeBatchPrompt({
             {' '}— {new Date(primary.updatedAt).toLocaleString()}
           </p>
           <div className="resume-prompt__actions">
-            <button onClick={onCancel}>{t('common.cancel')}</button>
-            <button onClick={() => onDiscardOne(primary)}>{t('bulkAdd.resume.discardThis')}</button>
             <button
-              className="resume-prompt__resume"
+              type="button"
+              className="resume-prompt__btn resume-prompt__btn--secondary"
+              onClick={onCancel}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="resume-prompt__btn resume-prompt__btn--danger"
+              onClick={() => onDiscardOne(primary)}
+            >
+              {t('bulkAdd.resume.discardThis')}
+            </button>
+            <button
+              type="button"
+              className="resume-prompt__btn resume-prompt__btn--primary"
               onClick={() => onResume(primary)}
             >
               {t('bulkAdd.resume.resume')}
@@ -48,12 +61,28 @@ export default function ResumeBatchPrompt({
               {others.map((d) => (
                 <li key={d.id}>
                   <span>{d.rows.length} rows · {new Date(d.updatedAt).toLocaleString()}</span>
-                  <button onClick={() => onResume(d)}>{t('bulkAdd.resume.resume')}</button>
-                  <button onClick={() => onDiscardOne(d)}>{t('bulkAdd.resume.discardThis')}</button>
+                  <button
+                    type="button"
+                    className="resume-prompt__btn resume-prompt__btn--primary resume-prompt__btn--small"
+                    onClick={() => onResume(d)}
+                  >
+                    {t('bulkAdd.resume.resume')}
+                  </button>
+                  <button
+                    type="button"
+                    className="resume-prompt__btn resume-prompt__btn--danger resume-prompt__btn--small"
+                    onClick={() => onDiscardOne(d)}
+                  >
+                    {t('bulkAdd.resume.discardThis')}
+                  </button>
                 </li>
               ))}
             </ul>
-            <button onClick={onDiscardAll} className="resume-prompt__discard-all">
+            <button
+              type="button"
+              className="resume-prompt__btn resume-prompt__btn--danger"
+              onClick={onDiscardAll}
+            >
               {t('bulkAdd.resume.discardAll')}
             </button>
           </details>

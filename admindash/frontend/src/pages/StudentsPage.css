@@ -277,17 +277,20 @@
 }
 
 .students-toolbar-secondary {
-  margin-left: 8px;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
   font-weight: 500;
-  cursor: pointer;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-primary, #2563eb);
-  border: 1px solid var(--color-primary, #2563eb);
+  color: #378ADD;
+  border: 1px solid #378ADD;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .students-toolbar-secondary:hover {
-  background: var(--color-primary-subtle, #eff6ff);
+  background: rgba(55, 138, 221, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.15);
 }

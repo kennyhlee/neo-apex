@@ -204,7 +204,15 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         const baseData: Record<string, unknown> = {};
         const customFields: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(r.values)) {
-          if (k === 'student_id' && (v == null || String(v).trim() === '')) continue;
+          if (k === 'student_id') {
+            // Documents mode: always strip — backend auto-assigns the next ID.
+            // The LLM may extract a junk value (e.g., a reference number from the
+            // application form) into student_id which would otherwise be used as
+            // the literal value. Matches AddStudentModal.tsx:89's behavior.
+            if (mode === 'documents') continue;
+            // CSV mode: respect explicit student_id from the CSV; skip empty.
+            if (v == null || String(v).trim() === '') continue;
+          }
           if (baseFieldNames.has(k)) baseData[k] = v;
           else if (customFieldNames.has(k)) customFields[k] = v;
         }
