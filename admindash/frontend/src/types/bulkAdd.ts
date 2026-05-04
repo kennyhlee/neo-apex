@@ -86,10 +86,9 @@ export type CsvParseOutcome =
   | { ok: true; result: CsvParseResult }
   | { ok: false; error: CsvParseError };
 
-export interface DupCheckEligibility {
-  eligible: boolean;
-  missingFields?: string[];
-}
+export type DupCheckEligibility =
+  | { eligible: true }
+  | { eligible: false; missingFields: string[] };
 
 export function newRowId(): string {
   return `row_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

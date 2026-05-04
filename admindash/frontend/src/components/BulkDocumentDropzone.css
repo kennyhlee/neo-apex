@@ -1,5 +1,5 @@
 /* admindash/frontend/src/components/BulkDocumentDropzone.css */
-.bulk-doc-dropzone-wrapper { max-width: 800px; }
+.bulk-doc-dropzone-wrapper { max-width: var(--bulk-content-max-width, 800px); }
 
 .bulk-doc-dropzone {
   border: 2px dashed var(--color-border, #d1d5db);
