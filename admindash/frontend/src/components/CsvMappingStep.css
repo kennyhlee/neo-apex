@@ -1,4 +1,4 @@
-.csv-mapping-step { max-width: 800px; }
+.csv-mapping-step { max-width: var(--bulk-content-max-width, 800px); }
 .csv-mapping-step h2 { font-size: 18px; margin: 0 0 8px 0; }
 .csv-mapping-step__subtitle { color: var(--color-text-muted, #6b7280); margin: 0 0 16px 0; }
 

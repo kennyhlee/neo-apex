@@ -23,6 +23,10 @@ import CreatedStudentsDisclosure from '../components/CreatedStudentsDisclosure.t
 import type { BatchDraft } from '../types/bulkAdd.ts';
 import './BulkAddStudentsPage.css';
 
+type ModelLoadError =
+  | { kind: 'not_configured' }
+  | { kind: 'load_failed'; message: string };
+
 interface BulkAddStudentsPageProps {
   tenant: string;
 }
@@ -35,7 +39,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
   const createdAtRef = useRef<string | null>(null);
 
   const [modelDef, setModelDef] = useState<ModelDefinition | null>(null);
-  const [modelError, setModelError] = useState<string | null>(null);
+  const [modelError, setModelError] = useState<ModelLoadError | null>(null);
   const [phase, setPhase] = useState<Phase>('mode_select');
   const [mode, setMode] = useState<BatchMode | null>(null);
   const [batchId] = useState<string>(() => newBatchId());
@@ -73,7 +77,13 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
     getModel(tenant, 'student')
       .then((def) => { if (!cancelled) setModelDef(def); })
       .catch((e: unknown) => {
-        if (!cancelled) setModelError(e instanceof Error ? e.message : String(e));
+        if (cancelled) return;
+        const message = e instanceof Error ? e.message : String(e);
+        setModelError(
+          message === 'Model not configured'
+            ? { kind: 'not_configured' }
+            : { kind: 'load_failed', message },
+        );
       });
     return () => { cancelled = true; };
   }, [tenant, getModel]);
@@ -278,9 +288,13 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
       <div className="bulk-add-page bulk-add-page--error">
         <h1>{t('bulkAdd.title')}</h1>
         <div className="bulk-add-page__no-model">
-          <p>{t('bulkAdd.noModelConfigured')}</p>
+          <p>
+            {modelError.kind === 'not_configured'
+              ? t('bulkAdd.noModelConfigured')
+              : t('bulkAdd.modelLoadFailed').replace('{message}', modelError.message)}
+          </p>
           <button
-            className="bulk-add-page__btn-primary"
+            className="bulk-add-page__btn-secondary"
             onClick={() => navigate('/students')}
           >
             {t('bulkAdd.backToStudents')}

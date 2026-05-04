@@ -16,13 +16,34 @@
 .post-submit-summary__actions { display: flex; gap: 8px; }
 .post-submit-summary__btn-retry,
 .post-submit-summary__btn-done {
-  padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s;
 }
+
 .post-submit-summary__btn-retry {
-  background: var(--color-warning, #d97706);
-  color: white; border: 1px solid var(--color-warning, #d97706);
+  background: #DD8A37;
+  color: var(--text-inverse);
+  border-color: #DD8A37;
 }
+
+.post-submit-summary__btn-retry:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(221, 138, 55, 0.3);
+}
+
 .post-submit-summary__btn-done {
-  background: var(--color-primary, #2563eb);
-  color: white; border: 1px solid var(--color-primary, #2563eb);
+  background: #378ADD;
+  color: var(--text-inverse);
+  border-color: #378ADD;
+}
+
+.post-submit-summary__btn-done:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
 }

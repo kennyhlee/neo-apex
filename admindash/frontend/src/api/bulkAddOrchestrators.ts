@@ -111,7 +111,7 @@ export async function bulkCheckDuplicates(opts: BulkDupCheckOptions): Promise<Du
     if (e.eligible) {
       eligible.push(row);
     } else {
-      skipped.push({ rowId: row.id, kind: 'skipped', missingFields: e.missingFields ?? [] });
+      skipped.push({ rowId: row.id, kind: 'skipped', missingFields: e.missingFields });
     }
   }
 
