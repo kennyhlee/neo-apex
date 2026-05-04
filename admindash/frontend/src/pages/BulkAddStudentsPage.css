@@ -66,7 +66,11 @@
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
-  margin-top: 2rem;
+  /* Match the 800px max-width used by the mode selector and dropzones so the
+     button's right-edge aligns with the upload column above it, instead of
+     floating to the page container's right edge. */
+  max-width: 800px;
+  margin-top: 4rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border-subtle);
 }
