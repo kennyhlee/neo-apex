@@ -357,8 +357,8 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
         />
       )}
 
-      <div className="bulk-add-page__toolbar">
-        {phase === 'review' && (
+      {phase === 'review' && (
+        <div className="bulk-add-page__toolbar">
           <button
             className="bulk-add-page__btn-primary"
             disabled={rows.length === 0}
@@ -367,37 +367,8 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
           >
             {t('bulkAdd.toolbar.createAll').replace('{n}', String(rows.length))}
           </button>
-        )}
-
-        <div className="bulk-add-page__toolbar-spacer" />
-
-        {(phase === 'mode_select' || phase === 'uploading' || phase === 'extracting') && (
-          <button
-            className="bulk-add-page__btn-secondary"
-            onClick={() => navigate('/students')}
-          >
-            {t('common.cancel')}
-          </button>
-        )}
-        {(phase === 'review' || phase === 'post_submit') && (
-          <button
-            className="bulk-add-page__btn-secondary"
-            onClick={() => {
-              if (window.confirm(t('bulkAdd.discardConfirm'))) {
-                void deleteDraft(buildDraftId(tenant, batchId));
-                navigate('/students');
-              }
-            }}
-          >
-            {t('bulkAdd.discardBatch')}
-          </button>
-        )}
-        {phase === 'submitting' && (
-          <button className="bulk-add-page__btn-secondary" disabled>
-            {t('bulkAdd.submittingDisabled')}
-          </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {(phase === 'extracting' || phase === 'review') && rows.length > 0 && (
         <BulkReviewTable
@@ -525,6 +496,37 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
           }}
         />
       )}
+
+      <div className="bulk-add-page__actions">
+        {(phase === 'mode_select' || phase === 'uploading' || phase === 'extracting') && (
+          <button
+            type="button"
+            className="bulk-add-page__btn-secondary"
+            onClick={() => navigate('/students')}
+          >
+            {t('common.cancel')}
+          </button>
+        )}
+        {(phase === 'review' || phase === 'post_submit') && (
+          <button
+            type="button"
+            className="bulk-add-page__btn-secondary"
+            onClick={() => {
+              if (window.confirm(t('bulkAdd.discardConfirm'))) {
+                void deleteDraft(buildDraftId(tenant, batchId));
+                navigate('/students');
+              }
+            }}
+          >
+            {t('bulkAdd.discardBatch')}
+          </button>
+        )}
+        {phase === 'submitting' && (
+          <button type="button" className="bulk-add-page__btn-secondary" disabled>
+            {t('bulkAdd.submittingDisabled')}
+          </button>
+        )}
+      </div>
 
     </div>
   );
