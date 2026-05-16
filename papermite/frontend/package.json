@@ -15,7 +15,7 @@
     "@neoapex/ui-tokens": "file:../../ui-tokens",
     "idb": "^8.0.3",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "react-dom": "^19.2.6",
     "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
