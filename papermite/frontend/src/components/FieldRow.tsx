@@ -17,6 +17,12 @@ interface Props {
   onDelete?: () => void;
 }
 
+function toEditString(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
 function OptionsEditor({
   options,
   multiple,
@@ -105,7 +111,7 @@ export default function FieldRow({
   onDelete,
 }: Props) {
   const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState(String(value ?? ""));
+  const [editValue, setEditValue] = useState(toEditString(value));
   const [showOptions, setShowOptions] = useState(false);
 
   const handleSave = () => {
@@ -118,12 +124,7 @@ export default function FieldRow({
     if (e.key === "Escape") setEditing(false);
   };
 
-  const displayValue =
-    value === null || value === undefined || value === ""
-      ? "—"
-      : typeof value === "object"
-        ? JSON.stringify(value)
-        : String(value);
+  const displayValue = toEditString(value) || "—";
 
   const isBase = source === "base_model";
 
@@ -134,7 +135,59 @@ export default function FieldRow({
           <code>{fieldName}</code>
         </td>
         <td className="field-row__value">
-          {editing ? (
+          {fieldType === "selection" && (options?.length ?? 0) > 0 ? (
+            multiple ? (
+              (() => {
+                const selected = Array.isArray(value)
+                  ? value.filter((s): s is string => typeof s === "string")
+                  : typeof value === "string" && value !== ""
+                    ? [value]
+                    : [];
+                return (
+                  <div className="field-row__multi-edit">
+                    {(options ?? []).map((opt) => (
+                      <label key={opt} className="field-row__multi-edit-label">
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(opt)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...selected, opt]
+                              : selected.filter((s) => s !== opt);
+                            onUpdate(fieldName, next);
+                          }}
+                        />
+                        {opt}
+                      </label>
+                    ))}
+                  </div>
+                );
+              })()
+            ) : (
+              (() => {
+                const currentValue =
+                  typeof value === "string"
+                    ? value
+                    : Array.isArray(value) && typeof value[0] === "string"
+                      ? value[0]
+                      : "";
+                return (
+                  <select
+                    className="input field-row__input"
+                    value={currentValue}
+                    onChange={(e) => onUpdate(fieldName, e.target.value)}
+                  >
+                    <option value="">— none —</option>
+                    {(options ?? []).map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                );
+              })()
+            )
+          ) : editing ? (
             <input
               className="input field-row__input"
               value={editValue}
