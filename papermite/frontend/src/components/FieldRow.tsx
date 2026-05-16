@@ -17,6 +17,12 @@ interface Props {
   onDelete?: () => void;
 }
 
+function toEditString(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
 function OptionsEditor({
   options,
   multiple,
@@ -105,7 +111,7 @@ export default function FieldRow({
   onDelete,
 }: Props) {
   const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState(String(value ?? ""));
+  const [editValue, setEditValue] = useState(toEditString(value));
   const [showOptions, setShowOptions] = useState(false);
 
   const handleSave = () => {
@@ -118,12 +124,7 @@ export default function FieldRow({
     if (e.key === "Escape") setEditing(false);
   };
 
-  const displayValue =
-    value === null || value === undefined || value === ""
-      ? "—"
-      : typeof value === "object"
-        ? JSON.stringify(value)
-        : String(value);
+  const displayValue = toEditString(value) || "—";
 
   const isBase = source === "base_model";
 
