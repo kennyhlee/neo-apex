@@ -65,6 +65,57 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
     onUpdate(index, updated);
   };
 
+  const handleFieldNameChange = (
+    oldName: string,
+    newName: string
+  ): { ok: true } | { ok: false; error: string } => {
+    const trimmed = newName.trim();
+    if (trimmed.length === 0) {
+      return { ok: false, error: "Name cannot be empty" };
+    }
+    if (trimmed === oldName) {
+      return { ok: true };
+    }
+    const collision = entity.field_mappings.some(
+      (m) => m.field_name !== oldName && m.field_name === trimmed
+    );
+    if (collision) {
+      return {
+        ok: false,
+        error: `"${trimmed}" is already used by another field`,
+      };
+    }
+
+    const newMappings = entity.field_mappings.map((m) =>
+      m.field_name === oldName ? { ...m, field_name: trimmed } : m
+    );
+
+    const newEntity: Record<string, unknown> = { ...entity.entity };
+    if (Object.prototype.hasOwnProperty.call(newEntity, oldName)) {
+      newEntity[trimmed] = newEntity[oldName];
+      delete newEntity[oldName];
+    }
+
+    const cf = newEntity.custom_fields;
+    if (
+      cf &&
+      typeof cf === "object" &&
+      Object.prototype.hasOwnProperty.call(cf, oldName)
+    ) {
+      const cfClone = { ...(cf as Record<string, unknown>) };
+      cfClone[trimmed] = cfClone[oldName];
+      delete cfClone[oldName];
+      newEntity.custom_fields = cfClone;
+    }
+
+    onUpdate(index, {
+      ...entity,
+      entity: newEntity,
+      field_mappings: newMappings,
+    });
+    return { ok: true };
+  };
+
   const handleFieldDelete = (fieldName: string) => {
     const updated = { ...entity };
     const newEntity = { ...updated.entity };
@@ -147,6 +198,11 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
                 onRequiredToggle={handleRequiredToggle}
                 onTypeChange={handleTypeChange}
                 onOptionsChange={handleOptionsChange}
+                onFieldNameChange={
+                  mapping.source === "custom_field"
+                    ? handleFieldNameChange
+                    : undefined
+                }
                 onDelete={
                   mapping.source === "custom_field"
                     ? () => handleFieldDelete(mapping.field_name)
