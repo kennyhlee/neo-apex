@@ -86,6 +86,29 @@
   padding: 0;
 }
 
+.field-row__name-display {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 0;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.2s;
+  display: inline-block;
+}
+
+.field-row__name-display:hover {
+  border-bottom-color: var(--text-tertiary);
+}
+
+.field-row__name-error {
+  margin-top: 4px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--accent-danger, #d4537e);
+  line-height: 1.3;
+}
+
 .field-row__value {
   overflow: hidden;
 }
