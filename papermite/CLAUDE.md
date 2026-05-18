@@ -5,17 +5,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```bash
-# Backend (from backend/)
-source /Users/kennylee/Development/NeoApex/papermite/.venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+# Backend (from papermite/backend/)
+uv run uvicorn app.main:app --reload --port 5710
 
-# Frontend (from frontend/)
-npm run dev          # Dev server on :5173
+# Frontend (from papermite/frontend/)
+npm run dev          # Dev server on :5700
 npm run build        # Production build
 npm run lint         # ESLint
 ```
 
-Install: `pip install -e ".[dev]"` (backend, from project root), `npm install` (frontend).
+Install: `uv sync --extra dev` (backend, from papermite/), `npm install` (frontend). Ports come from `services.json` at the repo root.
 
 ## Architecture
 
@@ -30,7 +29,7 @@ Papermite is the **data ingestion gateway** for NeoApex. Tenant admins upload po
 - `upload.py` — `POST /tenants/{tenant_id}/upload` (file → `extract_for_discovery` → map). Response carries `X-Papermite-Parser-Backend`.
 - `extract.py` — `POST /extract/{tenant_id}/{entity_type}` (file → `extract_for_entity` → filtered field map). Response carries `X-Papermite-Parser-Backend`.
 - `extraction.py` — `GET /schema`, `GET /config/models`, `GET /tenants/{tenant_id}/model`
-- `finalize.py` — `POST /tenants/{tenant_id}/finalize/preview` (dry run) and `/commit` (two-step: preview then confirm)
+- `finalize.py` — `POST /tenants/{tenant_id}/finalize/commit` (build model definition from extraction and PUT to DataCore). The Review→Finalize "preview" step is built client-side on `FinalizedPage` from the in-memory draft; there is no server-side `/preview` endpoint.
 
 **Key design decisions**:
 - `services/extraction_pipeline.py`: Shared parse+extract dispatcher. Two entrypoints — `extract_for_discovery(file_path, model_id)` returns a `RawExtraction` for the multi-entity upload flow (used by `/api/upload`); `extract_for_entity(file_path, model_id, entity_type, model_definition)` returns a filtered field map for a single entity (used by `/api/extract`). Honors `PAPERMITE_PARSER_BACKEND` for PDF dispatch (`local` → docling text path; `claude_merged` → Claude vision path).
