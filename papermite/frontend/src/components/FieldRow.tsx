@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FIELD_TYPES } from "../types/models";
 import type { FieldType } from "../types/models";
 
@@ -14,6 +14,10 @@ interface Props {
   onRequiredToggle: (fieldName: string, required: boolean) => void;
   onTypeChange: (fieldName: string, fieldType: FieldType) => void;
   onOptionsChange: (fieldName: string, options: string[], multiple: boolean) => void;
+  onFieldNameChange?: (
+    oldName: string,
+    newName: string
+  ) => { ok: true } | { ok: false; error: string };
   onDelete?: () => void;
 }
 
@@ -108,11 +112,21 @@ export default function FieldRow({
   onRequiredToggle,
   onTypeChange,
   onOptionsChange,
+  onFieldNameChange,
   onDelete,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(toEditString(value));
   const [showOptions, setShowOptions] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editName, setEditName] = useState(fieldName);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (nameError === null) return;
+    const t = setTimeout(() => setNameError(null), 3000);
+    return () => clearTimeout(t);
+  }, [nameError]);
 
   const handleSave = () => {
     onUpdate(fieldName, editValue);
@@ -124,6 +138,39 @@ export default function FieldRow({
     if (e.key === "Escape") setEditing(false);
   };
 
+  const handleNameSave = () => {
+    const trimmed = editName.trim();
+    if (trimmed === fieldName) {
+      setEditingName(false);
+      setEditName(fieldName);
+      return;
+    }
+    if (!onFieldNameChange) {
+      setEditingName(false);
+      setEditName(fieldName);
+      return;
+    }
+    const result = onFieldNameChange(fieldName, trimmed);
+    if (result.ok) {
+      setEditingName(false);
+    } else {
+      setNameError(result.error);
+      setEditingName(false);
+      setEditName(fieldName);
+    }
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleNameSave();
+    }
+    if (e.key === "Escape") {
+      setEditingName(false);
+      setEditName(fieldName);
+    }
+  };
+
   const displayValue = toEditString(value) || "—";
 
   const isBase = source === "base_model";
@@ -132,7 +179,34 @@ export default function FieldRow({
     <>
       <tr className="field-row">
         <td className="field-row__name">
-          <code>{fieldName}</code>
+          {isBase ? (
+            <code>{fieldName}</code>
+          ) : editingName ? (
+            <input
+              className="input field-row__input"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={handleNameSave}
+              onKeyDown={handleNameKeyDown}
+              autoFocus
+            />
+          ) : (
+            <span
+              className="field-row__name-display"
+              onClick={() => {
+                setEditName(fieldName);
+                setEditingName(true);
+              }}
+              title="Click to edit"
+            >
+              {fieldName}
+            </span>
+          )}
+          {nameError && (
+            <div className="field-row__name-error" role="alert">
+              {nameError}
+            </div>
+          )}
         </td>
         <td className="field-row__value">
           {fieldType === "selection" && (options?.length ?? 0) > 0 ? (
