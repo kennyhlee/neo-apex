@@ -43,6 +43,28 @@ def _is_empty(value) -> bool:
     return False
 
 
+def _split_extracted_tenant(entity: EntityResult) -> tuple[dict, dict]:
+    """Split an extracted TENANT entity's field_mappings into base and custom dicts.
+
+    - Mappings with `source == "base_model"` go to the base dict.
+    - Mappings with `source == "custom_field"` go to the custom dict.
+    - Mappings whose value is empty (per `_is_empty`) are dropped from both.
+
+    Returns:
+        (extracted_base, extracted_custom)
+    """
+    extracted_base: dict = {}
+    extracted_custom: dict = {}
+    for mapping in entity.field_mappings:
+        if _is_empty(mapping.value):
+            continue
+        if mapping.source == "base_model":
+            extracted_base[mapping.field_name] = mapping.value
+        elif mapping.source == "custom_field":
+            extracted_custom[mapping.field_name] = mapping.value
+    return extracted_base, extracted_custom
+
+
 def _build_model_definition(entities: list[EntityResult]) -> dict:
     """Convert extraction entities into a model definition (schema only)."""
     from app.models.domain import ENTITY_CLASSES
