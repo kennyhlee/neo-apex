@@ -7,6 +7,16 @@ from app.api.auth import require_admin
 from app.config import settings
 from app.models.registry import UserRecord
 from app.models.extraction import ExtractionResult, EntityResult
+from app.models.domain import Tenant
+
+# Base-data field names for the Tenant entity. Used to classify columns
+# returned by DataCore's /api/query (which flattens base_data and
+# custom_fields into a single top-level column set). System fields are
+# excluded so they cannot accidentally route an unrelated key to the
+# base bucket.
+_TENANT_BASE_KEYS: frozenset[str] = frozenset(
+    set(Tenant.model_fields.keys()) - {"tenant_id", "entity_type", "custom_fields"}
+)
 
 router = APIRouter()
 
@@ -26,6 +36,143 @@ def _infer_type(value) -> str:
     if isinstance(value, (list, dict)):
         return "selection"
     return "str"
+
+
+def _is_empty(value) -> bool:
+    """Return True iff `value` is None or a whitespace-only string.
+
+    Falsy non-string values (0, False, [], {}) are NOT empty — they are
+    legitimate user input. Strings like "0" or "False" (which can arise
+    from DataCore's query flattening that stringifies everything) are
+    also NOT empty.
+    """
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip() == "":
+        return True
+    return False
+
+
+def _split_extracted_tenant(entity: EntityResult) -> tuple[dict, dict]:
+    """Split an extracted TENANT entity's field_mappings into base and custom dicts.
+
+    - Mappings with `source == "base_model"` go to the base dict.
+    - Mappings with `source == "custom_field"` go to the custom dict.
+    - Mappings whose value is empty (per `_is_empty`) are dropped from both.
+
+    Returns:
+        (extracted_base, extracted_custom)
+    """
+    extracted_base: dict = {}
+    extracted_custom: dict = {}
+    for mapping in entity.field_mappings:
+        if _is_empty(mapping.value):
+            continue
+        if mapping.source == "base_model":
+            extracted_base[mapping.field_name] = mapping.value
+        elif mapping.source == "custom_field":
+            extracted_custom[mapping.field_name] = mapping.value
+    return extracted_base, extracted_custom
+
+
+def _split_existing_tenant_row(cleaned: dict) -> tuple[dict, dict]:
+    """Split a cleaned existing tenant row into base and custom dicts.
+
+    "Cleaned" means: already stripped of internal columns (_status,
+    _version, _created_at, _updated_at, _change_id, entity_type,
+    entity_id, base_data, custom_fields, vector), any key starting
+    with `_`, and any None value. The caller (_fetch_existing_tenant_row)
+    is responsible for that cleaning step.
+
+    Classification: keys in `_TENANT_BASE_KEYS` go to base; everything
+    else goes to custom.
+    """
+    existing_base: dict = {}
+    existing_custom: dict = {}
+    for key, value in cleaned.items():
+        if key in _TENANT_BASE_KEYS:
+            existing_base[key] = value
+        else:
+            existing_custom[key] = value
+    return existing_base, existing_custom
+
+
+def _merge_fields(existing: dict, extracted: dict) -> dict:
+    """Return a new dict that fills empty fields in `existing` with values from `extracted`.
+
+    For each (k, v) in `extracted`: if `_is_empty(existing.get(k))`, set
+    the merged value to v; otherwise keep existing's value. Keys present
+    in `existing` but absent from `extracted` are preserved unchanged.
+
+    Pure function — no I/O. Does not mutate either input.
+    """
+    merged = dict(existing)
+    for key, extracted_value in extracted.items():
+        if _is_empty(merged.get(key)):
+            merged[key] = extracted_value
+    return merged
+
+
+# Columns returned by DataCore's /api/query that are storage internals
+# rather than tenant data. Stripped before classification.
+_TENANT_ROW_INTERNAL_COLUMNS: frozenset[str] = frozenset({
+    "_status", "_version", "_created_at", "_updated_at", "_change_id",
+    "entity_type", "entity_id", "base_data", "custom_fields", "vector",
+})
+
+
+def _fetch_existing_tenant_row(tenant_id: str) -> dict:
+    """Read the active tenant row from DataCore and return its cleaned columns.
+
+    Uses POST /api/query (the same pattern Launchpad's
+    `update_tenant_profile` uses) because DataCore exposes no
+    GET-by-id endpoint for tenants.
+
+    Returns {} when no active row exists.
+
+    Cleaning: drops internal storage columns, any key starting with `_`
+    (e.g. `_abbrev` — DataCore re-derives it on PUT), and any None value.
+
+    Raises HTTPException(502) on any non-2xx response or transport
+    failure.
+    """
+    try:
+        resp = httpx.post(
+            f"{settings.datacore_api_url}/query",
+            json={
+                "tenant_id": tenant_id,
+                "table": "tenants",
+                "sql": "SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'",
+            },
+            timeout=30.0,
+        )
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to persist tenant from extraction",
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to persist tenant from extraction",
+        )
+
+    rows = resp.json().get("data", [])
+    if not rows:
+        return {}
+
+    raw = rows[0]
+    cleaned: dict = {}
+    for key, value in raw.items():
+        if key in _TENANT_ROW_INTERNAL_COLUMNS:
+            continue
+        if key.startswith("_"):
+            continue
+        if value is None:
+            continue
+        cleaned[key] = value
+    return cleaned
 
 
 def _build_model_definition(entities: list[EntityResult]) -> dict:
@@ -111,6 +258,38 @@ async def finalize_commit(
         raise HTTPException(status_code=resp.status_code, detail=detail)
 
     result = resp.json()
+
+    # --- Persist extracted tenant values to DataCore (issue #69) ---
+    tenant_entity = next(
+        (e for e in extraction.entities if e.entity_type == "TENANT"),
+        None,
+    )
+    if tenant_entity is not None:
+        extracted_base, extracted_custom = _split_extracted_tenant(tenant_entity)
+        if extracted_base or extracted_custom:
+            cleaned = _fetch_existing_tenant_row(tenant_id)
+            existing_base, existing_custom = _split_existing_tenant_row(cleaned)
+            merged_base = _merge_fields(existing_base, extracted_base)
+            merged_custom = _merge_fields(existing_custom, extracted_custom)
+
+            try:
+                tenant_resp = httpx.put(
+                    f"{settings.datacore_api_url}/tenants/{tenant_id}",
+                    json={"base_data": merged_base, "custom_fields": merged_custom},
+                    timeout=30.0,
+                )
+            except httpx.HTTPError:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Failed to persist tenant from extraction",
+                )
+            if tenant_resp.status_code not in (200, 201):
+                raise HTTPException(
+                    status_code=502,
+                    detail="Failed to persist tenant from extraction",
+                )
+    # --- end tenant persistence ---
+
     return {
         "status": result["status"],
         "tenant_id": tenant_id,
