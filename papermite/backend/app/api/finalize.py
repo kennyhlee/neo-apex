@@ -258,6 +258,38 @@ async def finalize_commit(
         raise HTTPException(status_code=resp.status_code, detail=detail)
 
     result = resp.json()
+
+    # --- Persist extracted tenant values to DataCore (issue #69) ---
+    tenant_entity = next(
+        (e for e in extraction.entities if e.entity_type == "TENANT"),
+        None,
+    )
+    if tenant_entity is not None:
+        extracted_base, extracted_custom = _split_extracted_tenant(tenant_entity)
+        if extracted_base or extracted_custom:
+            cleaned = _fetch_existing_tenant_row(tenant_id)
+            existing_base, existing_custom = _split_existing_tenant_row(cleaned)
+            merged_base = _merge_fields(existing_base, extracted_base)
+            merged_custom = _merge_fields(existing_custom, extracted_custom)
+
+            try:
+                tenant_resp = httpx.put(
+                    f"{settings.datacore_api_url}/tenants/{tenant_id}",
+                    json={"base_data": merged_base, "custom_fields": merged_custom},
+                    timeout=30.0,
+                )
+            except httpx.HTTPError:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Failed to persist tenant from extraction",
+                )
+            if tenant_resp.status_code not in (200, 201):
+                raise HTTPException(
+                    status_code=502,
+                    detail="Failed to persist tenant from extraction",
+                )
+    # --- end tenant persistence ---
+
     return {
         "status": result["status"],
         "tenant_id": tenant_id,
