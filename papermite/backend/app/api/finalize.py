@@ -28,6 +28,21 @@ def _infer_type(value) -> str:
     return "str"
 
 
+def _is_empty(value) -> bool:
+    """Return True iff `value` is None or a whitespace-only string.
+
+    Falsy non-string values (0, False, [], {}) are NOT empty — they are
+    legitimate user input. Strings like "0" or "False" (which can arise
+    from DataCore's query flattening that stringifies everything) are
+    also NOT empty.
+    """
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip() == "":
+        return True
+    return False
+
+
 def _build_model_definition(entities: list[EntityResult]) -> dict:
     """Convert extraction entities into a model definition (schema only)."""
     from app.models.domain import ENTITY_CLASSES
