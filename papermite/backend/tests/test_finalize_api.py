@@ -291,3 +291,63 @@ def test_finalize_merges_with_existing_tenant_row():
     assert body["custom_fields"]["school_district_code"] == "DC-100"
     # legacy_marker was non-empty and absent from extraction -> preserved
     assert body["custom_fields"]["legacy_marker"] == "keep-me"
+
+
+def test_finalize_skips_tenant_write_when_no_tenant_entity():
+    """STUDENT/FAMILY only — no TENANT entity → no /query and no /tenants PUT."""
+    put_calls: list[dict] = []
+
+    def fake_put(url, *, json, timeout):  # noqa: ARG001
+        put_calls.append({"url": url})
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = _datacore_response_payload(
+            json.get("model_definition") or {}
+        )
+        return mock_resp
+
+    # Reuse the existing student-only payload helper.
+    payload = _payload_with_renamed_custom_field()
+
+    with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
+         patch("app.api.finalize.httpx.post") as mock_post:
+        resp = client.post("/api/tenants/t1/finalize/commit", json=payload)
+
+    assert resp.status_code == 200, resp.text
+    # Only the models PUT happened.
+    assert len(put_calls) == 1
+    assert "/models/t1" in put_calls[0]["url"]
+    # No /api/query call.
+    assert mock_post.call_count == 0
+
+
+def test_finalize_skips_tenant_write_when_all_tenant_mappings_are_empty():
+    """TENANT entity exists but every mapping value is None or whitespace."""
+    put_calls: list[dict] = []
+
+    def fake_put(url, *, json, timeout):  # noqa: ARG001
+        put_calls.append({"url": url})
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = _datacore_response_payload(
+            json.get("model_definition") or {}
+        )
+        return mock_resp
+
+    # Build a TENANT entity with only empty values
+    payload = _payload_with_tenant_entity(
+        tenant_base={"name": None, "display_name": "   ", "contact_email": ""},
+        tenant_custom={},
+    )
+
+    with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
+         patch("app.api.finalize.httpx.post") as mock_post:
+        resp = client.post("/api/tenants/t1/finalize/commit", json=payload)
+
+    assert resp.status_code == 200, resp.text
+    # Only the models PUT happened.
+    assert len(put_calls) == 1
+    assert "/models/t1" in put_calls[0]["url"]
+    # No /api/query call — the splitter returned empty buckets so the
+    # whole block was skipped before any I/O.
+    assert mock_post.call_count == 0
