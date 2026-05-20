@@ -218,3 +218,76 @@ def test_finalize_persists_extracted_tenant_when_row_empty():
 
     # And we read existing first
     assert mock_post.call_count == 1
+
+
+def test_finalize_merges_with_existing_tenant_row():
+    """Existing non-empty fields are preserved; empty/None fields get filled.
+
+    The existing-row payload mimics what /api/query actually returns:
+    flattened columns from both base_data and custom_fields, with
+    everything stringified.
+    """
+    put_calls: list[dict] = []
+
+    def fake_put(url, *, json, timeout):  # noqa: ARG001
+        put_calls.append({"url": url, "json": json})
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        if "/models/" in url:
+            mock_resp.json.return_value = _datacore_response_payload(
+                json.get("model_definition") or {}
+            )
+        else:
+            mock_resp.json.return_value = {}
+        return mock_resp
+
+    def fake_post(url, *, json, timeout):  # noqa: ARG001
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        # Simulate /api/query flattening: base_data + custom_fields keys
+        # appear as top-level string columns. Plus the internal columns
+        # that the cleaning step must strip.
+        mock_resp.json.return_value = {
+            "data": [
+                {
+                    "_status": "active",
+                    "_version": 2,
+                    "_abbrev": "AC",
+                    "entity_type": "tenant",
+                    "entity_id": "t1",
+                    "base_data": "<encoded>",
+                    "custom_fields": "<encoded>",
+                    "vector": [0.0],
+                    "name": "User Typed Name",
+                    "contact_email": None,
+                    "school_district_code": "",
+                    "legacy_marker": "keep-me",
+                }
+            ],
+            "total": 1,
+        }
+        return mock_resp
+
+    payload = _payload_with_tenant_entity(
+        tenant_base={"name": "Extracted Name", "contact_email": "a@x.com"},
+        tenant_custom={"school_district_code": "DC-100"},
+    )
+
+    with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
+         patch("app.api.finalize.httpx.post", side_effect=fake_post):
+        resp = client.post("/api/tenants/t1/finalize/commit", json=payload)
+
+    assert resp.status_code == 200, resp.text
+
+    # Find the tenants PUT (it's the second one)
+    tenant_put = next(c for c in put_calls if c["url"].endswith("/tenants/t1"))
+    body = tenant_put["json"]
+
+    # name was non-empty in existing -> preserved
+    assert body["base_data"]["name"] == "User Typed Name"
+    # contact_email was None in existing -> filled
+    assert body["base_data"]["contact_email"] == "a@x.com"
+    # school_district_code was "" in existing -> filled
+    assert body["custom_fields"]["school_district_code"] == "DC-100"
+    # legacy_marker was non-empty and absent from extraction -> preserved
+    assert body["custom_fields"]["legacy_marker"] == "keep-me"
