@@ -351,3 +351,102 @@ def test_finalize_skips_tenant_write_when_all_tenant_mappings_are_empty():
     # No /api/query call — the splitter returned empty buckets so the
     # whole block was skipped before any I/O.
     assert mock_post.call_count == 0
+
+
+def test_finalize_raises_502_when_tenants_put_fails():
+    """Tenants PUT returns 500 → 502 surfaced. Model PUT already succeeded."""
+    put_calls: list[dict] = []
+
+    def fake_put(url, *, json, timeout):  # noqa: ARG001
+        put_calls.append({"url": url})
+        mock_resp = MagicMock()
+        if "/models/" in url:
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = _datacore_response_payload(
+                json.get("model_definition") or {}
+            )
+        else:
+            # Tenants PUT fails
+            mock_resp.status_code = 500
+            mock_resp.json.return_value = {"detail": "boom"}
+        return mock_resp
+
+    def fake_post(url, *, json, timeout):  # noqa: ARG001
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": [], "total": 0}
+        return mock_resp
+
+    with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
+         patch("app.api.finalize.httpx.post", side_effect=fake_post):
+        resp = client.post(
+            "/api/tenants/t1/finalize/commit",
+            json=_payload_with_tenant_entity(tenant_base={"name": "Acme"}),
+        )
+
+    assert resp.status_code == 502, resp.text
+    assert resp.json()["detail"] == "Failed to persist tenant from extraction"
+    # Critically: the model PUT still happened first.
+    assert any("/models/t1" in c["url"] for c in put_calls)
+
+
+def test_finalize_raises_502_when_query_fails():
+    """The /api/query call returns 500 → 502 surfaced. Model PUT already succeeded."""
+    put_calls: list[dict] = []
+
+    def fake_put(url, *, json, timeout):  # noqa: ARG001
+        put_calls.append({"url": url})
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = _datacore_response_payload(
+            json.get("model_definition") or {}
+        )
+        return mock_resp
+
+    def fake_post(url, *, json, timeout):  # noqa: ARG001
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.json.return_value = {"detail": "query failed"}
+        return mock_resp
+
+    with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
+         patch("app.api.finalize.httpx.post", side_effect=fake_post):
+        resp = client.post(
+            "/api/tenants/t1/finalize/commit",
+            json=_payload_with_tenant_entity(tenant_base={"name": "Acme"}),
+        )
+
+    assert resp.status_code == 502, resp.text
+    assert resp.json()["detail"] == "Failed to persist tenant from extraction"
+    # Model PUT was first; tenants PUT was never attempted (query failed).
+    assert any("/models/t1" in c["url"] for c in put_calls)
+    assert not any("/tenants/t1" in c["url"] for c in put_calls)
+
+
+def test_finalize_does_not_attempt_tenant_work_when_model_put_fails():
+    """Model PUT 500 → existing failure response is unchanged; no tenant work."""
+    put_calls: list[dict] = []
+
+    def fake_put(url, *, json, timeout):  # noqa: ARG001
+        put_calls.append({"url": url})
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.json.return_value = {"detail": "model write failed"}
+        return mock_resp
+
+    with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
+         patch("app.api.finalize.httpx.post") as mock_post:
+        resp = client.post(
+            "/api/tenants/t1/finalize/commit",
+            json=_payload_with_tenant_entity(tenant_base={"name": "Acme"}),
+        )
+
+    # Matches pre-change behavior: HTTPException with the DataCore status
+    # (or the default detail). Not the new 502 detail string.
+    assert resp.status_code == 500, resp.text
+    assert resp.json()["detail"] != "Failed to persist tenant from extraction"
+
+    # Only the models PUT was attempted; no tenants PUT and no /api/query.
+    assert len(put_calls) == 1
+    assert "/models/t1" in put_calls[0]["url"]
+    assert mock_post.call_count == 0
