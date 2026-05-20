@@ -113,6 +113,68 @@ def _merge_fields(existing: dict, extracted: dict) -> dict:
     return merged
 
 
+# Columns returned by DataCore's /api/query that are storage internals
+# rather than tenant data. Stripped before classification.
+_TENANT_ROW_INTERNAL_COLUMNS: frozenset[str] = frozenset({
+    "_status", "_version", "_created_at", "_updated_at", "_change_id",
+    "entity_type", "entity_id", "base_data", "custom_fields", "vector",
+})
+
+
+def _fetch_existing_tenant_row(tenant_id: str) -> dict:
+    """Read the active tenant row from DataCore and return its cleaned columns.
+
+    Uses POST /api/query (the same pattern Launchpad's
+    `update_tenant_profile` uses) because DataCore exposes no
+    GET-by-id endpoint for tenants.
+
+    Returns {} when no active row exists.
+
+    Cleaning: drops internal storage columns, any key starting with `_`
+    (e.g. `_abbrev` — DataCore re-derives it on PUT), and any None value.
+
+    Raises HTTPException(502) on any non-2xx response or transport
+    failure.
+    """
+    try:
+        resp = httpx.post(
+            f"{settings.datacore_api_url}/query",
+            json={
+                "tenant_id": tenant_id,
+                "table": "tenants",
+                "sql": "SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'",
+            },
+            timeout=30.0,
+        )
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to persist tenant from extraction",
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to persist tenant from extraction",
+        )
+
+    rows = resp.json().get("data", [])
+    if not rows:
+        return {}
+
+    raw = rows[0]
+    cleaned: dict = {}
+    for key, value in raw.items():
+        if key in _TENANT_ROW_INTERNAL_COLUMNS:
+            continue
+        if key.startswith("_"):
+            continue
+        if value is None:
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
 def _build_model_definition(entities: list[EntityResult]) -> dict:
     """Convert extraction entities into a model definition (schema only)."""
     from app.models.domain import ENTITY_CLASSES
