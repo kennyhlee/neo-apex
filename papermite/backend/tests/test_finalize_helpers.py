@@ -94,3 +94,40 @@ def test_split_existing_tenant_row_excludes_system_fields_from_base_bucket():
         "entity_type": "tenant",
         "custom_fields": "should-not-happen-but-be-safe",
     }
+
+
+def test_merge_fields_fills_missing_keys():
+    from app.api.finalize import _merge_fields
+    assert _merge_fields({"a": "x"}, {"b": "y"}) == {"a": "x", "b": "y"}
+
+
+def test_merge_fields_fills_none_and_empty_and_whitespace():
+    from app.api.finalize import _merge_fields
+    existing = {"a": None, "b": "", "c": "   "}
+    extracted = {"a": "1", "b": "2", "c": "3"}
+    assert _merge_fields(existing, extracted) == {"a": "1", "b": "2", "c": "3"}
+
+
+def test_merge_fields_preserves_nonempty_string_over_extracted():
+    from app.api.finalize import _merge_fields
+    assert _merge_fields({"a": "kept"}, {"a": "overwritten"}) == {"a": "kept"}
+
+
+def test_merge_fields_preserves_stringified_false_and_zero():
+    """DataCore /api/query stringifies all values: False -> 'False', 0 -> '0',
+    [] -> '[]'. Those are non-empty strings and MUST be preserved."""
+    from app.api.finalize import _merge_fields
+    existing = {"a": "False", "b": "0", "c": "[]"}
+    extracted = {"a": True, "b": 1, "c": [1, 2]}
+    assert _merge_fields(existing, extracted) == {"a": "False", "b": "0", "c": "[]"}
+
+
+def test_merge_fields_preserves_existing_keys_not_in_extracted():
+    from app.api.finalize import _merge_fields
+    existing = {"a": "kept", "b": "also-kept"}
+    extracted = {"c": "new"}
+    assert _merge_fields(existing, extracted) == {
+        "a": "kept",
+        "b": "also-kept",
+        "c": "new",
+    }

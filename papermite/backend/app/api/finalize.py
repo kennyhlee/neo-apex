@@ -97,6 +97,22 @@ def _split_existing_tenant_row(cleaned: dict) -> tuple[dict, dict]:
     return existing_base, existing_custom
 
 
+def _merge_fields(existing: dict, extracted: dict) -> dict:
+    """Return a new dict that fills empty fields in `existing` with values from `extracted`.
+
+    For each (k, v) in `extracted`: if `_is_empty(existing.get(k))`, set
+    the merged value to v; otherwise keep existing's value. Keys present
+    in `existing` but absent from `extracted` are preserved unchanged.
+
+    Pure function — no I/O. Does not mutate either input.
+    """
+    merged = dict(existing)
+    for key, extracted_value in extracted.items():
+        if _is_empty(merged.get(key)):
+            merged[key] = extracted_value
+    return merged
+
+
 def _build_model_definition(entities: list[EntityResult]) -> dict:
     """Convert extraction entities into a model definition (schema only)."""
     from app.models.domain import ENTITY_CLASSES
