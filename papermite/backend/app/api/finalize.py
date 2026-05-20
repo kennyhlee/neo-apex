@@ -7,6 +7,16 @@ from app.api.auth import require_admin
 from app.config import settings
 from app.models.registry import UserRecord
 from app.models.extraction import ExtractionResult, EntityResult
+from app.models.domain import Tenant
+
+# Base-data field names for the Tenant entity. Used to classify columns
+# returned by DataCore's /api/query (which flattens base_data and
+# custom_fields into a single top-level column set). System fields are
+# excluded so they cannot accidentally route an unrelated key to the
+# base bucket.
+_TENANT_BASE_KEYS: frozenset[str] = frozenset(
+    set(Tenant.model_fields.keys()) - {"tenant_id", "entity_type", "custom_fields"}
+)
 
 router = APIRouter()
 
@@ -63,6 +73,28 @@ def _split_extracted_tenant(entity: EntityResult) -> tuple[dict, dict]:
         elif mapping.source == "custom_field":
             extracted_custom[mapping.field_name] = mapping.value
     return extracted_base, extracted_custom
+
+
+def _split_existing_tenant_row(cleaned: dict) -> tuple[dict, dict]:
+    """Split a cleaned existing tenant row into base and custom dicts.
+
+    "Cleaned" means: already stripped of internal columns (_status,
+    _version, _created_at, _updated_at, _change_id, entity_type,
+    entity_id, base_data, custom_fields, vector), any key starting
+    with `_`, and any None value. The caller (_fetch_existing_tenant_row)
+    is responsible for that cleaning step.
+
+    Classification: keys in `_TENANT_BASE_KEYS` go to base; everything
+    else goes to custom.
+    """
+    existing_base: dict = {}
+    existing_custom: dict = {}
+    for key, value in cleaned.items():
+        if key in _TENANT_BASE_KEYS:
+            existing_base[key] = value
+        else:
+            existing_custom[key] = value
+    return existing_base, existing_custom
 
 
 def _build_model_definition(entities: list[EntityResult]) -> dict:

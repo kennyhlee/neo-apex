@@ -51,3 +51,46 @@ def test_split_extracted_tenant_routes_by_source_and_drops_empties():
 
     assert base == {"name": "Acme"}
     assert custom == {"school_district_code": "DC-100"}
+
+
+def test_split_existing_tenant_row_uses_tenant_model_fields_as_discriminator():
+    from app.api.finalize import _split_existing_tenant_row
+
+    cleaned = {
+        "name": "Acme",
+        "contact_email": "a@x.com",
+        "school_district_code": "DC-100",
+        "accreditation_id": "ACC-42",
+    }
+    base, custom = _split_existing_tenant_row(cleaned)
+
+    # name and contact_email are real Tenant base fields
+    assert base == {"name": "Acme", "contact_email": "a@x.com"}
+    # the others are not in Tenant.model_fields
+    assert custom == {
+        "school_district_code": "DC-100",
+        "accreditation_id": "ACC-42",
+    }
+
+
+def test_split_existing_tenant_row_excludes_system_fields_from_base_bucket():
+    """tenant_id / entity_type / custom_fields are NOT base-classified even though
+    they're declared on Tenant — they're system fields."""
+    from app.api.finalize import _split_existing_tenant_row
+
+    cleaned = {
+        "tenant_id": "t1",
+        "entity_type": "tenant",
+        "custom_fields": "should-not-happen-but-be-safe",
+        "name": "Acme",
+    }
+    base, custom = _split_existing_tenant_row(cleaned)
+
+    assert base == {"name": "Acme"}
+    # tenant_id / entity_type / custom_fields fall through to custom because
+    # they're filtered out of the base-key set
+    assert custom == {
+        "tenant_id": "t1",
+        "entity_type": "tenant",
+        "custom_fields": "should-not-happen-but-be-safe",
+    }
