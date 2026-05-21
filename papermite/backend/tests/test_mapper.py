@@ -165,3 +165,163 @@ def test_extraction_result_has_no_raw_text_field():
     """raw_text was removed in the extract-pipeline consolidation."""
     from app.models.extraction import ExtractionResult
     assert "raw_text" not in ExtractionResult.model_fields
+
+
+def test_map_extraction_all_placeholders_when_raw_is_empty():
+    """With nothing extracted, every entity type in ENTITY_CLASSES must appear."""
+    from app.models.domain import ENTITY_CLASSES
+
+    raw = RawExtraction()
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    types = {e.entity_type for e in result.entities}
+    expected = {k.upper() for k in ENTITY_CLASSES}
+    assert types == expected
+    assert len(result.entities) == len(ENTITY_CLASSES)
+
+
+def test_map_extraction_only_tenant_extracted_yields_7_placeholders():
+    """When AI extracts ONLY tenant, the other 7 entity types appear as placeholders."""
+    from app.models.domain import ENTITY_CLASSES
+
+    raw = RawExtraction(tenant={"name": "Acme School"})
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    # 8 total: TENANT (extracted) + 7 placeholders
+    assert len(result.entities) == len(ENTITY_CLASSES)
+
+    # TENANT carries the extracted name
+    tenant = next(e for e in result.entities if e.entity_type == "TENANT")
+    name_mapping = next(m for m in tenant.field_mappings if m.field_name == "name")
+    assert name_mapping.value == "Acme School"
+    assert name_mapping.source == "base_model"
+
+    # Every other entity type has only base_model mappings with value=None
+    # (placeholders have no extracted values)
+    for e in result.entities:
+        if e.entity_type == "TENANT":
+            continue
+        for m in e.field_mappings:
+            assert m.source == "base_model", (
+                f"{e.entity_type}.{m.field_name} unexpectedly has source={m.source}"
+            )
+            # Non-selection placeholder values are None.
+            # Selection fields (List[str] with defaults) carry the default list as value.
+            if m.field_type != "selection":
+                assert m.value is None, (
+                    f"{e.entity_type}.{m.field_name} expected None, got {m.value!r}"
+                )
+
+
+def test_map_extraction_multiple_students_consolidate_others_are_placeholders():
+    """Three extracted students consolidate to one STUDENT EntityResult;
+    7 other entity types appear as placeholders."""
+    from app.models.domain import ENTITY_CLASSES
+
+    raw = RawExtraction(students=[
+        {"first_name": "A"},
+        {"first_name": "B"},
+        {"first_name": "C"},
+    ])
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    # Total = 8 (one per ENTITY_CLASSES key)
+    assert len(result.entities) == len(ENTITY_CLASSES)
+
+    # Exactly one STUDENT after consolidation
+    students = [e for e in result.entities if e.entity_type == "STUDENT"]
+    assert len(students) == 1
+
+    # first_name mapping exists with one of the three input values
+    # (consolidator keeps the first encountered)
+    student = students[0]
+    first_name_mappings = [m for m in student.field_mappings if m.field_name == "first_name"]
+    assert len(first_name_mappings) == 1
+    assert first_name_mappings[0].value in {"A", "B", "C"}
+
+    # The other 7 types are present and have no consolidated extracted data
+    # (they were never extracted — the backstop added them)
+    non_student_types = {k.upper() for k in ENTITY_CLASSES if k != "student"}
+    actual_non_student_types = {e.entity_type for e in result.entities if e.entity_type != "STUDENT"}
+    assert actual_non_student_types == non_student_types
+
+
+def test_placeholder_student_has_full_base_field_coverage():
+    """Placeholder STUDENT entity contains all base fields from the Student Pydantic class."""
+    from app.models.domain import Student
+
+    raw = RawExtraction()
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    student = next(e for e in result.entities if e.entity_type == "STUDENT")
+
+    # Every base field declared on Student (excluding system fields) appears in
+    # field_mappings exactly once. System fields are tenant_id, entity_type, custom_fields.
+    SYSTEM = {"tenant_id", "entity_type", "custom_fields"}
+    expected_fields = set(Student.model_fields.keys()) - SYSTEM
+    mapping_names = {m.field_name for m in student.field_mappings}
+    assert mapping_names == expected_fields
+
+    # All mappings are sourced from base_model (no custom fields in a placeholder)
+    for m in student.field_mappings:
+        assert m.source == "base_model"
+
+    # Selection-type Student fields carry non-empty options lists from the
+    # Pydantic class defaults
+    selection_field_names = {"grade_level", "gender", "status"}
+    for name in selection_field_names:
+        m = next(m for m in student.field_mappings if m.field_name == name)
+        assert m.field_type == "selection", f"{name} expected selection type, got {m.field_type}"
+        assert m.options, f"{name} expected non-empty options list, got {m.options}"
+
+
+def test_placeholder_list_entity_gets_tenant_id_and_uuid_id():
+    """A placeholder FAMILY has tenant_id == 't1' and an auto-generated family_id."""
+    raw = RawExtraction()
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    family = next(e for e in result.entities if e.entity_type == "FAMILY")
+
+    assert family.entity["tenant_id"] == "t1"
+    # _map_entity_list generates an 8-character UUID slice when the id field
+    # is None on a list-type entity
+    family_id = family.entity.get("family_id")
+    assert isinstance(family_id, str)
+    assert len(family_id) == 8
+
+
+def test_placeholder_tenant_keeps_caller_provided_tenant_id():
+    """A placeholder TENANT keeps tenant_id='t1' — no UUID overwrite happens
+    because _map_entity_list's setdefault sets tenant_id before the UUID gate."""
+    raw = RawExtraction()  # raw.tenant is None
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    tenant = next(e for e in result.entities if e.entity_type == "TENANT")
+
+    assert tenant.entity["tenant_id"] == "t1"
+    # Sanity: tenant_id is not an 8-char UUID slice
+    assert tenant.entity["tenant_id"] != "t1"[:8] or tenant.entity["tenant_id"] == "t1"
+    # Stronger: tenant_id is literally the caller-provided value
+    assert tenant.entity["tenant_id"] == "t1"
+
+
+def test_placeholder_attendance_is_added_despite_no_raw_field():
+    """ATTENDANCE has no raw.attendances source field but still appears as
+    a placeholder thanks to the coverage backstop iterating ENTITY_CLASSES."""
+    from app.models.domain import Attendance
+
+    raw = RawExtraction()
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    attendances = [e for e in result.entities if e.entity_type == "ATTENDANCE"]
+    assert len(attendances) == 1
+
+    att = attendances[0]
+    # Attendance base fields (excluding system fields) all appear
+    SYSTEM = {"tenant_id", "entity_type", "custom_fields"}
+    expected = set(Attendance.model_fields.keys()) - SYSTEM
+    actual = {m.field_name for m in att.field_mappings}
+    assert actual == expected
+
+    # tenant_id is the caller-provided value
+    assert att.entity["tenant_id"] == "t1"
