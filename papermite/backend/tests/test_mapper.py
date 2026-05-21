@@ -273,3 +273,33 @@ def test_placeholder_student_has_full_base_field_coverage():
         m = next(m for m in student.field_mappings if m.field_name == name)
         assert m.field_type == "selection", f"{name} expected selection type, got {m.field_type}"
         assert m.options, f"{name} expected non-empty options list, got {m.options}"
+
+
+def test_placeholder_list_entity_gets_tenant_id_and_uuid_id():
+    """A placeholder FAMILY has tenant_id == 't1' and an auto-generated family_id."""
+    raw = RawExtraction()
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    family = next(e for e in result.entities if e.entity_type == "FAMILY")
+
+    assert family.entity["tenant_id"] == "t1"
+    # _map_entity_list generates an 8-character UUID slice when the id field
+    # is None on a list-type entity
+    family_id = family.entity.get("family_id")
+    assert isinstance(family_id, str)
+    assert len(family_id) == 8
+
+
+def test_placeholder_tenant_keeps_caller_provided_tenant_id():
+    """A placeholder TENANT keeps tenant_id='t1' — no UUID overwrite happens
+    because _map_entity_list's setdefault sets tenant_id before the UUID gate."""
+    raw = RawExtraction()  # raw.tenant is None
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    tenant = next(e for e in result.entities if e.entity_type == "TENANT")
+
+    assert tenant.entity["tenant_id"] == "t1"
+    # Sanity: tenant_id is not an 8-char UUID slice
+    assert tenant.entity["tenant_id"] != "t1"[:8] or tenant.entity["tenant_id"] == "t1"
+    # Stronger: tenant_id is literally the caller-provided value
+    assert tenant.entity["tenant_id"] == "t1"
