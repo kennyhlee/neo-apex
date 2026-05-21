@@ -244,3 +244,32 @@ def test_map_extraction_multiple_students_consolidate_others_are_placeholders():
     non_student_types = {k.upper() for k in ENTITY_CLASSES if k != "student"}
     actual_non_student_types = {e.entity_type for e in result.entities if e.entity_type != "STUDENT"}
     assert actual_non_student_types == non_student_types
+
+
+def test_placeholder_student_has_full_base_field_coverage():
+    """Placeholder STUDENT entity contains all base fields from the Student Pydantic class."""
+    from app.models.domain import Student
+
+    raw = RawExtraction()
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    student = next(e for e in result.entities if e.entity_type == "STUDENT")
+
+    # Every base field declared on Student (excluding system fields) appears in
+    # field_mappings exactly once. System fields are tenant_id, entity_type, custom_fields.
+    SYSTEM = {"tenant_id", "entity_type", "custom_fields"}
+    expected_fields = set(Student.model_fields.keys()) - SYSTEM
+    mapping_names = {m.field_name for m in student.field_mappings}
+    assert mapping_names == expected_fields
+
+    # All mappings are sourced from base_model (no custom fields in a placeholder)
+    for m in student.field_mappings:
+        assert m.source == "base_model"
+
+    # Selection-type Student fields carry non-empty options lists from the
+    # Pydantic class defaults
+    selection_field_names = {"grade_level", "gender", "status"}
+    for name in selection_field_names:
+        m = next(m for m in student.field_mappings if m.field_name == name)
+        assert m.field_type == "selection", f"{name} expected selection type, got {m.field_type}"
+        assert m.options, f"{name} expected non-empty options list, got {m.options}"
