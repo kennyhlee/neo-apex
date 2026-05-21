@@ -178,3 +178,36 @@ def test_map_extraction_all_placeholders_when_raw_is_empty():
     expected = {k.upper() for k in ENTITY_CLASSES}
     assert types == expected
     assert len(result.entities) == len(ENTITY_CLASSES)
+
+
+def test_map_extraction_only_tenant_extracted_yields_7_placeholders():
+    """When AI extracts ONLY tenant, the other 7 entity types appear as placeholders."""
+    from app.models.domain import ENTITY_CLASSES
+
+    raw = RawExtraction(tenant={"name": "Acme School"})
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    # 8 total: TENANT (extracted) + 7 placeholders
+    assert len(result.entities) == len(ENTITY_CLASSES)
+
+    # TENANT carries the extracted name
+    tenant = next(e for e in result.entities if e.entity_type == "TENANT")
+    name_mapping = next(m for m in tenant.field_mappings if m.field_name == "name")
+    assert name_mapping.value == "Acme School"
+    assert name_mapping.source == "base_model"
+
+    # Every other entity type has only base_model mappings with value=None
+    # (placeholders have no extracted values)
+    for e in result.entities:
+        if e.entity_type == "TENANT":
+            continue
+        for m in e.field_mappings:
+            assert m.source == "base_model", (
+                f"{e.entity_type}.{m.field_name} unexpectedly has source={m.source}"
+            )
+            # Non-selection placeholder values are None.
+            # Selection fields (List[str] with defaults) carry the default list as value.
+            if m.field_type != "selection":
+                assert m.value is None, (
+                    f"{e.entity_type}.{m.field_name} expected None, got {m.value!r}"
+                )
