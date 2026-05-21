@@ -165,3 +165,16 @@ def test_extraction_result_has_no_raw_text_field():
     """raw_text was removed in the extract-pipeline consolidation."""
     from app.models.extraction import ExtractionResult
     assert "raw_text" not in ExtractionResult.model_fields
+
+
+def test_map_extraction_all_placeholders_when_raw_is_empty():
+    """With nothing extracted, every entity type in ENTITY_CLASSES must appear."""
+    from app.models.domain import ENTITY_CLASSES
+
+    raw = RawExtraction()
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    types = {e.entity_type for e in result.entities}
+    expected = {k.upper() for k in ENTITY_CLASSES}
+    assert types == expected
+    assert len(result.entities) == len(ENTITY_CLASSES)

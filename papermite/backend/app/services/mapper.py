@@ -292,6 +292,17 @@ def map_extraction(raw: RawExtraction, tenant_id: str, filename: str) -> Extract
     # Consolidate multiple entities of the same type into one
     entities = _consolidate_entities(entities)
 
+    # Coverage backstop: every entity type in ENTITY_CLASSES must be present.
+    # When the AI did not extract a type, add a placeholder EntityResult with
+    # full base-field coverage so downstream model definitions stay canonical.
+    existing_types = {e.entity_type.lower() for e in entities}
+    for entity_type, model_class in ENTITY_CLASSES.items():
+        if entity_type in existing_types:
+            continue
+        entities.extend(
+            _map_entity_list([{}], entity_type, model_class, tenant_id)
+        )
+
     return ExtractionResult(
         tenant_id=tenant_id,
         filename=filename,
