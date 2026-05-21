@@ -211,3 +211,36 @@ def test_map_extraction_only_tenant_extracted_yields_7_placeholders():
                 assert m.value is None, (
                     f"{e.entity_type}.{m.field_name} expected None, got {m.value!r}"
                 )
+
+
+def test_map_extraction_multiple_students_consolidate_others_are_placeholders():
+    """Three extracted students consolidate to one STUDENT EntityResult;
+    7 other entity types appear as placeholders."""
+    from app.models.domain import ENTITY_CLASSES
+
+    raw = RawExtraction(students=[
+        {"first_name": "A"},
+        {"first_name": "B"},
+        {"first_name": "C"},
+    ])
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    # Total = 8 (one per ENTITY_CLASSES key)
+    assert len(result.entities) == len(ENTITY_CLASSES)
+
+    # Exactly one STUDENT after consolidation
+    students = [e for e in result.entities if e.entity_type == "STUDENT"]
+    assert len(students) == 1
+
+    # first_name mapping exists with one of the three input values
+    # (consolidator keeps the first encountered)
+    student = students[0]
+    first_name_mappings = [m for m in student.field_mappings if m.field_name == "first_name"]
+    assert len(first_name_mappings) == 1
+    assert first_name_mappings[0].value in {"A", "B", "C"}
+
+    # The other 7 types are present and have no consolidated extracted data
+    # (they were never extracted — the backstop added them)
+    non_student_types = {k.upper() for k in ENTITY_CLASSES if k != "student"}
+    actual_non_student_types = {e.entity_type for e in result.entities if e.entity_type != "STUDENT"}
+    assert actual_non_student_types == non_student_types
