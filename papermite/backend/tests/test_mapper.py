@@ -303,3 +303,25 @@ def test_placeholder_tenant_keeps_caller_provided_tenant_id():
     assert tenant.entity["tenant_id"] != "t1"[:8] or tenant.entity["tenant_id"] == "t1"
     # Stronger: tenant_id is literally the caller-provided value
     assert tenant.entity["tenant_id"] == "t1"
+
+
+def test_placeholder_attendance_is_added_despite_no_raw_field():
+    """ATTENDANCE has no raw.attendances source field but still appears as
+    a placeholder thanks to the coverage backstop iterating ENTITY_CLASSES."""
+    from app.models.domain import Attendance
+
+    raw = RawExtraction()
+    result = map_extraction(raw, "t1", "f.pdf")
+
+    attendances = [e for e in result.entities if e.entity_type == "ATTENDANCE"]
+    assert len(attendances) == 1
+
+    att = attendances[0]
+    # Attendance base fields (excluding system fields) all appear
+    SYSTEM = {"tenant_id", "entity_type", "custom_fields"}
+    expected = set(Attendance.model_fields.keys()) - SYSTEM
+    actual = {m.field_name for m in att.field_mappings}
+    assert actual == expected
+
+    # tenant_id is the caller-provided value
+    assert att.entity["tenant_id"] == "t1"
