@@ -21,9 +21,17 @@ primary_region = "sjc"
 
 # Internal service on Fly's private network. No [http_service] means the app
 # is NOT reachable from the public internet.
+#
+# auto_stop_machines / min_machines_running are set so the machine suspends
+# when idle. Sibling apps calling `datacore.flycast:5800` will auto-wake it
+# (~3–5s cold start + LanceDB load). Set to "off" / 1 if cold starts become
+# disruptive to beta testers.
 [[services]]
   protocol = "tcp"
   internal_port = 5800
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
 
   [[services.ports]]
     port = 5800

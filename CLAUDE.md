@@ -106,6 +106,7 @@ NeoApex deploys to Fly.io (Python backends) and Cloudflare Workers with Static A
 - [`docs/deployment/provisioning.md`](docs/deployment/provisioning.md) — one-time setup runbook (Fly.io account, Cloudflare Workers, DNS, secrets, first deploy)
 - [`docs/deployment/release-runbook.md`](docs/deployment/release-runbook.md) — cutting releases, approving deploys, rolling back
 - [`docs/deployment/follow-ups.md`](docs/deployment/follow-ups.md) — deferred hardening and nice-to-haves
+- [`docs/deployment/cost-control.md`](docs/deployment/cost-control.md) — scale-to-zero config for beta idle, cold-start expectations, wake/sleep commands
 
 ## Conventions
 
