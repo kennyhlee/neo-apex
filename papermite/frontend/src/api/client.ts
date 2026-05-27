@@ -146,6 +146,7 @@ export function modelToExtraction(
         field_type: field.type,
         ...(field.options && { options: field.options }),
         ...(field.multiple !== undefined && { multiple: field.multiple }),
+        ...(field.default !== undefined && { default: field.default }),
       });
     }
 
@@ -160,6 +161,7 @@ export function modelToExtraction(
         field_type: field.type,
         ...(field.options && { options: field.options }),
         ...(field.multiple !== undefined && { multiple: field.multiple }),
+        ...(field.default !== undefined && { default: field.default }),
       });
     }
 

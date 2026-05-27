@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { EntityResult, ExtractionResult } from "../types/models";
-import { getDraft, saveDraft } from "../db/indexedDb";
+import { getDraft, getEditOriginal, saveDraft } from "../db/indexedDb";
 import EntityCard from "../components/EntityCard";
 import "./ReviewPage.css";
 
@@ -22,6 +22,7 @@ function hasChanges(original: ExtractionResult, current: ExtractionResult): bool
       if (om.field_type !== cm.field_type) return true;
       if (JSON.stringify(om.options ?? []) !== JSON.stringify(cm.options ?? [])) return true;
       if ((om.multiple ?? false) !== (cm.multiple ?? false)) return true;
+      if (JSON.stringify(om.default ?? null) !== JSON.stringify(cm.default ?? null)) return true;
     }
   }
   return false;
@@ -46,7 +47,8 @@ export default function ReviewPage() {
         if (draft) {
           setExtraction(draft);
           if (!originalRef.current) {
-            originalRef.current = JSON.parse(JSON.stringify(draft));
+            const saved = getEditOriginal(draft.extraction_id);
+            originalRef.current = saved ?? JSON.parse(JSON.stringify(draft));
           }
         } else {
           navigate("/");

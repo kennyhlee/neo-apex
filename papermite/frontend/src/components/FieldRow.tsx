@@ -10,10 +10,12 @@ interface Props {
   fieldType: FieldType;
   options?: string[];
   multiple?: boolean;
+  defaultVal?: unknown;
   onUpdate: (fieldName: string, value: unknown) => void;
   onRequiredToggle: (fieldName: string, required: boolean) => void;
   onTypeChange: (fieldName: string, fieldType: FieldType) => void;
   onOptionsChange: (fieldName: string, options: string[], multiple: boolean) => void;
+  onDefaultChange?: (fieldName: string, value: unknown) => void;
   onFieldNameChange?: (
     oldName: string,
     newName: string
@@ -108,10 +110,12 @@ export default function FieldRow({
   fieldType,
   options,
   multiple,
+  defaultVal,
   onUpdate,
   onRequiredToggle,
   onTypeChange,
   onOptionsChange,
+  onDefaultChange,
   onFieldNameChange,
   onDelete,
 }: Props) {
@@ -121,6 +125,8 @@ export default function FieldRow({
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState(fieldName);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [editingDefault, setEditingDefault] = useState(false);
+  const [editDefault, setEditDefault] = useState(toEditString(defaultVal));
 
   useEffect(() => {
     if (nameError === null) return;
@@ -171,6 +177,50 @@ export default function FieldRow({
     }
   };
 
+  const handleDefaultSave = () => {
+    if (!onDefaultChange) {
+      setEditingDefault(false);
+      setEditDefault(toEditString(defaultVal));
+      return;
+    }
+    const trimmed = editDefault.trim();
+    const next = trimmed === "" ? undefined : trimmed;
+    onDefaultChange(fieldName, next);
+    setEditingDefault(false);
+  };
+
+  const handleDefaultKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleDefaultSave();
+    }
+    if (e.key === "Escape") {
+      setEditingDefault(false);
+      setEditDefault(toEditString(defaultVal));
+    }
+  };
+
+  const handleDefaultSelectionSingle = (newValue: string) => {
+    if (!onDefaultChange) return;
+    onDefaultChange(fieldName, newValue === "" ? undefined : newValue);
+  };
+
+  const handleDefaultSelectionMulti = (option: string, checked: boolean) => {
+    if (!onDefaultChange) return;
+    const current = Array.isArray(defaultVal)
+      ? defaultVal.filter((s): s is string => typeof s === "string")
+      : [];
+    const next = checked
+      ? [...current, option]
+      : current.filter((s) => s !== option);
+    onDefaultChange(fieldName, next.length === 0 ? undefined : next);
+  };
+
+  const handleDefaultBool = (checked: boolean) => {
+    if (!onDefaultChange) return;
+    onDefaultChange(fieldName, checked);
+  };
+
   const displayValue = toEditString(value) || "—";
 
   const isBase = source === "base_model";
@@ -208,7 +258,7 @@ export default function FieldRow({
             </div>
           )}
         </td>
-        <td className="field-row__value">
+        <td className="field-row__value" data-testid="field-row-value">
           {fieldType === "selection" && (options?.length ?? 0) > 0 ? (
             multiple ? (
               (() => {
@@ -280,6 +330,64 @@ export default function FieldRow({
             </span>
           )}
         </td>
+        <td className="field-row__default" data-testid="field-row-default">
+          {fieldType === "selection" && (options?.length ?? 0) > 0 ? (
+            multiple ? (
+              (() => {
+                const selected = Array.isArray(defaultVal)
+                  ? defaultVal.filter((s): s is string => typeof s === "string")
+                  : [];
+                return (options ?? []).map((opt) => (
+                  <label key={opt} className="field-row__default-multi-label">
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(opt)}
+                      onChange={(e) => handleDefaultSelectionMulti(opt, e.target.checked)}
+                    />
+                    {opt}
+                  </label>
+                ));
+              })()
+            ) : (
+              <select
+                className="input field-row__input"
+                value={typeof defaultVal === "string" ? defaultVal : ""}
+                onChange={(e) => handleDefaultSelectionSingle(e.target.value)}
+              >
+                <option value="">— none —</option>
+                {(options ?? []).map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            )
+          ) : fieldType === "bool" ? (
+            <input
+              type="checkbox"
+              checked={Boolean(defaultVal)}
+              onChange={(e) => handleDefaultBool(e.target.checked)}
+            />
+          ) : editingDefault ? (
+            <input
+              className="input field-row__input"
+              value={editDefault}
+              onChange={(e) => setEditDefault(e.target.value)}
+              onBlur={handleDefaultSave}
+              onKeyDown={handleDefaultKeyDown}
+              autoFocus
+            />
+          ) : (
+            <span
+              className="field-row__default-display"
+              onClick={() => {
+                setEditDefault(toEditString(defaultVal));
+                setEditingDefault(true);
+              }}
+              title="Click to edit default"
+            >
+              {toEditString(defaultVal) || "—"}
+            </span>
+          )}
+        </td>
         <td className="field-row__data-type">
           <div className="field-row__type-wrapper">
             {isBase ? (
@@ -338,7 +446,7 @@ export default function FieldRow({
       </tr>
       {showOptions && fieldType === "selection" && (
         <tr className="field-row__options-row">
-          <td colSpan={6}>
+          <td colSpan={7}>
             <OptionsEditor
               options={options ?? []}
               multiple={multiple ?? false}

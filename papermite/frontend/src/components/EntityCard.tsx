@@ -47,6 +47,7 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
         ? {
             ...m,
             field_type,
+            default: undefined,
             // Reset selection-specific fields when switching away
             ...(field_type !== "selection" ? { options: undefined, multiple: undefined } : {}),
             // Init selection defaults when switching to selection
@@ -59,8 +60,23 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
 
   const handleOptionsChange = (fieldName: string, options: string[], multiple: boolean) => {
     const updated = { ...entity };
+    updated.field_mappings = updated.field_mappings.map((m) => {
+      if (m.field_name !== fieldName) return m;
+      const multipleChanged = m.multiple !== multiple;
+      return {
+        ...m,
+        options,
+        multiple,
+        ...(multipleChanged ? { default: undefined } : {}),
+      };
+    });
+    onUpdate(index, updated);
+  };
+
+  const handleDefaultChange = (fieldName: string, value: unknown) => {
+    const updated = { ...entity };
     updated.field_mappings = updated.field_mappings.map((m) =>
-      m.field_name === fieldName ? { ...m, options, multiple } : m
+      m.field_name === fieldName ? { ...m, default: value } : m
     );
     onUpdate(index, updated);
   };
@@ -135,7 +151,7 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
     onUpdate(index, updated);
   };
 
-  const handleAddField = (fieldName: string, value: string) => {
+  const handleAddField = (fieldName: string, value: string, defaultVal?: string) => {
     const updated = { ...entity };
     updated.entity = { ...updated.entity, [fieldName]: value };
     const cf = {
@@ -145,7 +161,14 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
     updated.entity.custom_fields = cf;
     updated.field_mappings = [
       ...updated.field_mappings,
-      { field_name: fieldName, value, source: "custom_field" as const, required: false, field_type: "str" as const },
+      {
+        field_name: fieldName,
+        value,
+        source: "custom_field" as const,
+        required: false,
+        field_type: "str" as const,
+        ...(defaultVal !== undefined ? { default: defaultVal } : {}),
+      },
     ];
     onUpdate(index, updated);
   };
@@ -174,6 +197,7 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
             <tr>
               <th>Field</th>
               <th>Value</th>
+              <th>Default</th>
               <th>Data Type</th>
               <th>Source</th>
               <th>Required</th>
@@ -194,10 +218,12 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
                 fieldType={mapping.field_type}
                 options={mapping.options}
                 multiple={mapping.multiple}
+                defaultVal={mapping.default}
                 onUpdate={handleFieldUpdate}
                 onRequiredToggle={handleRequiredToggle}
                 onTypeChange={handleTypeChange}
                 onOptionsChange={handleOptionsChange}
+                onDefaultChange={handleDefaultChange}
                 onFieldNameChange={
                   mapping.source === "custom_field"
                     ? handleFieldNameChange

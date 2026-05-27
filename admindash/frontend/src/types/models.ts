@@ -47,6 +47,7 @@ export interface ModelFieldDefinition {
   required: boolean;
   options?: string[];
   multiple?: boolean;
+  default?: unknown;
 }
 
 export interface ModelDefinition {

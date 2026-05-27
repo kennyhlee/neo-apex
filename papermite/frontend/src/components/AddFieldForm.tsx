@@ -1,20 +1,23 @@
 import { useState } from "react";
 
 interface Props {
-  onAdd: (fieldName: string, value: string) => void;
+  onAdd: (fieldName: string, value: string, defaultVal?: string) => void;
 }
 
 export default function AddFieldForm({ onAdd }: Props) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+  const [defaultVal, setDefaultVal] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onAdd(name.trim(), value);
+    const trimmedDefault = defaultVal.trim();
+    onAdd(name.trim(), value, trimmedDefault === "" ? undefined : trimmedDefault);
     setName("");
     setValue("");
+    setDefaultVal("");
     setOpen(false);
   };
 
@@ -44,6 +47,12 @@ export default function AddFieldForm({ onAdd }: Props) {
         placeholder="value"
         value={value}
         onChange={(e) => setValue(e.target.value)}
+      />
+      <input
+        className="input"
+        placeholder="default (optional)"
+        value={defaultVal}
+        onChange={(e) => setDefaultVal(e.target.value)}
       />
       <button className="btn btn--primary btn--sm" type="submit">
         Add

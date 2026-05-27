@@ -18,6 +18,7 @@ export interface FieldMapping {
   field_type: FieldType;
   options?: string[];
   multiple?: boolean;
+  default?: unknown;
 }
 
 export interface EntityResult {
@@ -54,6 +55,7 @@ export interface FieldDefinition {
   required: boolean;
   options?: string[];
   multiple?: boolean;
+  default?: unknown;
 }
 
 export interface EntityModelDefinition {

@@ -39,3 +39,34 @@ export async function deleteDraft(extractionId: string): Promise<void> {
   const db = await getDb();
   await db.delete(STORE_NAME, extractionId);
 }
+
+// ── Edit-flow original snapshot (sessionStorage, per tab) ──────
+//
+// The Review page's "no changes detected" Finalize-disabled gate needs a
+// baseline that is durable across remounts. A useRef inside ReviewPage
+// resets every time the page unmounts (e.g., user navigates to the
+// Finalize/Confirm step and back), causing the post-back snapshot to equal
+// the already-edited draft and falsely report "no changes." Storing the
+// snapshot in sessionStorage when the edit flow starts (LandingPage)
+// survives remounts within the tab and gets cleared on
+// finalize-confirm or finalize-cancel.
+
+const EDIT_ORIGINAL_KEY_PREFIX = "papermite-edit-original-";
+
+export function saveEditOriginal(extraction: ExtractionResult): void {
+  sessionStorage.setItem(
+    EDIT_ORIGINAL_KEY_PREFIX + extraction.extraction_id,
+    JSON.stringify(extraction),
+  );
+}
+
+export function getEditOriginal(
+  extractionId: string,
+): ExtractionResult | null {
+  const raw = sessionStorage.getItem(EDIT_ORIGINAL_KEY_PREFIX + extractionId);
+  return raw ? (JSON.parse(raw) as ExtractionResult) : null;
+}
+
+export function clearEditOriginal(extractionId: string): void {
+  sessionStorage.removeItem(EDIT_ORIGINAL_KEY_PREFIX + extractionId);
+}

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { TestUser, TenantModel } from "../types/models";
 import { getActiveModel, modelToExtraction } from "../api/client";
-import { saveDraft } from "../db/indexedDb";
+import { saveDraft, saveEditOriginal } from "../db/indexedDb";
 import TenantInfo from "../components/TenantInfo";
 import "../components/TenantInfo.css";
 import "./LandingPage.css";
@@ -31,6 +31,7 @@ export default function LandingPage({ user }: Props) {
     if (!model) return;
     const extraction = modelToExtraction(model);
     await saveDraft(extraction);
+    saveEditOriginal(extraction);
     navigate(`/review/${extraction.extraction_id}${forwardQs}`);
   };
 
