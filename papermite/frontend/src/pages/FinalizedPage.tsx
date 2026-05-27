@@ -186,6 +186,9 @@ export default function FinalizedPage({ user }: Props) {
               fieldDef.options = mapping.options || [];
               fieldDef.multiple = mapping.multiple || false;
             }
+            if (mapping.default !== undefined) {
+              fieldDef.default = mapping.default;
+            }
             if (mapping.source === "base_model") {
               baseFields.push(fieldDef);
             } else {
