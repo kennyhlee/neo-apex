@@ -192,7 +192,21 @@ export default function DynamicForm({
   const buildValues = (overrides?: Record<string, unknown>) => {
     const result: Record<string, unknown> = {};
     for (const field of allFields) {
-      result[field.name] = overrides?.[field.name] ?? (field.type === 'bool' ? false : '');
+      const override = overrides?.[field.name];
+      const fallback = field.type === 'bool' ? false : '';
+      let resolved: unknown;
+      if (override !== undefined) {
+        resolved = override;
+      } else if (field.default !== undefined) {
+        resolved = field.default;
+      } else {
+        resolved = fallback;
+      }
+      if (field.type === 'number' && resolved !== '' && resolved !== null && resolved !== undefined) {
+        const coerced = Number(resolved);
+        resolved = Number.isNaN(coerced) ? '' : coerced;
+      }
+      result[field.name] = resolved;
     }
     return result;
   };
