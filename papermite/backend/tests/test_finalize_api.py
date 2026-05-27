@@ -450,3 +450,69 @@ def test_finalize_does_not_attempt_tenant_work_when_model_put_fails():
     assert len(put_calls) == 1
     assert "/models/t1" in put_calls[0]["url"]
     assert mock_post.call_count == 0
+
+
+def test_finalize_commit_sends_default_in_datacore_put():
+    """Defaults on FieldMappings flow into the PUT payload to DataCore /api/models."""
+    payload = {
+        "extraction": {
+            "extraction_id": "e2",
+            "tenant_id": "t1",
+            "filename": "app.pdf",
+            "entities": [
+                {
+                    "entity_type": "student",
+                    "entity": {"first_name": "Sam", "school_year": "2026-2027"},
+                    "field_mappings": [
+                        {
+                            "field_name": "first_name",
+                            "value": "Sam",
+                            "source": "base_model",
+                            "required": True,
+                            "field_type": "str",
+                        },
+                        {
+                            "field_name": "school_year",
+                            "value": "",
+                            "source": "custom_field",
+                            "required": False,
+                            "field_type": "str",
+                            "default": "2026-2027",
+                        },
+                        {
+                            "field_name": "is_active",
+                            "value": "",
+                            "source": "custom_field",
+                            "required": False,
+                            "field_type": "bool",
+                            "default": False,
+                        },
+                    ],
+                }
+            ],
+            "status": "pending_review",
+        }
+    }
+
+    captured = {}
+
+    def fake_put(url, *, json, timeout):  # noqa: ARG001
+        captured["url"] = url
+        captured["json"] = json
+        return MagicMock(
+            status_code=200,
+            json=MagicMock(return_value=_datacore_response_payload(json["model_definition"])),
+        )
+
+    with patch("app.api.finalize.httpx.put", side_effect=fake_put):
+        resp = client.post("/api/tenants/t1/finalize/commit", json=payload)
+
+    assert resp.status_code == 200, resp.text
+    md = captured["json"]["model_definition"]
+    student_custom = md["student"]["custom_fields"]
+    school_year = next(f for f in student_custom if f["name"] == "school_year")
+    assert school_year["default"] == "2026-2027"
+    is_active = next(f for f in student_custom if f["name"] == "is_active")
+    assert is_active["default"] is False
+    first_name = next(f for f in md["student"]["base_fields"] if f["name"] == "first_name")
+    assert "default" not in first_name
