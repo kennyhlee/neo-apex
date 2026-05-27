@@ -22,6 +22,7 @@ function hasChanges(original: ExtractionResult, current: ExtractionResult): bool
       if (om.field_type !== cm.field_type) return true;
       if (JSON.stringify(om.options ?? []) !== JSON.stringify(cm.options ?? [])) return true;
       if ((om.multiple ?? false) !== (cm.multiple ?? false)) return true;
+      if (JSON.stringify(om.default ?? null) !== JSON.stringify(cm.default ?? null)) return true;
     }
   }
   return false;
