@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { EntityResult, ExtractionResult } from "../types/models";
-import { getDraft, saveDraft } from "../db/indexedDb";
+import { getDraft, getEditOriginal, saveDraft } from "../db/indexedDb";
 import EntityCard from "../components/EntityCard";
 import "./ReviewPage.css";
 
@@ -47,7 +47,8 @@ export default function ReviewPage() {
         if (draft) {
           setExtraction(draft);
           if (!originalRef.current) {
-            originalRef.current = JSON.parse(JSON.stringify(draft));
+            const saved = getEditOriginal(draft.extraction_id);
+            originalRef.current = saved ?? JSON.parse(JSON.stringify(draft));
           }
         } else {
           navigate("/");

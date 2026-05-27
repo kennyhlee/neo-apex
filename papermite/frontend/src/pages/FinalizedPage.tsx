@@ -6,7 +6,7 @@ import type {
   ModelDefinition,
   TestUser,
 } from "../types/models";
-import { getDraft, deleteDraft } from "../db/indexedDb";
+import { getDraft, deleteDraft, clearEditOriginal } from "../db/indexedDb";
 import { commitFinalize, getActiveModel } from "../api/client";
 import "./FinalizedPage.css";
 
@@ -266,7 +266,10 @@ export default function FinalizedPage({ user }: Props) {
     setStatus("committing");
     try {
       await commitFinalize(user.tenant_id, extraction);
-      if (id) deleteDraft(id);
+      if (id) {
+        deleteDraft(id);
+        clearEditOriginal(id);
+      }
       if (returnUrl) {
         window.location.href = returnUrl;
       } else {
@@ -279,7 +282,10 @@ export default function FinalizedPage({ user }: Props) {
   };
 
   const handleCancel = () => {
-    if (id) deleteDraft(id);
+    if (id) {
+      deleteDraft(id);
+      clearEditOriginal(id);
+    }
     if (returnUrl) {
       window.location.href = returnUrl;
     } else {
