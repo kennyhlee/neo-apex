@@ -25,6 +25,7 @@ class FieldMapping(BaseModel):
     field_type: Literal["str", "number", "bool", "date", "datetime", "email", "phone", "selection"] = "str"
     options: Optional[list[str]] = None
     multiple: Optional[bool] = None
+    default: Optional[Any] = None
 
 
 class EntityResult(BaseModel):
