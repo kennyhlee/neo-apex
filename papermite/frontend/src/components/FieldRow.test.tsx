@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import FieldRow from "./FieldRow";
 import type { FieldType } from "../types/models";
 
@@ -11,6 +11,7 @@ interface FieldRowTestProps {
   fieldType?: FieldType;
   options?: string[];
   multiple?: boolean;
+  defaultVal?: unknown;
   onUpdate?: (fieldName: string, value: unknown) => void;
   onRequiredToggle?: (fieldName: string, required: boolean) => void;
   onTypeChange?: (fieldName: string, fieldType: FieldType) => void;
@@ -19,6 +20,7 @@ interface FieldRowTestProps {
     options: string[],
     multiple: boolean
   ) => void;
+  onDefaultChange?: (fieldName: string, value: unknown) => void;
   onDelete?: () => void;
 }
 
@@ -27,6 +29,7 @@ function renderRow(overrides: FieldRowTestProps = {}) {
   const onRequiredToggle = overrides.onRequiredToggle ?? vi.fn();
   const onTypeChange = overrides.onTypeChange ?? vi.fn();
   const onOptionsChange = overrides.onOptionsChange ?? vi.fn();
+  const onDefaultChange = overrides.onDefaultChange ?? vi.fn();
 
   const utils = render(
     <table>
@@ -39,17 +42,19 @@ function renderRow(overrides: FieldRowTestProps = {}) {
           fieldType={overrides.fieldType ?? "str"}
           options={overrides.options}
           multiple={overrides.multiple}
+          defaultVal={overrides.defaultVal}
           onUpdate={onUpdate}
           onRequiredToggle={onRequiredToggle}
           onTypeChange={onTypeChange}
           onOptionsChange={onOptionsChange}
+          onDefaultChange={onDefaultChange}
           onDelete={overrides.onDelete}
         />
       </tbody>
     </table>
   );
 
-  return { ...utils, onUpdate, onRequiredToggle, onTypeChange, onOptionsChange };
+  return { ...utils, onUpdate, onRequiredToggle, onTypeChange, onOptionsChange, onDefaultChange };
 }
 
 describe("FieldRow", () => {
@@ -69,8 +74,6 @@ describe("FieldRow", () => {
 
   it("renders a <select> inline for single-select with options (no click required)", () => {
     const { onUpdate } = renderRow({
-      // base_model so the data-type column renders a locked <span>, not a <select>;
-      // this keeps the Value cell's <select> the only combobox in the row.
       source: "base_model",
       required: true,
       value: "Active",
@@ -79,7 +82,9 @@ describe("FieldRow", () => {
       multiple: false,
     });
 
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    // Scope to the Value cell so the Default cell's <select> doesn't interfere.
+    const valueCell = screen.getByTestId("field-row-value");
+    const select = within(valueCell).getByRole("combobox") as HTMLSelectElement;
     expect(select).toBeInTheDocument();
     expect(select.value).toBe("Active");
     const optionValues = Array.from(select.options).map((o) => o.value);
@@ -100,13 +105,9 @@ describe("FieldRow", () => {
       multiple: true,
     });
 
-    const checkboxes = screen.getAllByRole("checkbox");
-    // The Required column also has a checkbox, so we filter by accessible name.
-    const optionBoxes = checkboxes.filter((cb) =>
-      ["Mon", "Tue", "Wed"].some((label) =>
-        cb.closest("label")?.textContent?.includes(label)
-      )
-    );
+    // Scope to the Value cell so the Default cell's checkboxes don't interfere.
+    const valueCell = screen.getByTestId("field-row-value");
+    const optionBoxes = within(valueCell).getAllByRole("checkbox");
     expect(optionBoxes).toHaveLength(3);
     expect((optionBoxes[0] as HTMLInputElement).checked).toBe(true);
     expect((optionBoxes[1] as HTMLInputElement).checked).toBe(false);
@@ -128,5 +129,95 @@ describe("FieldRow", () => {
     expect(screen.getByText("seed")).toBeInTheDocument();
     fireEvent.click(screen.getByText("seed"));
     expect(screen.getByDisplayValue("seed")).toBeInTheDocument();
+  });
+
+  it("renders an empty Default cell click-to-edit input", () => {
+    const { onDefaultChange } = renderRow({ fieldType: "str" });
+    const cell = screen.getByTestId("field-row-default");
+    const display = cell.querySelector(".field-row__default-display") as HTMLElement;
+    expect(display).toBeInTheDocument();
+    fireEvent.click(display);
+    const input = cell.querySelector("input") as HTMLInputElement;
+    expect(input).toBeInTheDocument();
+    expect(input.value).toBe("");
+    fireEvent.change(input, { target: { value: "9" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onDefaultChange).toHaveBeenCalledWith("grade_level", "9");
+  });
+
+  it("Escape in the Default input cancels without firing onDefaultChange", () => {
+    const { onDefaultChange } = renderRow({ fieldType: "str", defaultVal: "9" });
+    const cell = screen.getByTestId("field-row-default");
+    const display = cell.querySelector(".field-row__default-display") as HTMLElement;
+    fireEvent.click(display);
+    const input = cell.querySelector("input") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "11" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(onDefaultChange).not.toHaveBeenCalled();
+  });
+
+  it("clearing the Default input commits undefined (not the empty string)", () => {
+    const { onDefaultChange } = renderRow({ fieldType: "str", defaultVal: "9" });
+    const cell = screen.getByTestId("field-row-default");
+    const display = cell.querySelector(".field-row__default-display") as HTMLElement;
+    fireEvent.click(display);
+    const input = cell.querySelector("input") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onDefaultChange).toHaveBeenCalledWith("grade_level", undefined);
+  });
+
+  it("bool Default cell renders a checkbox bound to defaultVal", () => {
+    const { onDefaultChange } = renderRow({ fieldType: "bool", defaultVal: false });
+    const cell = screen.getByTestId("field-row-default");
+    const checkbox = cell.querySelector("input[type='checkbox']") as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    fireEvent.click(checkbox);
+    expect(onDefaultChange).toHaveBeenCalledWith("grade_level", true);
+  });
+
+  it("selection-single Default cell renders a <select> with — none — option", () => {
+    const { onDefaultChange } = renderRow({
+      fieldType: "selection",
+      options: ["9", "10", "11"],
+      multiple: false,
+      defaultVal: "10",
+    });
+    const cell = screen.getByTestId("field-row-default");
+    const select = cell.querySelector("select") as HTMLSelectElement;
+    expect(select.value).toBe("10");
+    const optionValues = Array.from(select.options).map((o) => o.value);
+    expect(optionValues).toEqual(["", "9", "10", "11"]);
+    fireEvent.change(select, { target: { value: "" } });
+    expect(onDefaultChange).toHaveBeenCalledWith("grade_level", undefined);
+  });
+
+  it("selection-multi Default cell renders checkboxes and commits arrays", () => {
+    const { onDefaultChange } = renderRow({
+      fieldType: "selection",
+      options: ["math", "science", "history"],
+      multiple: true,
+      defaultVal: ["math"],
+    });
+    const cell = screen.getByTestId("field-row-default");
+    const checkboxes = cell.querySelectorAll<HTMLInputElement>("input[type='checkbox']");
+    expect(checkboxes).toHaveLength(3);
+    expect(checkboxes[0].checked).toBe(true);
+    expect(checkboxes[1].checked).toBe(false);
+    fireEvent.click(checkboxes[1]);
+    expect(onDefaultChange).toHaveBeenCalledWith("grade_level", ["math", "science"]);
+  });
+
+  it("selection-multi clearing the last checked option commits undefined", () => {
+    const { onDefaultChange } = renderRow({
+      fieldType: "selection",
+      options: ["math", "science"],
+      multiple: true,
+      defaultVal: ["math"],
+    });
+    const cell = screen.getByTestId("field-row-default");
+    const checkboxes = cell.querySelectorAll<HTMLInputElement>("input[type='checkbox']");
+    fireEvent.click(checkboxes[0]);
+    expect(onDefaultChange).toHaveBeenCalledWith("grade_level", undefined);
   });
 });
