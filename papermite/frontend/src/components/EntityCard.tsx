@@ -151,7 +151,7 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
     onUpdate(index, updated);
   };
 
-  const handleAddField = (fieldName: string, value: string) => {
+  const handleAddField = (fieldName: string, value: string, defaultVal?: string) => {
     const updated = { ...entity };
     updated.entity = { ...updated.entity, [fieldName]: value };
     const cf = {
@@ -161,7 +161,14 @@ export default function EntityCard({ entity, index, onUpdate }: Props) {
     updated.entity.custom_fields = cf;
     updated.field_mappings = [
       ...updated.field_mappings,
-      { field_name: fieldName, value, source: "custom_field" as const, required: false, field_type: "str" as const },
+      {
+        field_name: fieldName,
+        value,
+        source: "custom_field" as const,
+        required: false,
+        field_type: "str" as const,
+        ...(defaultVal !== undefined ? { default: defaultVal } : {}),
+      },
     ];
     onUpdate(index, updated);
   };
