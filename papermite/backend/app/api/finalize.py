@@ -200,6 +200,8 @@ def _build_model_definition(entities: list[EntityResult]) -> dict:
             if field_type == "selection":
                 field_def["options"] = mapping.options or []
                 field_def["multiple"] = mapping.multiple or False
+            if mapping.default is not None:
+                field_def["default"] = mapping.default
 
             if mapping.source == "base_model":
                 base_fields.append(field_def)

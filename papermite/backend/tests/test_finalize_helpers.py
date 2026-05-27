@@ -227,3 +227,100 @@ def test_fetch_existing_tenant_row_raises_502_on_connection_error():
 
     assert exc_info.value.status_code == 502
     assert exc_info.value.detail == "Failed to persist tenant from extraction"
+
+
+def test_build_model_definition_omits_default_when_none():
+    """A field with default=None must NOT emit 'default' (not even as null)."""
+    from app.api.finalize import _build_model_definition
+    from app.models.extraction import EntityResult, FieldMapping
+
+    entity = EntityResult(
+        entity_type="student",
+        entity={"first_name": "Sam"},
+        field_mappings=[
+            FieldMapping(
+                field_name="first_name", value="Sam",
+                source="base_model", required=True, field_type="str",
+            ),
+        ],
+    )
+    md = _build_model_definition([entity])
+    field = md["student"]["base_fields"][0]
+    assert "default" not in field
+    assert field == {"name": "first_name", "type": "str", "required": True}
+
+
+def test_build_model_definition_includes_default_when_set():
+    """A field with a non-None default emits 'default'."""
+    from app.api.finalize import _build_model_definition
+    from app.models.extraction import EntityResult, FieldMapping
+
+    entity = EntityResult(
+        entity_type="student",
+        entity={"school_year": "2026-2027"},
+        field_mappings=[
+            FieldMapping(
+                field_name="school_year", value="2026-2027",
+                source="custom_field", required=False, field_type="str",
+                default="2026-2027",
+            ),
+        ],
+    )
+    md = _build_model_definition([entity])
+    field = md["student"]["custom_fields"][0]
+    assert field == {
+        "name": "school_year",
+        "type": "str",
+        "required": False,
+        "default": "2026-2027",
+    }
+
+
+def test_build_model_definition_preserves_bool_false_default():
+    """default=False is a meaningful value and MUST be persisted."""
+    from app.api.finalize import _build_model_definition
+    from app.models.extraction import EntityResult, FieldMapping
+
+    entity = EntityResult(
+        entity_type="student",
+        entity={"is_active": False},
+        field_mappings=[
+            FieldMapping(
+                field_name="is_active", value=True,
+                source="custom_field", required=False, field_type="bool",
+                default=False,
+            ),
+        ],
+    )
+    md = _build_model_definition([entity])
+    field = md["student"]["custom_fields"][0]
+    assert field["default"] is False
+
+
+def test_build_model_definition_preserves_selection_multi_default():
+    """Selection (multi) default preserved verbatim alongside options/multiple."""
+    from app.api.finalize import _build_model_definition
+    from app.models.extraction import EntityResult, FieldMapping
+
+    entity = EntityResult(
+        entity_type="student",
+        entity={"subjects": ["math"]},
+        field_mappings=[
+            FieldMapping(
+                field_name="subjects", value=["math"],
+                source="custom_field", required=False, field_type="selection",
+                options=["math", "science", "history"], multiple=True,
+                default=["math"],
+            ),
+        ],
+    )
+    md = _build_model_definition([entity])
+    field = md["student"]["custom_fields"][0]
+    assert field == {
+        "name": "subjects",
+        "type": "selection",
+        "required": False,
+        "options": ["math", "science", "history"],
+        "multiple": True,
+        "default": ["math"],
+    }
