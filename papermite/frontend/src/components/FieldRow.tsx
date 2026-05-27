@@ -446,7 +446,7 @@ export default function FieldRow({
       </tr>
       {showOptions && fieldType === "selection" && (
         <tr className="field-row__options-row">
-          <td colSpan={6}>
+          <td colSpan={7}>
             <OptionsEditor
               options={options ?? []}
               multiple={multiple ?? false}
