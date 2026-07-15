@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import CalendarChip from './CalendarChip.tsx';
@@ -96,11 +96,16 @@ export default function ProgramWeekView({
     getWeekStart(weekStart ?? new Date()),
   );
 
-  // Sync external weekStart prop to internal state
-  const externalWeekStart = weekStart;
-  useEffect(() => {
-    if (externalWeekStart) setCurrentWeekStart(getWeekStart(externalWeekStart));
-  }, [externalWeekStart]);
+  // Sync external weekStart prop to internal state by adjusting state during
+  // render when the prop changes — the React-recommended alternative to a
+  // setState-in-effect (see react.dev "You Might Not Need an Effect"). The
+  // parent passes a stable Date reference that only changes on navigation, so
+  // a referential comparison is sufficient.
+  const [prevWeekStart, setPrevWeekStart] = useState<Date | undefined>(weekStart);
+  if (weekStart !== prevWeekStart) {
+    setPrevWeekStart(weekStart);
+    if (weekStart) setCurrentWeekStart(getWeekStart(weekStart));
+  }
 
   // The 7 days of the current week (Mon–Sun)
   const weekDays = useMemo<Date[]>(() => {

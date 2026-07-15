@@ -273,7 +273,10 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Table preferences
   const userId = user?.user_id ?? 'anonymous';
-  const { prefs, updatePrefs, toggleColumn } = useTablePreferences(userId, tenant, columnKeys);
+  const { prefs, updatePrefs, toggleColumn } = useTablePreferences(userId, tenant, columnKeys, {
+    namespace: 'student',
+    defaultSortBy: 'last_name',
+  });
 
   // Adaptive page size on mount
   const containerRef = useRef<HTMLDivElement>(null);
