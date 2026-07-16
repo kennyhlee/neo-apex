@@ -74,8 +74,7 @@ describe("FieldRow", () => {
 
   it("renders a <select> inline for single-select with options (no click required)", () => {
     const { onUpdate } = renderRow({
-      source: "base_model",
-      required: true,
+      source: "custom_field",
       value: "Active",
       fieldType: "selection",
       options: ["Active", "Inactive"],
@@ -96,8 +95,7 @@ describe("FieldRow", () => {
 
   it("renders one checkbox per option inline for multi-select with options", () => {
     const { onUpdate } = renderRow({
-      source: "base_model",
-      required: true,
+      source: "custom_field",
       fieldName: "days_of_week",
       value: ["Mon"],
       fieldType: "selection",
@@ -119,16 +117,63 @@ describe("FieldRow", () => {
 
   it("falls back to text input when selection has no options yet", () => {
     renderRow({
-      source: "base_model",
+      source: "custom_field",
       value: "seed",
       fieldType: "selection",
       options: [],
     });
 
-    expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.getByText("seed")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("seed"));
-    expect(screen.getByDisplayValue("seed")).toBeInTheDocument();
+    const valueCell = screen.getByTestId("field-row-value");
+    expect(within(valueCell).queryByRole("combobox")).toBeNull();
+    expect(within(valueCell).getByText("seed")).toBeInTheDocument();
+    fireEvent.click(within(valueCell).getByText("seed"));
+    expect(within(valueCell).getByDisplayValue("seed")).toBeInTheDocument();
+  });
+
+  // Issue #66 — base fields do not invite value entry in the model form.
+  it("renders a base field's Value read-only (no click-to-edit input)", () => {
+    renderRow({
+      source: "base_model",
+      fieldName: "first_name",
+      value: "Ada",
+      fieldType: "str",
+    });
+    const valueCell = screen.getByTestId("field-row-value");
+    // Value is shown but not editable — clicking does not open an input.
+    expect(within(valueCell).getByText("Ada")).toBeInTheDocument();
+    fireEvent.click(within(valueCell).getByText("Ada"));
+    expect(within(valueCell).queryByRole("textbox")).toBeNull();
+  });
+
+  it("renders a base selection field's Value read-only (no inline control)", () => {
+    renderRow({
+      source: "base_model",
+      fieldName: "grade_level",
+      value: ["9", "10"],
+      fieldType: "selection",
+      options: ["9", "10", "11"],
+      multiple: true,
+    });
+    const valueCell = screen.getByTestId("field-row-value");
+    expect(within(valueCell).queryByRole("checkbox")).toBeNull();
+    expect(within(valueCell).getByText("9, 10")).toBeInTheDocument();
+  });
+
+  it("marks an auto-generated *_id base field and locks its Value and Default", () => {
+    renderRow({
+      source: "base_model",
+      fieldName: "student_id",
+      value: "abc123",
+      fieldType: "str",
+      defaultVal: undefined,
+    });
+    expect(screen.getByText("auto")).toBeInTheDocument();
+    const valueCell = screen.getByTestId("field-row-value");
+    expect(within(valueCell).getByText("auto-generated")).toBeInTheDocument();
+    // Default cell has no editable input for an auto-generated id.
+    const defaultCell = screen.getByTestId("field-row-default");
+    fireEvent.click(defaultCell.querySelector(".field-row__default-display--readonly") as HTMLElement);
+    expect(defaultCell.querySelector("input")).toBeNull();
   });
 
   it("renders an empty Default cell click-to-edit input", () => {
