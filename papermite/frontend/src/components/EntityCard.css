@@ -129,6 +129,46 @@
   border-bottom-color: var(--text-tertiary);
 }
 
+/* Read-only value/default rendering for base and auto-generated fields:
+   no click-to-edit affordance, muted, so the model form does not invite a
+   value where none is needed (issue #66). */
+.field-row__display--readonly,
+.field-row__default-display--readonly {
+  cursor: default;
+  color: var(--text-tertiary);
+  border-bottom: none;
+}
+
+.field-row__display--readonly:hover,
+.field-row__default-display--readonly:hover {
+  border-bottom-color: transparent;
+}
+
+.field-row__value-note {
+  font-style: italic;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.field-row__name-base {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-row__auto-chip {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary, rgba(0, 0, 0, 0.05));
+  border-radius: 4px;
+  padding: 1px 5px;
+  cursor: help;
+}
+
 .field-row__input {
   padding: 4px 8px;
   font-size: 14px;
