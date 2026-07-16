@@ -72,25 +72,25 @@ For backend deploys, the release pipeline SHALL build the Docker image exactly o
 - **WHEN** an operator runs `workflow_dispatch` with `module=datacore` and `version=datacore-v1.1.9`
 - **THEN** the job skips any Docker build step, pulls `ghcr.io/<owner>/datacore:datacore-v1.1.9` from GHCR, and deploys it without rebuilding
 
-### Requirement: Frontend releases rebuild only the affected Cloudflare Pages project
+### Requirement: Frontend releases rebuild only the affected Cloudflare Worker
 
-For frontend deploys (`launchpad` frontend, `papermite` frontend, `admindash`), the release pipeline SHALL trigger a Cloudflare Pages production build of only the affected project. The release pipeline MUST NOT rebuild or redeploy frontends that are not named by the release tag prefix.
+For frontend deploys (`launchpad` frontend, `papermite` frontend, `admindash`), the release pipeline SHALL build and `wrangler deploy` only the affected frontend Worker. The release pipeline MUST NOT rebuild or redeploy frontends that are not named by the release tag prefix.
 
 #### Scenario: Admindash release rebuilds only admindash frontend
 - **WHEN** a GitHub Release is published for tag `admindash-v0.5.0`
-- **THEN** the pipeline triggers a Cloudflare Pages production deployment of the `admindash` project and does not trigger deployments for the `launchpad-frontend` or `papermite-frontend` Pages projects
+- **THEN** the pipeline builds and deploys the `admindash` frontend Worker and does not trigger deployments for the `launchpad-frontend` or `papermite-frontend` Workers
 
 ### Requirement: Module tags with both backend and frontend halves deploy both
 
-For modules that have both a Fly.io backend app and a Cloudflare Pages frontend project — `launchpad` (backend `launchpad-api`, frontend `launchpad-frontend`), `papermite` (backend `papermite-api`, frontend `papermite-frontend`), and `admindash` (backend `admindash-api`, frontend `admindash`) — a single module-prefixed release tag SHALL deploy both halves in the same workflow run. Each half is its own job inside the release workflow, but a single tag triggers them together.
+For modules that have both a Fly.io backend app and a Cloudflare Workers frontend — `launchpad` (backend `launchpad-api`, frontend `launchpad-frontend`), `papermite` (backend `papermite-api`, frontend `papermite-frontend`), and `admindash` (backend `admindash-api`, frontend `admindash`) — a single module-prefixed release tag SHALL deploy both halves in the same workflow run. Each half is its own job inside the release workflow, but a single tag triggers them together.
 
 #### Scenario: Admindash release deploys both backend and frontend
 - **WHEN** a GitHub Release is published for tag `admindash-v0.5.0`
-- **THEN** the release pipeline runs both `deploy-admindash-api` (Fly.io) and `deploy-admindash` (Cloudflare Pages) jobs, and does not run any other module's deploy jobs
+- **THEN** the release pipeline runs both `deploy-admindash-api` (Fly.io) and `deploy-admindash-frontend` (Cloudflare Workers) jobs, and does not run any other module's deploy jobs
 
 #### Scenario: DataCore release deploys only the backend
 - **WHEN** a GitHub Release is published for tag `datacore-v1.2.0`
-- **THEN** the release pipeline runs only `deploy-datacore` (Fly.io) and does not trigger any Cloudflare Pages deployment because DataCore has no frontend
+- **THEN** the release pipeline runs only `deploy-datacore` (Fly.io) and does not trigger any Cloudflare Workers deployment because DataCore has no frontend
 
 ### Requirement: Release event also fires existing Discord notification
 
