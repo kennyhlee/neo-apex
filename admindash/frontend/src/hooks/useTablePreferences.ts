@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 
 const VALID_PAGE_SIZES = [10, 20, 30, 40, 50] as const;
 type ValidPageSize = (typeof VALID_PAGE_SIZES)[number];
@@ -10,15 +10,33 @@ export interface TablePreferences {
   sortDir: 'asc' | 'desc';
 }
 
-const DEFAULT_PREFS: TablePreferences = {
-  hiddenColumns: [],
-  pageSize: 20,
-  sortBy: 'last_name',
-  sortDir: 'asc',
-};
+/**
+ * Options that scope a preferences slot to a particular table.
+ *
+ * `namespace` partitions storage per entity type so that, e.g., the Programs
+ * table and the Students table do not clobber each other's sort/page-size/hidden
+ * columns. `defaultSortBy` is the fallback sort column when nothing is persisted
+ * yet (e.g. 'last_name' for students, 'name' for programs).
+ */
+export interface UseTablePreferencesOptions {
+  namespace?: string;
+  defaultSortBy?: string;
+}
 
-function buildStorageKey(userId: string, tenantId: string): string {
-  return `admindash_table_prefs_${userId}_${tenantId}`;
+const DEFAULT_NAMESPACE = 'student';
+const DEFAULT_SORT_BY = 'last_name';
+
+function baseDefaults(defaultSortBy: string): TablePreferences {
+  return {
+    hiddenColumns: [],
+    pageSize: 20,
+    sortBy: defaultSortBy,
+    sortDir: 'asc',
+  };
+}
+
+function buildStorageKey(namespace: string, userId: string, tenantId: string): string {
+  return `admindash_table_prefs_${namespace}_${userId}_${tenantId}`;
 }
 
 function validatePageSize(size: number): ValidPageSize {
@@ -28,13 +46,15 @@ function validatePageSize(size: number): ValidPageSize {
 }
 
 function loadPreferences(
+  namespace: string,
   userId: string,
   tenantId: string,
   currentColumns: string[],
+  defaultSortBy: string,
 ): TablePreferences {
-  const key = buildStorageKey(userId, tenantId);
+  const key = buildStorageKey(namespace, userId, tenantId);
   const raw = localStorage.getItem(key);
-  if (!raw) return { ...DEFAULT_PREFS };
+  if (!raw) return baseDefaults(defaultSortBy);
 
   try {
     const parsed = JSON.parse(raw) as Partial<TablePreferences>;
@@ -42,20 +62,21 @@ function loadPreferences(
     return {
       hiddenColumns: (parsed.hiddenColumns ?? []).filter((c) => colSet.has(c)),
       pageSize: validatePageSize(parsed.pageSize ?? 20),
-      sortBy: (parsed.sortBy && colSet.has(parsed.sortBy)) ? parsed.sortBy : DEFAULT_PREFS.sortBy,
+      sortBy: (parsed.sortBy && colSet.has(parsed.sortBy)) ? parsed.sortBy : defaultSortBy,
       sortDir: parsed.sortDir === 'desc' ? 'desc' : 'asc',
     };
   } catch {
-    return { ...DEFAULT_PREFS };
+    return baseDefaults(defaultSortBy);
   }
 }
 
 function savePreferences(
+  namespace: string,
   userId: string,
   tenantId: string,
   prefs: TablePreferences,
 ): void {
-  const key = buildStorageKey(userId, tenantId);
+  const key = buildStorageKey(namespace, userId, tenantId);
   localStorage.setItem(key, JSON.stringify(prefs));
 }
 
@@ -63,30 +84,33 @@ export function useTablePreferences(
   userId: string,
   tenantId: string,
   currentColumns: string[],
+  options: UseTablePreferencesOptions = {},
 ) {
+  const { namespace = DEFAULT_NAMESPACE, defaultSortBy = DEFAULT_SORT_BY } = options;
+
   const [prefs, setPrefs] = useState<TablePreferences>(() =>
-    loadPreferences(userId, tenantId, currentColumns),
+    loadPreferences(namespace, userId, tenantId, currentColumns, defaultSortBy),
   );
 
-  // Re-load preferences when columns, user, or tenant change
-  const prevKey = useRef(`${userId}_${tenantId}_${currentColumns.join(',')}`);
-  useEffect(() => {
-    const key = `${userId}_${tenantId}_${currentColumns.join(',')}`;
-    if (key !== prevKey.current && currentColumns.length > 0) {
-      prevKey.current = key;
-      setPrefs(loadPreferences(userId, tenantId, currentColumns));
-    }
-  }, [userId, tenantId, currentColumns]);
+  // Re-load preferences when namespace, columns, user, or tenant change by
+  // adjusting state during render (the React-recommended alternative to a
+  // setState-in-effect; see react.dev "You Might Not Need an Effect").
+  const key = `${namespace}_${userId}_${tenantId}_${currentColumns.join(',')}`;
+  const [prevKey, setPrevKey] = useState(key);
+  if (key !== prevKey && currentColumns.length > 0) {
+    setPrevKey(key);
+    setPrefs(loadPreferences(namespace, userId, tenantId, currentColumns, defaultSortBy));
+  }
 
   const updatePrefs = useCallback(
     (updates: Partial<TablePreferences>) => {
       setPrefs((prev) => {
         const next = { ...prev, ...updates };
-        savePreferences(userId, tenantId, next);
+        savePreferences(namespace, userId, tenantId, next);
         return next;
       });
     },
-    [userId, tenantId],
+    [namespace, userId, tenantId],
   );
 
   const toggleColumn = useCallback(
@@ -96,11 +120,11 @@ export function useTablePreferences(
           ? prev.hiddenColumns.filter((c) => c !== columnKey)
           : [...prev.hiddenColumns, columnKey];
         const next = { ...prev, hiddenColumns: hidden };
-        savePreferences(userId, tenantId, next);
+        savePreferences(namespace, userId, tenantId, next);
         return next;
       });
     },
-    [userId, tenantId],
+    [namespace, userId, tenantId],
   );
 
   return { prefs, updatePrefs, toggleColumn };

@@ -204,9 +204,6 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // View-only detail modal (from calendar click)
-  const [viewingEntity, setViewingEntity] = useState<DataRow | null>(null);
-
   // View toggle
   const [activeView, setActiveView] = useState<'list' | 'week' | 'month'>('list');
   const [weekStartDate, setWeekStartDate] = useState<Date | undefined>(undefined);
@@ -228,7 +225,10 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
   // Table preferences
   const userId = user?.user_id ?? 'anonymous';
-  const { prefs, updatePrefs, toggleColumn } = useTablePreferences(userId, tenant, columnKeys);
+  const { prefs, updatePrefs, toggleColumn } = useTablePreferences(userId, tenant, columnKeys, {
+    namespace: 'program',
+    defaultSortBy: 'name',
+  });
 
   // Adaptive page size on mount
   const containerRef = useRef<HTMLDivElement>(null);
@@ -459,7 +459,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
         <div className="programs-edit-overlay">
           <div className="programs-edit-dialog">
             <div className="programs-edit-dialog-header">
-              <h3>Edit Program</h3>
+              <h3>{t('program.editTitle')}</h3>
               <span className="programs-edit-dialog-subtitle">
                 {String(editingEntity.name ?? editingEntity.program_id ?? '')}
               </span>
@@ -474,46 +474,6 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
                 submitting={editSubmitting}
                 error={editError}
               />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* View-only program detail (from calendar click) */}
-      {viewingEntity && model && (
-        <div className="programs-edit-overlay" onClick={() => setViewingEntity(null)}>
-          <div className="programs-edit-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="programs-edit-dialog-header">
-              <h3>{String(viewingEntity.name ?? viewingEntity.program_id ?? 'Program')}</h3>
-              <span className="programs-edit-dialog-subtitle">
-                {String(viewingEntity.program_id ?? '')}
-              </span>
-            </div>
-            <div className="programs-edit-dialog-body">
-              <div className="programs-detail-grid">
-                {[...model.base_fields, ...model.custom_fields].map((field) => {
-                  const raw = viewingEntity[field.name];
-                  let display = '-';
-                  if (raw != null && raw !== '') {
-                    if (field.type === 'bool') {
-                      display = raw ? 'Yes' : 'No';
-                    } else if (field.type === 'selection') {
-                      display = formatSelectionValue(raw);
-                    } else {
-                      display = String(raw);
-                    }
-                  }
-                  return (
-                    <div className="programs-detail-field" key={field.name}>
-                      <div className="programs-detail-label">{formatFieldLabel(field.name)}</div>
-                      <div className="programs-detail-value">{display}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="programs-confirm-actions" style={{ marginTop: '1rem' }}>
-                <button onClick={() => setViewingEntity(null)}>{t('common.close')}</button>
-              </div>
             </div>
           </div>
         </div>
@@ -565,7 +525,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
                     value={filters[field.name] ?? ''}
                     onChange={(e) => updateFilter(field.name, e.target.value)}
                   >
-                    <option value="">All</option>
+                    <option value="">{t('program.filterAll')}</option>
                     {field.options.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
@@ -573,7 +533,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
                 ) : (
                   <input
                     type="text"
-                    placeholder={`Search ${formatFieldLabel(field.name).toLowerCase()}`}
+                    placeholder={`${t('program.search')} ${formatFieldLabel(field.name).toLowerCase()}`}
                     value={filters[field.name] ?? ''}
                     onChange={(e) => updateFilter(field.name, e.target.value)}
                   />
@@ -591,7 +551,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
             {selectedIds.size > 0 && (
               <span className="programs-selected-count">
-                {selectedIds.size} selected
+                {selectedIds.size} {t('program.selectedSuffix')}
               </span>
             )}
 
@@ -600,13 +560,13 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               <button
                 className="programs-menu-btn"
                 onClick={() => setShowMenu((prev) => !prev)}
-                aria-label="More actions"
+                aria-label={t('program.moreActions')}
               >
                 ⋮
               </button>
               {showMenu && (
                 <div className="programs-menu-popover">
-                  <div className="programs-menu-section-label">Actions</div>
+                  <div className="programs-menu-section-label">{t('program.actionsLabel')}</div>
                   <button
                     className="programs-menu-item"
                     disabled={selectedIds.size === 0}
@@ -621,24 +581,24 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
                       }
                     }}
                   >
-                    Edit Selected
+                    {t('program.editSelected')}
                   </button>
                   <button
                     className="programs-menu-item programs-menu-item-danger"
                     disabled={selectedIds.size === 0}
                     onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
                   >
-                    Delete Selected
+                    {t('program.deleteSelected')}
                   </button>
                   <button
                     className="programs-menu-item"
                     disabled={selectedIds.size === 0}
                     onClick={() => { setShowMenu(false); setShowComingSoon(true); }}
                   >
-                    Export Selected
+                    {t('program.exportSelected')}
                   </button>
                   <div className="programs-menu-divider" />
-                  <div className="programs-menu-section-label">Columns</div>
+                  <div className="programs-menu-section-label">{t('program.columnsLabel')}</div>
                   {columns.map((col) => (
                     <label key={col.key} className="programs-menu-column-option">
                       <input
@@ -683,7 +643,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
         <ProgramWeekView
           programs={data}
           model={model}
-          onEditProgram={setViewingEntity}
+          onEditProgram={setEditingEntity}
           weekStart={weekStartDate}
         />
       )}
@@ -692,7 +652,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
         <ProgramMonthView
           programs={data}
           model={model}
-          onEditProgram={setViewingEntity}
+          onEditProgram={setEditingEntity}
           onSwitchToWeek={(date: Date) => {
             setActiveView('week');
             setWeekStartDate(date);

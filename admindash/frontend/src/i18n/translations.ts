@@ -152,6 +152,15 @@ export const translations: Record<Locale, Record<string, string>> = {
     'program.calendarTooltipWhere': 'Where',
     'program.calendarTooltipStatus': 'Status',
     'program.calendarTooltipDays': 'Days',
+    'program.editTitle': 'Edit Program',
+    'program.selectedSuffix': 'selected',
+    'program.moreActions': 'More actions',
+    'program.actionsLabel': 'Actions',
+    'program.columnsLabel': 'Columns',
+    'program.editSelected': 'Edit Selected',
+    'program.deleteSelected': 'Delete Selected',
+    'program.exportSelected': 'Export Selected',
+    'program.filterAll': 'All',
 
     // Lead
     'lead.title': 'Lead Management',
@@ -425,6 +434,15 @@ export const translations: Record<Locale, Record<string, string>> = {
     'program.calendarTooltipWhere': '\u5730\u70b9',
     'program.calendarTooltipStatus': '\u72b6\u6001',
     'program.calendarTooltipDays': '\u661f\u671f',
+    'program.editTitle': '\u7f16\u8f91\u8bfe\u7a0b',
+    'program.selectedSuffix': '\u9879\u5df2\u9009',
+    'program.moreActions': '\u66f4\u591a\u64cd\u4f5c',
+    'program.actionsLabel': '\u64cd\u4f5c',
+    'program.columnsLabel': '\u5217',
+    'program.editSelected': '\u7f16\u8f91\u6240\u9009',
+    'program.deleteSelected': '\u5220\u9664\u6240\u9009',
+    'program.exportSelected': '\u5bfc\u51fa\u6240\u9009',
+    'program.filterAll': '\u5168\u90e8',
 
     // Lead
     'lead.title': '\u5ba2\u6237\u7ba1\u7406',
