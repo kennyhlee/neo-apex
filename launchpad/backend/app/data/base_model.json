@@ -2,10 +2,16 @@
   "tenant": {
     "base_fields": [
       {"name": "name", "type": "str", "required": true},
-      {"name": "address", "type": "str", "required": false},
-      {"name": "phone", "type": "phone", "required": false},
-      {"name": "email", "type": "email", "required": false},
-      {"name": "website", "type": "str", "required": false}
+      {"name": "display_name", "type": "str", "required": false},
+      {"name": "contact_email", "type": "email", "required": false},
+      {"name": "contact_phone", "type": "phone", "required": false},
+      {"name": "primary_address", "type": "str", "required": false},
+      {"name": "mailing_address", "type": "str", "required": false},
+      {"name": "license_number", "type": "str", "required": false},
+      {"name": "capacity", "type": "number", "required": false},
+      {"name": "accreditation", "type": "str", "required": false},
+      {"name": "insurance_provider", "type": "str", "required": false},
+      {"name": "note", "type": "str", "required": false}
     ],
     "custom_fields": []
   },
