@@ -83,11 +83,18 @@ export default function ReviewPage() {
     );
   }
 
-  const baseCount = extraction.entities.reduce(
+  // The Tenant entity is not exposed in the model-setup UI (issue #76): its
+  // schema is pre-determined and its data is managed on the LaunchPad tenant
+  // settings page. It remains in `extraction` so finalize still persists it.
+  const visibleEntities = extraction.entities.filter(
+    (e) => e.entity_type !== "TENANT"
+  );
+
+  const baseCount = visibleEntities.reduce(
     (sum, e) => sum + e.field_mappings.filter((m) => m.source === "base_model").length,
     0
   );
-  const customCount = extraction.entities.reduce(
+  const customCount = visibleEntities.reduce(
     (sum, e) => sum + e.field_mappings.filter((m) => m.source === "custom_field").length,
     0
   );
@@ -112,7 +119,7 @@ export default function ReviewPage() {
         <div className="review__stats">
           <div className="review__stat">
             <span className="review__stat-value">
-              {extraction.entities.length}
+              {visibleEntities.length}
             </span>
             <span className="review__stat-label">Entities</span>
           </div>
@@ -154,14 +161,16 @@ export default function ReviewPage() {
         )}
 
         <div className="review__entities">
-          {extraction.entities.map((entity, idx) => (
-            <EntityCard
-              key={`${entity.entity_type}-${idx}`}
-              entity={entity}
-              index={idx}
-              onUpdate={handleEntityUpdate}
-            />
-          ))}
+          {extraction.entities.map((entity, idx) =>
+            entity.entity_type === "TENANT" ? null : (
+              <EntityCard
+                key={`${entity.entity_type}-${idx}`}
+                entity={entity}
+                index={idx}
+                onUpdate={handleEntityUpdate}
+              />
+            )
+          )}
         </div>
       </div>
     </div>

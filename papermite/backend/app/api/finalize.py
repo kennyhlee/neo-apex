@@ -268,16 +268,23 @@ async def finalize_commit(
     )
     if tenant_entity is not None:
         extracted_base, extracted_custom = _split_extracted_tenant(tenant_entity)
-        if extracted_base or extracted_custom:
+        # The tenant schema is pre-determined and takes no custom fields
+        # (issue #76): fold any extra extracted fields into the `note` field so
+        # the information is preserved rather than stored as custom columns.
+        if extracted_custom:
+            extra = "; ".join(f"{k}: {v}" for k, v in extracted_custom.items())
+            base_note = str(extracted_base.get("note", "")).strip()
+            extracted_base["note"] = f"{base_note}\n{extra}".strip() if base_note else extra
+        if extracted_base:
             cleaned = _fetch_existing_tenant_row(tenant_id)
             existing_base, existing_custom = _split_existing_tenant_row(cleaned)
             merged_base = _merge_fields(existing_base, extracted_base)
-            merged_custom = _merge_fields(existing_custom, extracted_custom)
-
+            # Do not introduce new custom fields for the tenant; preserve any
+            # that already exist on the row unchanged.
             try:
                 tenant_resp = httpx.put(
                     f"{settings.datacore_api_url}/tenants/{tenant_id}",
-                    json={"base_data": merged_base, "custom_fields": merged_custom},
+                    json={"base_data": merged_base, "custom_fields": existing_custom},
                     timeout=30.0,
                 )
             except httpx.HTTPError:
