@@ -4,7 +4,9 @@ import type { TestUser, TenantModel } from "../types/models";
 import {
   getAvailableModels,
   getActiveModel,
-  uploadDocument,
+  uploadDocuments,
+  mergeExtractionResults,
+  modelToExtraction,
 } from "../api/client";
 import { saveDraft } from "../db/indexedDb";
 import TenantInfo from "../components/TenantInfo";
@@ -23,9 +25,10 @@ export default function UploadPage({ user }: Props) {
   const [searchParams] = useSearchParams();
   const returnUrl = searchParams.get("return_url");
   const tenantIdParam = searchParams.get("tenant_id");
+  const isAppend = searchParams.get("mode") === "append";
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existingModel, setExistingModel] = useState<TenantModel | null>(null);
@@ -40,12 +43,22 @@ export default function UploadPage({ user }: Props) {
   }, [user.tenant_id]);
 
   const doUpload = async () => {
-    if (!file) return;
+    if (files.length === 0) return;
     setLoading(true);
     setError(null);
     setShowConfirm(false);
     try {
-      const result = await uploadDocument(tenantIdParam || user.tenant_id, file, selectedModel);
+      const extracted = await uploadDocuments(
+        tenantIdParam || user.tenant_id,
+        files,
+        selectedModel
+      );
+      // Append mode merges the new extraction into the existing model so the
+      // review reflects existing fields ∪ newly-discovered ones.
+      const result =
+        isAppend && existingModel
+          ? mergeExtractionResults(modelToExtraction(existingModel), extracted)
+          : extracted;
       await saveDraft(result);
       const forwardParams = new URLSearchParams();
       if (returnUrl) forwardParams.set("return_url", returnUrl);
@@ -59,8 +72,10 @@ export default function UploadPage({ user }: Props) {
   };
 
   const handleUpload = () => {
-    if (!file) return;
-    if (existingModel) {
+    if (files.length === 0) return;
+    // Append merges into the existing model (no replace prompt). A plain upload
+    // over an existing model still confirms the replace.
+    if (existingModel && !isAppend) {
       setShowConfirm(true);
     } else {
       doUpload();
@@ -71,10 +86,13 @@ export default function UploadPage({ user }: Props) {
     <div className="upload-page">
       <div className="page-header">
         <div className="page-header__eyebrow">Step 1 of 3</div>
-        <h1 className="page-header__title">Upload Document</h1>
+        <h1 className="page-header__title">
+          {isAppend ? "Add Documents to Model" : "Upload Documents"}
+        </h1>
         <p className="page-header__desc">
-          Upload your afterschool policy or application template. The AI will
-          extract entities and map them to the data model.
+          {isAppend
+            ? "Upload one or more additional documents. The AI extracts them and merges any newly-discovered fields into your existing model for review."
+            : "Upload one or more afterschool policy or application templates. The AI will extract entities and map them to the data model."}
         </p>
       </div>
 
@@ -98,7 +116,7 @@ export default function UploadPage({ user }: Props) {
           </div>
           <div className="upload-page__existing-model-text">
             <span className="upload-page__existing-model-label">
-              Active model exists
+              {isAppend ? "Merging into active model" : "Active model exists"}
             </span>
             <span className="upload-page__existing-model-detail">
               Source: <code>{existingModel.source_filename}</code> &middot;
@@ -110,7 +128,7 @@ export default function UploadPage({ user }: Props) {
       )}
 
       <div className="upload-page__form">
-        <FileUploader onFileSelect={setFile} disabled={loading} />
+        <FileUploader onFilesChange={setFiles} disabled={loading} />
 
         <div className="upload-page__options">
           <ModelSelector
@@ -130,7 +148,7 @@ export default function UploadPage({ user }: Props) {
             <button
               className="btn btn--primary"
               onClick={handleUpload}
-              disabled={!file || loading}
+              disabled={files.length === 0 || loading}
             >
               {loading ? (
                 <>

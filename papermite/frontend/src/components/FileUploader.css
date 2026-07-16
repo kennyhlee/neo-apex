@@ -62,21 +62,65 @@
   margin-top: 8px;
 }
 
-.file-uploader__selected {
+.file-uploader__list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.file-uploader__selected {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
 }
 
 .file-uploader__filename {
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 14px;
   color: var(--accent);
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-uploader__size {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-tertiary);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.file-uploader__remove {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.file-uploader__remove:hover {
+  color: var(--accent-danger, #d4537e);
+}
+
+.file-uploader__add-more {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 4px 0;
+  align-self: flex-start;
+}
+
+.file-uploader__add-more:hover {
+  text-decoration: underline;
 }
