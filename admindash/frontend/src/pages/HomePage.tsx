@@ -5,6 +5,7 @@ import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { postQuery } from '../api/client.ts';
 import CalendarChip from '../components/CalendarChip.tsx';
+import ProgramDetailModal from '../components/ProgramDetailModal.tsx';
 import { timeToMinutes } from '../components/calendarTime.ts';
 import {
   getDateFields,
@@ -42,6 +43,7 @@ export default function HomePage({ tenant }: HomePageProps) {
   const [programs, setPrograms] = useState<ProgramRow[]>([]);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(true);
+  const [detailProgram, setDetailProgram] = useState<ProgramRow | null>(null);
 
   useEffect(() => {
     if (!tenant) return;
@@ -227,7 +229,7 @@ export default function HomePage({ tenant }: HomePageProps) {
                       <CalendarChip
                         key={String(program.entity_id ?? program.program_id ?? `${idx}-${i}`)}
                         program={program}
-                        onEdit={() => navigate('/programs')}
+                        onEdit={setDetailProgram}
                       />
                     ))}
                   </div>
@@ -237,6 +239,12 @@ export default function HomePage({ tenant }: HomePageProps) {
           )}
         </div>
       </div>
+
+      <ProgramDetailModal
+        program={detailProgram}
+        model={model ?? null}
+        onClose={() => setDetailProgram(null)}
+      />
     </div>
   );
 }
