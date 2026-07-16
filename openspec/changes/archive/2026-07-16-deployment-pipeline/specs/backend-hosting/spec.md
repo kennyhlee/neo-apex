@@ -2,7 +2,7 @@
 
 ### Requirement: Each backend runs as a dedicated Fly.io app
 
-The system SHALL host each of `datacore`, `launchpad` backend, `papermite` backend, and `admindash` backend as a distinct Fly.io application. Each app MUST have its own `fly.toml` configuration file committed to the repo at the service root (`datacore/fly.toml`, `launchpad/backend/fly.toml`, `papermite/backend/fly.toml`, `admindash/backend/fly.toml`). Deploying one app MUST NOT cause any other app to be restarted or reconfigured.
+The system SHALL host each of `datacore`, `launchpad` backend, `papermite` backend, and `admindash` backend as a distinct Fly.io application. Each app MUST have its own `fly.toml` configuration file committed to the repo at the module root (`datacore/fly.toml`, `launchpad/fly.toml`, `papermite/fly.toml`, `admindash/fly.toml`). Deploying one app MUST NOT cause any other app to be restarted or reconfigured.
 
 #### Scenario: Launchpad deploy does not restart DataCore
 - **WHEN** the release pipeline deploys `launchpad-api` to Fly.io
@@ -14,7 +14,7 @@ The system SHALL host each of `datacore`, `launchpad` backend, `papermite` backe
 
 #### Scenario: Each app has its own fly.toml
 - **WHEN** a developer inspects the repo
-- **THEN** `datacore/fly.toml`, `launchpad/backend/fly.toml`, `papermite/backend/fly.toml`, and `admindash/backend/fly.toml` each exist and declare a distinct `app =` name
+- **THEN** `datacore/fly.toml`, `launchpad/fly.toml`, `papermite/fly.toml`, and `admindash/fly.toml` each exist and declare a distinct `app =` name
 
 ### Requirement: DataCore is reachable only on the Fly private network
 

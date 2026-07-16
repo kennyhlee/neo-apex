@@ -1,3 +1,5 @@
+> **Implementation note (2026-07-15):** Shipped and live. The frontends were implemented on **Cloudflare Workers (Static Assets)** rather than Cloudflare Pages (git-integrated builds); they deploy via `.github/workflows/deploy.yml` using `wrangler deploy` on release-tag publish, gated by the `production` GitHub Environment. `fly.toml` files live at each module root. The delta specs in this change have been updated to reflect the as-built system; the prose below is the original proposal.
+
 ## Why
 
 NeoApex has no production deployment story today. All services run locally via `start-services.sh`, there is no hosting, no CI/CD, no TLS, and no way to ship a new version of any module without manual work. To run Floatify as a real product we need a reliable, low-maintenance pipeline that can deploy each module independently as new releases are cut, so a bug fix in `papermite` never has to wait on unrelated work in `launchpad`, `datacore`, or `admindash`.
