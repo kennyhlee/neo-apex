@@ -159,6 +159,10 @@ class Tenant(BaseEntity):
     capacity: Optional[int] = None
     accreditation: Optional[str] = None
     insurance_provider: Optional[str] = None
+    # Free-text note holding any extra information extracted from documents.
+    # The tenant schema is pre-determined and takes no custom fields (issue #76);
+    # anything the AI extracts beyond these fields is folded into `note`.
+    note: str = ""
 
 
 # All entity classes that can be extracted from documents

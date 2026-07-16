@@ -211,9 +211,11 @@ def test_finalize_persists_extracted_tenant_when_row_empty():
     assert len(put_calls) == 2, put_calls
     assert "/models/t1" in put_calls[0]["url"]
     assert put_calls[1]["url"].endswith("/tenants/t1")
+    # Tenant takes no custom fields (issue #76): the extracted custom value is
+    # folded into `note`, and no custom fields are written for an empty row.
     assert put_calls[1]["json"] == {
-        "base_data": {"name": "Acme"},
-        "custom_fields": {"school_district_code": "DC-100"},
+        "base_data": {"name": "Acme", "note": "school_district_code: DC-100"},
+        "custom_fields": {},
     }
 
     # And we read existing first
@@ -287,9 +289,10 @@ def test_finalize_merges_with_existing_tenant_row():
     assert body["base_data"]["name"] == "User Typed Name"
     # contact_email was None in existing -> filled
     assert body["base_data"]["contact_email"] == "a@x.com"
-    # school_district_code was "" in existing -> filled
-    assert body["custom_fields"]["school_district_code"] == "DC-100"
-    # legacy_marker was non-empty and absent from extraction -> preserved
+    # Extracted custom (school_district_code) is folded into note, not custom
+    # fields (issue #76).
+    assert body["base_data"]["note"] == "school_district_code: DC-100"
+    # legacy_marker was non-empty and absent from extraction -> preserved as-is
     assert body["custom_fields"]["legacy_marker"] == "keep-me"
 
 
