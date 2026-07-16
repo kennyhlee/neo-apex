@@ -197,70 +197,65 @@
   border-radius: var(--radius-sm);
 }
 
+.schedule-day-header-today {
+  background: var(--accent-muted, #E6F0FB);
+  color: var(--accent, #378ADD);
+}
+
+.schedule-day-label {
+  display: block;
+}
+
+.schedule-day-num {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.schedule-day-header-today .schedule-day-num {
+  color: var(--accent, #378ADD);
+}
+
 .schedule-day-cell {
   min-height: 80px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 0.35rem;
-}
-
-.schedule-event {
-  padding: 0.35rem 0.5rem;
-  border-radius: var(--radius-sm);
-  margin-bottom: 0.3rem;
-  cursor: pointer;
-  border-left: 3px solid;
-}
-
-.schedule-event.course {
-  background: rgba(55, 138, 221, 0.08);
-  border-color: #378ADD;
-}
-
-.schedule-event.meeting {
-  background: rgba(239, 159, 39, 0.1);
-  border-color: #EF9F27;
-}
-
-.schedule-event.activity {
-  background: rgba(99, 153, 34, 0.1);
-  border-color: #639922;
-}
-
-.schedule-event-time {
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.schedule-event-title {
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.schedule-event-location {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-}
-
-.schedule-legend {
   display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  padding: 0.75rem 1rem;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.75rem;
+.schedule-day-cell-today {
+  border-color: var(--accent, #378ADD);
+  background: var(--accent-muted, rgba(55, 138, 221, 0.06));
+}
+
+.schedule-week-range {
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
-.legend-color {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
+.schedule-viewall {
+  background: none;
+  border: none;
+  color: var(--accent, #378ADD);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.schedule-viewall:hover {
+  text-decoration: underline;
+}
+
+.schedule-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
 }
 
 @media (max-width: 992px) {
