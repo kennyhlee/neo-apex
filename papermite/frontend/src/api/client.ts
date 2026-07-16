@@ -101,13 +101,15 @@ export async function getActiveModel(
   return data;
 }
 
-export async function uploadDocument(
+export async function uploadDocuments(
   tenantId: string,
-  file: File,
+  files: File[],
   modelId: string
 ): Promise<ExtractionResult> {
   const formData = new FormData();
-  formData.append("file", file);
+  for (const file of files) {
+    formData.append("files", file);
+  }
   formData.append("model_id", modelId);
 
   const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/upload`, {
@@ -119,6 +121,63 @@ export async function uploadDocument(
     throw new Error(detail.detail || "Upload failed");
   }
   return res.json();
+}
+
+/**
+ * Merge a freshly-extracted ExtractionResult into an existing one (used when
+ * appending additional documents to an already-finalized model). For each
+ * entity type, the base's fields are kept and any newly-discovered fields from
+ * `incoming` are added; selection options present in both are unioned. Base
+ * field definitions (types, defaults, required) always win — appending adds
+ * coverage, it never rewrites the existing schema.
+ */
+export function mergeExtractionResults(
+  base: ExtractionResult,
+  incoming: ExtractionResult
+): ExtractionResult {
+  const byType = new Map<string, EntityResult>();
+  for (const entity of base.entities) {
+    byType.set(entity.entity_type, {
+      ...entity,
+      entity: { ...entity.entity },
+      field_mappings: entity.field_mappings.map((m) => ({ ...m })),
+    });
+  }
+
+  for (const incomingEntity of incoming.entities) {
+    const existing = byType.get(incomingEntity.entity_type);
+    if (!existing) {
+      byType.set(incomingEntity.entity_type, {
+        ...incomingEntity,
+        entity: { ...incomingEntity.entity },
+        field_mappings: incomingEntity.field_mappings.map((m) => ({ ...m })),
+      });
+      continue;
+    }
+    const indexByName = new Map(
+      existing.field_mappings.map((m, i) => [m.field_name, i] as const)
+    );
+    for (const mapping of incomingEntity.field_mappings) {
+      const idx = indexByName.get(mapping.field_name);
+      if (idx === undefined) {
+        indexByName.set(mapping.field_name, existing.field_mappings.length);
+        existing.field_mappings.push({ ...mapping });
+        existing.entity[mapping.field_name] = mapping.value;
+      } else if (mapping.field_type === "selection" && mapping.options?.length) {
+        const current = existing.field_mappings[idx];
+        const merged = [...(current.options ?? [])];
+        for (const opt of mapping.options) {
+          if (!merged.includes(opt)) merged.push(opt);
+        }
+        existing.field_mappings[idx] = { ...current, options: merged };
+      }
+    }
+  }
+
+  return {
+    ...base,
+    entities: Array.from(byType.values()),
+  };
 }
 
 /**

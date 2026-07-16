@@ -26,6 +26,7 @@ export default function LandingPage({ user }: Props) {
   }, [user.tenant_id]);
 
   const forwardQs = returnUrl ? `?return_url=${encodeURIComponent(returnUrl)}` : "";
+  const appendQs = forwardQs ? `${forwardQs}&mode=append` : "?mode=append";
 
   const handleEditModel = async () => {
     if (!model) return;
@@ -157,6 +158,38 @@ export default function LandingPage({ user }: Props) {
 
             <div
               className="landing__action-card card"
+              onClick={() => navigate(`/upload${appendQs}`)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === "Enter" && navigate(`/upload${appendQs}`)}
+            >
+              <div className="landing__action-icon">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="12" y1="12" x2="12" y2="18" />
+                  <line x1="9" y1="15" x2="15" y2="15" />
+                </svg>
+              </div>
+              <div className="landing__action-content">
+                <h3 className="landing__action-title">Add Documents to Model</h3>
+                <p className="landing__action-desc">
+                  Upload additional documents. Newly-discovered fields are merged
+                  into the current model for review before saving a new version.
+                </p>
+              </div>
+              <div className="landing__action-arrow">&rarr;</div>
+            </div>
+
+            <div
+              className="landing__action-card card"
               onClick={() => navigate(`/upload${forwardQs}`)}
               role="button"
               tabIndex={0}
@@ -180,7 +213,7 @@ export default function LandingPage({ user }: Props) {
               <div className="landing__action-content">
                 <h3 className="landing__action-title">Upload New Document</h3>
                 <p className="landing__action-desc">
-                  Upload a revised document to re-extract and update the model.
+                  Upload a revised document to re-extract and replace the model.
                   The current version will be archived.
                 </p>
               </div>

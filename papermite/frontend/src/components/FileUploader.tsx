@@ -2,22 +2,46 @@ import { useCallback, useState } from "react";
 import "./FileUploader.css";
 
 interface Props {
-  onFileSelect: (file: File) => void;
+  /** Called whenever the selected file set changes. */
+  onFilesChange: (files: File[]) => void;
   disabled?: boolean;
 }
 
 const ACCEPTED = ".pdf,.docx,.txt";
 
-export default function FileUploader({ onFileSelect, disabled }: Props) {
+export default function FileUploader({ onFilesChange, disabled }: Props) {
   const [dragOver, setDragOver] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
 
-  const handleFile = useCallback(
-    (file: File) => {
-      setSelectedFile(file);
-      onFileSelect(file);
+  const addFiles = useCallback(
+    (incoming: File[]) => {
+      setFiles((prev) => {
+        // De-dupe by name + size so re-dropping the same file is a no-op.
+        const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
+        const next = [...prev];
+        for (const f of incoming) {
+          const key = `${f.name}:${f.size}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            next.push(f);
+          }
+        }
+        onFilesChange(next);
+        return next;
+      });
     },
-    [onFileSelect]
+    [onFilesChange]
+  );
+
+  const removeFile = useCallback(
+    (index: number) => {
+      setFiles((prev) => {
+        const next = prev.filter((_, i) => i !== index);
+        onFilesChange(next);
+        return next;
+      });
+    },
+    [onFilesChange]
   );
 
   const handleDrop = useCallback(
@@ -25,18 +49,20 @@ export default function FileUploader({ onFileSelect, disabled }: Props) {
       e.preventDefault();
       setDragOver(false);
       if (disabled) return;
-      const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
+      const dropped = Array.from(e.dataTransfer.files);
+      if (dropped.length) addFiles(dropped);
     },
-    [disabled, handleFile]
+    [disabled, addFiles]
   );
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
+      const picked = Array.from(e.target.files ?? []);
+      if (picked.length) addFiles(picked);
+      // Reset so selecting the same file again still fires change.
+      e.target.value = "";
     },
-    [handleFile]
+    [addFiles]
   );
 
   return (
@@ -65,31 +91,60 @@ export default function FileUploader({ onFileSelect, disabled }: Props) {
             <polyline points="9 15 12 12 15 15" />
           </svg>
         </div>
-        {selectedFile ? (
-          <div className="file-uploader__selected">
-            <span className="file-uploader__filename">
-              {selectedFile.name}
-            </span>
-            <span className="file-uploader__size">
-              {(selectedFile.size / 1024).toFixed(1)} KB
-            </span>
+        {files.length > 0 ? (
+          <div className="file-uploader__list">
+            {files.map((file, i) => (
+              <div key={`${file.name}:${file.size}`} className="file-uploader__selected">
+                <span className="file-uploader__filename">{file.name}</span>
+                <span className="file-uploader__size">
+                  {(file.size / 1024).toFixed(1)} KB
+                </span>
+                {!disabled && (
+                  <button
+                    type="button"
+                    className="file-uploader__remove"
+                    onClick={() => removeFile(i)}
+                    title="Remove file"
+                    aria-label={`Remove ${file.name}`}
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
+            ))}
+            {!disabled && (
+              <label className="file-uploader__add-more">
+                + Add more files
+                <input
+                  type="file"
+                  accept={ACCEPTED}
+                  multiple
+                  onChange={handleChange}
+                  hidden
+                  disabled={disabled}
+                />
+              </label>
+            )}
           </div>
         ) : (
           <>
             <p className="file-uploader__text">
-              Drop your document here or{" "}
+              Drop your documents here or{" "}
               <label className="file-uploader__browse">
                 browse
                 <input
                   type="file"
                   accept={ACCEPTED}
+                  multiple
                   onChange={handleChange}
                   hidden
                   disabled={disabled}
                 />
               </label>
             </p>
-            <p className="file-uploader__hint">PDF, DOCX, or TXT</p>
+            <p className="file-uploader__hint">
+              PDF, DOCX, or TXT — one or more files
+            </p>
           </>
         )}
       </div>

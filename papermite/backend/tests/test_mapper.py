@@ -325,3 +325,37 @@ def test_placeholder_attendance_is_added_despite_no_raw_field():
 
     # tenant_id is the caller-provided value
     assert att.entity["tenant_id"] == "t1"
+
+
+# --- merge_raw_extractions (multi-file upload, issue #53) ---
+from app.services.mapper import merge_raw_extractions  # noqa: E402
+
+
+def test_merge_raw_extractions_unions_fields_across_files():
+    """Two files each contributing different student fields merge into one
+    student with the union of fields."""
+    file_a = RawExtraction(students=[{"first_name": "Ada", "grade_level": "3"}])
+    file_b = RawExtraction(students=[{"last_name": "Lovelace", "dob": "2015-01-01"}])
+
+    merged = merge_raw_extractions([file_a, file_b])
+    result = map_extraction(merged, "t1", "a.pdf, b.pdf")
+
+    students = [e for e in result.entities if e.entity_type == "STUDENT"]
+    assert len(students) == 1
+    names = {m.field_name for m in students[0].field_mappings}
+    assert {"first_name", "last_name", "grade_level", "dob"} <= names
+
+
+def test_merge_raw_extractions_merges_tenant_first_nonempty_wins():
+    file_a = RawExtraction(tenant={"tenant_name": "Acme", "address": ""})
+    file_b = RawExtraction(tenant={"tenant_name": "Ignored", "address": "123 Main St"})
+
+    merged = merge_raw_extractions([file_a, file_b])
+    assert merged.tenant["tenant_name"] == "Acme"  # first non-empty wins
+    assert merged.tenant["address"] == "123 Main St"  # blank filled by later file
+
+
+def test_merge_raw_extractions_empty_list_is_safe():
+    merged = merge_raw_extractions([])
+    assert merged.tenant is None
+    assert merged.students == []

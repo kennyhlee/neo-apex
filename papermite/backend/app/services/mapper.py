@@ -264,6 +264,31 @@ def _consolidate_entities(entities: list[EntityResult]) -> list[EntityResult]:
     return list(by_type.values())
 
 
+def merge_raw_extractions(raws: list[RawExtraction]) -> RawExtraction:
+    """Merge several per-file RawExtractions into one before mapping.
+
+    Entity lists are concatenated — `map_extraction`'s `_consolidate_entities`
+    then merges same-type entities into a single field union. The tenant dict is
+    shallow-merged, with the first non-empty value for each key winning so an
+    earlier document's data is not clobbered by a later blank.
+    """
+    merged = RawExtraction()
+    tenant: dict[str, Any] = {}
+    for raw in raws:
+        if raw.tenant:
+            for key, value in raw.tenant.items():
+                if key not in tenant or tenant[key] in (None, "", [], {}):
+                    tenant[key] = value
+        merged.programs.extend(raw.programs)
+        merged.students.extend(raw.students)
+        merged.families.extend(raw.families)
+        merged.contacts.extend(raw.contacts)
+        merged.enrollments.extend(raw.enrollments)
+        merged.registration_applications.extend(raw.registration_applications)
+    merged.tenant = tenant or None
+    return merged
+
+
 def map_extraction(raw: RawExtraction, tenant_id: str, filename: str) -> ExtractionResult:
     """Map a RawExtraction into an ExtractionResult with field provenance."""
     entities: list[EntityResult] = []
