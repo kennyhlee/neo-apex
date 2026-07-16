@@ -1,0 +1,116 @@
+.pdm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.pdm-dialog {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated);
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pdm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-subtle, var(--border-primary));
+}
+
+.pdm-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pdm-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pdm-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.pdm-x {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.pdm-x:hover {
+  color: var(--text-primary);
+}
+
+.pdm-body {
+  padding: 1rem 1.25rem;
+  overflow-y: auto;
+}
+
+.pdm-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 40%) 1fr;
+  gap: 0.5rem 1rem;
+}
+
+.pdm-field {
+  display: contents;
+}
+
+.pdm-label {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+}
+
+.pdm-value {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  padding: 4px 0;
+  word-break: break-word;
+}
+
+.pdm-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border-subtle, var(--border-primary));
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pdm-close-btn {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 16px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary, transparent);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.pdm-close-btn:hover {
+  background: var(--bg-secondary, var(--bg-tertiary));
+}

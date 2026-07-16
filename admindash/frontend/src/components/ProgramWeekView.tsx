@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
-import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
+import type { ModelDefinition } from '../types/models.ts';
 import CalendarChip from './CalendarChip.tsx';
+import { getDateFields, getWeekStart, getProgramsForDay, isSameDay } from './programWeek.ts';
 import './ProgramCalendar.css';
 
 type DataRow = Record<string, unknown>;
@@ -13,75 +14,6 @@ interface ProgramWeekViewProps {
   model: ModelDefinition | null;
   onEditProgram: (program: DataRow) => void;
   weekStart?: Date;
-}
-
-/** Returns all date/datetime fields from the model definition. */
-function getDateFields(model: ModelDefinition): ModelFieldDefinition[] {
-  const all = [...model.base_fields, ...model.custom_fields];
-  return all.filter((f) => f.type === 'date' || f.type === 'datetime');
-}
-
-/** Returns the Monday of the week containing the given date. */
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay(); // 0=Sun, 1=Mon, …
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-/** Parses a string value to a Date, or returns null. */
-function parseDateValue(value: unknown): Date | null {
-  if (!value || typeof value !== 'string') return null;
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) {
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  }
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-/** Returns true if two dates fall on the same calendar day. */
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-/** Day name lookup: JS getDay() (0=Sun) → day name strings. */
-const JS_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-/**
- * Parse a days_of_week field value into a Set of JS day indices (0=Sun..6=Sat).
- * Handles JSON arrays like '["Monday","Tuesday"]', comma-separated, or single values.
- * Returns null if no valid days found (meaning: show on all days).
- */
-function parseDaysOfWeek(value: unknown): Set<number> | null {
-  if (value == null || value === '') return null;
-  let dayNames: string[] = [];
-  const s = String(value).trim();
-  if (s.startsWith('[')) {
-    try { dayNames = JSON.parse(s); } catch { dayNames = [s]; }
-  } else {
-    dayNames = s.split(',').map((d) => d.trim());
-  }
-  const indices = new Set<number>();
-  for (const name of dayNames) {
-    const idx = JS_DAY_NAMES.findIndex((d) => d.toLowerCase() === name.toLowerCase());
-    if (idx >= 0) indices.add(idx);
-  }
-  return indices.size > 0 ? indices : null;
-}
-
-/** Returns true if date falls within [start, end] (inclusive, day-level). */
-function isInRange(date: Date, start: Date, end: Date): boolean {
-  const d = date.getTime();
-  const s = new Date(start); s.setHours(0, 0, 0, 0);
-  const e = new Date(end); e.setHours(23, 59, 59, 999);
-  return d >= s.getTime() && d <= e.getTime();
 }
 
 export default function ProgramWeekView({
@@ -161,36 +93,6 @@ export default function ProgramWeekView({
   const startField = dateFields[0];
   const endField = dateFields.length >= 2 ? dateFields[1] : null;
 
-  // Map: dayIndex (0–6) → programs that appear on that day
-  function getProgramsForDay(day: Date): Array<{ program: DataRow; index: number }> {
-    const result: Array<{ program: DataRow; index: number }> = [];
-    for (let i = 0; i < programs.length; i++) {
-      const program = programs[i];
-      const startDate = parseDateValue(program[startField.name]);
-      if (!startDate) continue;
-
-      // Check days_of_week constraint
-      const allowedDays = parseDaysOfWeek(program.days_of_week);
-      if (allowedDays && !allowedDays.has(day.getDay())) continue;
-
-      if (endField) {
-        const endDate = parseDateValue(program[endField.name]);
-        if (endDate) {
-          if (isInRange(day, startDate, endDate)) {
-            result.push({ program, index: i });
-          }
-          continue;
-        }
-      }
-
-      // No end field or end date not parseable — just check start date
-      if (isSameDay(day, startDate)) {
-        result.push({ program, index: i });
-      }
-    }
-    return result;
-  }
-
   return (
     <div>
       {/* Navigation */}
@@ -205,7 +107,7 @@ export default function ProgramWeekView({
       <div className="calendar-week-grid">
         {weekDays.map((day, dayIndex) => {
           const isToday = isSameDay(day, today);
-          const programsOnDay = getProgramsForDay(day);
+          const programsOnDay = getProgramsForDay(programs, day, startField, endField);
 
           return (
             <div

@@ -42,6 +42,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'homepage.todoItems': 'To-Do Items',
     'homepage.announcements': 'Announcements',
     'homepage.weeklySchedule': 'Weekly Schedule',
+    'homepage.programsThisWeek': 'Programs This Week',
+    'homepage.viewAllPrograms': 'View all',
+    'homepage.scheduleNoDateFields': 'No date fields in the program model. Add start/end date fields via Papermite to see the weekly schedule.',
+    'homepage.scheduleNoPrograms': 'No programs scheduled for this week.',
 
     // Students
     'students.title': 'Student Management',
@@ -311,6 +315,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'homepage.todoItems': '\u5f85\u529e\u4e8b\u9879',
     'homepage.announcements': '\u901a\u77e5\u516c\u544a',
     'homepage.weeklySchedule': '\u5468\u8bfe\u8868\u5b89\u6392',
+    'homepage.programsThisWeek': '\u672c\u5468\u8bfe\u7a0b',
+    'homepage.viewAllPrograms': '\u67e5\u770b\u5168\u90e8',
+    'homepage.scheduleNoDateFields': '\u8bfe\u7a0b\u6a21\u578b\u4e2d\u6ca1\u6709\u65e5\u671f\u5b57\u6bb5\u3002\u8bf7\u901a\u8fc7 Papermite \u6dfb\u52a0\u5f00\u59cb/\u7ed3\u675f\u65e5\u671f\u5b57\u6bb5\u4ee5\u67e5\u770b\u5468\u8bfe\u8868\u3002',
+    'homepage.scheduleNoPrograms': '\u672c\u5468\u6ca1\u6709\u5b89\u6392\u8bfe\u7a0b\u3002',
 
     // Students
     'students.title': '\u5b66\u751f\u7ba1\u7406\u7cfb\u7edf',

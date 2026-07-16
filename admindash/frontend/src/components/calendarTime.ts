@@ -50,6 +50,15 @@ function parseTimeString(value: unknown): ParsedTime | null {
   return { h, m };
 }
 
+/**
+ * Parse a loose time string to minutes-since-midnight, or null if unparseable.
+ * Useful for ordering same-day events chronologically. Never throws.
+ */
+export function timeToMinutes(value: unknown): number | null {
+  const p = parseTimeString(value);
+  return p ? p.h * 60 + p.m : null;
+}
+
 interface FormattedTime {
   text: string;
   meridiem: 'a' | 'p';
