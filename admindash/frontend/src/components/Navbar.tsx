@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
+import { postQuery } from '../api/client.ts';
 import type { Locale } from '../i18n/translations.ts';
 import './Navbar.css';
 
@@ -8,6 +10,33 @@ export default function Navbar() {
   const { t, locale, setLocale } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  // The upper-right label shows the tenant's display name (issue #76), fetched
+  // from the tenant row. Falls back to the legal tenant_name from the user
+  // profile until (or unless) a display name is available.
+  const [tenantDisplayName, setTenantDisplayName] = useState<string>('');
+  useEffect(() => {
+    const tid = user?.tenant_id;
+    if (!tid) return;
+    let cancelled = false;
+    postQuery(
+      tid,
+      'tenants',
+      "SELECT * FROM data WHERE entity_type = 'tenant' AND _status = 'active'",
+    )
+      .then((res) => {
+        if (cancelled) return;
+        const row = res.data?.[0];
+        const dn = row && typeof row.display_name === 'string' ? row.display_name.trim() : '';
+        if (dn) setTenantDisplayName(dn);
+      })
+      .catch(() => {
+        /* fall back to tenant_name */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.tenant_id]);
 
   const navItems = [
     { to: '/home', label: t('nav.home') },
@@ -18,7 +47,7 @@ export default function Navbar() {
 
   const displayName = user?.name ?? 'User';
   const avatarInitial = displayName.charAt(0).toUpperCase();
-  const tenantName = user?.tenant_name ?? '';
+  const tenantName = (tenantDisplayName || user?.tenant_name) ?? '';
 
   function handleLogout() {
     logout();
