@@ -33,8 +33,8 @@ export default function LoginPage() {
         <div className="login-card-body">
           <div className="login-logo">
             <img
-              src="https://www.acmeschool.com/uploads/2/7/1/4/27147223/1418317113.png"
-              alt="Logo"
+              src="/favicon.svg"
+              alt="Floatify"
             />
           </div>
           <h1 className="login-title">{t('login.title')}</h1>

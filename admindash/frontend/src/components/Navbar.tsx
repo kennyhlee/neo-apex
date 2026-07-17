@@ -59,8 +59,8 @@ export default function Navbar() {
       <div className="navbar-inner">
         <a className="navbar-brand" href="/">
           <img
-            src="https://www.acmeschool.com/uploads/2/7/1/4/27147223/1418317113.png"
-            alt="Logo"
+            src="/favicon.svg"
+            alt="Floatify"
           />
           <span className="navbar-brand-text" style={{ color: '#378ADD' }}>{t('nav.systemName')}</span>
         </a>
