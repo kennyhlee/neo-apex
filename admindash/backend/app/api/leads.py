@@ -260,7 +260,7 @@ def convert_lead(tenant_id: str, lead_id: str, body: ConvertRequest,
     if body.target_stage is not None and body.target_stage not in opts:
         raise HTTPException(400, f"Unknown target stage: {body.target_stage}")
     target = body.target_stage or opts[-1]
-    prev_stage = base.get("stage")
+    prev_stage = base.get("stage") or opts[0]
     base["stage"] = target
     _dc_update(tenant_id, "lead", lead_id, base, token)
     if prev_stage != target:
