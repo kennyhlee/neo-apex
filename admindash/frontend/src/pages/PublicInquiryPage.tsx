@@ -8,7 +8,7 @@ import './PublicInquiryPage.css';
 
 const DEFAULT_FIELDS: LeadModelField[] = [
   { name: 'guardian_name', type: 'str', required: true },
-  { name: 'email', type: 'email', required: true },
+  { name: 'email', type: 'email', required: false },
   { name: 'phone', type: 'phone', required: false },
   { name: 'student_first_name', type: 'str', required: false },
   { name: 'student_last_name', type: 'str', required: false },

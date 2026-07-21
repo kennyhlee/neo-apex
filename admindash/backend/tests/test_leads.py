@@ -470,12 +470,15 @@ def test_public_intake_source_field_overridden(client):
 # ── public lead model route ───────────────────────────────────────────────────
 
 
-def _stub_query_with_base_fields(mock, *, base_fields=None):
-    """Stub /api/query so models table returns a lead model with given base_fields list."""
+def _stub_query_with_base_fields(mock, *, base_fields=None, custom_fields=None):
+    """Stub /api/query so models table returns a lead model with given base_fields and custom_fields lists."""
     def responder(request):
         body = _j.loads(request.content)
         if body.get("table") == "models":
-            data = [{"model_definition": {"lead": {"base_fields": base_fields, "custom_fields": []}}}] if base_fields is not None else []
+            data = [{"model_definition": {"lead": {
+                "base_fields": base_fields,
+                "custom_fields": custom_fields or [],
+            }}}] if base_fields is not None else []
             return httpx.Response(200, json={"data": data, "total": len(data)})
         return httpx.Response(200, json={"data": [], "total": 0})
     mock.post("http://localhost:5800/api/query").mock(side_effect=responder)
@@ -483,19 +486,21 @@ def _stub_query_with_base_fields(mock, *, base_fields=None):
 
 @respx.mock
 def test_public_model_returns_prospect_fields_from_model(client):
-    """Model's base_fields are returned minus all four reserved fields."""
+    """Model's base_fields + custom_fields are returned minus all four reserved fields."""
     _stub_query_with_base_fields(respx, base_fields=[
         {"name": "guardian_name", "type": "str", "required": True},
-        {"name": "hear_about_us", "type": "str", "required": False},
         {"name": "stage", "type": "selection", "required": False},
         {"name": "source", "type": "str", "required": False},
         {"name": "lead_id", "type": "str", "required": False},
         {"name": "converted_family_id", "type": "str", "required": False},
+    ], custom_fields=[
+        {"name": "hear_about_us", "type": "str", "required": False},
     ])
     resp = client.get("/api/public/leads/t1/model")
     assert resp.status_code == 200
     names = [f["name"] for f in resp.json()["fields"]]
     assert "guardian_name" in names
+    # custom_fields must be surfaced on the public form
     assert "hear_about_us" in names
     for reserved in ("stage", "source", "lead_id", "converted_family_id"):
         assert reserved not in names

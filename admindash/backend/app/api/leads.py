@@ -190,7 +190,8 @@ def public_lead_model(tenant_id: str):
     if model is None:
         fields = _default_prospect_fields()
     else:
-        fields = [f for f in model.get("base_fields", []) if f.get("name") not in RESERVED_LEAD_FIELDS]
+        all_fields = model.get("base_fields", []) + model.get("custom_fields", [])
+        fields = [f for f in all_fields if f.get("name") not in RESERVED_LEAD_FIELDS]
         if not fields:
             fields = _default_prospect_fields()
     return {"fields": fields}
@@ -310,12 +311,13 @@ def list_activities(tenant_id: str, lead_id: str, user=Depends(require_authentic
 @router.patch("/leads/{tenant_id}/{lead_id}/stage")
 def update_stage(tenant_id: str, lead_id: str, body: StageUpdate,
                  user=Depends(require_authenticated_user)):
-    if body.stage not in _stage_options(tenant_id, user["_token"]):
+    opts = _stage_options(tenant_id, user["_token"])
+    if body.stage not in opts:
         raise HTTPException(400, f"Unknown stage: {body.stage}")
     lead = _get_lead(tenant_id, lead_id, user["_token"])
     if not lead:
         raise HTTPException(404, "Lead not found")
-    current = lead.get("stage", "New")
+    current = lead.get("stage") or opts[0]
     base = _lead_base_data(lead)
     base["stage"] = body.stage
     updated = _dc_update(tenant_id, "lead", lead_id, base, user["_token"])
