@@ -12,6 +12,7 @@ router = APIRouter()
 
 DEFAULT_STAGES = ["New", "Contacted", "Tour Scheduled", "Toured", "Enrolled", "Lost"]
 ACTIVITY_TYPES = {"call", "email", "note"}
+RESERVED_LEAD_FIELDS = {"stage", "source", "converted_family_id", "lead_id"}
 
 
 # ── DataCore client helpers (sync httpx so respx intercepts) ──────────────
@@ -83,6 +84,19 @@ def _stage_options(tenant: str, token: str | None) -> list[str]:
             if f.get("name") == "stage" and f.get("options"):
                 return f["options"]
     return DEFAULT_STAGES
+
+
+def _default_prospect_fields() -> list[dict]:
+    """Default prospect field definitions used when a tenant has no lead model."""
+    return [
+        {"name": "guardian_name", "type": "str", "required": True},
+        {"name": "email", "type": "email", "required": False},
+        {"name": "phone", "type": "phone", "required": False},
+        {"name": "student_first_name", "type": "str", "required": False},
+        {"name": "student_last_name", "type": "str", "required": False},
+        {"name": "grade_of_interest", "type": "str", "required": False},
+        {"name": "message", "type": "str", "required": False},
+    ]
 
 
 def _get_lead(tenant: str, lead_id: str, token: str | None) -> dict | None:
@@ -166,6 +180,20 @@ def public_intake(tenant_id: str, body: PublicLeadCreate):
         base.pop(k, None)
     base.update({"source": "web_form", "stage": _stage_options(tenant_id, None)[0]})
     return _dc_create(tenant_id, "lead", base, None)
+
+
+@router.get("/public/leads/{tenant_id}/model")
+def public_lead_model(tenant_id: str):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", tenant_id):
+        raise HTTPException(404, "Unknown tenant")
+    model = _lead_model(tenant_id, None)
+    if model is None:
+        fields = _default_prospect_fields()
+    else:
+        fields = [f for f in model.get("base_fields", []) if f.get("name") not in RESERVED_LEAD_FIELDS]
+        if not fields:
+            fields = _default_prospect_fields()
+    return {"fields": fields}
 
 
 @router.post("/leads/{tenant_id}", status_code=201)

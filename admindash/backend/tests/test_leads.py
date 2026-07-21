@@ -465,3 +465,62 @@ def test_public_intake_source_field_overridden(client):
     assert b["source"] == "web_form"
     assert b["stage"] == "New"
     assert "converted_family_id" not in b
+
+
+# ── public lead model route ───────────────────────────────────────────────────
+
+
+def _stub_query_with_base_fields(mock, *, base_fields=None):
+    """Stub /api/query so models table returns a lead model with given base_fields list."""
+    def responder(request):
+        body = _j.loads(request.content)
+        if body.get("table") == "models":
+            data = [{"model_definition": {"lead": {"base_fields": base_fields, "custom_fields": []}}}] if base_fields is not None else []
+            return httpx.Response(200, json={"data": data, "total": len(data)})
+        return httpx.Response(200, json={"data": [], "total": 0})
+    mock.post("http://localhost:5800/api/query").mock(side_effect=responder)
+
+
+@respx.mock
+def test_public_model_returns_prospect_fields_from_model(client):
+    """Model's base_fields are returned minus all four reserved fields."""
+    _stub_query_with_base_fields(respx, base_fields=[
+        {"name": "guardian_name", "type": "str", "required": True},
+        {"name": "hear_about_us", "type": "str", "required": False},
+        {"name": "stage", "type": "selection", "required": False},
+        {"name": "source", "type": "str", "required": False},
+        {"name": "lead_id", "type": "str", "required": False},
+        {"name": "converted_family_id", "type": "str", "required": False},
+    ])
+    resp = client.get("/api/public/leads/t1/model")
+    assert resp.status_code == 200
+    names = [f["name"] for f in resp.json()["fields"]]
+    assert "guardian_name" in names
+    assert "hear_about_us" in names
+    for reserved in ("stage", "source", "lead_id", "converted_family_id"):
+        assert reserved not in names
+
+
+@respx.mock
+def test_public_model_falls_back_to_defaults(client):
+    """When models query returns empty, default prospect fields are returned."""
+    _stub_query_with_base_fields(respx, base_fields=None)
+    resp = client.get("/api/public/leads/t1/model")
+    assert resp.status_code == 200
+    names = [f["name"] for f in resp.json()["fields"]]
+    assert "guardian_name" in names
+    assert "stage" not in names
+
+
+@respx.mock
+def test_public_model_no_jwt_required(client):
+    """Endpoint must not 401 when no Authorization header is sent."""
+    _stub_query_with_base_fields(respx, base_fields=None)
+    resp = client.get("/api/public/leads/t1/model")
+    assert resp.status_code != 401
+
+
+def test_public_model_malformed_tenant_404(client):
+    """tenant_id with illegal chars returns 404 without calling DataCore."""
+    resp = client.get("/api/public/leads/t1'%20OR%201=1/model")
+    assert resp.status_code == 404
