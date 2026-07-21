@@ -1,36 +1,60 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { type FormEvent } from 'react';
 import { createLead } from '../api/client.ts';
 import { parseInquiryEmail } from '../utils/parseInquiryEmail.ts';
+import { useModel } from '../contexts/ModelContext.tsx';
+import { formModel } from '../utils/leadModel.ts';
+import type { ModelDefinition } from '../types/models.ts';
 import './DynamicForm.css';
 import './LeadModal.css';
+
+const FIXED_REVIEW_KEYS = [
+  'guardian_name', 'email', 'phone',
+  'student_first_name', 'student_last_name', 'message',
+] as const;
+
+function formatLabel(name: string): string {
+  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default function ImportEmailModal(
   { tenant, onClose, onCreated }: { tenant: string; onClose: () => void; onCreated: () => void },
 ) {
+  const { getModel } = useModel();
+  const [model, setModel] = useState<ModelDefinition | null>(null);
   const [raw, setRaw] = useState('');
   const [parsed, setParsed] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => { getModel(tenant, 'lead').then(setModel).catch(() => setModel(null)); }, [tenant, getModel]);
+
+  // Field names shown in the review step: model base fields (non-reserved) or fixed fallback.
+  const reviewFieldNames: string[] = model
+    ? formModel(model).base_fields.map((fld) => fld.name)
+    : [...FIXED_REVIEW_KEYS];
+
   function doParse() {
     const p = parseInquiryEmail(raw);
-    setParsed({
+    // Values the parser can produce, keyed by name.
+    const parserValues: Record<string, string> = {
       guardian_name: p.guardian_name ?? '',
       email: p.email ?? '',
       phone: p.phone ?? '',
       student_first_name: p.student_first_name ?? '',
       student_last_name: p.student_last_name ?? '',
       message: p.message ?? '',
-    });
+    };
+    // Pre-fill review fields by matching field name; leave others blank.
+    const initial: Record<string, string> = {};
+    for (const name of reviewFieldNames) {
+      initial[name] = parserValues[name] ?? '';
+    }
+    setParsed(initial);
   }
 
   async function confirm(e: FormEvent) {
     e.preventDefault();
     if (!parsed) return;
-    if (!parsed.guardian_name.trim() || (!parsed.email.trim() && !parsed.phone.trim())) {
-      setError('Guardian name and at least one contact are required.');
-      return;
-    }
     try {
       const payload = Object.fromEntries(Object.entries(parsed).filter(([, v]) => v.trim()));
       await createLead(tenant, { ...payload, source: 'email_import' });
@@ -66,7 +90,7 @@ export default function ImportEmailModal(
               <div className="dynamic-form-fields">
                 {Object.keys(parsed).map((k) => (
                   <div key={k} className="dynamic-form-field">
-                    <label>{k}</label>
+                    <label>{formatLabel(k)}</label>
                     <input
                       value={parsed[k]}
                       onChange={(e) => setParsed({ ...parsed, [k]: e.target.value })}

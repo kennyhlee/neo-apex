@@ -18,3 +18,22 @@ export function leadStages(model: ModelDefinition | undefined | null): string[] 
   }
   return [...DEFAULT_LEAD_STAGES];
 }
+
+/**
+ * Build a ModelDefinition suitable for capture/edit forms by excluding
+ * reserved internal fields (stage/source/converted_family_id/lead_id) from
+ * both base_fields and custom_fields.
+ *
+ * When `model` is null, both field lists come back empty — callers should
+ * detect that and fall back to their fixed hardcoded inputs.
+ */
+export function formModel(
+  model: ModelDefinition | null,
+  exclude: string[] = ['stage', 'source', 'converted_family_id', 'lead_id'],
+): ModelDefinition {
+  const keep = (f: { name: string }) => !exclude.includes(f.name);
+  return {
+    base_fields: (model?.base_fields ?? []).filter(keep),
+    custom_fields: (model?.custom_fields ?? []).filter(keep),
+  };
+}
