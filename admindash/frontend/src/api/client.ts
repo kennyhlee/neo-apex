@@ -6,6 +6,7 @@ import type {
   DuplicateCheckResponse,
   Lead,
   LeadActivity,
+  LeadModelField,
 } from '../types/models.ts';
 
 import { ADMINDASH_API_URL } from '../config.ts';
@@ -201,6 +202,7 @@ export interface ConvertPayload {
   family_name: string; primary_address: string;
   primary_email?: string; primary_phone?: string;
   student_first_name: string; student_last_name: string; grade_level?: string;
+  target_stage?: string;
 }
 export async function convertLead(tenantId: string, leadId: string, payload: ConvertPayload) {
   const resp = await fetch(`${API_BASE}/api/leads/${tenantId}/${leadId}/convert`, {
@@ -210,6 +212,14 @@ export async function convertLead(tenantId: string, leadId: string, payload: Con
   if (resp.status === 409) throw new Error(await resp.text());
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
+}
+
+// Public model fetch — NO auth header.
+export async function fetchPublicLeadModel(tenant: string): Promise<LeadModelField[]> {
+  const resp = await fetch(`${API_BASE}/api/public/leads/${tenant}/model`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
+  return data.fields as LeadModelField[];
 }
 
 // Public intake — NO auth header.
