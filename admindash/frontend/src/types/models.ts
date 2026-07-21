@@ -106,3 +106,36 @@ export interface DuplicateCheckRequest {
 export interface DuplicateCheckResponse {
   matches: DuplicateMatch[];
 }
+
+export const LEAD_STAGES = [
+  'New', 'Contacted', 'Tour Scheduled', 'Toured', 'Enrolled', 'Lost',
+] as const;
+export type LeadStage = (typeof LEAD_STAGES)[number];
+
+export interface Lead {
+  entity_id: string;
+  lead_id?: string;
+  guardian_name: string;
+  email?: string;
+  phone?: string;
+  student_first_name?: string;
+  student_last_name?: string;
+  grade_of_interest?: string;
+  message?: string;
+  source: 'web_form' | 'manual' | 'email_import';
+  stage: LeadStage;
+  converted_family_id?: string;
+  _created_at?: string;
+  _updated_at?: string;
+}
+
+export interface LeadActivity {
+  entity_id: string;
+  lead_id: string;
+  type: 'call' | 'email' | 'note' | 'stage_change';
+  body: string;
+  stage_from?: string;
+  stage_to?: string;
+  created_by: string;
+  _created_at?: string;
+}
