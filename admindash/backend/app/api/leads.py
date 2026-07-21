@@ -1,0 +1,112 @@
+"""Lead-management routes — proxy to DataCore with lead-specific business rules."""
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, model_validator
+
+from app.auth import require_authenticated_user
+from app.config import settings
+
+router = APIRouter()
+
+STAGES = ["New", "Contacted", "Tour Scheduled", "Toured", "Enrolled", "Lost"]
+TERMINAL_STAGES = {"Enrolled", "Lost"}
+ACTIVITY_TYPES = {"call", "email", "note"}
+
+
+# ── DataCore client helpers (sync httpx so respx intercepts) ──────────────
+def _dc(method: str, path: str, token: str | None, json_body: dict | None = None):
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = token
+    try:
+        resp = httpx.request(
+            method, f"{settings.datacore_url}{path}",
+            json=json_body, headers=headers, timeout=30.0,
+        )
+    except httpx.RequestError:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "DataCore is unreachable")
+    return resp
+
+
+def _dc_create(tenant: str, entity_type: str, base_data: dict, token: str | None) -> dict:
+    resp = _dc("POST", f"/api/entities/{tenant}/{entity_type}", token,
+               {"base_data": base_data, "custom_fields": {}})
+    if resp.status_code not in (200, 201):
+        raise HTTPException(resp.status_code, f"DataCore create failed: {resp.text}")
+    return resp.json()
+
+
+def _dc_update(tenant: str, entity_type: str, entity_id: str, base_data: dict, token: str | None) -> dict:
+    resp = _dc("PUT", f"/api/entities/{tenant}/{entity_type}/{entity_id}", token,
+               {"base_data": base_data, "custom_fields": {}})
+    if resp.status_code not in (200, 201):
+        raise HTTPException(resp.status_code, f"DataCore update failed: {resp.text}")
+    return resp.json()
+
+
+def _dc_query(tenant: str, sql: str, token: str | None) -> list[dict]:
+    resp = _dc("POST", "/api/query", token,
+               {"tenant_id": tenant, "table": "entities", "sql": sql})
+    if resp.status_code != 200:
+        raise HTTPException(resp.status_code, f"DataCore query failed: {resp.text}")
+    return resp.json().get("data", [])
+
+
+def _get_lead(tenant: str, lead_id: str, token: str | None) -> dict | None:
+    rows = _dc_query(
+        tenant,
+        f"SELECT * FROM data WHERE entity_type = 'lead' "
+        f"AND entity_id = '{lead_id}' AND _status = 'active'",
+        token,
+    )
+    return rows[0] if rows else None
+
+
+def _tenant_exists(tenant: str) -> bool:
+    rows = _dc_query(
+        tenant,
+        f"SELECT entity_id FROM data WHERE entity_type = 'tenant' "
+        f"AND entity_id = '{tenant}' AND _status = 'active'",
+        None,
+    )
+    return bool(rows)
+
+
+# ── Schemas ───────────────────────────────────────────────────────────────
+class LeadCreate(BaseModel):
+    guardian_name: str
+    email: str | None = None
+    phone: str | None = None
+    student_first_name: str | None = None
+    student_last_name: str | None = None
+    grade_of_interest: str | None = None
+    message: str | None = None
+
+    @model_validator(mode="after")
+    def _contact_required(self):
+        if not (self.email or self.phone):
+            raise ValueError("At least one of email or phone is required")
+        return self
+
+
+class PublicLeadCreate(LeadCreate):
+    """Same prospect fields; internal fields (stage/source/converted_family_id) are never accepted."""
+
+
+class StageUpdate(BaseModel):
+    stage: str
+
+
+class ActivityCreate(BaseModel):
+    type: str
+    body: str
+
+
+class ConvertRequest(BaseModel):
+    family_name: str
+    primary_address: str
+    primary_email: str | None = None
+    primary_phone: str | None = None
+    student_first_name: str
+    student_last_name: str
+    grade_level: str | None = None
