@@ -243,3 +243,58 @@ def test_convert_guards_double_conversion(client):
         headers={"Authorization": "Bearer good"})
     assert resp.status_code == 409
     assert "famX" in resp.json()["detail"]
+
+
+# ── public intake route ───────────────────────────────────────────────────────
+
+
+@respx.mock
+def test_public_intake_creates_web_form_lead(client):
+    respx.post("http://localhost:5800/api/query").mock(  # tenant existence check
+        return_value=httpx.Response(200, json={"data": [{"entity_id": "t1"}], "total": 1}))
+    create = respx.post("http://localhost:5800/api/entities/t1/lead").mock(
+        return_value=httpx.Response(201, json={"entity_id": "ld1"}))
+    resp = client.post("/api/public/leads/t1",
+        json={"guardian_name": "Prospect", "email": "p@e.com", "stage": "Enrolled",
+              "converted_family_id": "hack"})  # internal fields must be ignored
+    assert resp.status_code == 201
+    b = _j.loads(create.calls.last.request.content)["base_data"]
+    assert b["source"] == "web_form" and b["stage"] == "New"
+    assert "converted_family_id" not in b
+
+
+@respx.mock
+def test_public_intake_unknown_tenant_404(client):
+    respx.post("http://localhost:5800/api/query").mock(
+        return_value=httpx.Response(200, json={"data": [], "total": 0}))
+    resp = client.post("/api/public/leads/ghost",
+        json={"guardian_name": "P", "email": "p@e.com"})
+    assert resp.status_code == 404
+
+
+def test_public_intake_needs_no_jwt(client):
+    # No Authorization header at all — must not 401 on auth (tenant check will run)
+    import respx as _r
+    with _r.mock:
+        _r.post("http://localhost:5800/api/query").mock(
+            return_value=httpx.Response(200, json={"data": [], "total": 0}))
+        resp = client.post("/api/public/leads/t1", json={"guardian_name": "P", "phone": "555"})
+    assert resp.status_code != 401
+
+
+@respx.mock
+def test_public_intake_source_field_overridden(client):
+    """Prospect-supplied source/stage/converted_family_id must never reach DataCore."""
+    respx.post("http://localhost:5800/api/query").mock(
+        return_value=httpx.Response(200, json={"data": [{"entity_id": "t1"}], "total": 1}))
+    create = respx.post("http://localhost:5800/api/entities/t1/lead").mock(
+        return_value=httpx.Response(201, json={"entity_id": "ld1"}))
+    resp = client.post("/api/public/leads/t1",
+        json={"guardian_name": "Prospect", "email": "p@e.com",
+              "source": "email_import", "stage": "Enrolled",
+              "converted_family_id": "fam-hack"})
+    assert resp.status_code == 201
+    b = _j.loads(create.calls.last.request.content)["base_data"]
+    assert b["source"] == "web_form"
+    assert b["stage"] == "New"
+    assert "converted_family_id" not in b

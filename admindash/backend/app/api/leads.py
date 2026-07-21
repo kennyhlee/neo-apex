@@ -90,8 +90,21 @@ class LeadCreate(BaseModel):
         return self
 
 
-class PublicLeadCreate(LeadCreate):
-    """Same prospect fields; internal fields (stage/source/converted_family_id) are never accepted."""
+class PublicLeadCreate(BaseModel):
+    """Prospect-facing fields only — source/stage/converted_family_id are never accepted."""
+    guardian_name: str
+    email: str | None = None
+    phone: str | None = None
+    student_first_name: str | None = None
+    student_last_name: str | None = None
+    grade_of_interest: str | None = None
+    message: str | None = None
+
+    @model_validator(mode="after")
+    def _contact_required(self):
+        if not (self.email or self.phone):
+            raise ValueError("At least one of email or phone is required")
+        return self
 
 
 class StageUpdate(BaseModel):
@@ -114,6 +127,15 @@ class ConvertRequest(BaseModel):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────
+
+@router.post("/public/leads/{tenant_id}", status_code=201)
+def public_intake(tenant_id: str, body: PublicLeadCreate):
+    if not _tenant_exists(tenant_id):
+        raise HTTPException(404, "Unknown tenant")
+    base = body.model_dump(exclude_none=True)
+    base.update({"source": "web_form", "stage": "New"})  # force; internal fields never in schema
+    return _dc_create(tenant_id, "lead", base, None)
+
 
 @router.post("/leads/{tenant_id}", status_code=201)
 def create_lead(tenant_id: str, body: LeadCreate, user=Depends(require_authenticated_user)):
