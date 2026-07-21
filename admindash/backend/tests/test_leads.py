@@ -111,3 +111,53 @@ def test_create_lead_honors_email_import_source(client):
     assert resp2.status_code == 201
     body2 = _j.loads(route2.calls.last.request.content)
     assert body2["base_data"]["source"] == "manual"
+
+
+# ── stage transition routes ───────────────────────────────────────────────
+
+
+def _stub_lead(mock, lead_id="ld1", stage="New"):
+    mock.post("http://localhost:5800/api/query").mock(
+        return_value=httpx.Response(200, json={"data": [
+            {"entity_id": lead_id, "guardian_name": "Sam", "email": "s@e.com",
+             "stage": stage, "source": "manual"}], "total": 1}))
+
+
+@respx.mock
+def test_stage_change_updates_and_logs(client):
+    _stub_auth(respx)
+    _stub_lead(respx, stage="New")
+    upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
+        return_value=httpx.Response(200, json={"entity_id": "ld1", "base_data": {"stage": "Contacted"}}))
+    act = respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
+        return_value=httpx.Response(201, json={"entity_id": "la1"}))
+    resp = client.patch("/api/leads/t1/ld1/stage", json={"stage": "Contacted"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    assert upd.called and act.called
+    act_body = _j.loads(act.calls.last.request.content)["base_data"]
+    assert act_body["type"] == "stage_change"
+    assert act_body["stage_from"] == "New" and act_body["stage_to"] == "Contacted"
+    assert act_body["created_by"] == "system"
+
+
+@respx.mock
+def test_stage_change_same_stage_no_activity(client):
+    _stub_auth(respx)
+    _stub_lead(respx, stage="Contacted")
+    upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
+        return_value=httpx.Response(200, json={"entity_id": "ld1"}))
+    act = respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
+        return_value=httpx.Response(201, json={}))
+    resp = client.patch("/api/leads/t1/ld1/stage", json={"stage": "Contacted"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    assert not act.called
+
+
+@respx.mock
+def test_stage_change_rejects_unknown_stage(client):
+    _stub_auth(respx)
+    resp = client.patch("/api/leads/t1/ld1/stage", json={"stage": "Nope"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 400

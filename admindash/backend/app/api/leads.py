@@ -140,3 +140,36 @@ def get_lead(tenant_id: str, lead_id: str, user=Depends(require_authenticated_us
     if not lead:
         raise HTTPException(404, "Lead not found")
     return lead
+
+
+_LEAD_FIELDS = ["guardian_name", "email", "phone", "student_first_name",
+                "student_last_name", "grade_of_interest", "message", "source",
+                "stage", "lead_id", "converted_family_id"]
+
+
+def _lead_base_data(row: dict) -> dict:
+    return {k: row[k] for k in _LEAD_FIELDS if row.get(k) is not None}
+
+
+def _log_stage_change(tenant: str, lead_id: str, frm: str, to: str, token: str | None):
+    _dc_create(tenant, "lead_activity", {
+        "lead_id": lead_id, "type": "stage_change", "body": f"{frm} → {to}",
+        "stage_from": frm, "stage_to": to, "created_by": "system",
+    }, token)
+
+
+@router.patch("/leads/{tenant_id}/{lead_id}/stage")
+def update_stage(tenant_id: str, lead_id: str, body: StageUpdate,
+                 user=Depends(require_authenticated_user)):
+    if body.stage not in STAGES:
+        raise HTTPException(400, f"Unknown stage: {body.stage}")
+    lead = _get_lead(tenant_id, lead_id, user["_token"])
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    current = lead.get("stage", "New")
+    base = _lead_base_data(lead)
+    base["stage"] = body.stage
+    updated = _dc_update(tenant_id, "lead", lead_id, base, user["_token"])
+    if body.stage != current:
+        _log_stage_change(tenant_id, lead_id, current, body.stage, user["_token"])
+    return updated
