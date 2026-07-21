@@ -20,6 +20,7 @@ DUPLICATE_CHECK_THRESHOLD = float(
 DEFAULT_ABBREVS = {
     "student": "ST",
     "program": "PR",
+    "lead": "LD",
 }
 
 
