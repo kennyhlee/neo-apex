@@ -4,6 +4,7 @@ import { listActivities, addActivity, updateLeadStage } from '../api/client.ts';
 import { LEAD_STAGES, type Lead, type LeadActivity } from '../types/models.ts';
 import ConvertToFamilyModal from './ConvertToFamilyModal.tsx';
 import './DynamicForm.css';
+import './LeadModal.css';
 import './LeadDetailDrawer.css';
 
 const ACTIVITY_TYPES = ['call', 'email', 'note'] as const;
@@ -15,6 +16,8 @@ export default function LeadDetailDrawer(
   const { t } = useTranslation();
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [stage, setStage] = useState(lead.stage);
+  const [pendingStage, setPendingStage] = useState<Lead['stage'] | null>(null);
+  const [savingStage, setSavingStage] = useState(false);
   const [actType, setActType] = useState<(typeof ACTIVITY_TYPES)[number]>('note');
   const [actBody, setActBody] = useState('');
   const [showConvert, setShowConvert] = useState(false);
@@ -25,11 +28,24 @@ export default function LeadDetailDrawer(
   );
   useEffect(() => { loadActs().then(setActivities); }, [loadActs]);
 
-  async function changeStage(next: string) {
-    setStage(next as Lead['stage']);
-    await updateLeadStage(tenant, lead.entity_id, next);
-    setActivities(await loadActs());
-    onChanged();
+  // Selecting a new stage only stages the change; it is committed on confirm.
+  function requestStageChange(next: string) {
+    if (next !== stage) setPendingStage(next as Lead['stage']);
+  }
+
+  async function confirmStageChange() {
+    if (!pendingStage) return;
+    const next = pendingStage;
+    setSavingStage(true);
+    try {
+      await updateLeadStage(tenant, lead.entity_id, next);
+      setStage(next);
+      setActivities(await loadActs());
+      onChanged();
+      setPendingStage(null);
+    } finally {
+      setSavingStage(false);
+    }
   }
 
   async function submitActivity(e: FormEvent) {
@@ -50,7 +66,7 @@ export default function LeadDetailDrawer(
 
         <div className="dynamic-form-field">
           <label>{t('leads.stage')}</label>
-          <select value={stage} onChange={(e) => void changeStage(e.target.value)}>
+          <select value={stage} onChange={(e) => requestStageChange(e.target.value)}>
             {LEAD_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
@@ -81,6 +97,30 @@ export default function LeadDetailDrawer(
             </li>
           ))}
         </ul>
+
+        {pendingStage && (
+          <div className="lead-modal-overlay" onClick={() => !savingStage && setPendingStage(null)}>
+            <div className="lead-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="lead-modal-header"><h3>{t('leads.confirmStageTitle')}</h3></div>
+              <div className="lead-modal-body">
+                <p>{t('leads.confirmStagePrompt')}</p>
+                <p className="stage-change-preview">
+                  <strong>{stage}</strong> → <strong>{pendingStage}</strong>
+                </p>
+                <div className="dynamic-form-actions">
+                  <button type="button" className="dynamic-form-btn-secondary"
+                    disabled={savingStage} onClick={() => setPendingStage(null)}>
+                    {t('leads.cancel')}
+                  </button>
+                  <button type="button" className="dynamic-form-btn-primary"
+                    disabled={savingStage} onClick={() => void confirmStageChange()}>
+                    {t('leads.confirm')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showConvert && (
           <ConvertToFamilyModal tenant={tenant} lead={lead}

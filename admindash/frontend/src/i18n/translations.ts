@@ -173,6 +173,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'leads.addActivity': 'Add Activity',
     'leads.stage': 'Stage',
     'leads.activityTimeline': 'Activity',
+    'leads.confirmStageTitle': 'Change stage',
+    'leads.confirmStagePrompt': "Change this lead's stage? The change will be recorded in the activity log.",
+    'leads.confirm': 'Confirm',
+    'leads.cancel': 'Cancel',
 
     // Bulk Add Students
     'bulkAdd.entryButton': 'Bulk add',
@@ -464,6 +468,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'leads.addActivity': '\u6dfb\u52a0\u6d3b\u52a8',
     'leads.stage': '\u9636\u6bb5',
     'leads.activityTimeline': '\u6d3b\u52a8',
+    'leads.confirmStageTitle': '\u66f4\u6539\u9636\u6bb5',
+    'leads.confirmStagePrompt': '\u786e\u5b9a\u66f4\u6539\u8be5\u5ba2\u6237\u7684\u9636\u6bb5\uff1f\u6b64\u66f4\u6539\u5c06\u8bb0\u5f55\u5728\u6d3b\u52a8\u65e5\u5fd7\u4e2d\u3002',
+    'leads.confirm': '\u786e\u8ba4',
+    'leads.cancel': '\u53d6\u6d88',
 
     // Bulk Add Students
     'bulkAdd.entryButton': '\u6279\u91cf\u6dfb\u52a0',

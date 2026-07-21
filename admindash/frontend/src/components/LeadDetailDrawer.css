@@ -166,3 +166,10 @@
 .badge-email    { background: rgba(99, 153, 34, 0.15); color: var(--success); }
 .badge-note     { background: var(--bg-tertiary); color: var(--text-tertiary); }
 .badge-stage_change { background: rgba(239, 159, 39, 0.15); color: var(--warning); }
+
+.stage-change-preview {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+  color: var(--text-primary);
+  text-align: center;
+}
