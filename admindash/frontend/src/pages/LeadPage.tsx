@@ -5,6 +5,7 @@ import { LEAD_STAGES, type Lead, type LeadStage } from '../types/models.ts';
 import LeadDetailDrawer from '../components/LeadDetailDrawer.tsx';
 import AddLeadModal from '../components/AddLeadModal.tsx';
 import ImportEmailModal from '../components/ImportEmailModal.tsx';
+import '../components/DynamicForm.css';
 import './LeadPage.css';
 
 export default function LeadPage({ tenant }: { tenant: string }) {
@@ -31,15 +32,15 @@ export default function LeadPage({ tenant }: { tenant: string }) {
       <header className="leads-header">
         <h1>{t('leads.title')}</h1>
         <div className="leads-actions">
-          <select value={filter} onChange={(e) => setFilter(e.target.value as LeadStage | '')}>
+          <select className="leads-stage-filter" value={filter} onChange={(e) => setFilter(e.target.value as LeadStage | '')}>
             <option value="">{t('leads.filterAll')}</option>
             {LEAD_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button onClick={() => setShowAdd(true)}>{t('leads.addManual')}</button>
-          <button onClick={() => setShowImport(true)}>{t('leads.importEmail')}</button>
+          <button className="dynamic-form-btn-primary" onClick={() => setShowAdd(true)}>{t('leads.addManual')}</button>
+          <button className="dynamic-form-btn-secondary" onClick={() => setShowImport(true)}>{t('leads.importEmail')}</button>
         </div>
       </header>
-      {error && <p className="error">{error}</p>}
+      {error && <div className="dynamic-form-error">{error}</div>}
       {leads.length === 0 && <p>{t('leads.empty')}</p>}
       <div className="leads-board">
         {LEAD_STAGES.map((stage) => (

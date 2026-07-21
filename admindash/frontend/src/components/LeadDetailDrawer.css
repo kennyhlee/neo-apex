@@ -118,23 +118,6 @@
   flex: 1;
 }
 
-.activity-form button[type="submit"] {
-  font-size: 1rem;
-  font-weight: 600;
-  padding: 0.4rem 0.75rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.activity-form button[type="submit"]:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
 .lead-drawer h3 {
   font-size: 0.95rem;
   font-weight: 600;
@@ -179,7 +162,7 @@
   flex-shrink: 0;
 }
 
-.badge-call     { background: rgba(66, 153, 225, 0.15); color: #2b6cb0; }
-.badge-email    { background: rgba(72, 187, 120, 0.15); color: #276749; }
-.badge-note     { background: rgba(159, 122, 234, 0.15); color: #553c9a; }
-.badge-stage_change { background: rgba(237, 137, 54, 0.15); color: #c05621; }
+.badge-call     { background: var(--accent-muted); color: var(--info); }
+.badge-email    { background: rgba(99, 153, 34, 0.15); color: var(--success); }
+.badge-note     { background: var(--bg-tertiary); color: var(--text-tertiary); }
+.badge-stage_change { background: rgba(239, 159, 39, 0.15); color: var(--warning); }

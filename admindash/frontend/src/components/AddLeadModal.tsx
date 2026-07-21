@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { type ChangeEvent, type FormEvent } from 'react';
 import { createLead } from '../api/client.ts';
+import './DynamicForm.css';
 import './LeadModal.css';
 
 export default function AddLeadModal(
@@ -29,19 +30,41 @@ export default function AddLeadModal(
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h3>Add Lead</h3>
-        {error && <p className="error">{error}</p>}
-        <label>Guardian name*<input value={f.guardian_name} onChange={set('guardian_name')} /></label>
-        <label>Email<input value={f.email} onChange={set('email')} /></label>
-        <label>Phone<input value={f.phone} onChange={set('phone')} /></label>
-        <label>Student first name<input value={f.student_first_name} onChange={set('student_first_name')} /></label>
-        <label>Student last name<input value={f.student_last_name} onChange={set('student_last_name')} /></label>
-        <label>Grade of interest<input value={f.grade_of_interest} onChange={set('grade_of_interest')} /></label>
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>Cancel</button>
-          <button type="submit">Create</button>
+    <div className="lead-modal-overlay" onClick={onClose}>
+      <form className="lead-modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="lead-modal-header"><h3>Add Lead</h3></div>
+        <div className="lead-modal-body">
+          {error && <div className="dynamic-form-error">{error}</div>}
+          <div className="dynamic-form-fields">
+            <div className="dynamic-form-field">
+              <label>Guardian name<span className="dynamic-form-required">*</span></label>
+              <input value={f.guardian_name} onChange={set('guardian_name')} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Email</label>
+              <input value={f.email} onChange={set('email')} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Phone</label>
+              <input value={f.phone} onChange={set('phone')} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Student first name</label>
+              <input value={f.student_first_name} onChange={set('student_first_name')} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Student last name</label>
+              <input value={f.student_last_name} onChange={set('student_last_name')} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Grade of interest</label>
+              <input value={f.grade_of_interest} onChange={set('grade_of_interest')} />
+            </div>
+          </div>
+          <div className="dynamic-form-actions">
+            <button type="button" className="dynamic-form-btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="dynamic-form-btn-primary">Create</button>
+          </div>
         </div>
       </form>
     </div>

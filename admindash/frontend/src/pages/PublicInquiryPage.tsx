@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { submitPublicLead } from '../api/client.ts';
+import '../components/DynamicForm.css';
 import './PublicInquiryPage.css';
 
 export default function PublicInquiryPage() {
@@ -29,16 +30,41 @@ export default function PublicInquiryPage() {
   return (
     <div className="inquiry-page">
       <h1>Request Information</h1>
-      {error && <p className="error">{error}</p>}
       <form onSubmit={submit}>
-        <label>Your name*<input value={f.guardian_name} onChange={set('guardian_name')} /></label>
-        <label>Email*<input value={f.email} onChange={set('email')} /></label>
-        <label>Phone<input value={f.phone} onChange={set('phone')} /></label>
-        <label>Student first name<input value={f.student_first_name} onChange={set('student_first_name')} /></label>
-        <label>Student last name<input value={f.student_last_name} onChange={set('student_last_name')} /></label>
-        <label>Grade of interest<input value={f.grade_of_interest} onChange={set('grade_of_interest')} /></label>
-        <label>Message<textarea value={f.message} onChange={set('message')} /></label>
-        <button type="submit">Submit</button>
+        {error && <div className="dynamic-form-error">{error}</div>}
+        <div className="dynamic-form-fields">
+          <div className="dynamic-form-field">
+            <label>Your name<span className="dynamic-form-required">*</span></label>
+            <input value={f.guardian_name} onChange={set('guardian_name')} />
+          </div>
+          <div className="dynamic-form-field">
+            <label>Email<span className="dynamic-form-required">*</span></label>
+            <input value={f.email} onChange={set('email')} />
+          </div>
+          <div className="dynamic-form-field">
+            <label>Phone</label>
+            <input value={f.phone} onChange={set('phone')} />
+          </div>
+          <div className="dynamic-form-field">
+            <label>Student first name</label>
+            <input value={f.student_first_name} onChange={set('student_first_name')} />
+          </div>
+          <div className="dynamic-form-field">
+            <label>Student last name</label>
+            <input value={f.student_last_name} onChange={set('student_last_name')} />
+          </div>
+          <div className="dynamic-form-field">
+            <label>Grade of interest</label>
+            <input value={f.grade_of_interest} onChange={set('grade_of_interest')} />
+          </div>
+          <div className="dynamic-form-field">
+            <label>Message</label>
+            <textarea value={f.message} onChange={set('message')} />
+          </div>
+        </div>
+        <div className="dynamic-form-actions">
+          <button type="submit" className="dynamic-form-btn-primary">Submit</button>
+        </div>
       </form>
     </div>
   );

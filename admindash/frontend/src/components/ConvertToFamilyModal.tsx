@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { convertLead } from '../api/client.ts';
 import type { Lead } from '../types/models.ts';
+import './DynamicForm.css';
 import './LeadModal.css';
 
 export default function ConvertToFamilyModal(
@@ -31,18 +32,37 @@ export default function ConvertToFamilyModal(
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h3>Convert to Family</h3>
-        {error && <p className="error">{error}</p>}
-        <label>Family name<input value={familyName} onChange={(e) => setFamilyName(e.target.value)} /></label>
-        <label>Primary address*<input value={address} onChange={(e) => setAddress(e.target.value)} /></label>
-        <label>Student first name*<input value={firstName} onChange={(e) => setFirstName(e.target.value)} /></label>
-        <label>Student last name*<input value={lastName} onChange={(e) => setLastName(e.target.value)} /></label>
-        <label>Grade<input value={grade} onChange={(e) => setGrade(e.target.value)} /></label>
-        <div className="modal-actions">
-          <button type="button" onClick={onClose}>Cancel</button>
-          <button type="submit">Convert</button>
+    <div className="lead-modal-overlay" onClick={onClose}>
+      <form className="lead-modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="lead-modal-header"><h3>Convert to Family</h3></div>
+        <div className="lead-modal-body">
+          {error && <div className="dynamic-form-error">{error}</div>}
+          <div className="dynamic-form-fields">
+            <div className="dynamic-form-field">
+              <label>Family name</label>
+              <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Primary address<span className="dynamic-form-required">*</span></label>
+              <input value={address} onChange={(e) => setAddress(e.target.value)} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Student first name<span className="dynamic-form-required">*</span></label>
+              <input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Student last name<span className="dynamic-form-required">*</span></label>
+              <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </div>
+            <div className="dynamic-form-field">
+              <label>Grade</label>
+              <input value={grade} onChange={(e) => setGrade(e.target.value)} />
+            </div>
+          </div>
+          <div className="dynamic-form-actions">
+            <button type="button" className="dynamic-form-btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="dynamic-form-btn-primary">Convert</button>
+          </div>
         </div>
       </form>
     </div>

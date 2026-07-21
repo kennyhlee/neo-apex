@@ -3,6 +3,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { listActivities, addActivity, updateLeadStage } from '../api/client.ts';
 import { LEAD_STAGES, type Lead, type LeadActivity } from '../types/models.ts';
 import ConvertToFamilyModal from './ConvertToFamilyModal.tsx';
+import './DynamicForm.css';
 import './LeadDetailDrawer.css';
 
 const ACTIVITY_TYPES = ['call', 'email', 'note'] as const;
@@ -47,13 +48,18 @@ export default function LeadDetailDrawer(
         <p>{lead.email} {lead.phone}</p>
         <p>{lead.student_first_name} {lead.student_last_name} — {lead.grade_of_interest}</p>
 
-        <label>{t('leads.stage')}
+        <div className="dynamic-form-field">
+          <label>{t('leads.stage')}</label>
           <select value={stage} onChange={(e) => void changeStage(e.target.value)}>
             {LEAD_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-        </label>
+        </div>
 
-        <button disabled={!!lead.converted_family_id} onClick={() => setShowConvert(true)}>
+        <button
+          className={`dynamic-form-btn-primary ${lead.converted_family_id ? 'dynamic-form-btn-invalid' : ''}`}
+          disabled={!!lead.converted_family_id}
+          onClick={() => setShowConvert(true)}
+        >
           {lead.converted_family_id ? `Converted → ${lead.converted_family_id}` : t('leads.convert')}
         </button>
 
@@ -62,7 +68,7 @@ export default function LeadDetailDrawer(
             {ACTIVITY_TYPES.map((ty) => <option key={ty} value={ty}>{ty}</option>)}
           </select>
           <input value={actBody} onChange={(e) => setActBody(e.target.value)} placeholder={t('leads.addActivity')} />
-          <button type="submit">+</button>
+          <button type="submit" className="dynamic-form-btn-primary">+</button>
         </form>
 
         <h3>{t('leads.activityTimeline')}</h3>
