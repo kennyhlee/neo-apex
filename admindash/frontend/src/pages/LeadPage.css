@@ -13,3 +13,11 @@
 .placeholder-page p {
   color: var(--text-tertiary);
 }
+
+.leads-header { display: flex; justify-content: space-between; align-items: center; }
+.leads-actions { display: flex; gap: var(--space-2, 8px); }
+.leads-board { display: flex; gap: var(--space-3, 12px); overflow-x: auto; }
+.leads-column { min-width: 200px; flex: 1; }
+.lead-card { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left;
+  padding: var(--space-2, 8px); margin-bottom: var(--space-2, 8px);
+  border: 1px solid var(--color-border, #ddd); border-radius: var(--radius-md, 6px); background: var(--color-surface, #fff); cursor: pointer; }

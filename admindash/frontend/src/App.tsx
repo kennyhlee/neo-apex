@@ -46,7 +46,7 @@ function AppRoutes() {
                       path="/students/bulk-add"
                       element={<BulkAddStudentsPage tenant={tenant} />}
                     />
-                    <Route path="/leads" element={<LeadPage />} />
+                    <Route path="/leads" element={<LeadPage tenant={tenant} />} />
                     <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
                     <Route path="*" element={<Navigate to="/home" replace />} />
                   </Routes>
