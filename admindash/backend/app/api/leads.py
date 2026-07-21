@@ -1,16 +1,16 @@
 """Lead-management routes — proxy to DataCore with lead-specific business rules."""
+import json
 import re
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict
 
 from app.auth import require_authenticated_user
 from app.config import settings
 
 router = APIRouter()
 
-STAGES = ["New", "Contacted", "Tour Scheduled", "Toured", "Enrolled", "Lost"]
-TERMINAL_STAGES = {"Enrolled", "Lost"}
+DEFAULT_STAGES = ["New", "Contacted", "Tour Scheduled", "Toured", "Enrolled", "Lost"]
 ACTIVITY_TYPES = {"call", "email", "note"}
 
 
@@ -45,12 +45,44 @@ def _dc_update(tenant: str, entity_type: str, entity_id: str, base_data: dict, t
     return resp.json()
 
 
-def _dc_query(tenant: str, sql: str, token: str | None) -> list[dict]:
+def _dc_query(tenant: str, sql: str, token: str | None, table: str = "entities") -> list[dict]:
     resp = _dc("POST", "/api/query", token,
-               {"tenant_id": tenant, "table": "entities", "sql": sql})
+               {"tenant_id": tenant, "table": table, "sql": sql})
     if resp.status_code != 200:
         raise HTTPException(resp.status_code, f"DataCore query failed: {resp.text}")
     return resp.json().get("data", [])
+
+
+# ── Model-driven stage helpers ────────────────────────────────────────────
+def _lead_model(tenant: str, token: str | None) -> dict | None:
+    """Return the lead entity's model definition {base_fields, custom_fields} or None."""
+    rows = _dc_query(
+        tenant,
+        "SELECT * FROM data WHERE entity_type = 'lead' AND _status = 'active'",
+        token, table="models",
+    )
+    if not rows:
+        return None
+    try:
+        md = rows[0]["model_definition"]
+        if isinstance(md, str):
+            md = json.loads(md)
+        if isinstance(md, dict) and "lead" in md:
+            return md["lead"]
+        return md
+    except Exception:
+        return None
+
+
+def _stage_options(tenant: str, token: str | None) -> list[str]:
+    """Stage options from the lead model's `stage` selection field, else DEFAULT_STAGES."""
+    model = _lead_model(tenant, token)
+    if model:
+        fields = model.get("base_fields", []) + model.get("custom_fields", [])
+        for f in fields:
+            if f.get("name") == "stage" and f.get("options"):
+                return f["options"]
+    return DEFAULT_STAGES
 
 
 def _get_lead(tenant: str, lead_id: str, token: str | None) -> dict | None:
@@ -75,7 +107,9 @@ def _tenant_exists(tenant: str) -> bool:
 
 # ── Schemas ───────────────────────────────────────────────────────────────
 class LeadCreate(BaseModel):
-    guardian_name: str
+    model_config = ConfigDict(extra="allow")
+
+    guardian_name: str | None = None
     email: str | None = None
     phone: str | None = None
     student_first_name: str | None = None
@@ -84,28 +118,18 @@ class LeadCreate(BaseModel):
     message: str | None = None
     source: str | None = None
 
-    @model_validator(mode="after")
-    def _contact_required(self):
-        if not (self.email or self.phone):
-            raise ValueError("At least one of email or phone is required")
-        return self
-
 
 class PublicLeadCreate(BaseModel):
-    """Prospect-facing fields only — source/stage/converted_family_id are never accepted."""
-    guardian_name: str
+    """Prospect-facing fields — reserved internal keys are stripped in the route."""
+    model_config = ConfigDict(extra="allow")
+
+    guardian_name: str | None = None
     email: str | None = None
     phone: str | None = None
     student_first_name: str | None = None
     student_last_name: str | None = None
     grade_of_interest: str | None = None
     message: str | None = None
-
-    @model_validator(mode="after")
-    def _contact_required(self):
-        if not (self.email or self.phone):
-            raise ValueError("At least one of email or phone is required")
-        return self
 
 
 class StageUpdate(BaseModel):
@@ -125,6 +149,7 @@ class ConvertRequest(BaseModel):
     student_first_name: str
     student_last_name: str
     grade_level: str | None = None
+    target_stage: str | None = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────
@@ -136,15 +161,19 @@ def public_intake(tenant_id: str, body: PublicLeadCreate):
     if not _tenant_exists(tenant_id):
         raise HTTPException(404, "Unknown tenant")
     base = body.model_dump(exclude_none=True)
-    base.update({"source": "web_form", "stage": "New"})  # force; internal fields never in schema
+    # Strip reserved internal keys — a prospect must not set these.
+    for k in ("stage", "source", "converted_family_id", "lead_id"):
+        base.pop(k, None)
+    base.update({"source": "web_form", "stage": _stage_options(tenant_id, None)[0]})
     return _dc_create(tenant_id, "lead", base, None)
 
 
 @router.post("/leads/{tenant_id}", status_code=201)
 def create_lead(tenant_id: str, body: LeadCreate, user=Depends(require_authenticated_user)):
-    src = body.source if body.source in ("manual", "email_import") else "manual"
     base = body.model_dump(exclude_none=True, exclude={"source"})
-    base.update({"source": src, "stage": "New"})
+    src = body.source if body.source in ("manual", "email_import") else "manual"
+    base["source"] = src
+    base["stage"] = _stage_options(tenant_id, user["_token"])[0]
     return _dc_create(tenant_id, "lead", base, user["_token"])
 
 
@@ -152,7 +181,7 @@ def create_lead(tenant_id: str, body: LeadCreate, user=Depends(require_authentic
 def list_leads(tenant_id: str, stage: str | None = None, user=Depends(require_authenticated_user)):
     where = "entity_type = 'lead' AND _status = 'active'"
     if stage:
-        if stage not in STAGES:
+        if stage not in _stage_options(tenant_id, user["_token"]):
             raise HTTPException(400, f"Unknown stage: {stage}")
         where += f" AND stage = '{stage}'"
     rows = _dc_query(tenant_id, f"SELECT * FROM data WHERE {where}", user["_token"])
@@ -167,15 +196,15 @@ def get_lead(tenant_id: str, lead_id: str, user=Depends(require_authenticated_us
     return lead
 
 
-# Keep in sync with LeadCreate schema fields + internal fields (source, stage,
-# lead_id, converted_family_id) — stage/convert PUTs will silently drop new fields otherwise.
-_LEAD_FIELDS = ["guardian_name", "email", "phone", "student_first_name",
-                "student_last_name", "grade_of_interest", "message", "source",
-                "stage", "lead_id", "converted_family_id"]
+# Preserve ALL lead fields (base + custom) from a flattened entity row, dropping
+# only system/metadata columns — stage/convert PUTs REPLACE base_data, so anything
+# omitted here is lost.
+_SYSTEM_COLS = {"entity_id", "entity_type", "base_data", "custom_fields", "vector"}
 
 
 def _lead_base_data(row: dict) -> dict:
-    return {k: row[k] for k in _LEAD_FIELDS if row.get(k) is not None}
+    return {k: v for k, v in row.items()
+            if k not in _SYSTEM_COLS and not k.startswith("_") and v is not None}
 
 
 def _log_stage_change(tenant: str, lead_id: str, frm: str, to: str, token: str | None):
@@ -227,11 +256,15 @@ def convert_lead(tenant_id: str, lead_id: str, body: ConvertRequest,
 
     base = _lead_base_data(lead)
     base["converted_family_id"] = family_id
-    prev_stage = base.get("stage", "New")
-    base["stage"] = "Enrolled"
+    opts = _stage_options(tenant_id, token)
+    if body.target_stage is not None and body.target_stage not in opts:
+        raise HTTPException(400, f"Unknown target stage: {body.target_stage}")
+    target = body.target_stage or opts[-1]
+    prev_stage = base.get("stage")
+    base["stage"] = target
     _dc_update(tenant_id, "lead", lead_id, base, token)
-    if prev_stage != "Enrolled":
-        _log_stage_change(tenant_id, lead_id, prev_stage, "Enrolled", token)
+    if prev_stage != target:
+        _log_stage_change(tenant_id, lead_id, prev_stage, target, token)
 
     return {"family_id": family_id, "student_id": student["entity_id"], "lead_id": lead_id}
 
@@ -249,7 +282,7 @@ def list_activities(tenant_id: str, lead_id: str, user=Depends(require_authentic
 @router.patch("/leads/{tenant_id}/{lead_id}/stage")
 def update_stage(tenant_id: str, lead_id: str, body: StageUpdate,
                  user=Depends(require_authenticated_user)):
-    if body.stage not in STAGES:
+    if body.stage not in _stage_options(tenant_id, user["_token"]):
         raise HTTPException(400, f"Unknown stage: {body.stage}")
     lead = _get_lead(tenant_id, lead_id, user["_token"])
     if not lead:

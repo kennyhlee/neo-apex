@@ -11,9 +11,28 @@ def _stub_auth(mock):
     )
 
 
+def _stub_query(mock, *, lead_model=None, entity_rows=None):
+    """Route /api/query by request body's `table`.
+
+    lead_model: list[str] of stage options to expose as the lead model's
+        `stage` selection field. None → models query returns empty (no model).
+    entity_rows: list[dict] returned for entities-table queries.
+    """
+    def responder(request):
+        body = _j.loads(request.content)
+        if body.get("table") == "models":
+            data = [{"model_definition": {"base_fields": [
+                {"name": "stage", "type": "selection", "options": lead_model}]}}] if lead_model else []
+            return httpx.Response(200, json={"data": data, "total": len(data)})
+        rows = entity_rows or []
+        return httpx.Response(200, json={"data": rows, "total": len(rows)})
+
+    mock.post("http://localhost:5800/api/query").mock(side_effect=responder)
+
+
 def test_stages_constant_is_ordered():
-    from app.api.leads import STAGES
-    assert STAGES == ["New", "Contacted", "Tour Scheduled", "Toured", "Enrolled", "Lost"]
+    from app.api.leads import DEFAULT_STAGES
+    assert DEFAULT_STAGES == ["New", "Contacted", "Tour Scheduled", "Toured", "Enrolled", "Lost"]
 
 
 # ── create / list / get routes ────────────────────────────────────────────
@@ -22,6 +41,7 @@ def test_stages_constant_is_ordered():
 @respx.mock
 def test_create_lead_manual(client):
     _stub_auth(respx)
+    _stub_query(respx)  # no lead model → DEFAULT_STAGES, first = "New"
     route = respx.post("http://localhost:5800/api/entities/t1/lead").mock(
         return_value=httpx.Response(201, json={
             "entity_id": "ld1", "base_data": {
@@ -39,21 +59,47 @@ def test_create_lead_manual(client):
 
 
 @respx.mock
-def test_create_lead_requires_contact(client):
+def test_create_lead_permissive_forwards_extra_field(client):
     _stub_auth(respx)
-    resp = client.post("/api/leads/t1", json={"guardian_name": "No Contact"},
+    _stub_query(respx)  # no model → DEFAULT_STAGES
+    route = respx.post("http://localhost:5800/api/entities/t1/lead").mock(
+        return_value=httpx.Response(201, json={"entity_id": "ld1"}))
+    # No email/phone (no longer required) + an extra custom field
+    resp = client.post("/api/leads/t1",
+        json={"guardian_name": "No Contact", "referral_source": "Friend"},
         headers={"Authorization": "Bearer good"})
-    assert resp.status_code == 422
+    assert resp.status_code == 201
+    body = _j.loads(route.calls.last.request.content)["base_data"]
+    assert body["referral_source"] == "Friend"
+    assert body["source"] == "manual"
+    assert body["stage"] == "New"  # first DEFAULT_STAGE
+
+
+@respx.mock
+def test_create_lead_first_stage_from_model(client):
+    _stub_auth(respx)
+    _stub_query(respx, lead_model=["Inquiry", "Applied", "Enrolled"])
+    route = respx.post("http://localhost:5800/api/entities/t1/lead").mock(
+        return_value=httpx.Response(201, json={"entity_id": "ld1"}))
+    resp = client.post("/api/leads/t1",
+        json={"guardian_name": "Sam", "email": "s@e.com"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 201
+    body = _j.loads(route.calls.last.request.content)["base_data"]
+    assert body["stage"] == "Inquiry"  # first model stage option
 
 
 @respx.mock
 def test_list_leads_filters_by_stage(client):
     _stub_auth(respx)
-    route = respx.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [{"entity_id": "ld1", "stage": "Toured"}], "total": 1}))
+    _stub_query(respx, entity_rows=[{"entity_id": "ld1", "stage": "Toured"}])
     resp = client.get("/api/leads/t1?stage=Toured", headers={"Authorization": "Bearer good"})
     assert resp.status_code == 200
-    sql = _j.loads(route.calls.last.request.content)["sql"]
+    # Find the entities query (last call may be either; grab the entities one)
+    entity_calls = [c for c in respx.calls
+                    if c.request.url.path == "/api/query"
+                    and _j.loads(c.request.content).get("table") != "models"]
+    sql = _j.loads(entity_calls[-1].request.content)["sql"]
     assert "entity_type = 'lead'" in sql and "stage = 'Toured'" in sql
 
 
@@ -65,8 +111,7 @@ def test_list_leads_requires_auth(client):
 @respx.mock
 def test_get_lead_returns_lead(client):
     _stub_auth(respx)
-    respx.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [{"entity_id": "ld1", "stage": "New"}], "total": 1}))
+    _stub_query(respx, entity_rows=[{"entity_id": "ld1", "stage": "New"}])
     resp = client.get("/api/leads/t1/ld1", headers={"Authorization": "Bearer good"})
     assert resp.status_code == 200
     assert resp.json()["entity_id"] == "ld1"
@@ -75,8 +120,7 @@ def test_get_lead_returns_lead(client):
 @respx.mock
 def test_get_lead_not_found(client):
     _stub_auth(respx)
-    respx.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [], "total": 0}))
+    _stub_query(respx, entity_rows=[])
     resp = client.get("/api/leads/t1/missing", headers={"Authorization": "Bearer good"})
     assert resp.status_code == 404
 
@@ -84,6 +128,7 @@ def test_get_lead_not_found(client):
 @respx.mock
 def test_create_lead_honors_email_import_source(client):
     _stub_auth(respx)
+    _stub_query(respx)
     # Case 1: email_import source is preserved
     route = respx.post("http://localhost:5800/api/entities/t1/lead").mock(
         return_value=httpx.Response(201, json={
@@ -116,17 +161,12 @@ def test_create_lead_honors_email_import_source(client):
 # ── stage transition routes ───────────────────────────────────────────────
 
 
-def _stub_lead(mock, lead_id="ld1", stage="New"):
-    mock.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [
-            {"entity_id": lead_id, "guardian_name": "Sam", "email": "s@e.com",
-             "stage": stage, "source": "manual"}], "total": 1}))
-
-
 @respx.mock
 def test_stage_change_updates_and_logs(client):
     _stub_auth(respx)
-    _stub_lead(respx, stage="New")
+    _stub_query(respx, lead_model=["New", "Contacted", "Tour Scheduled", "Toured", "Enrolled", "Lost"],
+                entity_rows=[{"entity_id": "ld1", "guardian_name": "Sam", "email": "s@e.com",
+                              "stage": "New", "source": "manual"}])
     upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
         return_value=httpx.Response(200, json={"entity_id": "ld1", "base_data": {"stage": "Contacted"}}))
     act = respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
@@ -142,9 +182,57 @@ def test_stage_change_updates_and_logs(client):
 
 
 @respx.mock
+def test_stage_change_no_model_falls_back_to_default(client):
+    """When the models query returns empty, DEFAULT_STAGES is used for validation."""
+    _stub_auth(respx)
+    _stub_query(respx, lead_model=None,  # no model
+                entity_rows=[{"entity_id": "ld1", "stage": "New", "source": "manual"}])
+    upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
+        return_value=httpx.Response(200, json={"entity_id": "ld1"}))
+    act = respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
+        return_value=httpx.Response(201, json={"entity_id": "la1"}))
+    resp = client.patch("/api/leads/t1/ld1/stage", json={"stage": "Contacted"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200  # "Contacted" is in DEFAULT_STAGES
+    assert upd.called and act.called
+
+
+@respx.mock
+def test_stage_change_preserves_custom_field(client):
+    """_lead_base_data must carry custom fields and drop system/metadata columns."""
+    _stub_auth(respx)
+    _stub_query(respx, lead_model=None,
+                entity_rows=[{
+                    "entity_id": "ld1", "entity_type": "lead",
+                    "guardian_name": "Sam", "email": "s@e.com",
+                    "stage": "New", "source": "manual",
+                    "referral_source": "Friend",  # custom field
+                    "base_data": {"guardian_name": "Sam"},  # system col → dropped
+                    "custom_fields": {}, "vector": [0.1],
+                    "_status": "active", "_version": 3, "_created_at": "x",
+                    "_updated_at": "y", "_change_id": "c1"}])
+    upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
+        return_value=httpx.Response(200, json={"entity_id": "ld1"}))
+    respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
+        return_value=httpx.Response(201, json={"entity_id": "la1"}))
+    resp = client.patch("/api/leads/t1/ld1/stage", json={"stage": "Contacted"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    put_body = _j.loads(upd.calls.last.request.content)["base_data"]
+    assert put_body["referral_source"] == "Friend"  # custom field preserved
+    assert put_body["stage"] == "Contacted"
+    # system + metadata columns dropped
+    for k in ("entity_id", "entity_type", "base_data", "custom_fields", "vector",
+              "_status", "_version", "_created_at", "_updated_at", "_change_id"):
+        assert k not in put_body
+
+
+@respx.mock
 def test_stage_change_same_stage_no_activity(client):
     _stub_auth(respx)
-    _stub_lead(respx, stage="Contacted")
+    _stub_query(respx, lead_model=None,
+                entity_rows=[{"entity_id": "ld1", "guardian_name": "Sam",
+                              "stage": "Contacted", "source": "manual"}])
     upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
         return_value=httpx.Response(200, json={"entity_id": "ld1"}))
     act = respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
@@ -158,6 +246,7 @@ def test_stage_change_same_stage_no_activity(client):
 @respx.mock
 def test_stage_change_rejects_unknown_stage(client):
     _stub_auth(respx)
+    _stub_query(respx, lead_model=None)  # DEFAULT_STAGES, "Nope" not in it
     resp = client.patch("/api/leads/t1/ld1/stage", json={"stage": "Nope"},
         headers={"Authorization": "Bearer good"})
     assert resp.status_code == 400
@@ -191,11 +280,10 @@ def test_add_activity_rejects_bad_type(client):
 @respx.mock
 def test_list_activities_desc(client):
     _stub_auth(respx)
-    route = respx.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [{"entity_id": "la2"}, {"entity_id": "la1"}], "total": 2}))
+    _stub_query(respx, entity_rows=[{"entity_id": "la2"}, {"entity_id": "la1"}])
     resp = client.get("/api/leads/t1/ld1/activities", headers={"Authorization": "Bearer good"})
     assert resp.status_code == 200
-    sql = _j.loads(route.calls.last.request.content)["sql"]
+    sql = _j.loads(respx.calls.last.request.content)["sql"]
     assert "lead_activity" in sql and "lead_id = 'ld1'" in sql and "ORDER BY _created_at DESC" in sql
 
 
@@ -205,10 +293,9 @@ def test_list_activities_desc(client):
 @respx.mock
 def test_convert_creates_family_student_and_links(client):
     _stub_auth(respx)
-    respx.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [
-            {"entity_id": "ld1", "guardian_name": "Sam", "email": "s@e.com",
-             "stage": "Toured", "source": "manual"}], "total": 1}))
+    _stub_query(respx, lead_model=["Inquiry", "Applied", "Enrolled"],
+                entity_rows=[{"entity_id": "ld1", "guardian_name": "Sam", "email": "s@e.com",
+                              "stage": "Applied", "source": "manual"}])
     fam = respx.post("http://localhost:5800/api/entities/t1/family").mock(
         return_value=httpx.Response(201, json={"entity_id": "fam1", "base_data": {"family_id": "F-1"}}))
     stu = respx.post("http://localhost:5800/api/entities/t1/student").mock(
@@ -223,20 +310,92 @@ def test_convert_creates_family_student_and_links(client):
         headers={"Authorization": "Bearer good"})
     assert resp.status_code == 201
     assert fam.called and stu.called and upd.called and act.called
-    import json as _j
     stu_body = _j.loads(stu.calls.last.request.content)["base_data"]
     assert stu_body["family_id"] == "fam1" and stu_body["status"] == "Enrolled"
     lead_body = _j.loads(upd.calls.last.request.content)["base_data"]
+    # default target = LAST model stage option
     assert lead_body["converted_family_id"] == "fam1" and lead_body["stage"] == "Enrolled"
+
+
+@respx.mock
+def test_convert_honors_explicit_target_stage(client):
+    _stub_auth(respx)
+    _stub_query(respx, lead_model=["Inquiry", "Applied", "Accepted", "Enrolled"],
+                entity_rows=[{"entity_id": "ld1", "guardian_name": "Sam",
+                              "stage": "Applied", "source": "manual"}])
+    respx.post("http://localhost:5800/api/entities/t1/family").mock(
+        return_value=httpx.Response(201, json={"entity_id": "fam1"}))
+    respx.post("http://localhost:5800/api/entities/t1/student").mock(
+        return_value=httpx.Response(201, json={"entity_id": "stu1"}))
+    upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
+        return_value=httpx.Response(200, json={"entity_id": "ld1"}))
+    respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
+        return_value=httpx.Response(201, json={}))
+    resp = client.post("/api/leads/t1/ld1/convert",
+        json={"family_name": "X", "primary_address": "Y",
+              "student_first_name": "A", "student_last_name": "B",
+              "target_stage": "Accepted"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 201
+    lead_body = _j.loads(upd.calls.last.request.content)["base_data"]
+    assert lead_body["stage"] == "Accepted"
+
+
+@respx.mock
+def test_convert_rejects_target_stage_not_in_options(client):
+    _stub_auth(respx)
+    _stub_query(respx, lead_model=["Inquiry", "Applied", "Enrolled"],
+                entity_rows=[{"entity_id": "ld1", "guardian_name": "Sam",
+                              "stage": "Applied", "source": "manual"}])
+    respx.post("http://localhost:5800/api/entities/t1/family").mock(
+        return_value=httpx.Response(201, json={"entity_id": "fam1"}))
+    respx.post("http://localhost:5800/api/entities/t1/student").mock(
+        return_value=httpx.Response(201, json={"entity_id": "stu1"}))
+    respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
+        return_value=httpx.Response(200, json={"entity_id": "ld1"}))
+    resp = client.post("/api/leads/t1/ld1/convert",
+        json={"family_name": "X", "primary_address": "Y",
+              "student_first_name": "A", "student_last_name": "B",
+              "target_stage": "Bogus"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 400
+
+
+@respx.mock
+def test_convert_preserves_custom_field(client):
+    _stub_auth(respx)
+    _stub_query(respx, lead_model=None,
+                entity_rows=[{"entity_id": "ld1", "guardian_name": "Sam", "email": "s@e.com",
+                              "stage": "Toured", "source": "manual",
+                              "referral_source": "Friend",
+                              "base_data": {}, "custom_fields": {}, "vector": [0.1],
+                              "_status": "active", "_version": 1}])
+    respx.post("http://localhost:5800/api/entities/t1/family").mock(
+        return_value=httpx.Response(201, json={"entity_id": "fam1"}))
+    respx.post("http://localhost:5800/api/entities/t1/student").mock(
+        return_value=httpx.Response(201, json={"entity_id": "stu1"}))
+    upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
+        return_value=httpx.Response(200, json={"entity_id": "ld1"}))
+    respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
+        return_value=httpx.Response(201, json={}))
+    resp = client.post("/api/leads/t1/ld1/convert",
+        json={"family_name": "X", "primary_address": "Y",
+              "student_first_name": "A", "student_last_name": "B"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 201
+    lead_body = _j.loads(upd.calls.last.request.content)["base_data"]
+    assert lead_body["referral_source"] == "Friend"
+    assert lead_body["converted_family_id"] == "fam1"
+    assert lead_body["stage"] == "Lost"  # last DEFAULT_STAGE
+    assert "vector" not in lead_body and "_status" not in lead_body
 
 
 @respx.mock
 def test_convert_guards_double_conversion(client):
     _stub_auth(respx)
-    respx.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [
-            {"entity_id": "ld1", "guardian_name": "Sam", "email": "s@e.com",
-             "stage": "Enrolled", "converted_family_id": "famX"}], "total": 1}))
+    _stub_query(respx, lead_model=None,
+                entity_rows=[{"entity_id": "ld1", "guardian_name": "Sam", "email": "s@e.com",
+                              "stage": "Enrolled", "converted_family_id": "famX"}])
     resp = client.post("/api/leads/t1/ld1/convert",
         json={"family_name": "X", "primary_address": "Y",
               "student_first_name": "A", "student_last_name": "B"},
@@ -250,8 +409,8 @@ def test_convert_guards_double_conversion(client):
 
 @respx.mock
 def test_public_intake_creates_web_form_lead(client):
-    respx.post("http://localhost:5800/api/query").mock(  # tenant existence check
-        return_value=httpx.Response(200, json={"data": [{"entity_id": "t1"}], "total": 1}))
+    # tenant existence check (entities) + model query both route through _stub_query
+    _stub_query(respx, lead_model=None, entity_rows=[{"entity_id": "t1"}])
     create = respx.post("http://localhost:5800/api/entities/t1/lead").mock(
         return_value=httpx.Response(201, json={"entity_id": "ld1"}))
     resp = client.post("/api/public/leads/t1",
@@ -265,8 +424,7 @@ def test_public_intake_creates_web_form_lead(client):
 
 @respx.mock
 def test_public_intake_unknown_tenant_404(client):
-    respx.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [], "total": 0}))
+    _stub_query(respx, lead_model=None, entity_rows=[])  # tenant not found
     resp = client.post("/api/public/leads/ghost",
         json={"guardian_name": "P", "email": "p@e.com"})
     assert resp.status_code == 404
@@ -287,8 +445,7 @@ def test_public_intake_needs_no_jwt(client):
     # No Authorization header at all — must not 401 on auth (tenant check will run)
     import respx as _r
     with _r.mock:
-        _r.post("http://localhost:5800/api/query").mock(
-            return_value=httpx.Response(200, json={"data": [], "total": 0}))
+        _stub_query(_r, lead_model=None, entity_rows=[])  # tenant not found → 404, not 401
         resp = client.post("/api/public/leads/t1", json={"guardian_name": "P", "phone": "555"})
     assert resp.status_code != 401
 
@@ -296,8 +453,7 @@ def test_public_intake_needs_no_jwt(client):
 @respx.mock
 def test_public_intake_source_field_overridden(client):
     """Prospect-supplied source/stage/converted_family_id must never reach DataCore."""
-    respx.post("http://localhost:5800/api/query").mock(
-        return_value=httpx.Response(200, json={"data": [{"entity_id": "t1"}], "total": 1}))
+    _stub_query(respx, lead_model=None, entity_rows=[{"entity_id": "t1"}])
     create = respx.post("http://localhost:5800/api/entities/t1/lead").mock(
         return_value=httpx.Response(201, json={"entity_id": "ld1"}))
     resp = client.post("/api/public/leads/t1",
