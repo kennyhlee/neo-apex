@@ -81,6 +81,7 @@ class LeadCreate(BaseModel):
     student_last_name: str | None = None
     grade_of_interest: str | None = None
     message: str | None = None
+    source: str | None = None
 
     @model_validator(mode="after")
     def _contact_required(self):
@@ -110,3 +111,32 @@ class ConvertRequest(BaseModel):
     student_first_name: str
     student_last_name: str
     grade_level: str | None = None
+
+
+# ── Routes ────────────────────────────────────────────────────────────────
+
+@router.post("/leads/{tenant_id}", status_code=201)
+def create_lead(tenant_id: str, body: LeadCreate, user=Depends(require_authenticated_user)):
+    src = body.source if body.source in ("manual", "email_import") else "manual"
+    base = body.model_dump(exclude_none=True, exclude={"source"})
+    base.update({"source": src, "stage": "New"})
+    return _dc_create(tenant_id, "lead", base, user["_token"])
+
+
+@router.get("/leads/{tenant_id}")
+def list_leads(tenant_id: str, stage: str | None = None, user=Depends(require_authenticated_user)):
+    where = "entity_type = 'lead' AND _status = 'active'"
+    if stage:
+        if stage not in STAGES:
+            raise HTTPException(400, f"Unknown stage: {stage}")
+        where += f" AND stage = '{stage}'"
+    rows = _dc_query(tenant_id, f"SELECT * FROM data WHERE {where}", user["_token"])
+    return {"leads": rows}
+
+
+@router.get("/leads/{tenant_id}/{lead_id}")
+def get_lead(tenant_id: str, lead_id: str, user=Depends(require_authenticated_user)):
+    lead = _get_lead(tenant_id, lead_id, user["_token"])
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    return lead
