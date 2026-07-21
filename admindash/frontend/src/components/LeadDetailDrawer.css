@@ -173,3 +173,24 @@
   color: var(--text-primary);
   text-align: center;
 }
+
+.lead-detail-fields {
+  margin: 0 0 1rem;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 0.75rem;
+}
+.lead-detail-field {
+  display: contents;
+}
+.lead-detail-field dt {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.lead-detail-field dd {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  word-break: break-word;
+}

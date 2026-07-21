@@ -71,13 +71,12 @@ export default function LeadDetailDrawer(
   }
 
   // Dynamic read-only field list from the model's non-reserved fields.
+  const fm = formModel(model);
   const displayFields = model
-    ? [...formModel(model).base_fields, ...formModel(model).custom_fields].filter(
-        (fld) => {
-          const v = lead[fld.name];
-          return v != null && v !== '' && !(Array.isArray(v) && v.length === 0);
-        },
-      )
+    ? [...fm.base_fields, ...fm.custom_fields].filter((fld) => {
+        const v = lead[fld.name];
+        return v != null && v !== '' && !(Array.isArray(v) && v.length === 0);
+      })
     : null;
 
   return (
