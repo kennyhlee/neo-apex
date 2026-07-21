@@ -1,4 +1,5 @@
 """Lead-management routes — proxy to DataCore with lead-specific business rules."""
+import re
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, model_validator
@@ -130,6 +131,8 @@ class ConvertRequest(BaseModel):
 
 @router.post("/public/leads/{tenant_id}", status_code=201)
 def public_intake(tenant_id: str, body: PublicLeadCreate):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", tenant_id):
+        raise HTTPException(404, "Unknown tenant")
     if not _tenant_exists(tenant_id):
         raise HTTPException(404, "Unknown tenant")
     base = body.model_dump(exclude_none=True)

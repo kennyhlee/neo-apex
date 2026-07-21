@@ -272,6 +272,17 @@ def test_public_intake_unknown_tenant_404(client):
     assert resp.status_code == 404
 
 
+@respx.mock
+def test_public_intake_rejects_malformed_tenant_id(client):
+    """tenant_id with characters outside [A-Za-z0-9_-] must be rejected before DataCore is called."""
+    # No DataCore routes registered — if the code reaches _tenant_exists/_dc_query it will error
+    resp = client.post(
+        "/api/public/leads/t1'%20OR%201=1",
+        json={"guardian_name": "Probe", "email": "p@e.com"},
+    )
+    assert resp.status_code in (400, 404)
+
+
 def test_public_intake_needs_no_jwt(client):
     # No Authorization header at all — must not 401 on auth (tenant check will run)
     import respx as _r
