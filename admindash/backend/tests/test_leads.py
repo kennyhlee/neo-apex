@@ -161,3 +161,39 @@ def test_stage_change_rejects_unknown_stage(client):
     resp = client.patch("/api/leads/t1/ld1/stage", json={"stage": "Nope"},
         headers={"Authorization": "Bearer good"})
     assert resp.status_code == 400
+
+
+# ── activity create + timeline routes ────────────────────────────────────────
+
+
+@respx.mock
+def test_add_activity(client):
+    _stub_auth(respx)
+    act = respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
+        return_value=httpx.Response(201, json={"entity_id": "la1"}))
+    resp = client.post("/api/leads/t1/ld1/activities",
+        json={"type": "call", "body": "Left voicemail"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 201
+    b = _j.loads(act.calls.last.request.content)["base_data"]
+    assert b["type"] == "call" and b["lead_id"] == "ld1" and b["created_by"] == "u1"
+
+
+@respx.mock
+def test_add_activity_rejects_bad_type(client):
+    _stub_auth(respx)
+    resp = client.post("/api/leads/t1/ld1/activities",
+        json={"type": "carrier_pigeon", "body": "x"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 400
+
+
+@respx.mock
+def test_list_activities_desc(client):
+    _stub_auth(respx)
+    route = respx.post("http://localhost:5800/api/query").mock(
+        return_value=httpx.Response(200, json={"data": [{"entity_id": "la2"}, {"entity_id": "la1"}], "total": 2}))
+    resp = client.get("/api/leads/t1/ld1/activities", headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    sql = _j.loads(route.calls.last.request.content)["sql"]
+    assert "lead_activity" in sql and "lead_id = 'ld1'" in sql and "ORDER BY _created_at DESC" in sql
