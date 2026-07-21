@@ -1,0 +1,76 @@
+.inquiry-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-6, 48px) var(--space-4, 16px);
+  min-height: 100vh;
+  background: var(--color-bg, #f7f8fa);
+}
+
+.inquiry-page h1 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #1A202C;
+  margin-bottom: var(--space-4, 16px);
+}
+
+.inquiry-page form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  width: 100%;
+  max-width: 480px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: var(--radius-md, 6px);
+  padding: var(--space-5, 32px);
+}
+
+.inquiry-page label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  font-size: 14px;
+  color: var(--text-secondary, #4A5568);
+  font-weight: 500;
+}
+
+.inquiry-page input,
+.inquiry-page textarea {
+  padding: var(--space-2, 8px) var(--space-2, 8px);
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 14px;
+  background: var(--color-bg, #f7f8fa);
+  color: #1A202C;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inquiry-page textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.inquiry-page button[type='submit'] {
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  background: var(--color-primary, #3B82F6);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 6px);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.inquiry-page button[type='submit']:hover {
+  background: var(--color-primary-hover, #2563EB);
+}
+
+.inquiry-page .error {
+  color: var(--color-error, #E53E3E);
+  font-size: 14px;
+  margin-bottom: var(--space-2, 8px);
+}

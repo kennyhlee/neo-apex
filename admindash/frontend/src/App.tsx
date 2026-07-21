@@ -5,6 +5,7 @@ import { DashboardProvider } from './contexts/DashboardContext.tsx';
 import Navbar from './components/Navbar.tsx';
 import Footer from './components/Footer.tsx';
 import LoginPage from './pages/LoginPage.tsx';
+import PublicInquiryPage from './pages/PublicInquiryPage.tsx';
 import HomePage from './pages/HomePage.tsx';
 import StudentsPage from './pages/StudentsPage.tsx';
 import BulkAddStudentsPage from './pages/BulkAddStudentsPage.tsx';
@@ -24,6 +25,8 @@ function AppRoutes() {
         path="/login"
         element={user ? <Navigate to="/home" replace /> : <LoginPage />}
       />
+
+      <Route path="/inquire/:tenantId" element={<PublicInquiryPage />} />
 
       <Route
         path="*"
