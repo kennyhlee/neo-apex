@@ -3,7 +3,7 @@ import { type FormEvent } from 'react';
 import { createLead } from '../api/client.ts';
 import { parseInquiryEmail } from '../utils/parseInquiryEmail.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
-import { formModel } from '../utils/leadModel.ts';
+import { formModel, formatFieldLabel } from '../utils/leadModel.ts';
 import type { ModelDefinition } from '../types/models.ts';
 import './DynamicForm.css';
 import './LeadModal.css';
@@ -12,10 +12,6 @@ const FIXED_REVIEW_KEYS = [
   'guardian_name', 'email', 'phone',
   'student_first_name', 'student_last_name', 'message',
 ] as const;
-
-function formatLabel(name: string): string {
-  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 export default function ImportEmailModal(
   { tenant, onClose, onCreated }: { tenant: string; onClose: () => void; onCreated: () => void },
@@ -90,7 +86,7 @@ export default function ImportEmailModal(
               <div className="dynamic-form-fields">
                 {Object.keys(parsed).map((k) => (
                   <div key={k} className="dynamic-form-field">
-                    <label>{formatLabel(k)}</label>
+                    <label>{formatFieldLabel(k)}</label>
                     <input
                       value={parsed[k]}
                       onChange={(e) => setParsed({ ...parsed, [k]: e.target.value })}

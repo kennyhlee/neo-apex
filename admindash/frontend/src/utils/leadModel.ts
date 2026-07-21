@@ -2,6 +2,14 @@ import type { ModelDefinition } from '../types/models.ts';
 import { DEFAULT_LEAD_STAGES } from '../types/models.ts';
 
 /**
+ * Humanize a field name into a readable label.
+ * e.g. "guardian_name" → "Guardian Name"
+ */
+export function formatFieldLabel(name: string): string {
+  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
  * Return the list of lead stages for a given ModelDefinition.
  * Looks for a field named "stage" (in base_fields then custom_fields) with
  * a non-empty options array. Falls back to DEFAULT_LEAD_STAGES if not found.

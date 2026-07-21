@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, type FormEvent } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { listActivities, addActivity, updateLeadStage } from '../api/client.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
-import { leadStages, formModel } from '../utils/leadModel.ts';
+import { leadStages, formModel, formatFieldLabel } from '../utils/leadModel.ts';
 import { type Lead, type LeadActivity } from '../types/models.ts';
 import type { ModelDefinition } from '../types/models.ts';
 import ConvertToFamilyModal from './ConvertToFamilyModal.tsx';
@@ -11,10 +11,6 @@ import './LeadModal.css';
 import './LeadDetailDrawer.css';
 
 const ACTIVITY_TYPES = ['call', 'email', 'note'] as const;
-
-function formatLabel(name: string): string {
-  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 function formatValue(val: unknown): string {
   if (Array.isArray(val)) return val.join(', ');
@@ -94,7 +90,7 @@ export default function LeadDetailDrawer(
           <dl className="lead-detail-fields">
             {displayFields.map((fld) => (
               <div key={fld.name} className="lead-detail-field">
-                <dt>{formatLabel(fld.name)}</dt>
+                <dt>{formatFieldLabel(fld.name)}</dt>
                 <dd>{formatValue(lead[fld.name])}</dd>
               </div>
             ))}
