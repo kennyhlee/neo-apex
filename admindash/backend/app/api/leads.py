@@ -169,6 +169,46 @@ def add_activity(tenant_id: str, lead_id: str, body: ActivityCreate,
     }, user["_token"])
 
 
+@router.post("/leads/{tenant_id}/{lead_id}/convert", status_code=201)
+def convert_lead(tenant_id: str, lead_id: str, body: ConvertRequest,
+                 user=Depends(require_authenticated_user)):
+    token = user["_token"]
+    lead = _get_lead(tenant_id, lead_id, token)
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    if lead.get("converted_family_id"):
+        raise HTTPException(409, f"Lead already converted to family {lead['converted_family_id']}")
+
+    family = _dc_create(tenant_id, "family", {
+        "family_name": body.family_name,
+        "primary_address": body.primary_address,
+        "primary_email": body.primary_email or lead.get("email"),
+        "primary_phone": body.primary_phone or lead.get("phone"),
+    }, token)
+    family_id = family["entity_id"]
+
+    student_base = {
+        "first_name": body.student_first_name,
+        "last_name": body.student_last_name,
+        "family_id": family_id,
+        "primary_address": body.primary_address,
+        "status": "Enrolled",
+    }
+    if body.grade_level:
+        student_base["grade_level"] = body.grade_level
+    student = _dc_create(tenant_id, "student", student_base, token)
+
+    base = _lead_base_data(lead)
+    base["converted_family_id"] = family_id
+    prev_stage = base.get("stage", "New")
+    base["stage"] = "Enrolled"
+    _dc_update(tenant_id, "lead", lead_id, base, token)
+    if prev_stage != "Enrolled":
+        _log_stage_change(tenant_id, lead_id, prev_stage, "Enrolled", token)
+
+    return {"family_id": family_id, "student_id": student["entity_id"], "lead_id": lead_id}
+
+
 @router.get("/leads/{tenant_id}/{lead_id}/activities")
 def list_activities(tenant_id: str, lead_id: str, user=Depends(require_authenticated_user)):
     rows = _dc_query(

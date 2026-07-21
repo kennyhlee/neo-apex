@@ -197,3 +197,49 @@ def test_list_activities_desc(client):
     assert resp.status_code == 200
     sql = _j.loads(route.calls.last.request.content)["sql"]
     assert "lead_activity" in sql and "lead_id = 'ld1'" in sql and "ORDER BY _created_at DESC" in sql
+
+
+# ── convert lead routes ───────────────────────────────────────────────────
+
+
+@respx.mock
+def test_convert_creates_family_student_and_links(client):
+    _stub_auth(respx)
+    respx.post("http://localhost:5800/api/query").mock(
+        return_value=httpx.Response(200, json={"data": [
+            {"entity_id": "ld1", "guardian_name": "Sam", "email": "s@e.com",
+             "stage": "Toured", "source": "manual"}], "total": 1}))
+    fam = respx.post("http://localhost:5800/api/entities/t1/family").mock(
+        return_value=httpx.Response(201, json={"entity_id": "fam1", "base_data": {"family_id": "F-1"}}))
+    stu = respx.post("http://localhost:5800/api/entities/t1/student").mock(
+        return_value=httpx.Response(201, json={"entity_id": "stu1"}))
+    upd = respx.put("http://localhost:5800/api/entities/t1/lead/ld1").mock(
+        return_value=httpx.Response(200, json={"entity_id": "ld1"}))
+    act = respx.post("http://localhost:5800/api/entities/t1/lead_activity").mock(
+        return_value=httpx.Response(201, json={}))
+    resp = client.post("/api/leads/t1/ld1/convert",
+        json={"family_name": "Rivera Family", "primary_address": "1 Main St",
+              "student_first_name": "Ada", "student_last_name": "Rivera"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 201
+    assert fam.called and stu.called and upd.called and act.called
+    import json as _j
+    stu_body = _j.loads(stu.calls.last.request.content)["base_data"]
+    assert stu_body["family_id"] == "fam1" and stu_body["status"] == "Enrolled"
+    lead_body = _j.loads(upd.calls.last.request.content)["base_data"]
+    assert lead_body["converted_family_id"] == "fam1" and lead_body["stage"] == "Enrolled"
+
+
+@respx.mock
+def test_convert_guards_double_conversion(client):
+    _stub_auth(respx)
+    respx.post("http://localhost:5800/api/query").mock(
+        return_value=httpx.Response(200, json={"data": [
+            {"entity_id": "ld1", "guardian_name": "Sam", "email": "s@e.com",
+             "stage": "Enrolled", "converted_family_id": "famX"}], "total": 1}))
+    resp = client.post("/api/leads/t1/ld1/convert",
+        json={"family_name": "X", "primary_address": "Y",
+              "student_first_name": "A", "student_last_name": "B"},
+        headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 409
+    assert "famX" in resp.json()["detail"]
