@@ -167,6 +167,8 @@ def get_lead(tenant_id: str, lead_id: str, user=Depends(require_authenticated_us
     return lead
 
 
+# Keep in sync with LeadCreate schema fields + internal fields (source, stage,
+# lead_id, converted_family_id) — stage/convert PUTs will silently drop new fields otherwise.
 _LEAD_FIELDS = ["guardian_name", "email", "phone", "student_first_name",
                 "student_last_name", "grade_of_interest", "message", "source",
                 "stage", "lead_id", "converted_family_id"]

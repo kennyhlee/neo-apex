@@ -124,32 +124,6 @@ def test_default_abbrevs_cleaned_up(program_client):
     assert "program" in DEFAULT_ABBREVS
 
 
-@pytest.fixture
-def lead_client():
-    """Client with 'lead' registered in DEFAULT_ABBREVS."""
-    original = dict(DEFAULT_ABBREVS)
-    DEFAULT_ABBREVS["lead"] = "LD"
-    with tempfile.TemporaryDirectory() as tmp:
-        mock_embedder = MagicMock()
-        mock_embedder.embed.return_value = [0.0] * 1024
-        store = Store(data_dir=tmp, embedder=mock_embedder)
-        app = create_app(store)
-        client = TestClient(app)
-        client.put(
-            "/api/tenants/t1",
-            json={
-                "base_data": {
-                    "tenant_id": "t1",
-                    "name": "Acme Child Center",
-                    "primary_address": "123 Main St",
-                },
-            },
-        )
-        yield client, store
-    DEFAULT_ABBREVS.clear()
-    DEFAULT_ABBREVS.update(original)
-
-
 def test_lead_gets_sequential_human_id():
     """Creating a lead without lead_id should auto-assign one."""
     # This test verifies lead auto-ID WITHOUT the fixture managing DEFAULT_ABBREVS
