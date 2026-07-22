@@ -43,6 +43,10 @@ def get_tenant_profile(tenant_id: str, user=Depends(require_role("admin", "staff
     data = {k: v for k, v in row.items()
             if k not in skip_keys and v is not None and not k.startswith("_")}
     data["tenant_id"] = tenant_id
+    # name is immutable post-creation and may be absent/None on the stored
+    # entity; fall back to the JWT's tenant_name so the field is never blank.
+    if not data.get("name"):
+        data["name"] = user["tenant_name"]
     return data
 
 
@@ -158,6 +162,46 @@ def use_default_model(tenant_id: str, user=Depends(require_role("admin"))):
     )
 
     return base_model
+
+
+@router.post("/tenants/{tenant_id}/model/sync-defaults")
+def sync_default_model(tenant_id: str, user=Depends(require_role("admin"))):
+    """Non-destructively add any base_model entities missing from the tenant's
+    current model. Existing entities (and their customizations) are untouched."""
+    if user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    base_model = json.loads(BASE_MODEL_PATH.read_text())
+
+    resp = httpx.post(
+        _datacore_url("/query"),
+        json={
+            "tenant_id": tenant_id,
+            "table": "models",
+            "sql": "SELECT entity_type FROM data WHERE _status = 'active'",
+        },
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch model")
+    existing = {r["entity_type"] for r in resp.json().get("data", [])}
+
+    missing = {et: definition for et, definition in base_model.items()
+               if et not in existing}
+    if not missing:
+        return {"added": []}
+
+    put_resp = httpx.put(
+        _datacore_url(f"/models/{tenant_id}"),
+        json={
+            "model_definition": missing,
+            "source_filename": "base_model.json",
+            "created_by": user["name"],
+        },
+        timeout=30.0,
+    )
+    if put_resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to sync model")
+
+    return {"added": sorted(missing.keys())}
 
 
 @router.get("/tenants/{tenant_id}/onboarding-status")
