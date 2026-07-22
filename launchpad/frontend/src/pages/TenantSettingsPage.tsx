@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { User, EntityModelDefinition } from "../types/models";
-import { getTenantModel, getTenantProfile, updateTenantProfile, getTenantModelInfo, getExchangeCode, syncDefaultModel } from "../api/client";
+import { getTenantModel, getTenantProfile, updateTenantProfile, getTenantModelInfo, getTenantModelEntities, getExchangeCode, syncDefaultModel } from "../api/client";
 import { PAPERMITE_FRONTEND_URL } from "../config";
 import DynamicEntityForm from "../components/DynamicEntityForm";
 
@@ -30,9 +30,9 @@ export default function TenantSettingsPage({ user }: Props) {
     getTenantModelInfo(user.tenant_id).then(info => {
       if (info) {
         setModelInfo({ version: info.version, change_id: info.change_id, created_at: info.created_at, updated_at: info.updated_at });
-        setModelDefinition(info.model_definition as ModelDefinition);
       }
     }).catch(() => {});
+    getTenantModelEntities(user.tenant_id).then(setModelDefinition).catch(() => {});
   }, [user.tenant_id]);
 
   const handleEditModel = async () => {
@@ -49,8 +49,8 @@ export default function TenantSettingsPage({ user }: Props) {
       const info = await getTenantModelInfo(user.tenant_id);
       if (info) {
         setModelInfo({ version: info.version, change_id: info.change_id, created_at: info.created_at, updated_at: info.updated_at });
-        setModelDefinition(info.model_definition as ModelDefinition);
       }
+      setModelDefinition(await getTenantModelEntities(user.tenant_id));
       setSyncMessage(added.length ? `Added: ${added.join(", ")}` : "Model already up to date.");
     } catch {
       setSyncMessage("Failed to sync default entities.");
@@ -111,14 +111,16 @@ export default function TenantSettingsPage({ user }: Props) {
             <span style={{ color: "var(--text-secondary)" }}>Updated</span>
             <span style={{ color: "var(--text-primary)" }}>{new Date(modelInfo.updated_at).toLocaleString()}</span>
           </div>
-          {modelDefinition && (
+          {modelDefinition && Object.keys(modelDefinition).length > 0 && (
             <div style={{ marginTop: 20 }}>
               <span style={{ color: "var(--text-secondary)", fontSize: 14 }}>Entities</span>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                 {Object.keys(modelDefinition).sort().map(entityType => {
-                  const entity = modelDefinition[entityType];
-                  const fieldCount = entity.base_fields.length + entity.custom_fields.length;
-                  const fieldNames = [...entity.base_fields, ...entity.custom_fields].map(f => f.name).join(", ");
+                  const entity = modelDefinition[entityType] || { base_fields: [], custom_fields: [] };
+                  const base = entity.base_fields || [];
+                  const custom = entity.custom_fields || [];
+                  const fieldCount = base.length + custom.length;
+                  const fieldNames = [...base, ...custom].map(f => f.name).join(", ");
                   return (
                     <div key={entityType} style={{ padding: "10px 12px", background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>

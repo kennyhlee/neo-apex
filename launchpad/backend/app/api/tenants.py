@@ -108,6 +108,39 @@ def get_model(tenant_id: str, user=Depends(get_current_user)):
     return json.loads(md) if isinstance(md, str) else md
 
 
+@router.get("/tenants/{tenant_id}/model/entities")
+def get_model_entities(tenant_id: str, user=Depends(get_current_user)):
+    """Return every entity in the tenant's model as {entity_type: {base_fields, custom_fields}}."""
+    if user["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    resp = httpx.post(
+        _datacore_url("/query"),
+        json={
+            "tenant_id": tenant_id,
+            "table": "models",
+            "sql": "SELECT * FROM data WHERE _status = 'active'",
+        },
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch model")
+    entities: dict = {}
+    for row in resp.json().get("data", []):
+        et = row.get("entity_type")
+        md = row.get("model_definition")
+        if isinstance(md, str):
+            try:
+                md = json.loads(md)
+            except (ValueError, TypeError):
+                continue
+        if not isinstance(md, dict) or not et:
+            continue
+        entities[et] = {
+            "base_fields": md.get("base_fields", []),
+            "custom_fields": md.get("custom_fields", []),
+        }
+    return {"entities": entities}
+
+
 @router.get("/tenants/{tenant_id}/model/info")
 def get_model_info(tenant_id: str, user=Depends(get_current_user)):
     if user["tenant_id"] != tenant_id:
