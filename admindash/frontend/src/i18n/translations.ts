@@ -164,6 +164,19 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Lead
     'lead.title': 'Lead Management',
+    'leads.title': 'Leads',
+    'leads.addManual': 'Add Lead',
+    'leads.importEmail': 'Import from Email',
+    'leads.filterAll': 'All stages',
+    'leads.empty': 'No leads yet',
+    'leads.convert': 'Convert to Family',
+    'leads.addActivity': 'Add Activity',
+    'leads.stage': 'Stage',
+    'leads.activityTimeline': 'Activity',
+    'leads.confirmStageTitle': 'Change stage',
+    'leads.confirmStagePrompt': "Change this lead's stage? The change will be recorded in the activity log.",
+    'leads.confirm': 'Confirm',
+    'leads.cancel': 'Cancel',
 
     // Bulk Add Students
     'bulkAdd.entryButton': 'Bulk add',
@@ -446,6 +459,19 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Lead
     'lead.title': '\u5ba2\u6237\u7ba1\u7406',
+    'leads.title': '\u5ba2\u6237',
+    'leads.addManual': '\u6dfb\u52a0\u5ba2\u6237',
+    'leads.importEmail': '\u4ece\u90ae\u4ef6\u5bfc\u5165',
+    'leads.filterAll': '\u5168\u90e8\u9636\u6bb5',
+    'leads.empty': '\u6682\u65e0\u5ba2\u6237',
+    'leads.convert': '\u8f6c\u5316\u4e3a\u5bb6\u5ead',
+    'leads.addActivity': '\u6dfb\u52a0\u6d3b\u52a8',
+    'leads.stage': '\u9636\u6bb5',
+    'leads.activityTimeline': '\u6d3b\u52a8',
+    'leads.confirmStageTitle': '\u66f4\u6539\u9636\u6bb5',
+    'leads.confirmStagePrompt': '\u786e\u5b9a\u66f4\u6539\u8be5\u5ba2\u6237\u7684\u9636\u6bb5\uff1f\u6b64\u66f4\u6539\u5c06\u8bb0\u5f55\u5728\u6d3b\u52a8\u65e5\u5fd7\u4e2d\u3002',
+    'leads.confirm': '\u786e\u8ba4',
+    'leads.cancel': '\u53d6\u6d88',
 
     // Bulk Add Students
     'bulkAdd.entryButton': '\u6279\u91cf\u6dfb\u52a0',

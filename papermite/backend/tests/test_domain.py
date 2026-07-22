@@ -116,3 +116,48 @@ def test_registration_application_no_program_fields():
     ra = RegistrationApplication(application_id="A1", school_year="2025-2026")
     assert "program_id" not in ra.model_fields
     assert "program_name" not in ra.model_fields
+
+
+from app.models.domain import Lead
+
+
+def test_lead_defaults():
+    lead = Lead(lead_id="L1", guardian_name="Jane Doe")
+    assert lead.entity_type == "LEAD"
+    assert lead.lead_id == "L1"
+    assert lead.guardian_name == "Jane Doe"
+    assert lead.email is None
+    assert lead.phone is None
+    assert lead.student_first_name is None
+    assert lead.student_last_name is None
+    assert lead.grade_of_interest is None
+    assert lead.message is None
+    assert lead.source is None
+    assert lead.stage is None
+    assert lead.converted_family_id is None
+    assert lead.custom_fields == {}
+
+
+def test_lead_with_optional_fields():
+    lead = Lead(
+        lead_id="L2",
+        guardian_name="Bob Smith",
+        email="bob@example.com",
+        phone="555-1234",
+        student_first_name="Alice",
+        student_last_name="Smith",
+        grade_of_interest="3rd",
+        message="Interested in after-school program",
+        source="website",
+        stage="contacted",
+        converted_family_id="F99",
+    )
+    assert lead.email == "bob@example.com"
+    assert lead.phone == "555-1234"
+    assert lead.student_first_name == "Alice"
+    assert lead.converted_family_id == "F99"
+
+
+def test_entity_classes_has_lead():
+    assert "lead" in ENTITY_CLASSES
+    assert ENTITY_CLASSES["lead"] is Lead

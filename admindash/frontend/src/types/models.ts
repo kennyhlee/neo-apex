@@ -106,3 +106,47 @@ export interface DuplicateCheckRequest {
 export interface DuplicateCheckResponse {
   matches: DuplicateMatch[];
 }
+
+export const DEFAULT_LEAD_STAGES = ['New', 'Contacted', 'Tour Scheduled', 'Toured', 'Enrolled', 'Lost'] as const;
+// Backward-compat alias
+export const LEAD_STAGES = DEFAULT_LEAD_STAGES;
+// Relaxed to string — stages are now customer-defined via model
+export type LeadStage = string;
+
+export interface Lead {
+  entity_id: string;
+  lead_id?: string;
+  guardian_name: string;
+  email?: string;
+  phone?: string;
+  student_first_name?: string;
+  student_last_name?: string;
+  grade_of_interest?: string;
+  message?: string;
+  source: 'web_form' | 'manual' | 'email_import';
+  stage: string;
+  converted_family_id?: string;
+  _created_at?: string;
+  _updated_at?: string;
+  // Index signature for dynamically-defined custom fields
+  [key: string]: unknown;
+}
+
+export interface LeadModelField {
+  name: string;
+  type: string;
+  required?: boolean;
+  options?: string[];
+  multiple?: boolean;
+}
+
+export interface LeadActivity {
+  entity_id: string;
+  lead_id: string;
+  type: 'call' | 'email' | 'note' | 'stage_change';
+  body: string;
+  stage_from?: string;
+  stage_to?: string;
+  created_by: string;
+  _created_at?: string;
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { User, EntityModelDefinition } from "../types/models";
-import { getTenantModel, getTenantProfile, updateTenantProfile, getTenantModelInfo, getExchangeCode } from "../api/client";
+import { getTenantModel, getTenantProfile, updateTenantProfile, getTenantModelInfo, getTenantModelEntities, getExchangeCode, syncDefaultModel } from "../api/client";
 import { PAPERMITE_FRONTEND_URL } from "../config";
 import DynamicEntityForm from "../components/DynamicEntityForm";
 
@@ -10,26 +10,53 @@ const btnPrimary: React.CSSProperties = { padding: "8px 16px", fontSize: 14, bac
 const btnSecondary: React.CSSProperties = { padding: "8px 16px", fontSize: 14, background: "var(--bg-secondary)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-md)", cursor: "pointer", fontFamily: "var(--font-sans)" };
 const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-lg)", padding: 32, boxShadow: "var(--shadow-card)", maxWidth: 600 };
 
+type ModelEntity = { base_fields: { name: string }[]; custom_fields: { name: string }[] };
+type ModelDefinition = Record<string, ModelEntity>;
+
 export default function TenantSettingsPage({ user }: Props) {
   const [model, setModel] = useState<EntityModelDefinition | null>(null);
   const [data, setData] = useState<Record<string, unknown>>({});
   const [modelInfo, setModelInfo] = useState<{ version: number; change_id: string; created_at: string; updated_at: string } | null>(null);
+  const [modelDefinition, setModelDefinition] = useState<ModelDefinition | null>(null);
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const isAdmin = user.role === "admin";
 
   useEffect(() => {
     getTenantModel(user.tenant_id).then(setModel);
     getTenantProfile(user.tenant_id).then(setData);
     getTenantModelInfo(user.tenant_id).then(info => {
-      if (info) setModelInfo({ version: info.version, change_id: info.change_id, created_at: info.created_at, updated_at: info.updated_at });
+      if (info) {
+        setModelInfo({ version: info.version, change_id: info.change_id, created_at: info.created_at, updated_at: info.updated_at });
+      }
     }).catch(() => {});
+    getTenantModelEntities(user.tenant_id).then(setModelDefinition).catch(() => {});
   }, [user.tenant_id]);
 
   const handleEditModel = async () => {
     const code = await getExchangeCode();
     const returnUrl = `${window.location.origin}/settings/tenant`;
     window.location.href = `${PAPERMITE_FRONTEND_URL}/?tenant_id=${user.tenant_id}&code=${encodeURIComponent(code)}&return_url=${encodeURIComponent(returnUrl)}`;
+  };
+
+  const handleSyncDefaults = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const { added } = await syncDefaultModel(user.tenant_id);
+      const info = await getTenantModelInfo(user.tenant_id);
+      if (info) {
+        setModelInfo({ version: info.version, change_id: info.change_id, created_at: info.created_at, updated_at: info.updated_at });
+      }
+      setModelDefinition(await getTenantModelEntities(user.tenant_id));
+      setSyncMessage(added.length ? `Added: ${added.join(", ")}` : "Model already up to date.");
+    } catch {
+      setSyncMessage("Failed to sync default entities.");
+    } finally {
+      setSyncing(false);
+    }
   };
 
   if (!model) return <p>Loading...</p>;
@@ -84,11 +111,38 @@ export default function TenantSettingsPage({ user }: Props) {
             <span style={{ color: "var(--text-secondary)" }}>Updated</span>
             <span style={{ color: "var(--text-primary)" }}>{new Date(modelInfo.updated_at).toLocaleString()}</span>
           </div>
+          {modelDefinition && Object.keys(modelDefinition).length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <span style={{ color: "var(--text-secondary)", fontSize: 14 }}>Entities</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                {Object.keys(modelDefinition).sort().map(entityType => {
+                  const entity = modelDefinition[entityType] || { base_fields: [], custom_fields: [] };
+                  const base = entity.base_fields || [];
+                  const custom = entity.custom_fields || [];
+                  const fieldCount = base.length + custom.length;
+                  const fieldNames = [...base, ...custom].map(f => f.name).join(", ");
+                  return (
+                    <div key={entityType} style={{ padding: "10px 12px", background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                        <span style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: 14 }}>{entityType}</span>
+                        <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>{fieldCount} fields</span>
+                      </div>
+                      {fieldNames && <div style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 4 }}>{fieldNames}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {isAdmin && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button onClick={handleSyncDefaults} disabled={syncing} style={{ ...btnSecondary, opacity: syncing ? 0.6 : 1, cursor: syncing ? "default" : "pointer" }}>
+                {syncing ? "Syncing…" : "Sync default entities"}
+              </button>
               <button onClick={handleEditModel} style={btnPrimary}>Edit Model</button>
             </div>
           )}
+          {syncMessage && <p style={{ color: "var(--text-secondary)", marginTop: 12, fontSize: 14 }}>{syncMessage}</p>}
         </div>
       )}
     </div>

@@ -81,6 +81,22 @@
     ],
     "custom_fields": []
   },
+  "lead": {
+    "base_fields": [
+      {"name": "lead_id", "type": "str", "required": true},
+      {"name": "guardian_name", "type": "str", "required": true},
+      {"name": "email", "type": "email", "required": false},
+      {"name": "phone", "type": "phone", "required": false},
+      {"name": "student_first_name", "type": "str", "required": false},
+      {"name": "student_last_name", "type": "str", "required": false},
+      {"name": "grade_of_interest", "type": "str", "required": false},
+      {"name": "message", "type": "str", "required": false},
+      {"name": "source", "type": "selection", "required": false, "options": ["web_form", "manual", "email_import"], "multiple": false},
+      {"name": "stage", "type": "selection", "required": false, "options": ["New", "Contacted", "Tour Scheduled", "Toured", "Enrolled", "Lost"], "multiple": false},
+      {"name": "converted_family_id", "type": "str", "required": false}
+    ],
+    "custom_fields": []
+  },
   "attendance": {
     "base_fields": [
       {"name": "attendance_id", "type": "str", "required": true},

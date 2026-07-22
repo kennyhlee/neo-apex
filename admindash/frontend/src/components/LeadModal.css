@@ -1,0 +1,59 @@
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lead-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.lead-modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  width: 92%;
+  max-width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-elevated);
+}
+
+.lead-modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.lead-modal-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.lead-modal-body {
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.lead-modal-body textarea {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.lead-modal-body textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.15);
+}

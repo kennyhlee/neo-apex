@@ -1,0 +1,26 @@
+.inquiry-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem 1rem;
+  min-height: 100vh;
+  background: var(--bg-primary, #F8FAFC);
+}
+
+.inquiry-page h1 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary, #1A202C);
+  margin-bottom: 1rem;
+}
+
+.inquiry-page form {
+  width: 100%;
+  max-width: 640px;
+  background: var(--bg-card, #FFF);
+  border: 1px solid var(--border-primary, #E2E8F0);
+  border-radius: var(--radius-md, 12px);
+  box-shadow: var(--shadow-card);
+  padding: 2rem;
+}

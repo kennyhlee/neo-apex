@@ -128,6 +128,21 @@ class Enrollment(BaseEntity):
     end_date: Optional[_dt.date] = None
 
 
+class Lead(BaseEntity):
+    entity_type: str = "LEAD"
+    lead_id: str = ""
+    guardian_name: str = ""
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    student_first_name: Optional[str] = None
+    student_last_name: Optional[str] = None
+    grade_of_interest: Optional[str] = None
+    message: Optional[str] = None
+    source: Optional[str] = None
+    stage: Optional[str] = None
+    converted_family_id: Optional[str] = None
+
+
 class Attendance(BaseEntity):
     entity_type: str = "ATTENDANCE"
     student_id: str = ""
@@ -172,6 +187,7 @@ ENTITY_CLASSES: Dict[str, type[BaseEntity]] = {
     "student": Student,
     "family": Family,
     "contact": Contact,
+    "lead": Lead,
     "enrollment": Enrollment,
     "attendance": Attendance,
     "registration_application": RegistrationApplication,

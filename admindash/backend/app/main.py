@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, entities, extract, health, query
+from app.api import auth, entities, extract, health, leads, query
 from app.config import settings
 from app.middleware.cloudflare_ip import CloudflareIPMiddleware
 
@@ -38,3 +38,4 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(query.router, prefix="/api", tags=["query"])
 app.include_router(entities.router, prefix="/api", tags=["entities"])
 app.include_router(extract.router, prefix="/api", tags=["extract"])
+app.include_router(leads.router, prefix="/api", tags=["leads"])

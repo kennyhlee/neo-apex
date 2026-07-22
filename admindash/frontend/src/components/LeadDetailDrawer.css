@@ -1,0 +1,196 @@
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 900;
+  animation: fadeIn 0.2s ease;
+}
+
+.lead-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 420px;
+  max-width: 95vw;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border-primary);
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.15);
+  animation: slideInRight 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.drawer-close {
+  align-self: flex-end;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  line-height: 1;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+
+.drawer-close:hover {
+  background: var(--bg-secondary);
+}
+
+.lead-drawer h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.lead-drawer p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.lead-drawer label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.lead-drawer label select {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.lead-drawer label select:focus {
+  border-color: var(--color-accent);
+}
+
+.activity-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.activity-form select,
+.activity-form input {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.activity-form select:focus,
+.activity-form input:focus {
+  border-color: var(--color-accent);
+}
+
+.activity-form input {
+  flex: 1;
+}
+
+.lead-drawer h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  border-top: 1px solid var(--border-primary);
+  padding-top: 0.75rem;
+}
+
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.activity-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.activity-list small {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.badge-call     { background: var(--accent-muted); color: var(--info); }
+.badge-email    { background: rgba(99, 153, 34, 0.15); color: var(--success); }
+.badge-note     { background: var(--bg-tertiary); color: var(--text-tertiary); }
+.badge-stage_change { background: rgba(239, 159, 39, 0.15); color: var(--warning); }
+
+.stage-change-preview {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.lead-detail-fields {
+  margin: 0 0 1rem;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 0.75rem;
+}
+.lead-detail-field {
+  display: contents;
+}
+.lead-detail-field dt {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.lead-detail-field dd {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  word-break: break-word;
+}
