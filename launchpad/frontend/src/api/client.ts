@@ -166,6 +166,14 @@ export async function useDefaultModel(tenantId: string): Promise<Record<string, 
   return res.json();
 }
 
+export async function syncDefaultModel(tenantId: string): Promise<{ added: string[] }> {
+  const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/model/sync-defaults`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to sync default entities");
+  return res.json();
+}
+
 export async function getTenantModelInfo(tenantId: string): Promise<{ model_definition: Record<string, unknown>; version: number; change_id: string; created_at: string; updated_at: string } | null> {
   const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/model/info`);
   if (!res.ok) throw new Error("Failed to fetch model info");
