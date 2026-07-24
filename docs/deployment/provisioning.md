@@ -178,7 +178,14 @@ In the Cloudflare dashboard → **Workers & Pages** → **Create** → **Import 
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
 | Advanced → API token / token name | *leave blank* (auth comes from the `CLOUDFLARE_API_TOKEN` variable below) |
-| Advanced → Build for non-production branches | optional (enable if you want PR preview builds) |
+| Advanced → Build for non-production branches | **disable** — leaving it on makes Cloudflare build every PR branch, which surfaces a red `Workers Builds: <project>` check on PRs (independent of, and redundant with, the `deploy.yml` release pipeline). |
+
+> **⚠️ Git integration vs. `deploy.yml` — pick one deploy path for the frontends.**
+> Connecting a Worker project to Git (above) makes Cloudflare **auto-build and deploy on every push to the production branch (`main`)**. That is **redundant with `.github/workflows/deploy.yml`** (which deploys the frontends via `wrangler-action` on a `<module>-v*` release tag) **and it bypasses the `production` approval gate** — a merge to `main` ships the frontend to prod immediately, before any release tag or approval.
+>
+> `deploy.yml` is the authoritative, gated deploy path. To make it the single source of truth (recommended):
+> - **Disconnect Git** from each Worker project: *Workers & Pages → `<project>` → Settings → Builds → Git repository → **Disconnect***. Deploys then happen only via the release pipeline.
+> - Or, if you want to keep Git connected for main-branch convenience, at minimum turn **off** *Build for non-production branches* on all three projects so PR checks stay green.
 
 ### Required variables by category
 

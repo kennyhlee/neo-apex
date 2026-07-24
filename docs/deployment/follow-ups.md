@@ -20,6 +20,8 @@ Deferred hardening and nice-to-haves. These are intentionally out of scope for t
 
 ## Reliability / ops
 
+- **Reconcile the two frontend deploy paths (Cloudflare Git build vs `deploy.yml`)** — the three frontend Worker projects (`launchpad-frontend`, `papermite-frontend`, `admindash`) are git-connected, so Cloudflare auto-builds+deploys on every push to `main`. This is redundant with `deploy.yml`'s `wrangler-action` (which deploys on `<module>-v*` release tags) **and bypasses the `production` approval gate** — a merge to `main` ships the frontend before any release/approval. It also surfaces a failing `Workers Builds: papermite-frontend` check on PRs (papermite is the only project with non-production-branch builds enabled). **Fix:** disconnect Git from all three Worker projects so `deploy.yml` is the single gated deploy path (or, to keep Git for main convenience, at least turn off *Build for non-production branches* so PR checks stay green). See `provisioning.md` Step 7. Dashboard action; can also be scripted via the Cloudflare API with a token scoped to `Account → Workers Scripts → Edit`.
+
 - **LanceDB off-site backup to Cloudflare R2** — Fly.io volume snapshots are phase 1 insurance but are single-provider. A scheduled GitHub Action should tar the LanceDB directory and upload to an R2 bucket daily. Restore procedure documented and tested quarterly.
 
 - **Multi-region Fly.io topology** — currently single-region (`sjc`). If uptime requirements tighten, replicate the backends to a second region. DataCore would need a different strategy (LanceDB replication is not trivial).
