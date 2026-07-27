@@ -1,13 +1,11 @@
 import json
 
 import httpx
-import pytest
 import respx
 from fastapi.testclient import TestClient
 
 from pydantic_ai import models
-from pydantic_ai.models.function import AgentInfo, FunctionModel
-from pydantic_ai import ModelMessage, ModelResponse, TextPart
+from pydantic_ai.models.function import FunctionModel
 
 import app.api.chat as chat_api
 from app.chat.agent import build_chat_agent, to_message_history
@@ -23,10 +21,12 @@ def test_to_message_history_trims():
     assert len(msgs) == 4
 
 
+async def _stream_text(messages, info):
+    yield 'Hello from the assistant.'
+
+
 def _text_only_agent():
-    def responder(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        return ModelResponse(parts=[TextPart("Hello from the assistant.")])
-    return build_chat_agent(model=FunctionModel(responder))
+    return build_chat_agent(model=FunctionModel(stream_function=_stream_text))
 
 
 def test_chat_endpoint_streams_tokens(monkeypatch):

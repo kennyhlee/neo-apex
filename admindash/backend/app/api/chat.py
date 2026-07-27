@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -8,7 +8,7 @@ from app.chat.datacore import ChatDeps
 from app.chat.stream import sse_chat
 from app.config import settings
 
-router = APIRouter(prefix="/api", tags=["chat"])
+router = APIRouter()
 
 
 class ChatTurn(BaseModel):
