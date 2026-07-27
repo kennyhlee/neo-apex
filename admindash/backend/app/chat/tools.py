@@ -119,3 +119,48 @@ def register_read_tools(agent: Agent) -> None:
             f"id={r.get('entity_id','?')})"
             for r in rows[:25]
         )
+
+
+def register_write_tools(agent: Agent) -> None:
+    @agent.tool
+    async def propose_create_student(
+        ctx: RunContext[ChatDeps],
+        first_name: str,
+        last_name: str,
+        grade_level: str | None = None,
+    ) -> str:
+        """Prepare (but do NOT execute) creation of a new student.
+        The user must confirm before it is created."""
+        fields = {"first_name": first_name, "last_name": last_name}
+        if grade_level:
+            fields["grade_level"] = grade_level
+        dupes = await dc_duplicate_check(ctx.deps, "student", fields)
+        ctx.deps.pending_proposals.append(
+            {"action": "create_student", "entity_type": "student",
+             "fields": fields, "duplicates": dupes}
+        )
+        note = " Possible duplicates were found." if dupes else ""
+        return ("Prepared a new-student proposal awaiting the user's confirmation."
+                + note + " Tell the user to review and confirm.")
+
+    @agent.tool
+    async def propose_create_lead(
+        ctx: RunContext[ChatDeps],
+        guardian_name: str,
+        email: str | None = None,
+        phone: str | None = None,
+        student_first_name: str | None = None,
+    ) -> str:
+        """Prepare (but do NOT execute) creation of a new lead.
+        The user must confirm before it is created."""
+        fields = {"guardian_name": guardian_name}
+        for k, v in (("email", email), ("phone", phone),
+                     ("student_first_name", student_first_name)):
+            if v:
+                fields[k] = v
+        ctx.deps.pending_proposals.append(
+            {"action": "create_lead", "entity_type": "lead",
+             "fields": fields, "duplicates": []}
+        )
+        return ("Prepared a new-lead proposal awaiting the user's confirmation. "
+                "Tell the user to review and confirm.")
