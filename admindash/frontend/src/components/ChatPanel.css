@@ -21,3 +21,18 @@
   border: none; border-radius: var(--radius-sm); padding: 0.5rem 0.9rem; cursor: pointer; }
 .chat-panel__input button:disabled { opacity: 0.5; cursor: default; }
 .quick-actions { padding: 0 0.75rem 0.5rem; }
+
+/* Markdown rendering inside assistant messages */
+.chat-msg__text .markdown { white-space: normal; }
+.chat-msg__text .markdown > :first-child { margin-top: 0; }
+.chat-msg__text .markdown > :last-child { margin-bottom: 0; }
+.chat-msg__text .markdown p { margin: 0 0 0.4rem; }
+.chat-msg__text .markdown ul,
+.chat-msg__text .markdown ol { margin: 0 0 0.4rem; padding-left: 1.2rem; }
+.chat-msg__text .markdown li { margin: 0.1rem 0; }
+.chat-msg__text .markdown h3,
+.chat-msg__text .markdown h4,
+.chat-msg__text .markdown h5 { margin: 0.3rem 0; font-size: 0.95rem; font-weight: 600; }
+.chat-msg__text .markdown code { background: var(--bg-tertiary); padding: 0.05rem 0.3rem;
+  border-radius: 4px; font-family: var(--font-mono); font-size: 0.85em; }
+.chat-msg__text .markdown strong { font-weight: 600; }

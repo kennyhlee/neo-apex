@@ -3,6 +3,7 @@ import { streamChat, type ChatTurn, type Proposal } from '../api/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { QuickActions } from './QuickActions';
 import { ProposalCard } from './ProposalCard';
+import { Markdown } from './Markdown';
 import './ChatPanel.css';
 
 interface Msg { role: 'user' | 'assistant'; content: string; proposals?: Proposal[]; }
@@ -87,7 +88,11 @@ export function ChatPanel() {
         )}
         {msgs.map((m, i) => (
           <div key={i} className={`chat-msg chat-msg--${m.role}`}>
-            <div className="chat-msg__text">{m.content || (busy && i === msgs.length - 1 ? '…' : '')}</div>
+            <div className="chat-msg__text">
+              {m.content
+                ? (m.role === 'assistant' ? <Markdown text={m.content} /> : m.content)
+                : (busy && i === msgs.length - 1 ? '…' : '')}
+            </div>
             {m.proposals?.map((p, j) => (
               <ProposalCard key={j} proposal={p} tenantId={user?.tenant_id ?? ''}
                 onDone={appendSystem} />

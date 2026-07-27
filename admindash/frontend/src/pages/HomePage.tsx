@@ -116,19 +116,17 @@ export default function HomePage({ tenant }: HomePageProps) {
 
   const [chatOpen, setChatOpen] = useState(true);
   return (
-    <div className={`home-layout ${chatOpen ? 'home-layout--chat-open' : ''}`}>
-      {chatOpen ? (
-        <div className="home-chat-col">
-          <button className="home-chat-toggle" onClick={() => setChatOpen(false)}>
-            Hide assistant ›
-          </button>
-          <ChatPanel />
-        </div>
-      ) : (
-        <button className="home-chat-fab" onClick={() => setChatOpen(true)}>
-          💬 Assistant
-        </button>
-      )}
+    <div className={`home-layout ${chatOpen ? 'chat-open' : ''}`}>
+      <button
+        className="home-chat-toggle"
+        onClick={() => setChatOpen((o) => !o)}
+        aria-expanded={chatOpen}
+      >
+        {chatOpen ? 'Hide assistant ›' : '‹ Assistant'}
+      </button>
+      <aside className={`home-chat-drawer ${chatOpen ? 'is-open' : ''}`} aria-hidden={!chatOpen}>
+        <ChatPanel />
+      </aside>
       <div className="home-page">
       <h1>{t('homepage.title')}</h1>
 
