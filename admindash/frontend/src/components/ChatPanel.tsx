@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { streamChat, type ChatTurn, type Proposal } from '../api/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { QuickActions } from './QuickActions';
-import { ProposalCard } from './ProposalCard';
+import { CreateEntityForm } from './CreateEntityForm';
 import { Markdown } from './Markdown';
 import './ChatPanel.css';
 
@@ -94,7 +94,7 @@ export function ChatPanel() {
                 : (busy && i === msgs.length - 1 ? '…' : '')}
             </div>
             {m.proposals?.map((p, j) => (
-              <ProposalCard key={j} proposal={p} tenantId={user?.tenant_id ?? ''}
+              <CreateEntityForm key={j} proposal={p} tenantId={user?.tenant_id ?? ''}
                 onDone={appendSystem} />
             ))}
           </div>

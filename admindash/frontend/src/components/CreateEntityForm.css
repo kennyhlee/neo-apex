@@ -1,0 +1,38 @@
+.create-form {
+  border: 1px solid var(--border-accent, var(--accent));
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  box-shadow: var(--shadow-card);
+}
+
+.create-form__title {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.create-form__warn {
+  color: var(--warning);
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.create-form--done {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.create-form--error {
+  color: var(--danger, var(--warning));
+}
+
+/* Keep the embedded DynamicForm compact within the narrow chat drawer. */
+.create-form .dynamic-form,
+.create-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}

@@ -3,7 +3,7 @@ import { ADMINDASH_API_URL } from '../config';
 export interface ChatTurn { role: 'user' | 'assistant'; content: string; }
 
 export interface Proposal {
-  action: 'create_student' | 'create_lead';
+  action: 'create_student' | 'create_lead' | 'create_program';
   entity_type: string;
   fields: Record<string, string>;
   duplicates: Array<Record<string, unknown>>;

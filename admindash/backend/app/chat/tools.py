@@ -125,42 +125,68 @@ def register_write_tools(agent: Agent) -> None:
     @agent.tool
     async def propose_create_student(
         ctx: RunContext[ChatDeps],
-        first_name: str,
-        last_name: str,
+        first_name: str | None = None,
+        last_name: str | None = None,
         grade_level: str | None = None,
     ) -> str:
-        """Prepare (but do NOT execute) creation of a new student.
-        The user must confirm before it is created."""
-        fields = {"first_name": first_name, "last_name": last_name}
-        if grade_level:
-            fields["grade_level"] = grade_level
-        dupes = await dc_duplicate_check(ctx.deps, "student", fields)
+        """Open a create-student form for the user. Call this for ANY request to
+        add / create / register / enroll a student. All arguments are optional —
+        pass only the fields the user actually mentioned to pre-fill them; the
+        form itself presents and collects every required field. Do NOT create the
+        student yourself."""
+        fields: dict = {}
+        for k, v in (("first_name", first_name), ("last_name", last_name),
+                     ("grade_level", grade_level)):
+            if v:
+                fields[k] = v
+        dupes = await dc_duplicate_check(ctx.deps, "student", fields) if fields else []
         ctx.deps.pending_proposals.append(
             {"action": "create_student", "entity_type": "student",
              "fields": fields, "duplicates": dupes}
         )
-        note = " Possible duplicates were found." if dupes else ""
-        return ("Prepared a new-student proposal awaiting the user's confirmation."
-                + note + " Tell the user to review and confirm.")
+        note = " Possible duplicate students were found." if dupes else ""
+        return ("Opened a new-student form for the user to complete and submit."
+                + note + " Tell them the form is ready to fill in.")
 
     @agent.tool
     async def propose_create_lead(
         ctx: RunContext[ChatDeps],
-        guardian_name: str,
+        guardian_name: str | None = None,
         email: str | None = None,
         phone: str | None = None,
         student_first_name: str | None = None,
     ) -> str:
-        """Prepare (but do NOT execute) creation of a new lead.
-        The user must confirm before it is created."""
-        fields = {"guardian_name": guardian_name}
-        for k, v in (("email", email), ("phone", phone),
-                     ("student_first_name", student_first_name)):
+        """Open a create-lead form for the user. Call this for ANY request to add
+        / create a lead or inquiry. All arguments are optional — pass only the
+        fields the user mentioned to pre-fill them; the form presents and collects
+        every required field. Do NOT create the lead yourself."""
+        fields: dict = {}
+        for k, v in (("guardian_name", guardian_name), ("email", email),
+                     ("phone", phone), ("student_first_name", student_first_name)):
             if v:
                 fields[k] = v
         ctx.deps.pending_proposals.append(
             {"action": "create_lead", "entity_type": "lead",
              "fields": fields, "duplicates": []}
         )
-        return ("Prepared a new-lead proposal awaiting the user's confirmation. "
-                "Tell the user to review and confirm.")
+        return ("Opened a new-lead form for the user to complete and submit. "
+                "Tell them the form is ready to fill in.")
+
+    @agent.tool
+    async def propose_create_program(
+        ctx: RunContext[ChatDeps],
+        name: str | None = None,
+    ) -> str:
+        """Open a create-program form for the user. Call this for ANY request to
+        add / create a program. The name argument is optional — pass it only if
+        the user gave one, to pre-fill it; the form presents and collects every
+        required field. Do NOT create the program yourself."""
+        fields: dict = {}
+        if name:
+            fields["name"] = name
+        ctx.deps.pending_proposals.append(
+            {"action": "create_program", "entity_type": "program",
+             "fields": fields, "duplicates": []}
+        )
+        return ("Opened a new-program form for the user to complete and submit. "
+                "Tell them the form is ready to fill in.")
