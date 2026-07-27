@@ -59,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem(TOKEN_KEY);
+    // Chat transcript is scoped to the login session (see ChatPanel).
+    sessionStorage.removeItem('admindash_chat_history');
   }, []);
 
   return (

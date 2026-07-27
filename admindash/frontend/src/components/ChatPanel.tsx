@@ -7,9 +7,22 @@ import './ChatPanel.css';
 
 interface Msg { role: 'user' | 'assistant'; content: string; proposals?: Proposal[]; }
 
+// Transcript persists across in-app navigation for the current login session.
+// Cleared on logout (see AuthContext). Session-scoped so a closed tab starts fresh.
+const CHAT_HISTORY_KEY = 'admindash_chat_history';
+
+function loadHistory(): Msg[] {
+  try {
+    const raw = sessionStorage.getItem(CHAT_HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as Msg[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function ChatPanel() {
   const { user } = useAuth();
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [msgs, setMsgs] = useState<Msg[]>(loadHistory);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -18,6 +31,17 @@ export function ChatPanel() {
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs]);
+
+  // Persist transcript (text only — not re-actionable proposals) so it survives
+  // navigating away from Home and back within the same login session.
+  useEffect(() => {
+    try {
+      const text = msgs.map(({ role, content }) => ({ role, content }));
+      sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(text));
+    } catch {
+      /* ignore storage quota / disabled storage */
+    }
   }, [msgs]);
 
   const send = async (text: string) => {

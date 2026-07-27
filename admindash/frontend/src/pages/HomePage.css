@@ -269,12 +269,16 @@
 }
 
 .home-layout { display: grid; grid-template-columns: 1fr; gap: 1.25rem; align-items: start; }
-.home-layout--chat-open { grid-template-columns: 360px 1fr; }
-.home-chat-col { position: sticky; top: 72px; height: calc(100vh - 96px); display: flex;
+.home-layout--chat-open { grid-template-columns: 1fr 360px; }
+.home-layout > .home-page { order: 1; min-width: 0; }
+.home-chat-col { order: 2; position: sticky; top: 72px; height: calc(100vh - 96px); display: flex;
   flex-direction: column; gap: 0.5rem; }
-.home-chat-toggle { align-self: flex-start; background: none; border: 1px solid var(--border-primary);
+.home-chat-toggle { align-self: flex-end; background: none; border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm); padding: 0.3rem 0.6rem; cursor: pointer; color: var(--text-secondary);
   font-size: 0.8rem; }
+.home-chat-fab { position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 50; background: var(--accent);
+  color: var(--text-inverse); border: none; border-radius: 999px; padding: 0.6rem 1rem; cursor: pointer;
+  box-shadow: var(--shadow-elevated); font-size: 0.85rem; }
 @media (max-width: 992px) {
   .home-layout--chat-open { grid-template-columns: 1fr; }
   .home-chat-col { position: static; height: auto; }
