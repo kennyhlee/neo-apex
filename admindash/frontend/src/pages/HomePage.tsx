@@ -6,6 +6,7 @@ import { useModel } from '../contexts/ModelContext.tsx';
 import { postQuery } from '../api/client.ts';
 import CalendarChip from '../components/CalendarChip.tsx';
 import ProgramDetailModal from '../components/ProgramDetailModal.tsx';
+import { ChatPanel } from '../components/ChatPanel';
 import { timeToMinutes } from '../components/calendarTime.ts';
 import {
   getDateFields,
@@ -113,8 +114,16 @@ export default function HomePage({ tenant }: HomePageProps) {
   const hasDateFields = !!startField;
   const totalThisWeek = programsByDay.reduce((n, day) => n + day.length, 0);
 
+  const [chatOpen, setChatOpen] = useState(true);
   return (
-    <div className="home-page">
+    <div className={`home-layout ${chatOpen ? 'home-layout--chat-open' : ''}`}>
+      <div className="home-chat-col">
+        <button className="home-chat-toggle" onClick={() => setChatOpen((o) => !o)}>
+          {chatOpen ? '‹ Hide assistant' : '› Assistant'}
+        </button>
+        {chatOpen && <ChatPanel />}
+      </div>
+      <div className="home-page">
       <h1>{t('homepage.title')}</h1>
 
       <div className="home-stats">
@@ -245,6 +254,7 @@ export default function HomePage({ tenant }: HomePageProps) {
         model={model ?? null}
         onClose={() => setDetailProgram(null)}
       />
+      </div>
     </div>
   );
 }

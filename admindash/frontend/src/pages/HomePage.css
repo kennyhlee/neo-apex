@@ -267,3 +267,15 @@
     overflow-x: auto;
   }
 }
+
+.home-layout { display: grid; grid-template-columns: 1fr; gap: 1.25rem; align-items: start; }
+.home-layout--chat-open { grid-template-columns: 360px 1fr; }
+.home-chat-col { position: sticky; top: 72px; height: calc(100vh - 96px); display: flex;
+  flex-direction: column; gap: 0.5rem; }
+.home-chat-toggle { align-self: flex-start; background: none; border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm); padding: 0.3rem 0.6rem; cursor: pointer; color: var(--text-secondary);
+  font-size: 0.8rem; }
+@media (max-width: 992px) {
+  .home-layout--chat-open { grid-template-columns: 1fr; }
+  .home-chat-col { position: static; height: auto; }
+}
