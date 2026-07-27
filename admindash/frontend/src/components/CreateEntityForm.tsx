@@ -155,10 +155,11 @@ export function CreateEntityForm({ proposal, tenantId, onDone }: Props) {
         submitting={submitting}
         error={error}
         submitButtonText={`Create ${label}`}
+        cancelButtonText="Skip"
         onSubmit={(base, custom) =>
           void create({ ...collected.base, ...base }, { ...collected.custom, ...custom })
         }
-        onCancel={() => setStep('required')}
+        onCancel={() => void create(collected.base, collected.custom)}
       />
     </div>
   );

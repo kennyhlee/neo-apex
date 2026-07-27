@@ -115,6 +115,12 @@ export default function HomePage({ tenant }: HomePageProps) {
   const totalThisWeek = programsByDay.reduce((n, day) => n + day.length, 0);
 
   const [chatOpen, setChatOpen] = useState(true);
+  // Let the shell reclaim the centered gutter so content meets the drawer with
+  // no dead gap while the assistant is open. Scoped to Home via cleanup.
+  useEffect(() => {
+    document.body.classList.toggle('assistant-open', chatOpen);
+    return () => document.body.classList.remove('assistant-open');
+  }, [chatOpen]);
   return (
     <div className={`home-layout ${chatOpen ? 'chat-open' : ''}`}>
       <button

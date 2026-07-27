@@ -269,8 +269,10 @@
 }
 
 /* Home + assistant slide-in drawer */
-.home-layout { transition: padding-right 0.28s ease; }
-.home-layout.chat-open { padding-right: 380px; }
+/* When open, let the shell go full-width and reserve exactly the drawer's
+   width on the right — content meets the drawer flush, no centered-gutter gap. */
+.app-main { transition: max-width 0s, padding-right 0.28s ease; }
+body.assistant-open .app-main { max-width: none; padding-right: calc(1.5rem + 380px); }
 
 /* Toggle stays pinned to the upper-right in both states */
 .home-chat-toggle { position: fixed; top: 68px; right: 1rem; z-index: 60;
@@ -288,6 +290,7 @@
 .home-chat-drawer .chat-panel { flex: 1; height: 100%; border: none; border-radius: 0; }
 
 @media (max-width: 992px) {
-  .home-layout.chat-open { padding-right: 0; }
+  /* Drawer covers the screen on small viewports; don't reserve desktop width. */
+  body.assistant-open .app-main { padding-right: 1.5rem; }
   .home-chat-drawer { width: 100%; }
 }
