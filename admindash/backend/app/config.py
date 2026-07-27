@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # At runtime, callers should treat this as list[str].
     cors_allowed_origins: Union[Optional[str], List[str]] = None
     port: int = 5610
+    chat_model: str = "anthropic:claude-haiku-4-5-20251001"
+    chat_max_tokens: int = 1024
+    chat_history_turns: int = 8
+    chat_session_message_cap: int = 30
 
     @model_validator(mode="after")
     def parse_and_validate_cors(self):

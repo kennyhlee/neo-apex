@@ -13,6 +13,7 @@ interface DynamicFormProps {
   submitting?: boolean;
   error?: string | null;
   submitButtonText?: string;
+  cancelButtonText?: string;
 }
 
 function renderField(
@@ -182,6 +183,7 @@ export default function DynamicForm({
   submitting = false,
   error,
   submitButtonText,
+  cancelButtonText,
 }: DynamicFormProps) {
   const { t } = useTranslation();
   const allFields = useMemo(() => [
@@ -300,7 +302,7 @@ export default function DynamicForm({
           className="dynamic-form-btn-secondary"
           onClick={onCancel}
         >
-          {t('common.cancel')}
+          {cancelButtonText || t('common.cancel')}
         </button>
         <button
           type="submit"

@@ -6,6 +6,7 @@ import { useModel } from '../contexts/ModelContext.tsx';
 import { postQuery } from '../api/client.ts';
 import CalendarChip from '../components/CalendarChip.tsx';
 import ProgramDetailModal from '../components/ProgramDetailModal.tsx';
+import { ChatPanel } from '../components/ChatPanel';
 import { timeToMinutes } from '../components/calendarTime.ts';
 import {
   getDateFields,
@@ -113,8 +114,26 @@ export default function HomePage({ tenant }: HomePageProps) {
   const hasDateFields = !!startField;
   const totalThisWeek = programsByDay.reduce((n, day) => n + day.length, 0);
 
+  const [chatOpen, setChatOpen] = useState(true);
+  // Let the shell reclaim the centered gutter so content meets the drawer with
+  // no dead gap while the assistant is open. Scoped to Home via cleanup.
+  useEffect(() => {
+    document.body.classList.toggle('assistant-open', chatOpen);
+    return () => document.body.classList.remove('assistant-open');
+  }, [chatOpen]);
   return (
-    <div className="home-page">
+    <div className={`home-layout ${chatOpen ? 'chat-open' : ''}`}>
+      <button
+        className="home-chat-toggle"
+        onClick={() => setChatOpen((o) => !o)}
+        aria-expanded={chatOpen}
+      >
+        {chatOpen ? 'Hide assistant ›' : '‹ Assistant'}
+      </button>
+      <aside className={`home-chat-drawer ${chatOpen ? 'is-open' : ''}`} aria-hidden={!chatOpen}>
+        <ChatPanel />
+      </aside>
+      <div className="home-page">
       <h1>{t('homepage.title')}</h1>
 
       <div className="home-stats">
@@ -245,6 +264,7 @@ export default function HomePage({ tenant }: HomePageProps) {
         model={model ?? null}
         onClose={() => setDetailProgram(null)}
       />
+      </div>
     </div>
   );
 }

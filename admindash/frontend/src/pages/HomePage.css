@@ -267,3 +267,36 @@
     overflow-x: auto;
   }
 }
+
+/* Home + assistant slide-in drawer.
+   Dashboard stays centered (app-main keeps its max-width). The drawer is
+   anchored to the RIGHT EDGE OF THE CENTERED CONTENT (--gutter), not the
+   viewport edge, and content reserves the drawer width + a small gap — so the
+   two sit flush with only a slight breathing space, no dead centered-gutter. */
+:root { --assistant-w: 380px; --content-max: 1400px; }
+.app-main { transition: padding-right 0.28s ease; }
+body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + 1rem); }
+
+/* Toggle pinned to the upper-right of the centered content in both states */
+.home-chat-toggle { position: fixed; top: 68px; z-index: 60;
+  right: max(1rem, calc((100vw - var(--content-max)) / 2 + 1rem));
+  background: var(--accent); color: var(--text-inverse); border: none;
+  border-radius: var(--radius-sm); padding: 0.4rem 0.8rem; cursor: pointer;
+  font-size: 0.8rem; box-shadow: var(--shadow-card); }
+.home-chat-toggle:hover { background: var(--accent-hover, var(--accent)); }
+
+.home-chat-drawer { position: fixed; top: 56px; z-index: 55;
+  right: max(0px, calc((100vw - var(--content-max)) / 2));
+  width: var(--assistant-w); height: calc(100vh - 56px);
+  transform: translateX(calc(100% + max(0px, (100vw - var(--content-max)) / 2)));
+  transition: transform 0.28s ease; display: flex;
+  background: var(--bg-secondary); border-left: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-elevated); }
+.home-chat-drawer.is-open { transform: translateX(0); }
+.home-chat-drawer .chat-panel { flex: 1; height: 100%; border: none; border-radius: 0; }
+
+@media (max-width: 992px) {
+  /* Drawer covers the screen on small viewports; don't reserve desktop width. */
+  body.assistant-open .app-main { padding-right: 1.5rem; }
+  .home-chat-drawer { width: 100%; transform: translateX(100%); }
+}
