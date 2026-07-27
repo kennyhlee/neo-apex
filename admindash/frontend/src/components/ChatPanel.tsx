@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { streamChat, type ChatTurn, type Proposal } from '../api/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { QuickActions } from './QuickActions';
@@ -13,6 +13,12 @@ export function ChatPanel() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const logRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs]);
 
   const send = async (text: string) => {
     const q = text.trim();
@@ -51,7 +57,7 @@ export function ChatPanel() {
   return (
     <aside className="chat-panel">
       <div className="chat-panel__header">Assistant</div>
-      <div className="chat-panel__log">
+      <div className="chat-panel__log" ref={logRef}>
         {msgs.length === 0 && (
           <p className="chat-panel__empty">Ask about students, programs, or leads.</p>
         )}

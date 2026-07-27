@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Proposal } from '../api/chat';
-import { createEntity } from '../api/client';
+import { createEntity, createLead } from '../api/client';
 import './ProposalCard.css';
 
 export function ProposalCard(
@@ -12,7 +12,11 @@ export function ProposalCard(
   const confirm = async () => {
     setState('saving');
     try {
-      await createEntity(tenantId, proposal.entity_type, proposal.fields, {});
+      if (proposal.action === 'create_lead') {
+        await createLead(tenantId, proposal.fields);
+      } else {
+        await createEntity(tenantId, proposal.entity_type, proposal.fields, {});
+      }
       setState('saved');
       onDone(`Created ${proposal.entity_type}: ${Object.values(proposal.fields).join(' ')}`);
     } catch {
