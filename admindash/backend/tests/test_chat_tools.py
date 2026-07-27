@@ -6,6 +6,7 @@ from pydantic_ai import Agent
 from pydantic_ai import models
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai import ModelMessage, ModelResponse, TextPart, ToolCallPart
+from pydantic_ai.messages import ToolReturnPart
 
 from app.chat.tools import ChatDeps, register_read_tools
 from app.chat.datacore import sql_literal
@@ -29,8 +30,8 @@ def _agent_that_calls(tool_name: str, args: dict) -> Agent:
             last_msg = messages[-1]
             if hasattr(last_msg, 'parts') and last_msg.parts:
                 for part in last_msg.parts:
-                    # Extract content from ToolReturnPart
-                    if hasattr(part, 'content'):
+                    # Extract content from ToolReturnPart only
+                    if isinstance(part, ToolReturnPart):
                         return ModelResponse(parts=[TextPart(part.content)])
         return ModelResponse(parts=[TextPart("done")])
 
@@ -58,5 +59,5 @@ async def test_find_student_queries_datacore():
     assert route.called
     sent = route.calls.last.request
     assert b"entity_type = 'student'" in sent.content
-    assert b"Lovelace" in sent.content
+    assert b"'%Lovelace%'" in sent.content
     assert "Ada" in result.output

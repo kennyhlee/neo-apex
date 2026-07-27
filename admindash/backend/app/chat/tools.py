@@ -86,6 +86,8 @@ def register_read_tools(agent: Agent) -> None:
         if not progs:
             return f"No program matching {program_name!r}."
         pid = progs[0].get("entity_id")
+        if not pid:
+            return f"Program {program_name!r} found but has no id."
         enr = await dc_query(
             ctx.deps,
             f"SELECT * FROM data WHERE entity_type = 'enrollment' AND {_ACTIVE} "
