@@ -1,3 +1,5 @@
+import json
+
 from pydantic_ai import Agent, RunContext
 
 from app.chat.datacore import (
@@ -9,6 +11,43 @@ from app.chat.datacore import (
 )
 
 _ACTIVE = "_status = 'active'"
+
+# System / non-domain columns excluded when listing or matching searchable fields.
+_SYS_COLS = frozenset({
+    "vector", "base_data", "custom_fields", "entity_id", "entity_type",
+    "tenant_id", "name",
+})
+
+
+def _norm_value(v: object) -> str:
+    """Normalize a stored field value to comparable text. Selection fields are
+    stored JSON-encoded (e.g. '["Aunt"]'); decode them to 'Aunt'."""
+    if v is None:
+        return ""
+    s = str(v)
+    if s.startswith("["):
+        try:
+            arr = json.loads(s)
+            if isinstance(arr, list):
+                return ", ".join(str(x) for x in arr)
+        except (ValueError, TypeError):
+            pass
+    return s
+
+
+def _searchable_fields(row: dict) -> set[str]:
+    """Domain field names on a flattened student row (base + custom)."""
+    return {k for k in row if k not in _SYS_COLS and not k.startswith("_")}
+
+
+def _resolve_field(requested: str, available: set[str]) -> str | None:
+    """Map a user phrase ('Preferred Pickup') to an actual field name
+    ('preferred_pickup'), tolerating spaces/case and partial matches."""
+    key = requested.strip().lower().replace(" ", "_")
+    if key in available:
+        return key
+    partial = sorted(f for f in available if key in f or f in key)
+    return partial[0] if partial else None
 
 
 def _fmt_students(rows: list[dict]) -> str:
@@ -119,6 +158,74 @@ def register_read_tools(agent: Agent) -> None:
             f"id={r.get('entity_id','?')})"
             for r in rows[:25]
         )
+
+    @agent.tool
+    async def list_student_fields(ctx: RunContext[ChatDeps]) -> str:
+        """List the student fields that can be searched (base and custom, e.g.
+        preferred_pickup, medical_conditions, school). Use this when unsure of a
+        field's exact name before calling search_students."""
+        rows = await dc_query(
+            ctx.deps,
+            f"SELECT * EXCLUDE (vector) FROM data WHERE entity_type = 'student' "
+            f"AND {_ACTIVE} LIMIT 1",
+        )
+        if not rows:
+            return "No students exist yet, so there are no fields to search."
+        fields = sorted(_searchable_fields(rows[0]))
+        return "Searchable student fields: " + ", ".join(fields)
+
+    @agent.tool
+    async def search_students(
+        ctx: RunContext[ChatDeps],
+        field: str,
+        value: str | None = None,
+        match: str = "contains",
+    ) -> str:
+        """Find students by ANY field, including custom fields (e.g.
+        preferred_pickup, medical_conditions, school, transportation).
+        match='set'      -> students where the field has any non-empty value (ignores value)
+        match='equals'   -> field equals value (case-insensitive)
+        match='contains' -> field contains value (case-insensitive; the default)
+        Example: field='preferred pickup', value='Aunt', match='contains'."""
+        rows = await dc_query(
+            ctx.deps,
+            f"SELECT * EXCLUDE (vector) FROM data WHERE entity_type = 'student' "
+            f"AND {_ACTIVE}",
+        )
+        if not rows:
+            return "No active students."
+        available = _searchable_fields(rows[0])
+        fname = _resolve_field(field, available)
+        if not fname:
+            return (
+                f"No student field matching {field!r}. Searchable fields: "
+                + ", ".join(sorted(available))
+            )
+        m = (match or "contains").lower()
+        want = (value or "").strip().lower()
+        hits: list[tuple[dict, str]] = []
+        for r in rows:
+            text = _norm_value(r.get(fname))
+            low = text.lower()
+            if m in ("set", "has", "present"):
+                ok = bool(text.strip())
+            elif m in ("equals", "is", "eq"):
+                ok = bool(want) and low == want
+            else:
+                ok = bool(want) and want in low
+            if ok:
+                hits.append((r, text))
+        if not hits:
+            cond = f"{m} {value!r}" if value else "is set"
+            return f"No students found where {fname} {cond}."
+        cond = f"{m} {value!r}" if value else "is set"
+        lines = [
+            f"- {r.get('first_name','')} {r.get('last_name','')} "
+            f"(id={r.get('entity_id','?')}) — {fname}: {text}"
+            for r, text in hits[:40]
+        ]
+        more = "" if len(hits) <= 40 else f"\n…and {len(hits) - 40} more."
+        return f"{len(hits)} student(s) where {fname} {cond}:\n" + "\n".join(lines) + more
 
 
 def register_write_tools(agent: Agent) -> None:
