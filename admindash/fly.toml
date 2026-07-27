@@ -41,6 +41,10 @@ primary_region = "sjc"
     timeout = "5s"
     path = "/api/health"
 
+# The in-process Pydantic-AI chat agent (POST /api/chat) needs more headroom
+# than the base proxy: at 256mb a chat request OOM-killed the machine. 1gb is
+# ample for the Haiku tool-calling agent (far lighter than papermite's 4gb
+# document/vision extraction).
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  memory = "1gb"
