@@ -112,7 +112,7 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
 
     let render: ((row: DataRow) => React.ReactNode) | undefined;
     if (field.name === 'enrollment_status' || field.name === '_status' || field.name === 'status') {
-      render = (row: DataRow) => <StatusBadge status={String(row[field.name] ?? '-')} />;
+      render = (row: DataRow) => <StatusBadge status={formatSelectionValue(row[field.name])} />;
     } else if (field.type === 'selection' || field.type === 'bool') {
       render = (row: DataRow) => {
         const raw = row[field.name];
