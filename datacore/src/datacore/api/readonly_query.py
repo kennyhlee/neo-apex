@@ -7,6 +7,7 @@ existing engine with filesystem access disabled. Does NOT reimplement execution.
 import re
 from enum import Enum
 
+import duckdb
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -83,11 +84,14 @@ def readonly_query(req: ReadOnlyQueryRequest):
         )
     except TableNotFoundError:
         return {"data": [], "total": 0}
+    except duckdb.Error as e:
+        # The (untrusted, LLM-authored) SQL failed to execute — bad column, type
+        # conversion, invalid input, etc. Any such failure is a query problem, so
+        # return 400 with the message and let the caller self-correct. 500 is
+        # reserved for genuine non-query failures below.
+        raise HTTPException(status_code=400, detail=f"SQL error: {e}")
     except Exception as e:
-        msg = str(e)
-        if "Catalog Error" in msg or "Parser Error" in msg or "Binder Error" in msg:
-            raise HTTPException(status_code=400, detail=f"SQL error: {msg}")
-        raise HTTPException(status_code=500, detail=f"Query failed: {msg}")
+        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
 
     for row in result["rows"]:
         row.pop("vector", None)
