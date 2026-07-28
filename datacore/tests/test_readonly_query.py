@@ -49,3 +49,15 @@ def test_endpoint_rejects_write(seeded_store):
         rq.readonly_query(rq.ReadOnlyQueryRequest(
             tenant_id="t1", table="entities", sql="DELETE FROM data"))
     assert ei.value.status_code == 400
+
+
+def test_endpoint_maps_execution_error_to_400(seeded_store):
+    """A DuckDB execution error (e.g. type conversion) must be 400, not 500, so the
+    caller (LLM) can self-correct instead of seeing a system failure."""
+    rq._store = seeded_store
+    with pytest.raises(HTTPException) as ei:
+        rq.readonly_query(rq.ReadOnlyQueryRequest(
+            tenant_id="t1", table="entities",
+            sql="SELECT CAST('x' AS INTEGER) AS n"))
+    assert ei.value.status_code == 400
+    assert "SQL error" in str(ei.value.detail)
