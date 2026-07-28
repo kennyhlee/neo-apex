@@ -16,11 +16,11 @@ def sql_literal(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
-async def dc_query(deps: ChatDeps, sql: str) -> list[dict]:
+async def dc_query(deps: ChatDeps, sql: str, table: str = "entities") -> list[dict]:
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
-            f"{deps.datacore_url}/api/query",
-            json={"tenant_id": deps.tenant_id, "table": "entities", "sql": sql},
+            f"{deps.datacore_url}/api/query/readonly",
+            json={"tenant_id": deps.tenant_id, "table": table, "sql": sql},
             headers={"Authorization": deps.token},
         )
     resp.raise_for_status()

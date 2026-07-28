@@ -31,6 +31,7 @@ class QueryEngine:
         sql: str,
         limit: int | None = None,
         offset: int | None = None,
+        external: bool = False,
     ) -> dict:
         """Execute a SQL query against a tenant's table.
 
@@ -66,6 +67,9 @@ class QueryEngine:
 
         # Register the arrow table and execute SQL via DuckDB
         con = duckdb.connect()
+        if external:
+            # Untrusted (e.g. LLM-authored) SQL: block filesystem/network escape.
+            con.execute("SET enable_external_access=false")
         con.register("data", arrow_table)
 
         # Get total count (before pagination)
