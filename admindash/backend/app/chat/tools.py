@@ -7,9 +7,15 @@ from app.chat.datacore import (
     ChatDeps,
     dc_duplicate_check,
     dc_query,
+    sql_literal,
 )
 
 _ROW_LIMIT_SHOWN = 30
+
+# Structural/raw columns to hide when listing a type's queryable fields.
+_SCHEMA_SKIP = frozenset({
+    "vector", "base_data", "custom_fields", "entity_type", "tenant_id", "name",
+})
 
 
 def register_read_tools(agent: Agent) -> None:
@@ -17,16 +23,45 @@ def register_read_tools(agent: Agent) -> None:
     async def describe_schema(
         ctx: RunContext[ChatDeps], entity_type: str | None = None
     ) -> str:
-        """List entity types and their fields so you can write correct queries.
-        With no argument, lists entity types. With an entity_type, lists that
-        type's fields as name:type (base and custom)."""
-        rows = await dc_query(
-            ctx.deps, "SELECT * FROM data WHERE _status = 'active'", table="models"
+        """List entity types and their ACTUAL queryable fields so you can write
+        correct queries. With no argument, lists the entity types that have data.
+        With an entity_type, lists that type's real columns (base fields AND any
+        custom fields present in the records — which may exceed the model
+        definition), annotated with the model's type where known."""
+        if not entity_type:
+            rows = await dc_query(
+                ctx.deps,
+                "SELECT DISTINCT entity_type FROM data WHERE _status = 'active'",
+            )
+            types = sorted(r.get("entity_type") for r in rows if r.get("entity_type"))
+            return "Entity types: " + ", ".join(types) if types else "No data yet."
+
+        et = entity_type.strip().lower()
+        # Actual queryable columns: the engine flattens every custom key present in
+        # the records into columns, so a single sample row exposes them all.
+        sample = await dc_query(
+            ctx.deps,
+            f"SELECT * FROM data WHERE entity_type = {sql_literal(et)} "
+            f"AND _status = 'active' LIMIT 1",
         )
-        types: dict[str, tuple[int, list[tuple[str, str]]]] = {}
-        for r in rows:
-            et = r.get("entity_type")
-            if not et:
+        if not sample:
+            return f"No active {et} records exist to derive fields from."
+        cols = sorted(
+            k for k in sample[0]
+            if k not in _SCHEMA_SKIP and not str(k).startswith("_")
+        )
+        # Annotate with declared types from the latest model version, if any.
+        model_rows = await dc_query(
+            ctx.deps,
+            f"SELECT entity_type, _version, model_definition FROM data "
+            f"WHERE entity_type = {sql_literal(et)} AND _status = 'active'",
+            table="models",
+        )
+        type_map: dict[str, str] = {}
+        best_ver = -1
+        for r in model_rows:
+            ver = int(r.get("_version") or 0)
+            if ver < best_ver:
                 continue
             md = r.get("model_definition") or {}
             if isinstance(md, str):
@@ -35,20 +70,12 @@ def register_read_tools(agent: Agent) -> None:
                 except ValueError:
                     md = {}
             fields = (md.get("base_fields") or []) + (md.get("custom_fields") or [])
-            ver = int(r.get("_version") or 0)
-            if et not in types or ver > types[et][0]:
-                types[et] = (ver, [(f.get("name"), f.get("type")) for f in fields])
-        if not types:
-            return "No models are defined for this tenant yet."
-        if entity_type:
-            key = entity_type.strip().lower()
-            if key not in types:
-                return (f"No model for {entity_type!r}. Entity types: "
-                        + ", ".join(sorted(types)))
-            pairs = types[key][1]
-            return f"Fields for {key}: " + ", ".join(
-                f"{n}:{t}" for n, t in pairs if n)
-        return "Entity types: " + ", ".join(sorted(types))
+            best_ver = ver
+            type_map = {f.get("name"): f.get("type") for f in fields}
+        listed = ", ".join(
+            f"{c}:{type_map[c]}" if type_map.get(c) else c for c in cols
+        )
+        return f"Fields for {et}: " + listed
 
     @agent.tool
     async def run_query(ctx: RunContext[ChatDeps], sql: str) -> str:

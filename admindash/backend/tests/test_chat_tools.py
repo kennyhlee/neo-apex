@@ -56,20 +56,42 @@ async def test_run_query_surfaces_400_for_self_correction():
     assert "SELECT" in result.output  # error text fed back for the model to fix
 
 
-async def test_describe_schema_lists_fields():
+async def test_describe_schema_lists_actual_columns_not_just_model():
+    """A custom field present in the records but absent from the model definition
+    must still be reported (data-driven), annotated with model types where known."""
     agent = _agent_that_calls("describe_schema", {"entity_type": "student"})
     deps = ChatDeps(tenant_id="t1", token="Bearer x", datacore_url=DATACORE)
-    models_row = {"data": [{
-        "entity_type": "student", "_status": "active", "_version": 2,
-        "model_definition": {
-            "base_fields": [{"name": "first_name", "type": "str"}],
-            "custom_fields": [{"name": "preferred_pickup", "type": "selection"}],
-        }}], "total": 1}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _json
+        table = _json.loads(request.content).get("table")
+        if table == "models":
+            return httpx.Response(200, json={"data": [{
+                "entity_type": "student", "_status": "active", "_version": 3,
+                "model_definition": {
+                    "base_fields": [{"name": "first_name", "type": "str"}],
+                    "custom_fields": [],  # model does NOT declare 'school'
+                }}], "total": 1})
+        # entities sample row — 'school' is a live column absent from the model
+        return httpx.Response(200, json={"data": [{
+            "entity_id": "s1", "entity_type": "student", "_status": "active",
+            "first_name": "Ada", "school": "Cherrywood", "vector": [0.0]}], "total": 1})
+
     with respx.mock:
-        route = respx.post(f"{DATACORE}/api/query/readonly").mock(
-            return_value=httpx.Response(200, json=models_row))
+        respx.post(f"{DATACORE}/api/query/readonly").mock(side_effect=handler)
         result = await agent.run("fields", deps=deps)
-    import json as _json
-    assert _json.loads(route.calls.last.request.content)["table"] == "models"
-    assert "first_name" in result.output
-    assert "preferred_pickup" in result.output
+    assert "school" in result.output          # the fix: data column not in model
+    assert "first_name:str" in result.output  # base field annotated from model
+    assert "vector" not in result.output      # structural/raw column hidden
+
+
+async def test_describe_schema_no_arg_lists_entity_types():
+    agent = _agent_that_calls("describe_schema", {})
+    deps = ChatDeps(tenant_id="t1", token="Bearer x", datacore_url=DATACORE)
+    with respx.mock:
+        respx.post(f"{DATACORE}/api/query/readonly").mock(
+            return_value=httpx.Response(200, json={
+                "data": [{"entity_type": "student"}, {"entity_type": "program"}],
+                "total": 2}))
+        result = await agent.run("types", deps=deps)
+    assert "student" in result.output and "program" in result.output
