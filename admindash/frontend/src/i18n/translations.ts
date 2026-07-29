@@ -282,6 +282,20 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.noAccount': "Don't have an account?",
     'login.register': 'Register now',
 
+    // Family Picker
+    'familyPicker.label': 'Family',
+    'familyPicker.searchPlaceholder': 'Search existing family by name, email, or phone…',
+    'familyPicker.noResults': 'No matching family',
+    'familyPicker.createNew': '+ Create new family',
+    'familyPicker.newFamilyName': 'Family name',
+    'familyPicker.newEmail': 'Primary email',
+    'familyPicker.newPhone': 'Primary phone',
+    'familyPicker.newAddress': 'Primary address',
+    'familyPicker.selected': 'Linked family',
+    'familyPicker.clear': 'Change',
+    'familyPicker.creatingNew': 'New family',
+    'familyPicker.studentsCount': '{n} students',
+
     // Grades
     'grade.grade1': 'Grade 1',
     'grade.grade2': 'Grade 2',
@@ -576,6 +590,20 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.submit': '\u767b\u5f55',
     'login.noAccount': '\u8fd8\u6ca1\u6709\u8d26\u53f7\uff1f',
     'login.register': '\u7acb\u5373\u6ce8\u518c',
+
+    // Family Picker
+    'familyPicker.label': '\u5bb6\u5ead',
+    'familyPicker.searchPlaceholder': '\u6309\u59d3\u540d\u3001\u90ae\u7bb1\u6216\u7535\u8bdd\u641c\u7d22\u73b0\u6709\u5bb6\u5ead\u2026',
+    'familyPicker.noResults': '\u6ca1\u6709\u5339\u914d\u7684\u5bb6\u5ead',
+    'familyPicker.createNew': '+ \u65b0\u5efa\u5bb6\u5ead',
+    'familyPicker.newFamilyName': '\u5bb6\u5ead\u540d\u79f0',
+    'familyPicker.newEmail': '\u4e3b\u8981\u90ae\u7bb1',
+    'familyPicker.newPhone': '\u4e3b\u8981\u7535\u8bdd',
+    'familyPicker.newAddress': '\u4e3b\u8981\u5730\u5740',
+    'familyPicker.selected': '\u5173\u8054\u5bb6\u5ead',
+    'familyPicker.clear': '\u66f4\u6539',
+    'familyPicker.creatingNew': '\u65b0\u5bb6\u5ead',
+    'familyPicker.studentsCount': '{n} \u540d\u5b66\u751f',
 
     // Grades
     'grade.grade1': '\u4e00\u5e74\u7ea7',

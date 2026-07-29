@@ -1,0 +1,14 @@
+.family-picker { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.family-picker-label { font-size: 13px; font-weight: 600; color: var(--color-text, #333); display: flex; gap: 8px; align-items: center; }
+.family-picker-link { background: none; border: none; color: var(--color-primary, #378ADD); cursor: pointer; font-size: 12px; }
+.family-picker-search { padding: 8px; border: 1px solid var(--color-border, #ccc); border-radius: 6px; }
+.family-picker-results { list-style: none; margin: 2px 0 0; padding: 4px; border: 1px solid var(--color-border, #ccc); border-radius: 6px; background: #fff; max-height: 220px; overflow-y: auto; }
+.family-picker-results li button { width: 100%; text-align: left; background: none; border: none; padding: 8px; cursor: pointer; border-radius: 4px; }
+.family-picker-results li button:hover { background: var(--color-hover, #f2f7fc); }
+.family-picker-empty { padding: 8px; color: #888; font-size: 13px; }
+.family-picker-create { border-top: 1px solid var(--color-border, #eee); margin-top: 4px; }
+.family-picker-create button { color: var(--color-primary, #378ADD); font-weight: 600; }
+.family-picker-chip { display: inline-flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--color-hover, #f2f7fc); border-radius: 6px; width: fit-content; }
+.family-picker-chip button { background: none; border: none; color: var(--color-primary, #378ADD); cursor: pointer; font-size: 12px; }
+.family-picker-newform { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.family-picker-newform input { padding: 8px; border: 1px solid var(--color-border, #ccc); border-radius: 6px; }
