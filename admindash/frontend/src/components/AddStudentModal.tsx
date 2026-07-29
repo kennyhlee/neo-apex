@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import {
   createEntity,
+  createFamily,
   extractStudentFromDocument,
   fetchNextEntityId,
   checkDuplicateStudents,
@@ -11,16 +12,19 @@ import { useDashboard } from '../contexts/DashboardContext.tsx';
 import DynamicForm from './DynamicForm.tsx';
 import DocumentUpload from './DocumentUpload.tsx';
 import DuplicateWarningModal from './DuplicateWarningModal.tsx';
-import type { ModelDefinition, DuplicateMatch } from '../types/models.ts';
+import FamilyPicker from './FamilyPicker.tsx';
+import type { ModelDefinition, DuplicateMatch, FamilySelection } from '../types/models.ts';
 import './AddStudentModal.css';
 
 interface AddStudentModalProps {
   tenant: string;
   onClose: () => void;
   onSuccess: (entityId: string) => void;
+  presetFamilyId?: string;
+  presetFamilyLabel?: string;
 }
 
-export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStudentModalProps) {
+export default function AddStudentModal({ tenant, onClose, onSuccess, presetFamilyId, presetFamilyLabel }: AddStudentModalProps) {
   const { t } = useTranslation();
   const { getModel } = useModel();
   const { invalidateStudentCount } = useDashboard();
@@ -33,6 +37,11 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [familySelection, setFamilySelection] = useState<FamilySelection | null>(
+    presetFamilyId
+      ? { mode: 'existing', familyId: presetFamilyId, label: presetFamilyLabel ?? presetFamilyId }
+      : null,
+  );
 
   // Auto-ID state
   const [generatedId, setGeneratedId] = useState<string | null>(null);
@@ -87,6 +96,15 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { student_id, ...submitData } = baseData;
+
+      // Resolve family: create it first if the user chose "new".
+      if (familySelection?.mode === 'existing') {
+        submitData.family_id = familySelection.familyId;
+      } else if (familySelection?.mode === 'new') {
+        const fam = await createFamily(tenant, familySelection.data);
+        submitData.family_id = fam.entity_id;
+      }
+
       const result = await createEntity(tenant, 'student', submitData, customFields);
       invalidateStudentCount();
       setSuccessMessage(t('addStudent.success'));
@@ -96,7 +114,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
     } finally {
       setSubmitting(false);
     }
-  }, [tenant, invalidateStudentCount, onSuccess, t]);
+  }, [tenant, invalidateStudentCount, onSuccess, t, familySelection]);
 
   const handleSubmit = async (
     baseData: Record<string, unknown>,
@@ -147,6 +165,14 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
     setDuplicateMatches(null);
     setPendingSubmission(null);
   };
+
+  const formModelDef = useMemo<ModelDefinition | null>(() => {
+    if (!modelDef) return null;
+    return {
+      ...modelDef,
+      base_fields: modelDef.base_fields.filter((f) => f.name !== 'family_id'),
+    };
+  }, [modelDef]);
 
   const initialValues: Record<string, unknown> = {
     ...extractedValues,
@@ -204,17 +230,20 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
                 <div className="add-modal-id-warning">{idError}</div>
               )}
 
-              {activeTab === 'form' && modelDef && (
-                <DynamicForm
-                  modelDefinition={modelDef}
-                  initialValues={initialValues}
-                  readOnlyFields={readOnlyFields}
-                  onSubmit={handleSubmit}
-                  onCancel={onClose}
-                  submitting={submitting}
-                  error={submitError}
-                  submitButtonText={submitButtonText}
-                />
+              {activeTab === 'form' && formModelDef && (
+                <>
+                  <FamilyPicker tenant={tenant} value={familySelection} onChange={setFamilySelection} />
+                  <DynamicForm
+                    modelDefinition={formModelDef}
+                    initialValues={initialValues}
+                    readOnlyFields={readOnlyFields}
+                    onSubmit={handleSubmit}
+                    onCancel={onClose}
+                    submitting={submitting}
+                    error={submitError}
+                    submitButtonText={submitButtonText}
+                  />
+                </>
               )}
               {activeTab === 'upload' && (
                 <DocumentUpload
