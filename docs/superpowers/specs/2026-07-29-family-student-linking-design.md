@@ -80,12 +80,14 @@ Submit (two-phase, in bulkAddOrchestrators.ts):
   group and are reported in PostSubmitSummary for retry.
 ```
 
-### Families tab
+### Families tab (mirrors the Students page)
+
+`FamiliesPage.tsx` follows the **same structure as `StudentsPage.tsx`** — reuse its `DataTable`, filter/search bar, dynamic custom-field columns, and add/edit-modal patterns rather than inventing new UI.
 
 - New nav item `Families` (`Navbar.tsx`) + route `/families` (`App.tsx`) → `pages/FamiliesPage.tsx`.
-- **List/search:** query families via `/api/query` (same pattern as StudentsPage), searchable by `family_name` / `primary_email` / `primary_phone`. Columns: family name, primary contact, # students.
-- **Family detail** (drawer or sub-page): shows family fields + **linked students** (`getStudentsByFamily` = `SELECT * FROM data WHERE entity_type='student' AND family_id='{id}'`). Each student row links to the student. A **"＋ Add student"** button opens `AddStudentModal` with the family **pre-linked** (picker preset to this family).
-- Edit family fields inline (PUT via generic entity proxy).
+- **List/search:** query families via `/api/query` (identical pattern to StudentsPage), searchable by `family_name` / `primary_email` / `primary_phone`. Columns: family name, primary contact, # students (+ dynamic custom fields, as StudentsPage does).
+- **Add/Edit family:** an `AddFamilyModal` mirroring `AddStudentModal`'s web-form path (model-driven `DynamicForm`, D3), plus edit via the same pattern StudentsPage uses to edit a student.
+- **Family detail / linked students:** consistent with the student-detail pattern on StudentsPage — the family row expands to / opens a view listing **linked students** (`getStudentsByFamily` = `SELECT * FROM data WHERE entity_type='student' AND family_id='{id}'`); each student links through to that student. A **"＋ Add student"** action opens `AddStudentModal` with the family **pre-linked** (picker preset to this family).
 
 ## Components & files touched (Phase 1)
 
@@ -117,8 +119,8 @@ Submit (two-phase, in bulkAddOrchestrators.ts):
 - **Backend:** proxy behavior is unchanged; existing `pytest` suite continues to cover entity/query proxying. Add a test asserting `family_id` round-trips through the student create proxy if not already covered.
 - **Manual QA checklist:** (1) web-form link existing, (2) web-form create-new, (3) single-doc → manual link, (4) CSV with family columns → siblings grouped into one new family, (5) CSV mixing existing + new families, (6) bulk-doc manual family assignment, (7) draft resume preserves family resolution, (8) Families tab search + detail + "Add student" pre-link, (9) two-phase failure (family create fails → students reported for retry).
 
-## Open questions for review
+## Resolved decisions (confirmed 2026-07-29)
 
-1. **Vitest adoption** — OK to add a frontend test runner for the pure family logic, or keep logic pure + manual-only for now?
-2. **Bulk-doc in Phase 1** — confirm it's acceptable that bulk *document* imports assign family **manually** (no auto-group) until Phase 2; CSV gets full auto-grouping now.
-3. **Families tab detail** — drawer (consistent with `LeadDetailDrawer`) vs. full sub-page. Default: drawer.
+1. **Vitest** — ✅ Add Vitest to the frontend; unit-test the pure family-matching / clustering logic (`familyMatch.ts`, CSV family mapping).
+2. **Bulk documents in Phase 1** — ✅ Bulk *document* imports assign family **manually** (via the per-row `FamilyPicker` in `BulkRowDrawer`); no auto-grouping for docs until Phase 2. CSV gets full auto-grouping now.
+3. **Families tab** — ✅ Mirror the **Students page** (full table page with `DataTable`, search/filter, dynamic columns, add/edit modal). Not a drawer.
