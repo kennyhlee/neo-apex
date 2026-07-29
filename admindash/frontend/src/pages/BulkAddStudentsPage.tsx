@@ -242,12 +242,12 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
       .filter((r): r is BulkRow => r != null);
 
     // Phase A: resolve/create families for these rows.
-    const { rowFamilyId, failedRowIds, failMessage } = await resolveRowFamilies(tenant, creatingRows);
+    const { rowFamilyId, failedRowIds, failMessagesByRow } = await resolveRowFamilies(tenant, creatingRows);
     if (failedRowIds.size > 0) {
       setRows((prev) =>
         prev.map((r) =>
           failedRowIds.has(r.id)
-            ? { ...r, status: 'failed', error: { source: 'create', message: failMessage || 'Family creation failed' } }
+            ? { ...r, status: 'failed', error: { source: 'create', message: failMessagesByRow.get(r.id) || 'Family creation failed' } }
             : r,
         ),
       );

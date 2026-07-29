@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { createEntity } from '../api/client.ts';
@@ -40,6 +40,16 @@ export default function AddFamilyModal({ tenant, onClose, onSuccess }: AddFamily
       .finally(() => setLoading(false));
   }, [tenant, getModel]);
 
+  // Strip `family_id` from the form model so a custom family model with a
+  // family_id base field doesn't render an editable/POSTable input.
+  const formModelDef = useMemo<ModelDefinition | null>(() => {
+    if (!modelDef) return null;
+    return {
+      ...modelDef,
+      base_fields: modelDef.base_fields.filter((f) => f.name !== 'family_id'),
+    };
+  }, [modelDef]);
+
   async function handleSubmit(baseData: Record<string, unknown>, customFields: Record<string, unknown>) {
     setSubmitting(true);
     setError(null);
@@ -62,9 +72,9 @@ export default function AddFamilyModal({ tenant, onClose, onSuccess }: AddFamily
           {success && <div className="add-modal-success">{success}</div>}
           {loading ? (
             <p>{t('common.loading')}</p>
-          ) : modelDef ? (
+          ) : formModelDef ? (
             <DynamicForm
-              modelDefinition={modelDef}
+              modelDefinition={formModelDef}
               onSubmit={handleSubmit}
               onCancel={onClose}
               submitting={submitting}

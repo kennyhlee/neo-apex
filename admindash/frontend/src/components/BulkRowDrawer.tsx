@@ -85,6 +85,7 @@ export default function BulkRowDrawer({
           onChangeCapture={() => setDirty(true)}
         >
           <FamilyPicker
+            key={row.id}
             tenant={tenant}
             value={currentSelection}
             onChange={(sel) => onSetRowFamily(row.id, sel)}

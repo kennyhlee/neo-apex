@@ -218,7 +218,7 @@ export async function bulkCreateStudents(opts: BulkCreateOptions): Promise<Creat
 export async function resolveRowFamilies(
   tenantId: string,
   rows: BulkRow[],
-): Promise<{ rowFamilyId: Map<string, string>; failedRowIds: Set<string>; failMessage: string }> {
+): Promise<{ rowFamilyId: Map<string, string>; failedRowIds: Set<string>; failMessagesByRow: Map<string, string> }> {
   const rowFamilyId = new Map<string, string>();
   const failedRowIds = new Set<string>();
 
@@ -233,11 +233,11 @@ export async function resolveRowFamilies(
   }
 
   // 2) Fetch a candidate pool of existing families to match against.
-  //    A broad, empty-query fetch returns the (capped) family list; adequate for
-  //    typical tenant sizes. Matching is exact-signature so false positives are nil.
+  //    Uses an explicit cap of 10 000 to cover realistic tenant sizes. Per-cluster
+  //    targeted matching is a Phase-2 improvement.
   let candidates: Awaited<ReturnType<typeof searchFamilies>> = [];
   try {
-    candidates = await searchFamilies(tenantId, '');
+    candidates = await searchFamilies(tenantId, '', 10000);
   } catch {
     candidates = [];
   }
@@ -253,16 +253,19 @@ export async function resolveRowFamilies(
 
   // 4) Phase A: create each unique new family once.
   const clusterToFamilyId = new Map<string, string>();
-  let failMessage = '';
+  const failMessagesByRow = new Map<string, string>();
   for (const { clusterKey, data } of plan.toCreate) {
     try {
       const created = await createFamily(tenantId, data as FamilyData);
       clusterToFamilyId.set(clusterKey, created.entity_id);
     } catch (e) {
-      failMessage = e instanceof Error ? e.message : String(e);
-      // Fail every row in this cluster.
+      const msg = e instanceof Error ? e.message : String(e);
+      // Fail every row in this cluster and record per-row error messages.
       for (const [rowId, key] of Object.entries(plan.rowToCluster)) {
-        if (key === clusterKey) failedRowIds.add(rowId);
+        if (key === clusterKey) {
+          failedRowIds.add(rowId);
+          failMessagesByRow.set(rowId, msg);
+        }
       }
     }
   }
@@ -273,5 +276,5 @@ export async function resolveRowFamilies(
     if (fid) rowFamilyId.set(rowId, fid);
   }
 
-  return { rowFamilyId, failedRowIds, failMessage };
+  return { rowFamilyId, failedRowIds, failMessagesByRow };
 }

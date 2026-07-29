@@ -238,13 +238,14 @@ export function escapeSql(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-export async function searchFamilies(tenantId: string, query: string): Promise<Family[]> {
+export async function searchFamilies(tenantId: string, query: string, limit = 20): Promise<Family[]> {
   const q = escapeSql(query.trim().toLowerCase());
   const where = q
     ? ` AND (LOWER(family_name) LIKE '%${q}%' OR LOWER(primary_email) LIKE '%${q}%' OR primary_phone LIKE '%${q}%')`
     : '';
+  const safeLimit = Math.max(1, Math.floor(limit));
   const sql =
-    `SELECT * FROM data WHERE entity_type = 'family' AND _status = 'active'${where} LIMIT 20`;
+    `SELECT * FROM data WHERE entity_type = 'family' AND _status = 'active'${where} LIMIT ${safeLimit}`;
   const res = await postQuery(tenantId, 'entities', sql);
   return res.data as unknown as Family[];
 }
