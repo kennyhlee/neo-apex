@@ -1,11 +1,15 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 /**
  * Minimal, safe Markdown renderer for chat messages. Produces React nodes
  * directly (never dangerouslySetInnerHTML), so untrusted model output cannot
  * inject HTML. Supports the subset LLMs commonly emit: paragraphs, single-line
  * breaks, unordered/ordered lists, ATX headings, GFM tables, and inline
- * **bold**, *italic*, `code`. Not a full CommonMark implementation — small.
+ * **bold**, *italic*, `code`.
+ *
+ * Tables are NOT rendered as an HTML grid (too cramped in the narrow chat
+ * drawer): a 2-column table becomes a key/value list, and a 3+-column table
+ * becomes one small card per row (fields stacked as label: value).
  */
 
 const INLINE = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
@@ -32,8 +36,6 @@ function renderInline(text: string): ReactNode[] {
   return nodes;
 }
 
-type Align = 'left' | 'center' | 'right' | undefined;
-
 /** Split a table row into trimmed cells, tolerating optional leading/trailing `|`. */
 function splitRow(line: string): string[] {
   let s = line.trim();
@@ -48,19 +50,52 @@ function isTableSeparator(line: string): boolean {
   return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
 }
 
-function parseAligns(sep: string): Align[] {
-  return splitRow(sep).map((c) => {
-    const l = c.startsWith(':');
-    const r = c.endsWith(':');
-    if (l && r) return 'center';
-    if (r) return 'right';
-    if (l) return 'left';
-    return undefined;
-  });
-}
+function renderTable(lines: string[], key: number): ReactNode {
+  const cols = splitRow(lines[1]).length;
+  let header = splitRow(lines[0]);
+  // Models sometimes run prose straight into the header with no line break
+  // ("…grade level.| A | B |"). The separator fixes the column count, so any
+  // extra leading header cells are prose — peel them off and show above.
+  let lead: string | null = null;
+  if (header.length > cols) {
+    lead = header.slice(0, header.length - cols).join(' | ').trim();
+    header = header.slice(header.length - cols);
+  }
+  const rows = lines.slice(2).filter((l) => l.trim() !== '').map(splitRow);
 
-function alignStyle(a: Align): CSSProperties | undefined {
-  return a ? { textAlign: a } : undefined;
+  const body =
+    cols <= 2 ? (
+      <ul className="md-kv">
+        {rows.map((cells, r) => (
+          <li key={r}>
+            <span className="md-k">{renderInline(cells[0] ?? '')}</span>
+            {cells[1] !== undefined && cells[1] !== '' ? (
+              <span className="md-v">{renderInline(cells[1])}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <div className="md-cards">
+        {rows.map((cells, r) => (
+          <div className="md-card" key={r}>
+            {header.map((h, i) => (
+              <div className="md-card-row" key={i}>
+                <span className="md-k">{renderInline(h)}</span>
+                <span className="md-v">{renderInline(cells[i] ?? '')}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+
+  return (
+    <div key={key}>
+      {lead ? <p>{renderInline(lead)}</p> : null}
+      {body}
+    </div>
+  );
 }
 
 function renderBlock(block: string, key: number): ReactNode {
@@ -68,47 +103,7 @@ function renderBlock(block: string, key: number): ReactNode {
 
   // GFM table: header row, a |---|---| separator, then data rows.
   if (lines.length >= 2 && lines[0].includes('|') && isTableSeparator(lines[1])) {
-    const aligns = parseAligns(lines[1]);
-    const cols = aligns.length;
-    let header = splitRow(lines[0]);
-    // Models sometimes run prose straight into the header with no line break
-    // ("…grade level.| A | B |"). The separator fixes the column count, so any
-    // extra leading header cells are prose — peel them off and show above.
-    let lead: string | null = null;
-    if (header.length > cols) {
-      lead = header.slice(0, header.length - cols).join(' | ').trim();
-      header = header.slice(header.length - cols);
-    }
-    const rows = lines.slice(2).filter((l) => l.trim() !== '').map(splitRow);
-    const table = (
-      <table className="md-table">
-        <thead>
-          <tr>
-            {header.map((c, i) => (
-              <th key={i} style={alignStyle(aligns[i])}>{renderInline(c)}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((cells, r) => (
-            <tr key={r}>
-              {cells.map((c, i) => (
-                <td key={i} style={alignStyle(aligns[i])}>{renderInline(c)}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-    if (lead) {
-      return (
-        <div key={key}>
-          <p>{renderInline(lead)}</p>
-          {table}
-        </div>
-      );
-    }
-    return <div key={key}>{table}</div>;
+    return renderTable(lines, key);
   }
 
   if (lines.every((l) => /^\s*[-*]\s+/.test(l))) {
