@@ -37,11 +37,25 @@
   border-radius: 4px; font-family: var(--font-mono); font-size: 0.85em; }
 .chat-msg__text .markdown strong { font-weight: 600; }
 
-/* Markdown tables in assistant messages */
-.chat-msg__text .markdown table.md-table { border-collapse: collapse; width: 100%;
-  margin: 0.4rem 0; font-size: 0.85em; }
-.chat-msg__text .markdown table.md-table th,
-.chat-msg__text .markdown table.md-table td { border: 1px solid var(--border-subtle);
-  padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
-.chat-msg__text .markdown table.md-table th { background: var(--bg-tertiary); font-weight: 600; }
-.chat-msg__text .markdown table.md-table tr:nth-child(even) td { background: var(--bg-primary); }
+/* Tabular data in assistant messages — narrow-friendly (no HTML grid). */
+/* 2-column tables -> key/value list */
+.chat-msg__text .markdown .md-kv { list-style: none; margin: 0.4rem 0; padding: 0; }
+.chat-msg__text .markdown .md-kv li { display: flex; justify-content: space-between;
+  align-items: baseline; gap: 0.75rem; padding: 0.2rem 0;
+  border-bottom: 1px solid var(--border-subtle); }
+.chat-msg__text .markdown .md-kv li:last-child { border-bottom: none; }
+.chat-msg__text .markdown .md-kv .md-k { color: var(--text-secondary); }
+.chat-msg__text .markdown .md-kv .md-v { font-weight: 600; text-align: right;
+  white-space: nowrap; }
+
+/* 3+ column tables -> one card per row */
+.chat-msg__text .markdown .md-cards { margin: 0.4rem 0; display: flex;
+  flex-direction: column; gap: 0.4rem; }
+.chat-msg__text .markdown .md-card { border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); background: var(--bg-primary);
+  padding: 0.4rem 0.55rem; }
+.chat-msg__text .markdown .md-card-row { display: flex; gap: 0.5rem; padding: 0.1rem 0; }
+.chat-msg__text .markdown .md-card .md-k { color: var(--text-tertiary);
+  flex: 0 0 40%; min-width: 0; }
+.chat-msg__text .markdown .md-card .md-v { color: var(--text-primary);
+  flex: 1 1 auto; min-width: 0; word-break: break-word; }
