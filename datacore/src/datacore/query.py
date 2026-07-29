@@ -9,6 +9,18 @@ import toon
 from datacore.store import Store
 
 
+def _scalar_to_str(v):
+    """Encode a decoded field value as the string stored in a flattened column.
+    Booleans use lowercase JSON form so consumers see 'true'/'false', not
+    Python's 'True'/'False'. Order matters: bool is a subclass of int, so it
+    must be checked before any numeric handling."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (dict, list)):
+        return json.dumps(v)
+    return str(v)
+
+
 class TableNotFoundError(Exception):
     """Raised when a query targets a table that doesn't exist."""
 
@@ -178,12 +190,7 @@ class QueryEngine:
             values = []
             for row in parsed:
                 v = row.get(key)
-                if v is None:
-                    values.append(None)
-                elif isinstance(v, (dict, list)):
-                    values.append(json.dumps(v))
-                else:
-                    values.append(str(v))
+                values.append(None if v is None else _scalar_to_str(v))
             arrow_table = arrow_table.append_column(
                 key, pa.array(values, type=pa.string())
             )
@@ -223,12 +230,7 @@ class QueryEngine:
             values = []
             for row in parsed:
                 v = row.get(key)
-                if v is None:
-                    values.append(None)
-                elif isinstance(v, (dict, list)):
-                    values.append(json.dumps(v))
-                else:
-                    values.append(str(v))
+                values.append(None if v is None else _scalar_to_str(v))
             arrow_table = arrow_table.append_column(
                 key, pa.array(values, type=pa.string())
             )
