@@ -4,7 +4,14 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import type { BulkRow } from '../types/bulkAdd.ts';
 import type { ModelDefinition } from '../types/models.ts';
 import { validateRowAgainstModel } from '../utils/validateField.ts';
+import { extractFamilyValues } from '../utils/familyBulk.ts';
 import './BulkReviewTable.css';
+
+function familyLabel(row: BulkRow): string {
+  if (row.familyLink) return row.familyLink.label;
+  const fam = extractFamilyValues(row.values);
+  return fam ? `+ ${fam.family_name || fam.primary_email || fam.primary_phone || 'new'}` : '—';
+}
 
 interface Props {
   rows: BulkRow[];
@@ -37,6 +44,7 @@ export default function BulkReviewTable({
           <th>{t('bulkAdd.table.name')}</th>
           <th>{t('bulkAdd.table.dob')}</th>
           <th>{t('bulkAdd.table.source')}</th>
+          <th>{t('bulkAdd.review.familyCol')}</th>
           <th>{t('bulkAdd.table.issues')}</th>
           <th>{t('bulkAdd.table.actions')}</th>
         </tr>
@@ -53,6 +61,7 @@ export default function BulkReviewTable({
               </td>
               <td>{String(r.values.dob ?? '')}</td>
               <td className="bulk-review-table__source">{r.source}</td>
+              <td className="bulk-review__family">{familyLabel(r)}</td>
               <td className="bulk-review-table__issues">
                 {r.error ? (
                   <span title={r.error.message} className="bulk-review-table__error-pill">

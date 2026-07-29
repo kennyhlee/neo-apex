@@ -255,6 +255,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.discardBatch': 'Discard batch',
     'bulkAdd.discardConfirm': 'Discard this batch? Unsaved rows will be lost.',
     'bulkAdd.submittingDisabled': 'Submitting…',
+    'bulkAdd.review.familyCol': 'Family',
 
     // Common
     'common.loading': 'Loading...',
@@ -583,6 +584,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'bulkAdd.discardBatch': '\u4e22\u5f03\u6279\u6b21',
     'bulkAdd.discardConfirm': '\u4e22\u5f03\u6b64\u6279\u6b21\uff1f\u672a\u4fdd\u5b58\u7684\u884c\u5c06\u4e22\u5931\u3002',
     'bulkAdd.submittingDisabled': '\u63d0\u4ea4\u4e2d\u2026',
+    'bulkAdd.review.familyCol': '\u5bb6\u5ead',
 
     // Common
     'common.loading': '\u52a0\u8f7d\u4e2d...',

@@ -15,6 +15,8 @@ import BulkReviewTable from '../components/BulkReviewTable.tsx';
 import BulkRowDrawer from '../components/BulkRowDrawer.tsx';
 import ResumeBatchPrompt from '../components/ResumeBatchPrompt.tsx';
 import { applyMapping } from '../utils/csvMapping.ts';
+import { FAMILY_TARGET_NAMES } from '../utils/familyBulk.ts';
+import type { FamilySelection } from '../types/models.ts';
 import { extractStudentBatch, bulkCreateStudents, resolveRowFamilies } from '../api/bulkAddOrchestrators.ts';
 import { saveDraft, deleteDraft, findActiveDraftsForTenant, buildDraftId } from '../db/bulkAddDrafts.ts';
 import PreSubmitGate, { type GateConfirmation } from '../components/PreSubmitGate.tsx';
@@ -156,6 +158,25 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
 
   const updateRow = (rowId: string, patch: Partial<BulkRow>) => {
     setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...patch } : r)));
+  };
+
+  const setRowFamily = (rowId: string, selection: FamilySelection | null) => {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== rowId) return r;
+      const values = { ...r.values };
+      // Clear any previous family_* values first.
+      for (const k of FAMILY_TARGET_NAMES) delete values[k];
+      if (!selection) return { ...r, values, familyLink: undefined };
+      if (selection.mode === 'existing') {
+        return { ...r, values, familyLink: { familyId: selection.familyId, label: selection.label } };
+      }
+      // new family — write family_* values, clear link
+      values.family_name = selection.data.family_name ?? '';
+      values.family_email = selection.data.primary_email ?? '';
+      values.family_phone = selection.data.primary_phone ?? '';
+      values.family_address = selection.data.primary_address ?? '';
+      return { ...r, values, familyLink: undefined };
+    }));
   };
 
   const startDocumentExtraction = async (files: File[]) => {
@@ -476,12 +497,14 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
           rows={drawerRows}
           activeRowIndex={activeDrawerIndex}
           modelDef={modelDef}
+          tenant={tenant}
           onSaveRow={(rowId, baseData, customFields) => {
             const target = rows.find((r) => r.id === rowId);
             if (!target || target.status === 'created') return; // refuse to mutate created rows
             const merged = { ...baseData, ...customFields };
             updateRow(rowId, { values: merged, status: 'ready', error: undefined });
           }}
+          onSetRowFamily={setRowFamily}
           onClose={() => setActiveDrawerIndex(null)}
           onNavigate={(newIndex) => setActiveDrawerIndex(newIndex)}
         />
