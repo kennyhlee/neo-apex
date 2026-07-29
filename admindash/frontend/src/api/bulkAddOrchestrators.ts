@@ -5,6 +5,7 @@ import type {
   DuplicateCheckRequest,
   DuplicateCheckResponse,
   ExtractResponse,
+  FamilyData,
 } from '../types/models.ts';
 import type {
   BulkRow,
@@ -14,6 +15,10 @@ import type {
 } from '../types/bulkAdd.ts';
 import { runBounded } from '../utils/boundedParallel.ts';
 import { parseDetailError } from '../utils/parseDetail.ts';
+import { createFamily, searchFamilies } from './client.ts';
+import { matchFamily } from '../utils/familyMatch.ts';
+import { extractFamilyValues } from '../utils/familyBulk.ts';
+import { planFamilies, type RowFamilyInput } from '../utils/familyPlan.ts';
 
 const TOKEN_KEY = 'neoapex_token';
 function authHeaders(): Record<string, string> {
@@ -201,4 +206,72 @@ export async function bulkCreateStudents(opts: BulkCreateOptions): Promise<Creat
     { concurrency: BULK_ADD_CONCURRENCY },
   );
   return results.filter((r): r is CreateOutcome => !(r instanceof Error));
+}
+
+/**
+ * Phase A of the two-phase create: resolve each row's family.
+ * - Rows with a manual `familyLink` use it directly.
+ * - Otherwise family values are read from the row (family_* keys), clustered,
+ *   matched against existing families, and any new families are created here.
+ * Returns rowId -> family_id, plus the rows whose family creation failed.
+ */
+export async function resolveRowFamilies(
+  tenantId: string,
+  rows: BulkRow[],
+): Promise<{ rowFamilyId: Map<string, string>; failedRowIds: Set<string>; failMessage: string }> {
+  const rowFamilyId = new Map<string, string>();
+  const failedRowIds = new Set<string>();
+
+  // 1) Manual links resolve immediately.
+  const needsPlanning: RowFamilyInput[] = [];
+  for (const row of rows) {
+    if (row.familyLink) {
+      rowFamilyId.set(row.id, row.familyLink.familyId);
+    } else {
+      needsPlanning.push({ rowId: row.id, data: extractFamilyValues(row.values) });
+    }
+  }
+
+  // 2) Fetch a candidate pool of existing families to match against.
+  //    A broad, empty-query fetch returns the (capped) family list; adequate for
+  //    typical tenant sizes. Matching is exact-signature so false positives are nil.
+  let candidates: Awaited<ReturnType<typeof searchFamilies>> = [];
+  try {
+    candidates = await searchFamilies(tenantId, '');
+  } catch {
+    candidates = [];
+  }
+  const plan = planFamilies(
+    needsPlanning,
+    (sig) => matchFamily(sig, candidates as Array<{ entity_id: string } & Record<string, unknown>>),
+  );
+
+  // 3) Rows matched to an existing family.
+  for (const [rowId, familyId] of Object.entries(plan.resolved)) {
+    rowFamilyId.set(rowId, familyId);
+  }
+
+  // 4) Phase A: create each unique new family once.
+  const clusterToFamilyId = new Map<string, string>();
+  let failMessage = '';
+  for (const { clusterKey, data } of plan.toCreate) {
+    try {
+      const created = await createFamily(tenantId, data as FamilyData);
+      clusterToFamilyId.set(clusterKey, created.entity_id);
+    } catch (e) {
+      failMessage = e instanceof Error ? e.message : String(e);
+      // Fail every row in this cluster.
+      for (const [rowId, key] of Object.entries(plan.rowToCluster)) {
+        if (key === clusterKey) failedRowIds.add(rowId);
+      }
+    }
+  }
+
+  // 5) Map new-family rows to their created family_id.
+  for (const [rowId, clusterKey] of Object.entries(plan.rowToCluster)) {
+    const fid = clusterToFamilyId.get(clusterKey);
+    if (fid) rowFamilyId.set(rowId, fid);
+  }
+
+  return { rowFamilyId, failedRowIds, failMessage };
 }

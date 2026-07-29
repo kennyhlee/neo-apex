@@ -15,7 +15,7 @@ import BulkReviewTable from '../components/BulkReviewTable.tsx';
 import BulkRowDrawer from '../components/BulkRowDrawer.tsx';
 import ResumeBatchPrompt from '../components/ResumeBatchPrompt.tsx';
 import { applyMapping } from '../utils/csvMapping.ts';
-import { extractStudentBatch, bulkCreateStudents } from '../api/bulkAddOrchestrators.ts';
+import { extractStudentBatch, bulkCreateStudents, resolveRowFamilies } from '../api/bulkAddOrchestrators.ts';
 import { saveDraft, deleteDraft, findActiveDraftsForTenant, buildDraftId } from '../db/bulkAddDrafts.ts';
 import PreSubmitGate, { type GateConfirmation } from '../components/PreSubmitGate.tsx';
 import PostSubmitSummary from '../components/PostSubmitSummary.tsx';
@@ -216,28 +216,40 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
       prev.map((r) => (creating.includes(r.id) ? { ...r, status: 'creating' } : r)),
     );
 
-    // Build payloads — strip empty student_id (matches AddStudentModal:89 behavior).
+    const creatingRows = creating
+      .map((id) => rows.find((r) => r.id === id))
+      .filter((r): r is BulkRow => r != null);
+
+    // Phase A: resolve/create families for these rows.
+    const { rowFamilyId, failedRowIds, failMessage } = await resolveRowFamilies(tenant, creatingRows);
+    if (failedRowIds.size > 0) {
+      setRows((prev) =>
+        prev.map((r) =>
+          failedRowIds.has(r.id)
+            ? { ...r, status: 'failed', error: { source: 'create', message: failMessage || 'Family creation failed' } }
+            : r,
+        ),
+      );
+    }
+
+    // Build student payloads (skip rows whose family failed). Strip empty student_id.
     const baseFieldNames = new Set(modelDef!.base_fields.map((f) => f.name));
     const customFieldNames = new Set(modelDef!.custom_fields.map((f) => f.name));
-    const payloads = creating
-      .map((id) => rows.find((r) => r.id === id))
-      .filter((r): r is BulkRow => r != null)
+    const payloads = creatingRows
+      .filter((r) => !failedRowIds.has(r.id))
       .map((r) => {
         const baseData: Record<string, unknown> = {};
         const customFields: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(r.values)) {
           if (k === 'student_id') {
-            // Documents mode: always strip — backend auto-assigns the next ID.
-            // The LLM may extract a junk value (e.g., a reference number from the
-            // application form) into student_id which would otherwise be used as
-            // the literal value. Matches AddStudentModal.tsx:89's behavior.
             if (mode === 'documents') continue;
-            // CSV mode: respect explicit student_id from the CSV; skip empty.
             if (v == null || String(v).trim() === '') continue;
           }
           if (baseFieldNames.has(k)) baseData[k] = v;
           else if (customFieldNames.has(k)) customFields[k] = v;
         }
+        const familyId = rowFamilyId.get(r.id);
+        if (familyId) baseData.family_id = familyId;
         return { rowId: r.id, baseData, customFields };
       });
 
