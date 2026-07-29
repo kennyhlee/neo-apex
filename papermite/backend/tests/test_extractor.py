@@ -122,3 +122,14 @@ def test_extract_fields_from_pdf_unknown_entity_returns_empty(tmp_path):
     )
 
     assert result == {}
+
+
+def test_filter_drops_angle_bracket_placeholders():
+    from app.services.extractor import _filter_extracted_fields
+    fields = [{"name": "a"}, {"name": "b"}, {"name": "c"}, {"name": "d"}]
+    raw = {"a": "<UNKNOWN>", "b": False, "c": "real value", "d": 0}
+    out = _filter_extracted_fields(raw, fields)
+    assert "a" not in out           # bracketed placeholder dropped
+    assert out["b"] is False        # real False preserved
+    assert out["c"] == "real value"
+    assert out["d"] == 0            # 0 preserved

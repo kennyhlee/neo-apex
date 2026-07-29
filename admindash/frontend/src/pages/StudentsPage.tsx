@@ -12,6 +12,7 @@ import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
+import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
 
@@ -117,7 +118,7 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
       render = (row: DataRow) => {
         const raw = row[field.name];
         if (raw == null) return '-';
-        const val = field.type === 'bool' ? (raw ? 'Yes' : 'No') : formatSelectionValue(raw);
+        const val = field.type === 'bool' ? (toBool(raw) ? 'Yes' : 'No') : formatSelectionValue(raw);
         return val === '-' ? val : <StatusBadge status={val} />;
       };
     }
@@ -149,7 +150,7 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
         ? (row: DataRow) => {
             const raw = row[field.name];
             if (raw == null) return '-';
-            const val = field.type === 'bool' ? (raw ? 'Yes' : 'No') : formatSelectionValue(raw);
+            const val = field.type === 'bool' ? (toBool(raw) ? 'Yes' : 'No') : formatSelectionValue(raw);
             return val === '-' ? val : <StatusBadge status={val} />;
           }
         : undefined,
