@@ -36,3 +36,12 @@
 .chat-msg__text .markdown code { background: var(--bg-tertiary); padding: 0.05rem 0.3rem;
   border-radius: 4px; font-family: var(--font-mono); font-size: 0.85em; }
 .chat-msg__text .markdown strong { font-weight: 600; }
+
+/* Markdown tables in assistant messages */
+.chat-msg__text .markdown table.md-table { border-collapse: collapse; width: 100%;
+  margin: 0.4rem 0; font-size: 0.85em; }
+.chat-msg__text .markdown table.md-table th,
+.chat-msg__text .markdown table.md-table td { border: 1px solid var(--border-subtle);
+  padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+.chat-msg__text .markdown table.md-table th { background: var(--bg-tertiary); font-weight: 600; }
+.chat-msg__text .markdown table.md-table tr:nth-child(even) td { background: var(--bg-primary); }
