@@ -1,10 +1,13 @@
 """AI extraction service using pydantic-ai."""
+import re
 from pathlib import Path
 from typing import Any
 
 from app.models.domain import ENTITY_CLASSES
 from app.models.extraction import RawExtraction
 from pydantic_ai import Agent, BinaryContent
+
+_PLACEHOLDER_RE = re.compile(r"^<.*>$")
 
 
 def _schema_context() -> str:
@@ -110,7 +113,10 @@ def _filter_extracted_fields(
     return {
         k: v
         for k, v in raw.items()
-        if v is not None and v != "" and k in known_fields
+        if v is not None
+        and v != ""
+        and k in known_fields
+        and not (isinstance(v, str) and _PLACEHOLDER_RE.match(v.strip()))
     }
 
 
