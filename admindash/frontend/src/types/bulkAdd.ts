@@ -28,6 +28,9 @@ export interface BulkRow {
   dupCheckSkipped?: boolean;
   duplicateMatches?: import('./models.ts').DuplicateMatch[];
   assignedStudentId?: string;
+  /** Manually-chosen existing family for this row (drawer override). New-family
+   *  values live in `values` under family_name/family_email/family_phone/family_address. */
+  familyLink?: { familyId: string; label: string };
 }
 
 export type ColumnMapping = Record<number, string>;
