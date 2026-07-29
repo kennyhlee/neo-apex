@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { ModelFieldDefinition, ModelDefinition } from '../types/models.ts';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { validateField } from '../utils/validateField.ts';
+import { toBool } from '../utils/boolValue.ts';
 import './DynamicForm.css';
 
 interface DynamicFormProps {
@@ -208,6 +209,9 @@ export default function DynamicForm({
         const coerced = Number(resolved);
         resolved = Number.isNaN(coerced) ? '' : coerced;
       }
+      if (field.type === 'bool') {
+        resolved = toBool(resolved);
+      }
       result[field.name] = resolved;
     }
     return result;
@@ -222,12 +226,15 @@ export default function DynamicForm({
       setValues((prev) => {
         const next = { ...prev };
         for (const [key, val] of Object.entries(initialValues)) {
-          if (val != null && val !== '') next[key] = val;
+          if (val != null && val !== '') {
+            const field = allFields.find((f) => f.name === key);
+            next[key] = field?.type === 'bool' ? toBool(val) : val;
+          }
         }
         return next;
       });
     }
-  }, [initialValues]);
+  }, [initialValues, allFields]);
 
   const fieldErrors = useMemo(() => {
     const errors: Record<string, string | null> = {};
@@ -259,7 +266,7 @@ export default function DynamicForm({
     const customFields: Record<string, unknown> = {};
 
     for (const field of allFields) {
-      const val = values[field.name];
+      const val = field.type === 'bool' ? toBool(values[field.name]) : values[field.name];
       if (field.group === 'base') {
         baseData[field.name] = val;
       } else {
