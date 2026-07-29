@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './ProgramDetailModal.css';
 
@@ -22,12 +23,7 @@ function formatFieldLabel(key: string): string {
 /** Read-only display of a field value, type-aware. */
 function formatValue(raw: unknown, type?: ModelFieldDefinition['type']): string {
   if (raw == null || raw === '') return '—';
-  if (type === 'bool') {
-    if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
-    const s = String(raw).toLowerCase();
-    if (s === 'true') return 'Yes';
-    if (s === 'false') return 'No';
-  }
+  if (type === 'bool') return toBool(raw) ? 'Yes' : 'No';
   if (Array.isArray(raw)) return raw.map((x) => String(x)).join(', ') || '—';
   const s = String(raw);
   if (s.startsWith('[')) {
