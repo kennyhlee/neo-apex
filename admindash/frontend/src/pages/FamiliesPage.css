@@ -1,0 +1,16 @@
+.families-page { padding: 24px; }
+.families-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.families-actions { display: flex; gap: 8px; }
+.families-search { padding: 8px 10px; border: 1px solid var(--color-border, #ccc); border-radius: 6px; min-width: 260px; }
+.families-add-btn { padding: 8px 14px; background: var(--color-primary, #378ADD); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.families-name-btn { background: none; border: none; color: var(--color-primary, #378ADD); cursor: pointer; padding: 0; font-size: inherit; text-align: left; font-weight: 500; }
+.families-name-btn:hover { text-decoration: underline; }
+.families-empty { color: #888; }
+.families-detail { background: #fff; border-radius: 10px; padding: 20px; width: min(560px, 92vw); max-height: 82vh; overflow-y: auto; }
+.families-detail-header { display: flex; justify-content: space-between; align-items: center; }
+.families-detail-header button { background: none; border: none; color: var(--color-primary, #378ADD); cursor: pointer; }
+.families-detail-fields { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 12px 0; }
+.families-detail-fields dt { font-weight: 600; color: #555; }
+.families-detail-students { list-style: none; padding: 0; margin: 8px 0 16px; }
+.families-detail-students li { padding: 8px; border-bottom: 1px solid var(--color-border, #eee); }
+.families-grade { color: #888; }

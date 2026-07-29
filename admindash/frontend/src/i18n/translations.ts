@@ -282,6 +282,24 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.noAccount': "Don't have an account?",
     'login.register': 'Register now',
 
+    // Families
+    'nav.family': 'Families',
+    'families.title': 'Families',
+    'families.search': 'Search families…',
+    'families.addFamily': 'Add Family',
+    'families.colName': 'Family',
+    'families.colEmail': 'Primary Email',
+    'families.colPhone': 'Primary Phone',
+    'families.colStudents': 'Students',
+    'families.empty': 'No families yet',
+    'families.detailStudents': 'Students in this family',
+    'families.addStudentToFamily': '+ Add student to this family',
+    'families.noStudents': 'No students linked yet',
+    'families.close': 'Close',
+    'addFamily.title': 'Add Family',
+    'addFamily.success': 'Family created',
+    'addFamily.error': 'Could not create family',
+
     // Family Picker
     'familyPicker.label': 'Family',
     'familyPicker.searchPlaceholder': 'Search existing family by name, email, or phone…',
@@ -590,6 +608,24 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.submit': '\u767b\u5f55',
     'login.noAccount': '\u8fd8\u6ca1\u6709\u8d26\u53f7\uff1f',
     'login.register': '\u7acb\u5373\u6ce8\u518c',
+
+    // Families
+    'nav.family': '\u5bb6\u5ead',
+    'families.title': '\u5bb6\u5ead',
+    'families.search': '\u641c\u7d22\u5bb6\u5ead\u2026',
+    'families.addFamily': '\u6dfb\u52a0\u5bb6\u5ead',
+    'families.colName': '\u5bb6\u5ead',
+    'families.colEmail': '\u4e3b\u8981\u90ae\u7bb1',
+    'families.colPhone': '\u4e3b\u8981\u7535\u8bdd',
+    'families.colStudents': '\u5b66\u751f',
+    'families.empty': '\u6682\u65e0\u5bb6\u5ead',
+    'families.detailStudents': '\u8be5\u5bb6\u5ead\u7684\u5b66\u751f',
+    'families.addStudentToFamily': '+ \u6dfb\u52a0\u5b66\u751f\u5230\u8be5\u5bb6\u5ead',
+    'families.noStudents': '\u6682\u65e0\u5173\u8054\u5b66\u751f',
+    'families.close': '\u5173\u95ed',
+    'addFamily.title': '\u6dfb\u52a0\u5bb6\u5ead',
+    'addFamily.success': '\u5bb6\u5ead\u5df2\u521b\u5efa',
+    'addFamily.error': '\u65e0\u6cd5\u521b\u5efa\u5bb6\u5ead',
 
     // Family Picker
     'familyPicker.label': '\u5bb6\u5ead',

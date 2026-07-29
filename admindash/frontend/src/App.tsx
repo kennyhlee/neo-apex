@@ -11,6 +11,7 @@ import StudentsPage from './pages/StudentsPage.tsx';
 import BulkAddStudentsPage from './pages/BulkAddStudentsPage.tsx';
 import LeadPage from './pages/LeadPage.tsx';
 import ProgramPage from './pages/ProgramPage.tsx';
+import FamiliesPage from './pages/FamiliesPage.tsx';
 import './App.css';
 
 function AppRoutes() {
@@ -51,6 +52,7 @@ function AppRoutes() {
                     />
                     <Route path="/leads" element={<LeadPage tenant={tenant} />} />
                     <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
+                    <Route path="/families" element={<FamiliesPage tenant={tenant} />} />
                     <Route path="*" element={<Navigate to="/home" replace />} />
                   </Routes>
                 </main>

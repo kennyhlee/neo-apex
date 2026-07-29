@@ -42,6 +42,7 @@ export default function Navbar() {
     { to: '/home', label: t('nav.home') },
     { to: '/leads', label: t('nav.lead') },
     { to: '/students', label: t('nav.student') },
+    { to: '/families', label: t('nav.family') },
     { to: '/programs', label: t('nav.program') },
   ];
 
