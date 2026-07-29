@@ -301,6 +301,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
     const allFieldNames = new Set([
       ...def.base_fields.map((f) => f.name),
       ...def.custom_fields.map((f) => f.name),
+      ...FAMILY_TARGET_NAMES,
     ]);
     return draftRows.map((r) => {
       const filteredValues: Record<string, unknown> = {};
