@@ -7,6 +7,8 @@ import type {
   Lead,
   LeadActivity,
   LeadModelField,
+  Family,
+  FamilyData,
 } from '../types/models.ts';
 
 import { ADMINDASH_API_URL } from '../config.ts';
@@ -229,4 +231,44 @@ export async function submitPublicLead(tenantId: string, fields: Partial<Lead>):
     body: JSON.stringify(fields),
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+}
+
+/** Double single quotes so a value is safe to interpolate into a SQL literal. */
+export function escapeSql(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+export async function searchFamilies(tenantId: string, query: string): Promise<Family[]> {
+  const q = escapeSql(query.trim().toLowerCase());
+  const where = q
+    ? ` AND (LOWER(family_name) LIKE '%${q}%' OR LOWER(primary_email) LIKE '%${q}%' OR primary_phone LIKE '%${q}%')`
+    : '';
+  const sql =
+    `SELECT * FROM data WHERE entity_type = 'family' AND _status = 'active'${where} LIMIT 20`;
+  const res = await postQuery(tenantId, 'entities', sql);
+  return res.data as unknown as Family[];
+}
+
+export async function getFamilyById(tenantId: string, familyId: string): Promise<Family | null> {
+  const sql =
+    `SELECT * FROM data WHERE entity_type = 'family' AND _status = 'active' AND entity_id = '${escapeSql(familyId)}'`;
+  const res = await postQuery(tenantId, 'entities', sql);
+  return (res.data[0] as unknown as Family) ?? null;
+}
+
+export async function getStudentsByFamily(
+  tenantId: string,
+  familyId: string,
+): Promise<Record<string, unknown>[]> {
+  const sql =
+    `SELECT * FROM data WHERE entity_type = 'student' AND _status = 'active' AND family_id = '${escapeSql(familyId)}'`;
+  const res = await postQuery(tenantId, 'entities', sql);
+  return res.data;
+}
+
+export async function createFamily(
+  tenantId: string,
+  data: FamilyData,
+): Promise<CreateEntityResponse> {
+  return createEntity(tenantId, 'family', data as unknown as Record<string, unknown>, {});
 }
