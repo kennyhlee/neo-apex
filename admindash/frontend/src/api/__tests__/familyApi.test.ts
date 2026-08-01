@@ -67,5 +67,6 @@ describe('searchStudents', () => {
     expect(body.sql).toContain("_status = 'active'");
     expect(body.sql).toContain("o''ryan");      // escaped + lowercased
     expect(body.sql).toContain('LIMIT 50');
+    expect(body.sql).toContain('LOWER(email)');
   });
 });
