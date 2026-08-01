@@ -7,6 +7,8 @@ import AddFamilyModal from '../components/AddFamilyModal.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
 import EditFamilyModal from '../components/EditFamilyModal.tsx';
+import StudentNameCell from '../components/StudentNameCell.tsx';
+import StatusBadge from '../components/StatusBadge.tsx';
 import type { Family, ModelDefinition } from '../types/models.ts';
 import './FamiliesPage.css';
 
@@ -134,9 +136,9 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
                       {String(s.student_id ?? '-')}
                     </button>
                   </td>
-                  <td>{String(s.first_name ?? '')} {String(s.last_name ?? '')}</td>
+                  <td><StudentNameCell row={s} /></td>
                   <td>{String(s.grade_level ?? '-')}</td>
-                  <td>{String(s.status ?? '-')}</td>
+                  <td><StatusBadge status={String(s.status ?? '-')} /></td>
                 </tr>
               ))}
             </tbody>
