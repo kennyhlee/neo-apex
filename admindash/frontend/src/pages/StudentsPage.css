@@ -150,11 +150,12 @@
 .students-confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  z-index: var(--z-modal);
+  animation: modal-fade .15s ease;
 }
 
 .students-confirm-dialog {
