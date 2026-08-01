@@ -90,3 +90,14 @@
   color: var(--text-primary);
   cursor: pointer;
 }
+
+/* Link-student styles (moved from LinkExistingStudentModal.css — used by the Existing Student tab) */
+.link-student-modal { background: #fff; border-radius: 10px; padding: 20px; width: min(520px, 92vw); max-height: 82vh; display: flex; flex-direction: column; }
+.link-student-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.link-student-header button { background: none; border: none; color: var(--color-primary, #378ADD); cursor: pointer; }
+.link-student-search { padding: 8px 10px; border: 1px solid var(--color-border, #ccc); border-radius: 6px; margin-bottom: 8px; }
+.link-student-results { list-style: none; padding: 0; margin: 0; overflow-y: auto; }
+.link-student-results li button { width: 100%; text-align: left; background: none; border: none; padding: 10px 8px; cursor: pointer; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.link-student-results li button:hover { background: var(--color-hover, #f2f7fc); }
+.link-student-meta { color: #888; font-size: 12px; white-space: nowrap; }
+.link-student-empty { padding: 10px 8px; color: #888; }

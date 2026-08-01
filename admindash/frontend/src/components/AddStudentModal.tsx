@@ -17,7 +17,6 @@ import FamilyPicker from './FamilyPicker.tsx';
 import EditStudentModal from './EditStudentModal.tsx';
 import type { ModelDefinition, DuplicateMatch, FamilySelection } from '../types/models.ts';
 import './AddStudentModal.css';
-import './LinkExistingStudentModal.css';
 
 interface AddStudentModalProps {
   tenant: string;

@@ -14,3 +14,9 @@
 .families-detail-students { list-style: none; padding: 0; margin: 8px 0 16px; }
 .families-detail-students li { padding: 8px; border-bottom: 1px solid var(--color-border, #eee); }
 .families-grade { color: #888; }
+.families-id { font-size: 12px; color: #555; }
+.families-expanded { display: flex; flex-direction: column; gap: 10px; }
+.families-students-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; }
+.families-students-table th, .families-students-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border, #eee); font-size: 13px; }
+.families-student-id { background: none; border: none; color: var(--color-primary, #378ADD); cursor: pointer; font-family: monospace; padding: 0; }
+.families-expanded .families-add-btn { align-self: flex-start; }
