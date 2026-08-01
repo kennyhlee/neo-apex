@@ -129,7 +129,7 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
                       type="button"
                       className="families-student-id"
                       title={t('studentDetail.dblclickHint')}
-                      onDoubleClick={() => setDetailStudent(s)}
+                      onClick={() => setDetailStudent(s)}
                     >
                       {String(s.student_id ?? '-')}
                     </button>

@@ -114,7 +114,7 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
             type="button"
             className="students-id-btn"
             title={t('studentDetail.dblclickHint')}
-            onDoubleClick={() => onStudentIdDblClick(row)}
+            onClick={() => onStudentIdDblClick(row)}
           >
             {String(row.student_id ?? '-')}
           </button>
