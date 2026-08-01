@@ -13,6 +13,7 @@ import StatusBadge from '../components/StatusBadge.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
 import EditStudentModal from '../components/EditStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
+import StudentNameCell from '../components/StudentNameCell.tsx';
 import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
@@ -77,25 +78,7 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
         key: 'name',
         label: 'Student Name',
         i18nKey: 'students.name',
-        render: (row: DataRow) => {
-          const fullName =
-            `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || '-';
-          const lastName = String(row.last_name ?? '');
-          const avatarChar = (lastName.charAt(0) || fullName.charAt(0)).toUpperCase();
-          return (
-            <div className="student-name-cell">
-              <div className="student-avatar">{avatarChar}</div>
-              <div className="student-name-info">
-                <span className="student-display-name">{fullName}</span>
-                {row.preferred_name ? (
-                  <span className="student-preferred-name">
-                    {String(row.preferred_name)}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          );
-        },
+        render: (row: DataRow) => <StudentNameCell row={row} />,
       });
       continue;
     }
@@ -188,24 +171,7 @@ function getFallbackColumns(): Column<DataRow>[] {
       key: 'name',
       label: 'Student Name',
       i18nKey: 'students.name',
-      render: (row: DataRow) => {
-        const fullName =
-          `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || '-';
-        const avatarChar = fullName.charAt(0);
-        return (
-          <div className="student-name-cell">
-            <div className="student-avatar">{avatarChar}</div>
-            <div className="student-name-info">
-              <span className="student-display-name">{fullName}</span>
-              {row.preferred_name ? (
-                <span className="student-preferred-name">
-                  {String(row.preferred_name)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        );
-      },
+      render: (row: DataRow) => <StudentNameCell row={row} />,
     },
     { key: 'student_id', label: 'Student ID', i18nKey: 'students.studentId' },
     { key: 'gender', label: 'Gender', i18nKey: 'students.gender' },

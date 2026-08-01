@@ -1,0 +1,9 @@
+.status-badge {
+  display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.status-badge--green { background: var(--status-green-bg); color: var(--status-green-fg); }
+.status-badge--amber { background: var(--status-amber-bg); color: var(--status-amber-fg); }
+.status-badge--blue  { background: var(--status-blue-bg);  color: var(--status-blue-fg); }
+.status-badge--rose  { background: var(--status-rose-bg);  color: var(--status-rose-fg); }
+.status-badge--gray  { background: var(--status-gray-bg);  color: var(--status-gray-fg); }
