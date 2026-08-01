@@ -319,6 +319,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editStudent.title': 'Edit Student',
     'editStudent.saveError': 'Failed to update student',
 
+    // Student Detail
+    'studentDetail.title': 'Student Detail',
+    'studentDetail.close': 'Close',
+
     // Family Picker
     'familyPicker.label': 'Family',
     'familyPicker.searchPlaceholder': 'Search existing family by name, email, or phone…',
@@ -664,6 +668,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Edit Student
     'editStudent.title': '\u7f16\u8f91\u5b66\u751f',
     'editStudent.saveError': '\u66f4\u65b0\u5b66\u751f\u5931\u8d25',
+
+    // Student Detail
+    'studentDetail.title': '\u5b66\u751f\u8be6\u60c5',
+    'studentDetail.close': '\u5173\u95ed',
 
     // Family Picker
     'familyPicker.label': '\u5bb6\u5ead',
