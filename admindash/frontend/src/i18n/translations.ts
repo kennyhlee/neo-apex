@@ -302,6 +302,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'addFamily.success': 'Family created',
     'addFamily.error': 'Could not create family',
 
+    // Edit Student
+    'editStudent.title': 'Edit Student',
+    'editStudent.saveError': 'Failed to update student',
+
     // Family Picker
     'familyPicker.label': 'Family',
     'familyPicker.searchPlaceholder': 'Search existing family by name, email, or phone…',
@@ -630,6 +634,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'addFamily.title': '\u6dfb\u52a0\u5bb6\u5ead',
     'addFamily.success': '\u5bb6\u5ead\u5df2\u521b\u5efa',
     'addFamily.error': '\u65e0\u6cd5\u521b\u5efa\u5bb6\u5ead',
+
+    // Edit Student
+    'editStudent.title': '\u7f16\u8f91\u5b66\u751f',
+    'editStudent.saveError': '\u66f4\u65b0\u5b66\u751f\u5931\u8d25',
 
     // Family Picker
     'familyPicker.label': '\u5bb6\u5ead',

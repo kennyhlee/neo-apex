@@ -6,12 +6,12 @@ import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
-import { postQuery, archiveEntities, updateEntity } from '../api/client.ts';
+import { postQuery, archiveEntities } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
-import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
+import EditStudentModal from '../components/EditStudentModal.tsx';
 import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
@@ -248,8 +248,6 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Edit modal state
   const [editingEntity, setEditingEntity] = useState<DataRow | null>(null);
-  const [editSubmitting, setEditSubmitting] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
 
   // Coming soon dialog
   const [showComingSoon, setShowComingSoon] = useState(false);
@@ -435,23 +433,6 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     }
   }
 
-  async function handleEditSave(baseData: Record<string, unknown>, customFields: Record<string, unknown>) {
-    if (!editingEntity) return;
-    setEditSubmitting(true);
-    setEditError(null);
-    try {
-      const entityId = String(editingEntity.entity_id);
-      await updateEntity(tenant, 'student', entityId, baseData, customFields);
-      setEditingEntity(null);
-      setSelectedIds(new Set());
-      loadData(page, filters);
-    } catch (err) {
-      setEditError(`Failed to update student: ${err}`);
-    } finally {
-      setEditSubmitting(false);
-    }
-  }
-
   // Row class for highlight
   function rowClassName(row: DataRow): string {
     if (activeHighlight && String(row.entity_id) === activeHighlight) {
@@ -612,27 +593,13 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
       {/* Edit student modal */}
       {editingEntity && model && (
-        <div className="students-confirm-overlay">
-          <div className="students-edit-modal">
-            <div className="students-edit-modal-header">
-              <h3>Edit Student</h3>
-              <span className="students-edit-modal-subtitle">
-                {String(editingEntity.first_name ?? '')} {String(editingEntity.last_name ?? '')}
-              </span>
-            </div>
-            <div className="students-edit-modal-body">
-              <DynamicForm
-                modelDefinition={model}
-                initialValues={editingEntity as Record<string, unknown>}
-                readOnlyFields={['student_id', 'first_name', 'last_name', 'middle_name', 'family_id']}
-                onSubmit={handleEditSave}
-                onCancel={() => { setEditingEntity(null); setEditError(null); }}
-                submitting={editSubmitting}
-                error={editError}
-              />
-            </div>
-          </div>
-        </div>
+        <EditStudentModal
+          tenant={tenant}
+          entity={editingEntity as Record<string, unknown>}
+          model={model}
+          onClose={() => { setEditingEntity(null); }}
+          onSaved={() => { setEditingEntity(null); setSelectedIds(new Set()); loadData(page, filters); }}
+        />
       )}
 
       {/* Coming soon dialog for batch edit */}
