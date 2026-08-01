@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { escapeSql, searchFamilies, getStudentsByFamily, createFamily } from '../client.ts';
+import { escapeSql, searchFamilies, getStudentsByFamily, createFamily, searchStudents } from '../client.ts';
 
 const fetchMock = vi.fn();
 
@@ -53,5 +53,19 @@ describe('createFamily', () => {
     expect(url).toContain('/api/entities/t1/family');
     const body = JSON.parse(init.body);
     expect(body.base_data.family_name).toBe('Nguyen');
+  });
+});
+
+describe('searchStudents', () => {
+  it('queries active students, escapes the term, matches name/id, respects limit', async () => {
+    fetchMock.mockReturnValue(ok({ data: [{ entity_id: 's1', first_name: "O'Ryan" }], total: 1 }));
+    const res = await searchStudents('t1', "O'Ryan", 50);
+    expect(res).toHaveLength(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.table).toBe('entities');
+    expect(body.sql).toContain("entity_type = 'student'");
+    expect(body.sql).toContain("_status = 'active'");
+    expect(body.sql).toContain("o''ryan");      // escaped + lowercased
+    expect(body.sql).toContain('LIMIT 50');
   });
 });

@@ -273,3 +273,19 @@ export async function createFamily(
 ): Promise<CreateEntityResponse> {
   return createEntity(tenantId, 'family', data as unknown as Record<string, unknown>, {});
 }
+
+export async function searchStudents(
+  tenantId: string,
+  query: string,
+  limit = 20,
+): Promise<Record<string, unknown>[]> {
+  const q = escapeSql(query.trim().toLowerCase());
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const where = q
+    ? ` AND (LOWER(first_name) LIKE '%${q}%' OR LOWER(last_name) LIKE '%${q}%' OR LOWER(student_id) LIKE '%${q}%')`
+    : '';
+  const sql =
+    `SELECT * FROM data WHERE entity_type = 'student' AND _status = 'active'${where} LIMIT ${safeLimit}`;
+  const res = await postQuery(tenantId, 'entities', sql);
+  return res.data;
+}
