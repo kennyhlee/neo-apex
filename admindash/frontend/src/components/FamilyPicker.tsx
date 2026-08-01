@@ -8,9 +8,10 @@ interface FamilyPickerProps {
   tenant: string;
   value: FamilySelection | null;
   onChange: (v: FamilySelection | null) => void;
+  locked?: boolean;
 }
 
-export default function FamilyPicker({ tenant, value, onChange }: FamilyPickerProps) {
+export default function FamilyPicker({ tenant, value, onChange, locked }: FamilyPickerProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Family[]>([]);
@@ -54,6 +55,17 @@ export default function FamilyPicker({ tenant, value, onChange }: FamilyPickerPr
     onChange(null);
     setLocalDraft({ family_name: '' });
     setQuery('');
+  }
+
+  if (locked) {
+    return (
+      <div className="family-picker">
+        <label className="family-picker-label">{t('familyPicker.label')}</label>
+        <div className="family-picker-chip">
+          <span>{value?.mode === 'existing' ? value.label : '—'}</span>
+        </div>
+      </div>
+    );
   }
 
   // Selected existing family — show a chip.

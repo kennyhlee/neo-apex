@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import {
   createEntity,
@@ -6,6 +6,7 @@ import {
   extractStudentFromDocument,
   fetchNextEntityId,
   checkDuplicateStudents,
+  searchStudents,
 } from '../api/client.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
@@ -13,8 +14,10 @@ import DynamicForm from './DynamicForm.tsx';
 import DocumentUpload from './DocumentUpload.tsx';
 import DuplicateWarningModal from './DuplicateWarningModal.tsx';
 import FamilyPicker from './FamilyPicker.tsx';
+import EditStudentModal from './EditStudentModal.tsx';
 import type { ModelDefinition, DuplicateMatch, FamilySelection } from '../types/models.ts';
 import './AddStudentModal.css';
+import './LinkExistingStudentModal.css';
 
 interface AddStudentModalProps {
   tenant: string;
@@ -22,14 +25,20 @@ interface AddStudentModalProps {
   onSuccess: (entityId: string) => void;
   presetFamilyId?: string;
   presetFamilyLabel?: string;
+  lockFamily?: boolean;
 }
 
-export default function AddStudentModal({ tenant, onClose, onSuccess, presetFamilyId, presetFamilyLabel }: AddStudentModalProps) {
+export default function AddStudentModal({ tenant, onClose, onSuccess, presetFamilyId, presetFamilyLabel, lockFamily }: AddStudentModalProps) {
   const { t } = useTranslation();
   const { getModel } = useModel();
   const { invalidateStudentCount } = useDashboard();
 
-  const [activeTab, setActiveTab] = useState<'form' | 'upload'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'upload' | 'existing'>('form');
+  const [linkQuery, setLinkQuery] = useState('');
+  const [linkResults, setLinkResults] = useState<Record<string, unknown>[]>([]);
+  const [linkConfirmMove, setLinkConfirmMove] = useState<Record<string, unknown> | null>(null);
+  const [linkEditing, setLinkEditing] = useState<Record<string, unknown> | null>(null);
+  const linkDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [modelDef, setModelDef] = useState<ModelDefinition | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,6 +85,15 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
       .catch(() => setModelError(t('addStudent.modelNotFound')))
       .finally(() => setLoading(false));
   }, [tenant, getModel, t]);
+
+  useEffect(() => {
+    if (linkDebounce.current) clearTimeout(linkDebounce.current);
+    linkDebounce.current = setTimeout(() => {
+      if (!linkQuery.trim()) { setLinkResults([]); return; }
+      searchStudents(tenant, linkQuery).then(setLinkResults).catch(() => setLinkResults([]));
+    }, 250);
+    return () => { if (linkDebounce.current) clearTimeout(linkDebounce.current); };
+  }, [linkQuery, tenant]);
 
   const handleExtracted = (fields: Record<string, string>) => {
     setExtractedValues((prev) => ({ ...prev, ...fields }));
@@ -166,6 +184,13 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
     setPendingSubmission(null);
   };
 
+  const familyLabel = presetFamilyLabel ?? presetFamilyId ?? '';
+  function pickExisting(student: Record<string, unknown>) {
+    const fid = student.family_id ? String(student.family_id) : '';
+    if (fid && fid !== presetFamilyId) setLinkConfirmMove(student);
+    else setLinkEditing(student);
+  }
+
   const formModelDef = useMemo<ModelDefinition | null>(() => {
     if (!modelDef) return null;
     return {
@@ -182,6 +207,19 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
   const submitButtonText = checkingDuplicates
     ? t('addStudent.checkingDuplicates')
     : undefined;
+
+  if (linkEditing && modelDef) {
+    return (
+      <EditStudentModal
+        tenant={tenant}
+        entity={linkEditing}
+        model={modelDef}
+        presetFamily={{ familyId: presetFamilyId!, label: familyLabel }}
+        onClose={() => setLinkEditing(null)}
+        onSaved={() => onSuccess(String(linkEditing.entity_id ?? ''))}
+      />
+    );
+  }
 
   return (
     <div className="students-confirm-overlay">
@@ -219,6 +257,14 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
               >
                 {t('addStudent.uploadDocument')}
               </button>
+              {presetFamilyId && (
+                <button
+                  className={`add-modal-tab ${activeTab === 'existing' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('existing')}
+                >
+                  {t('addStudent.existingStudent')}
+                </button>
+              )}
             </div>
 
             <div className="add-modal-body">
@@ -232,7 +278,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
 
               {activeTab === 'form' && formModelDef && (
                 <>
-                  <FamilyPicker tenant={tenant} value={familySelection} onChange={setFamilySelection} />
+                  <FamilyPicker tenant={tenant} value={familySelection} onChange={setFamilySelection} locked={lockFamily} />
                   <DynamicForm
                     modelDefinition={formModelDef}
                     initialValues={initialValues}
@@ -250,6 +296,52 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
                   onExtracted={handleExtracted}
                   onUpload={handleUpload}
                 />
+              )}
+              {activeTab === 'existing' && (
+                <div className="add-modal-existing">
+                  <input
+                    className="link-student-search"
+                    placeholder={t('linkStudent.search')}
+                    value={linkQuery}
+                    onChange={(e) => setLinkQuery(e.target.value)}
+                    autoFocus
+                  />
+                  <ul className="link-student-results">
+                    {linkResults.map((s) => {
+                      const fid = s.family_id ? String(s.family_id) : '';
+                      const label = !fid ? t('linkStudent.unlinked')
+                        : fid === presetFamilyId ? familyLabel : t('linkStudent.alreadyInFamily');
+                      return (
+                        <li key={String(s.entity_id)}>
+                          <button type="button" onClick={() => pickExisting(s)}>
+                            <span>{String(s.first_name ?? '')} {String(s.last_name ?? '')}</span>
+                            <span className="link-student-meta">{String(s.student_id ?? '')} · {label}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                    {linkQuery.trim() && linkResults.length === 0 && (
+                      <li className="link-student-empty">{t('linkStudent.noResults')}</li>
+                    )}
+                  </ul>
+                  {linkConfirmMove && (
+                    <div className="students-confirm-overlay" onClick={() => setLinkConfirmMove(null)}>
+                      <div className="students-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+                        <h4>{t('linkStudent.moveTitle')}</h4>
+                        <p>{t('linkStudent.moveBody').replace('{family}', familyLabel)}</p>
+                        <div className="students-confirm-actions">
+                          <button onClick={() => setLinkConfirmMove(null)}>{t('linkStudent.cancel')}</button>
+                          <button
+                            className="students-confirm-danger"
+                            onClick={() => { const s = linkConfirmMove; setLinkConfirmMove(null); setLinkEditing(s); }}
+                          >
+                            {t('linkStudent.moveConfirm')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </>
