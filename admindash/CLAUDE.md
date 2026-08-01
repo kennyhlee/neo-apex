@@ -81,6 +81,7 @@ Layer order (see `src/index.css`):
 - `components/ui/Modal.tsx` — every overlay, including drawers (`variant="drawer"`) and nested confirms. Provides focus trap, focus restoration, Escape scoped to the topmost overlay, scroll lock, and the dialog ARIA. Never build a bespoke overlay.
 - `components/ui/Button.tsx` — `variant="primary|secondary|danger|ghost|link"`.
 - `hooks/useToast.ts` — every mutation should report itself. Destructive actions pass `onUndo` and get a 10-second Undo instead of a blocking confirm where the backend supports it (see `restoreEntities`).
+- `components/ui/CommandPalette.tsx` — ⌘K / Ctrl-K search across students, families and programs, plus navigation commands. Mounted once in the shell; open it from anywhere with `openCommandPalette()` from `components/ui/paletteBus.ts`.
 - `components/DataTable.tsx` — pass `rowActions` for per-row controls, `rowLabel` for checkbox accessibility, `emptyState` for a useful empty view, and mark the name column `primary: true` so it becomes the card title when rows reflow below 768px.
 
 **Accessibility invariants** (these were absent before and are easy to regress):

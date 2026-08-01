@@ -20,3 +20,32 @@
 .status-badge--blue  { background: var(--status-blue-bg);  color: var(--status-blue-fg); }
 .status-badge--rose  { background: var(--status-rose-bg);  color: var(--status-rose-fg); }
 .status-badge--gray  { background: var(--status-gray-bg);  color: var(--status-gray-fg); }
+
+/* -----------------------------------------------------------------------------
+   Compact density: a dot plus a word, not a filled pill.
+
+   At ~18 visible rows a column of filled pills turns the grid into a colour
+   chart. The dot carries the same state with far less ink. Same markup — only
+   the presentation changes with the density token.
+   -------------------------------------------------------------------------- */
+
+:root[data-density='compact'] .status-badge,
+:root[data-density='compact'] .status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-weight: var(--weight-medium);
+}
+
+:root[data-density='compact'] .status-badge::before,
+:root[data-density='compact'] .status-pill::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}

@@ -4,8 +4,15 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useDensity } from '../hooks/useDensity.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { postQuery } from '../api/client.ts';
+import { openCommandPalette } from './ui/paletteBus.ts';
 import type { Locale } from '../i18n/translations.ts';
 import './Navbar.css';
+
+/** Mac shows ⌘K, everything else Ctrl K. */
+const shortcutHint =
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '')
+    ? '⌘K'
+    : 'Ctrl K';
 
 /** Simple line icons for the small-screen tab bar. */
 const icons: Record<string, ReactElement> = {
@@ -132,6 +139,17 @@ export default function Navbar() {
           </ul>
 
           <div className="navbar-right">
+            {/* Discoverability for ⌘K — the shortcut is the fast path, but it
+                has to be visible before anyone learns it. */}
+            <button type="button" className="navbar-search" onClick={openCommandPalette}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="m16 16 4.5 4.5" />
+              </svg>
+              <span className="navbar-search-text">{t('palette.openHint')}</span>
+              <kbd className="navbar-kbd">{shortcutHint}</kbd>
+            </button>
+
             <button
               type="button"
               className="navbar-density"

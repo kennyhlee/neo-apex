@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import { ModelProvider } from './contexts/ModelContext.tsx';
 import { DashboardProvider } from './contexts/DashboardContext.tsx';
 import { ToastProvider } from './components/ui/Toast.tsx';
+import CommandPalette from './components/ui/CommandPalette.tsx';
 import Navbar from './components/Navbar.tsx';
 import Footer from './components/Footer.tsx';
 import LoginPage from './pages/LoginPage.tsx';
@@ -55,6 +56,7 @@ function AppRoutes() {
               <DashboardProvider>
                 <div className="app-shell">
                   <Navbar />
+                  <CommandPalette tenant={tenant} />
                   <main className="app-main" id="main-content" tabIndex={-1}>
                     <Routes>
                       <Route path="/home" element={<HomePage tenant={tenant} />} />

@@ -57,6 +57,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'today.copied': 'Link copied',
     'today.noStages': 'No lead stages are defined in this model yet.',
 
+    // Command palette
+    'palette.title': 'Search and jump',
+    'palette.placeholder': 'Search students, families, programs…',
+    'palette.hint': 'Type at least two characters to search records.',
+    'palette.goTo': 'Go to',
+    'palette.actions': 'Actions',
+    'palette.navigate': 'navigate',
+    'palette.open': 'open',
+    'palette.openHint': 'Search',
+
     // Assistant
     'assistant.title': 'Assistant',
     'assistant.empty': 'Ask about students, programs, or leads.',
@@ -492,6 +502,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'today.copyLink': '\u590d\u5236\u94fe\u63a5',
     'today.copied': '\u94fe\u63a5\u5df2\u590d\u5236',
     'today.noStages': '\u5f53\u524d\u6a21\u578b\u5c1a\u672a\u5b9a\u4e49\u54a8\u8be2\u9636\u6bb5\u3002',
+
+    // Command palette
+    'palette.title': '\u641c\u7d22\u4e0e\u8df3\u8f6c',
+    'palette.placeholder': '\u641c\u7d22\u5b66\u751f\u3001\u5bb6\u5ead\u3001\u8bfe\u7a0b\u2026',
+    'palette.hint': '\u8bf7\u8f93\u5165\u81f3\u5c11\u4e24\u4e2a\u5b57\u7b26\u4ee5\u641c\u7d22\u8bb0\u5f55\u3002',
+    'palette.goTo': '\u524d\u5f80',
+    'palette.actions': '\u64cd\u4f5c',
+    'palette.navigate': '\u9009\u62e9',
+    'palette.open': '\u6253\u5f00',
+    'palette.openHint': '\u641c\u7d22',
 
     // Assistant
     'assistant.title': '\u52a9\u624b',

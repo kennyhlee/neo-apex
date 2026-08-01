@@ -268,3 +268,39 @@
     font-weight: var(--weight-semibold);
   }
 }
+
+/* --- Search / command palette trigger ------------------------------------ */
+
+.navbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.navbar-search:hover { border-color: var(--line-strong); color: var(--text-secondary); }
+.navbar-search svg { width: 15px; height: 15px; flex: none; }
+.navbar-search-text { padding-right: var(--space-4); }
+
+.navbar-kbd {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xs);
+  padding: 1px var(--space-1);
+  background: var(--bg-card);
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 900px) {
+  .navbar-search-text, .navbar-kbd { display: none; }
+  .navbar-search { width: 32px; padding: 0; justify-content: center; }
+}
