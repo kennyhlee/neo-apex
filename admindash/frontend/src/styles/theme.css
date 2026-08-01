@@ -1,0 +1,33 @@
+/* Canonical admindash design tokens — single source of truth.
+   Values match the existing hardcoded fallbacks so this is visually neutral;
+   it centralizes them so components can share ONE accent/ring/overlay/status. */
+:root {
+  /* Accent (brand blue) */
+  --accent: #378ADD;
+  --accent-hover: #2f78c4;
+  --accent-ring: rgba(55, 138, 221, 0.15);   /* focus ring */
+  --accent-tint: rgba(55, 138, 221, 0.06);    /* row hover / subtle bg */
+  --accent-tint-strong: rgba(55, 138, 221, 0.10);
+
+  /* Aliases for the fallback names used across the codebase */
+  --color-primary: var(--accent);
+  --color-accent: var(--accent);
+  --color-border: var(--border-primary, #E2E8F0);
+  --color-hover: var(--accent-tint);
+  --color-text: var(--text-secondary, #555);
+  --color-bg-subtle: var(--bg-tertiary, #F1F5F9);
+
+  /* Overlay / layering scale */
+  --overlay-bg: rgba(0, 0, 0, 0.45);
+  --z-dropdown: 100;
+  --z-modal: 500;
+  --z-drawer: 500;
+  --z-toast: 900;
+
+  /* Enrollment status palette (was inline in StatusBadge) */
+  --status-green-bg: #EAF3DE;  --status-green-fg: #3B6D11;
+  --status-amber-bg: #FAEEDA;  --status-amber-fg: #854F0B;
+  --status-blue-bg:  #E6F1FB;  --status-blue-fg:  #185FA5;
+  --status-rose-bg:  #FBEAF0;  --status-rose-fg:  #993556;
+  --status-gray-bg:  #EDF2F7;  --status-gray-fg:  #4A5568;
+}

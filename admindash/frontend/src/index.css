@@ -1,4 +1,5 @@
 @import '@neoapex/ui-tokens/tokens.css';
+@import './styles/theme.css';
 
 :root {
   /* AdminDash-specific tokens not in shared ui-tokens */
