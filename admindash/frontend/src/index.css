@@ -3,13 +3,6 @@
 @import './styles/buttons.css';
 @import './styles/modal.css';
 
-:root {
-  /* AdminDash-specific tokens not in shared ui-tokens */
-  --bg-glass: #FFFFFF;
-  --border-glass: #E2E8F0;
-  --font-mono: 'Inter', system-ui, sans-serif;
-}
-
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -19,13 +12,15 @@
 html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   font-family: var(--font-sans);
+  font-size: var(--ui-fs);
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.6;
+  line-height: var(--leading-normal);
   min-height: 100vh;
 }
 
@@ -35,10 +30,70 @@ body {
   flex-direction: column;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Inputs and buttons do not inherit the family by default. */
+input, select, textarea, button {
+  font-family: inherit;
+}
+
+/* -----------------------------------------------------------------------------
+   Focus: one visible ring for the whole product.
+
+   Previously nine `outline: none` declarations replaced the ring with a border
+   colour change, leaving keyboard users with no indicator on several controls.
+   This is the single global rule; components must not override it.
+   -------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* Only suppress the ring for pointer interaction, never for keyboard. */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Screen-reader-only utility. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link — first tab stop on every page. */
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: -100px;
+  z-index: var(--z-toast);
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xs);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  transition: top var(--dur-fast) var(--ease);
+}
+.skip-link:focus {
+  top: var(--space-4);
+}
+
+/* Prevent background scroll while a modal or drawer owns the screen. */
+body.scroll-locked {
+  overflow: hidden;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -57,4 +112,13 @@ body {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

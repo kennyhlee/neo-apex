@@ -1,7 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import { ModelProvider } from './contexts/ModelContext.tsx';
 import { DashboardProvider } from './contexts/DashboardContext.tsx';
+import { ToastProvider } from './components/ui/Toast.tsx';
 import Navbar from './components/Navbar.tsx';
 import Footer from './components/Footer.tsx';
 import LoginPage from './pages/LoginPage.tsx';
@@ -12,7 +13,25 @@ import BulkAddStudentsPage from './pages/BulkAddStudentsPage.tsx';
 import LeadPage from './pages/LeadPage.tsx';
 import ProgramPage from './pages/ProgramPage.tsx';
 import FamiliesPage from './pages/FamiliesPage.tsx';
+import { useTranslation } from './hooks/useTranslation.ts';
 import './App.css';
+
+/**
+ * Unknown URLs previously redirected to /home, so a typo looked like a
+ * successful navigation. They now say what happened.
+ */
+function NotFound() {
+  const { t } = useTranslation();
+  return (
+    <div className="not-found">
+      <h1>{t('notFound.title')}</h1>
+      <p>{t('notFound.body')}</p>
+      <Link className="btn btn-primary" to="/home">
+        {t('notFound.action')}
+      </Link>
+    </div>
+  );
+}
 
 function AppRoutes() {
   const { user, ready } = useAuth();
@@ -22,10 +41,7 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={user ? <Navigate to="/home" replace /> : <LoginPage />}
-      />
+      <Route path="/login" element={user ? <Navigate to="/home" replace /> : <LoginPage />} />
 
       <Route path="/inquire/:tenantId" element={<PublicInquiryPage />} />
 
@@ -36,29 +52,27 @@ function AppRoutes() {
             <Navigate to="/login" replace />
           ) : (
             <ModelProvider>
-            <DashboardProvider>
-              <div className="app-shell">
-                <Navbar />
-                <main className="app-main">
-                  <Routes>
-                    <Route path="/home" element={<HomePage tenant={tenant} />} />
-                    <Route
-                      path="/students"
-                      element={<StudentsPage tenant={tenant} />}
-                    />
-                    <Route
-                      path="/students/bulk-add"
-                      element={<BulkAddStudentsPage tenant={tenant} />}
-                    />
-                    <Route path="/leads" element={<LeadPage tenant={tenant} />} />
-                    <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
-                    <Route path="/families" element={<FamiliesPage tenant={tenant} />} />
-                    <Route path="*" element={<Navigate to="/home" replace />} />
-                  </Routes>
-                </main>
-                <Footer />
-              </div>
-            </DashboardProvider>
+              <DashboardProvider>
+                <div className="app-shell">
+                  <Navbar />
+                  <main className="app-main" id="main-content" tabIndex={-1}>
+                    <Routes>
+                      <Route path="/home" element={<HomePage tenant={tenant} />} />
+                      <Route path="/students" element={<StudentsPage tenant={tenant} />} />
+                      <Route
+                        path="/students/bulk-add"
+                        element={<BulkAddStudentsPage tenant={tenant} />}
+                      />
+                      <Route path="/leads" element={<LeadPage tenant={tenant} />} />
+                      <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
+                      <Route path="/families" element={<FamiliesPage tenant={tenant} />} />
+                      <Route path="/" element={<Navigate to="/home" replace />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </main>
+                  <Footer />
+                </div>
+              </DashboardProvider>
             </ModelProvider>
           )
         }
@@ -71,7 +85,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

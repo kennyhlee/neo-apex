@@ -1,0 +1,102 @@
+.toast-viewport {
+  position: fixed;
+  left: var(--space-5);
+  bottom: var(--space-5);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+  max-width: min(440px, calc(100vw - var(--space-8)));
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--toast-accent, var(--ink-faint));
+  background: var(--ink);
+  color: #fff;
+  box-shadow: var(--shadow-3);
+  animation: toast-in var(--dur-base) var(--ease);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.toast-success { --toast-accent: #6FBF8F; }
+.toast-attn    { --toast-accent: #E0A45F; }
+.toast-danger  { --toast-accent: #E08A85; }
+.toast-neutral { --toast-accent: #8FA79C; }
+
+.toast-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.toast-message {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+}
+
+.toast-detail {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.68);
+  line-height: var(--leading-snug);
+}
+
+.toast-undo {
+  flex: none;
+  align-self: center;
+  background: none;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  color: #9FD9BF;
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.toast-undo:hover:not(:disabled) { color: #C7ECD9; }
+.toast-undo:disabled { opacity: 0.6; cursor: default; }
+
+.toast-close {
+  flex: none;
+  align-self: flex-start;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast-close:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+
+.toast :focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .toast-viewport {
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: calc(var(--bottom-nav-h, 0px) + var(--space-3));
+    max-width: none;
+  }
+}

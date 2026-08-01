@@ -1,33 +1,262 @@
-/* Canonical admindash design tokens — single source of truth.
-   Values match the existing hardcoded fallbacks so this is visually neutral;
-   it centralizes them so components can share ONE accent/ring/overlay/status. */
+/* =============================================================================
+   AdminDash design system — single source of truth.
+
+   Layer order (see index.css):
+     1. @neoapex/ui-tokens  — shared suite tokens (NOT edited; launchpad and
+                              papermite depend on it)
+     2. THIS FILE           — admindash's own system, which overrides the
+                              shared layer locally and defines everything the
+                              codebase actually references.
+
+   Structure:
+     A. Primitives      — the palette, type scale, spacing scale, radii, shadows
+     B. Density         — the tokens that differ between comfortable / compact
+     C. Compatibility   — every legacy token name in the codebase, re-pointed
+                          at a primitive so all 43 stylesheets re-skin at once
+
+   Direction: "Homeroom" — chalk-green neutrals biased toward the accent, a
+   pine accent, and one warm secondary reserved exclusively for "this needs a
+   human". Semantic colour is never used decoratively.
+   ============================================================================= */
+
 :root {
-  /* Accent (brand blue) */
-  --accent: #378ADD;
-  --accent-hover: #2f78c4;
-  --accent-ring: rgba(55, 138, 221, 0.15);   /* focus ring */
-  --accent-tint: rgba(55, 138, 221, 0.06);    /* row hover / subtle bg */
-  --accent-tint-strong: rgba(55, 138, 221, 0.10);
+  /* ===========================================================================
+     A. PRIMITIVES
+     ========================================================================= */
 
-  /* Aliases for the fallback names used across the codebase */
-  --color-primary: var(--accent);
-  --color-accent: var(--accent);
-  --color-border: var(--border-primary, #E2E8F0);
-  --color-hover: var(--accent-tint);
-  --color-text: var(--text-secondary, #555);
-  --color-bg-subtle: var(--bg-tertiary, #F1F5F9);
+  /* --- Neutrals -----------------------------------------------------------
+     A chalk-green grey rather than a blue-grey: the ground carries a slight
+     hue bias toward the accent so the palette reads as chosen. */
+  --ground:          #F2F5F3;
+  --surface:         #FFFFFF;
+  --surface-2:       #F8FAF9;
+  --surface-sunken:  #E9EFEC;
+  --line:            #DCE4DF;
+  --line-subtle:     #E8EDEA;
+  --line-strong:     #C6D2CB;
 
-  /* Overlay / layering scale */
-  --overlay-bg: rgba(0, 0, 0, 0.45);
-  --z-dropdown: 100;
-  --z-modal: 500;
-  --z-drawer: 500;
-  --z-toast: 900;
+  --ink:             #1D2622;
+  --ink-2:           #46524C;
+  --ink-3:           #5C6B64;
+  --ink-faint:       #7C8A83;
+  --on-accent:       #FFFFFF;
 
-  /* Enrollment status palette (was inline in StatusBadge) */
-  --status-green-bg: #EAF3DE;  --status-green-fg: #3B6D11;
-  --status-amber-bg: #FAEEDA;  --status-amber-fg: #854F0B;
-  --status-blue-bg:  #E6F1FB;  --status-blue-fg:  #185FA5;
-  --status-rose-bg:  #FBEAF0;  --status-rose-fg:  #993556;
-  --status-gray-bg:  #EDF2F7;  --status-gray-fg:  #4A5568;
+  /* --- Accent: pine ------------------------------------------------------- */
+  --accent:            #1F6F5C;
+  --accent-hover:      #1A5B4C;
+  --accent-active:     #15493D;
+  --accent-tint:       #E4EFEB;
+  --accent-tint-strong:#D2E4DD;
+  --accent-ring:       rgba(31, 111, 92, 0.30);
+  --accent-glow:       rgba(31, 111, 92, 0.08);
+
+  /* --- Semantic ------------------------------------------------------------
+     Deliberately outside the accent hue. `attn` means a person must act. */
+  --success:       #2F7D4F;  --success-tint: #E4F1E9;
+  --attn:          #8A5220;  --attn-tint:    #F7EADD;
+  --danger:        #A3352F;  --danger-tint:  #F8E8E7;
+  --info:          #3E5A7A;  --info-tint:    #E9EDF3;
+  --away:          #5B4478;  --away-tint:    #EDE7F2;
+  --neutral:       #5C6B64;  --neutral-tint: #E7EBE9;
+
+  /* --- Typography ----------------------------------------------------------
+     Inter arrives from the shared token package. The display face is a system
+     serif — names are the content of this product, so they get the good face.
+     --font-mono previously pointed at Inter; it now points at a real mono. */
+  --font-sans:    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-mono:    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --text-2xs:  11px;
+  --text-xs:   12px;
+  --text-sm:   13px;
+  --text-md:   14px;
+  --text-base: 15px;
+  --text-lg:   17px;
+  --text-xl:   20px;
+  --text-2xl:  24px;
+  --text-3xl:  30px;
+
+  --leading-tight:  1.25;
+  --leading-snug:   1.4;
+  --leading-normal: 1.6;
+
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* --- Spacing: strict 4px step -------------------------------------------
+     Replaces the 0.45rem / 0.7rem / 0.85rem off-grid values used previously. */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* --- Radii --------------------------------------------------------------- */
+  --radius-xs:   6px;
+  --radius-sm:  10px;
+  --radius-md:  14px;
+  --radius-lg:  18px;
+  --radius-full: 999px;
+
+  /* --- Elevation: three steps, no bespoke shadows -------------------------- */
+  --shadow-1: 0 1px 2px rgba(29, 38, 34, 0.05);
+  --shadow-2: 0 1px 2px rgba(29, 38, 34, 0.04), 0 6px 18px rgba(29, 38, 34, 0.06);
+  --shadow-3: 0 2px 4px rgba(29, 38, 34, 0.05), 0 16px 40px rgba(29, 38, 34, 0.12);
+
+  /* --- Motion -------------------------------------------------------------- */
+  --ease:      cubic-bezier(0.2, 0, 0.2, 1);
+  --dur-fast:  120ms;
+  --dur-base:  180ms;
+
+  /* --- Layering: one ladder, used by everything ---------------------------- */
+  --z-sticky:   100;
+  --z-dropdown: 200;
+  --z-overlay:  400;
+  --z-modal:    500;
+  --z-drawer:   500;
+  --z-popover:  600;
+  --z-toast:    900;
+  --overlay-bg: rgba(29, 38, 34, 0.42);
+
+  /* --- Layout -------------------------------------------------------------- */
+  --content-max: 1400px;
+  --bulk-content-max-width: 1100px;
+  --assistant-w: 380px;
+  --tap-min: 44px;             /* minimum touch target */
+
+  /* ===========================================================================
+     B. DENSITY — comfortable (default)
+     These are the ONLY tokens that differ in compact mode. Components read
+     them, so "Direction A" is a token swap rather than a second component set.
+     ========================================================================= */
+  --row-h:        56px;
+  --cell-px:      18px;
+  --cell-py:      10px;
+  --table-fs:     var(--text-base);
+  --table-head-fs:var(--text-xs);
+  --table-head-transform: none;
+  --table-head-spacing: 0;
+  --table-numeric: normal;
+  --ui-fs:        var(--text-base);
+  --control-h:    40px;
+  --control-px:   16px;
+  --control-r:    var(--radius-sm);
+  --nav-h:        62px;
+  --gutter:       var(--space-5);
+  --card-r:       var(--radius-md);
+  --page-title-family: var(--font-display);
+  --page-title-size: var(--text-2xl);
+  --page-title-weight: 600;
+}
+
+/* --- Density: compact ("Registrar") ---------------------------------------
+   ~18 rows visible instead of ~9, tabular numerals, tighter controls. */
+:root[data-density='compact'] {
+  --row-h:        34px;
+  --cell-px:      12px;
+  --cell-py:      6px;
+  --table-fs:     var(--text-sm);
+  --table-head-fs:var(--text-2xs);
+  --table-head-transform: uppercase;
+  --table-head-spacing: 0.05em;
+  --table-numeric: tabular-nums;
+  --ui-fs:        var(--text-sm);
+  --control-h:    30px;
+  --control-px:   12px;
+  --control-r:    var(--radius-xs);
+  --nav-h:        48px;
+  --gutter:       var(--space-3);
+  --card-r:       var(--radius-xs);
+  --page-title-family: var(--font-sans);
+  --page-title-size: var(--text-lg);
+  --page-title-weight: 600;
+}
+
+/* =============================================================================
+   C. COMPATIBILITY LAYER
+
+   Every legacy token name referenced anywhere in src/, re-pointed at a
+   primitive above. This is what lets the whole product re-skin without
+   editing 43 stylesheets — and it defines the 12 `--color-*` names that were
+   previously used but never declared, so those components stop rendering
+   from inline hex fallbacks.
+   ============================================================================= */
+:root {
+  /* Backgrounds */
+  --bg-primary:   var(--ground);
+  --bg-secondary: var(--surface);
+  --bg-tertiary:  var(--surface-sunken);
+  --bg-card:      var(--surface);
+  --bg-elevated:  var(--surface);
+  --bg-input:     var(--surface);
+  --bg-glass:     var(--surface);
+
+  /* Borders */
+  --border-primary: var(--line);
+  --border-subtle:  var(--line-subtle);
+  --border-accent:  var(--accent-tint-strong);
+  --border-glass:   var(--line);
+
+  /* Text */
+  --text-primary:   var(--ink);
+  --text-secondary: var(--ink-3);
+  --text-tertiary:  var(--ink-faint);
+  --text-inverse:   var(--on-accent);
+
+  /* Accent aliases */
+  --accent-muted: var(--accent-tint);
+
+  /* Status aliases (ui-tokens names) */
+  --success-muted: var(--success-tint);
+  --danger-muted:  var(--danger-tint);
+  --info-muted:    var(--info-tint);
+  --warning:       var(--attn);
+  --warning-muted: var(--attn-tint);
+
+  /* Tinted pairs (ui-tokens names) */
+  --tint-blue-bg:   var(--info-tint);    --tint-blue-text:  var(--info);
+  --tint-green-bg:  var(--success-tint); --tint-green-text: var(--success);
+  --tint-amber-bg:  var(--attn-tint);    --tint-amber-text: var(--attn);
+  --tint-pink-bg:   var(--danger-tint);  --tint-pink-text:  var(--danger);
+
+  /* Enrollment status palette (StatusBadge) */
+  --status-green-bg: var(--success-tint); --status-green-fg: var(--success);
+  --status-amber-bg: var(--attn-tint);    --status-amber-fg: var(--attn);
+  --status-blue-bg:  var(--info-tint);    --status-blue-fg:  var(--info);
+  --status-rose-bg:  var(--away-tint);    --status-rose-fg:  var(--away);
+  --status-gray-bg:  var(--neutral-tint); --status-gray-fg:  var(--neutral);
+
+  /* ---- The `--color-*` namespace ----------------------------------------
+     Previously used across the bulk-add flow but never defined, so those
+     components rendered from inline hex fallbacks — including a second,
+     more saturated blue (#2563eb). Defining --color-primary here retires
+     that divergence in one line. --color-danger had no fallback at all,
+     which is why required-field asterisks rendered with no colour. */
+  --color-primary:         var(--accent);
+  --color-primary-subtle:  var(--accent-tint);
+  --color-accent:          var(--accent);
+  --color-border:          var(--line);
+  --color-hover:           var(--accent-tint);
+  --color-text:            var(--ink-3);
+  --color-text-muted:      var(--ink-faint);
+  --color-bg-subtle:       var(--surface-sunken);
+  --color-disabled:        var(--ink-faint);
+
+  --color-danger:          var(--danger);
+  --color-error:           var(--danger);
+  --color-error-subtle:    var(--danger-tint);
+  --color-success:         var(--success);
+  --color-success-subtle:  var(--success-tint);
+  --color-warning:         var(--attn);
+  --color-warning-subtle:  var(--attn-tint);
+  --color-info:            var(--info);
+  --color-info-subtle:     var(--info-tint);
 }

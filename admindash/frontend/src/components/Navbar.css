@@ -1,150 +1,270 @@
+/* =============================================================================
+   Navbar — top bar on desktop, bottom tab bar on small screens.
+   ============================================================================= */
+
 .navbar {
-  background: #FFFFFF;
-  border-bottom: 1px solid #E2E8F0;
-  padding: 0 1.5rem;
-  height: 56px;
-  display: flex;
-  align-items: center;
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-sticky);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-primary);
 }
 
 .navbar-inner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  max-width: 1400px;
+  gap: var(--space-6);
+  height: var(--nav-h);
+  max-width: var(--content-max);
   margin: 0 auto;
+  padding: 0 var(--space-6);
 }
+
+/* --- Brand ---------------------------------------------------------------- */
 
 .navbar-brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-2);
   text-decoration: none;
+  flex: none;
+  min-width: 0;
 }
 
 .navbar-brand img {
-  height: 32px;
-  width: auto;
-  object-fit: contain;
+  width: 28px;
+  height: 28px;
+  flex: none;
 }
 
 .navbar-brand-text {
-  font-weight: 700;
-  font-size: 1rem;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+/* --- Primary links -------------------------------------------------------- */
 
 .navbar-nav {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .navbar-nav a {
-  text-decoration: none;
-  color: var(--text-secondary);
-  padding: 0.4rem 0.85rem;
+  display: block;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.15s;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
 .navbar-nav a:hover {
-  background: var(--bg-tertiary);
+  background: var(--surface-sunken);
   color: var(--text-primary);
 }
 
 .navbar-nav a.active {
-  background: var(--accent-muted);
+  background: var(--accent-tint);
   color: var(--accent);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
+
+/* --- Right cluster -------------------------------------------------------- */
 
 .navbar-right {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-2);
 }
 
-.navbar-user-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.navbar-tenant-name {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.navbar-site-select,
-.navbar-lang-select {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.navbar-site-select:focus,
-.navbar-lang-select:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.navbar-avatar {
+.navbar-density {
+  display: grid;
+  place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: var(--tint-blue-bg, #EBF5FF);
-  border: 1px solid var(--border-primary, #E5E7EB);
-  color: var(--tint-blue-text, var(--accent));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.navbar-logout {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 50%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: color 0.2s, background 0.2s;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.navbar-density svg { width: 17px; height: 17px; }
+.navbar-density:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.navbar-density[aria-pressed='true'] { color: var(--accent); background: var(--accent-tint); }
+
+.navbar-lang-select {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xs);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
 }
 
-.navbar-logout:hover {
-  color: var(--danger);
-  background: var(--danger-muted);
+/* --- User menu ------------------------------------------------------------ */
+
+.navbar-user { position: relative; }
+
+.navbar-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
 }
+.navbar-user-trigger:hover { background: var(--surface-sunken); }
+
+.navbar-tenant-name {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navbar-avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.navbar-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  z-index: var(--z-dropdown);
+  min-width: 220px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-3);
+  padding: var(--space-1);
+  animation: fadeIn var(--dur-fast) var(--ease);
+}
+
+.navbar-menu-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-1);
+}
+.navbar-menu-head strong { font-size: var(--text-md); color: var(--text-primary); }
+.navbar-menu-head span { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+.navbar-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+.navbar-menu-item:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.navbar-menu-danger { color: var(--danger); }
+.navbar-menu-danger:hover { background: var(--danger-tint); color: var(--danger); }
+
+/* =============================================================================
+   Small-screen tab bar
+   ============================================================================= */
+
+.navbar-tabs { display: none; }
 
 @media (max-width: 768px) {
-  .navbar {
-    padding: 0 1rem;
+  .navbar-inner {
+    padding: 0 var(--space-4);
+    gap: var(--space-3);
   }
 
-  .navbar-nav {
-    display: none;
+  .navbar-nav { display: none; }
+  .navbar-tenant-name { display: none; }
+  .navbar-density { display: none; }
+
+  .navbar-brand-text {
+    font-size: var(--text-md);
+    max-width: 46vw;
   }
 
-  .navbar-tenant-name {
-    display: none;
+  /* Bottom tab bar owns primary navigation below 768px. */
+  .navbar-tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-sticky);
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-primary);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .navbar-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 56px;
+    padding: var(--space-2) 2px;
+    color: var(--text-tertiary);
+    text-decoration: none;
+  }
+
+  .navbar-tab-icon {
+    display: block;
+    width: 22px;
+    height: 22px;
+  }
+  .navbar-tab-icon svg { width: 100%; height: 100%; }
+
+  .navbar-tab-label {
+    font-size: var(--text-2xs);
+    line-height: 1.2;
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .navbar-tab.active {
+    color: var(--accent);
+    font-weight: var(--weight-semibold);
   }
 }

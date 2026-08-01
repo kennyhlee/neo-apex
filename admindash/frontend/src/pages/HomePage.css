@@ -1,302 +1,396 @@
+/* =============================================================================
+   Today — the work queue that replaced the placeholder dashboard.
+
+   The previous page carried a hardcoded "98% attendance", two to-do items and
+   two announcements dated 2025, and a View Reports tile with no handler.
+   Everything here is computed from live tenant data.
+   ============================================================================= */
+
 .home-page {
-  animation: fadeIn 0.3s ease;
-}
-
-.home-page h1 {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #1A202C;
-  margin-bottom: 1.25rem;
-}
-
-.home-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
-  padding: 1.5rem;
-  text-align: center;
-}
-
-.stat-label {
-  font-size: 0.85rem;
-  color: var(--text-tertiary);
-  margin-bottom: 0.75rem;
-}
-
-.stat-value {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 80px;
-  height: 44px;
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  border-radius: var(--radius-sm);
-}
-
-.stat-value.purple { background: #E6F1FB; color: #185FA5; }
-.stat-value.blue { background: #EAF3DE; color: #3B6D11; }
-.stat-value.green { background: #FAEEDA; color: #854F0B; }
-
-.home-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.home-card {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
-}
-
-.home-card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border-subtle);
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-
-.home-card-body {
-  padding: 1rem;
-}
-
-.shortcut-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
-}
-
-.shortcut-item {
   display: flex;
   flex-direction: column;
+  gap: var(--space-8);
+  animation: fadeIn var(--dur-base) var(--ease);
+}
+
+.today-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.today-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.today-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+.today-section-head .today-section-title { flex: 1; }
+
+.today-section-title {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.today-muted {
+  font-size: var(--text-md);
+  color: var(--text-tertiary);
+}
+
+/* --- Work queue ----------------------------------------------------------- */
+
+.queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: var(--space-3);
+}
+
+.queue-card {
+  display: flex;
   align-items: center;
-  padding: 0.75rem;
-  border-radius: var(--radius-sm);
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-left: 3px solid var(--queue-c, var(--neutral));
+  border-radius: var(--card-r);
+}
+
+.queue-danger { --queue-c: var(--danger); }
+.queue-attn   { --queue-c: var(--attn); }
+.queue-ok     { --queue-c: var(--success); }
+
+.queue-count {
+  flex: none;
+  min-width: 2ch;
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--queue-c, var(--text-primary));
+}
+
+.queue-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.queue-text strong {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--text-primary);
+}
+.queue-text small { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+.queue-card-skeleton { align-items: center; }
+.queue-skel-n,
+.queue-skel-line {
+  display: block;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.queue-skel-n { width: 28px; height: 24px; flex: none; }
+.queue-skel-line { flex: 1; }
+
+.today-clear {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-5) var(--space-6);
+  background: var(--success-tint);
+  border-radius: var(--card-r);
+}
+.today-clear strong { font-size: var(--text-lg); color: var(--success); }
+.today-clear span { font-size: var(--text-md); color: var(--text-secondary); }
+
+/* --- Pipeline spine -------------------------------------------------------
+   A sequential ramp, cool to committed. Colour encodes progress and nothing
+   else — the action accent stays pine so a button never reads as a stage. */
+
+.spine {
+  display: flex;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.spine-stage {
+  flex: 1 1 0;
+  min-width: 116px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-left: 3px solid var(--stage-c);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+}
+.spine-stage:first-child { border-radius: var(--radius-xs); }
+
+.spine-stage b {
+  display: block;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--stage-c);
+}
+
+.spine-stage span {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  display: block;
+  margin-top: 2px;
+}
+
+/* --- Stat tiles ------------------------------------------------------------ */
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+  text-align: left;
+  padding: var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--card-r);
   cursor: pointer;
-  transition: all 0.15s;
-  text-align: center;
+  font: inherit;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.tile:hover { border-color: var(--accent-tint-strong); background: var(--accent-tint); }
+
+.tile-n {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text-primary);
 }
 
-.shortcut-item:hover {
-  background: var(--bg-tertiary);
-}
-
-.shortcut-icon {
-  font-size: 1.8rem;
-  margin-bottom: 0.4rem;
-}
-
-.shortcut-label {
-  font-size: 0.8rem;
+.tile-l {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-md);
   color: var(--text-secondary);
 }
+.tile-l small { font-size: var(--text-xs); color: var(--text-tertiary); }
 
-.todo-item {
-  margin-bottom: 1rem;
+/* --- Public inquiry link --------------------------------------------------- */
+
+.inquiry-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  padding: var(--space-5) var(--space-6);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--card-r);
 }
 
-.todo-bar {
-  height: 6px;
-  border-radius: 3px;
-  background: #EDF2F7;
-  margin-bottom: 0.4rem;
-  overflow: hidden;
+.inquiry-text { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: var(--space-2); }
+.inquiry-text h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+.inquiry-text p { font-size: var(--text-md); color: var(--text-tertiary); }
+
+.inquiry-url {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--accent);
+  background: var(--accent-tint);
+  border-radius: var(--radius-xs);
+  padding: var(--space-2) var(--space-3);
+  word-break: break-all;
 }
 
-.todo-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-}
-
-.todo-text {
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.todo-date {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-}
-
-.announce-item {
-  padding-bottom: 0.75rem;
-  margin-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.announce-item:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-}
-
-.announce-date {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  margin-bottom: 0.25rem;
-}
-
-.announce-text {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
+/* =============================================================================
+   Weekly schedule (unchanged behaviour, retokenised)
+   ============================================================================= */
 
 .schedule-card {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--card-r);
 }
 
 .schedule-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .schedule-title {
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-md);
+  color: var(--text-primary);
 }
 
-.schedule-body {
-  padding: 1rem;
+.schedule-week-range {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
 }
+
+.schedule-body { padding: var(--space-4); }
 
 .schedule-days {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: repeat(7, minmax(96px, 1fr));
+  gap: var(--space-2);
 }
 
 .schedule-day-header {
   text-align: center;
-  font-weight: 600;
-  font-size: 0.75rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  padding: 0.4rem;
-  background: #F1F5F9;
-  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-xs);
 }
 
 .schedule-day-header-today {
-  background: var(--accent-muted, #E6F0FB);
+  background: var(--accent-tint);
   color: var(--accent);
 }
 
-.schedule-day-label {
-  display: block;
-}
+.schedule-day-label { display: block; }
 
 .schedule-day-num {
   display: block;
-  font-size: 0.7rem;
-  font-weight: 500;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
   color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 
-.schedule-day-header-today .schedule-day-num {
-  color: var(--accent);
-}
+.schedule-day-header-today .schedule-day-num { color: var(--accent); }
 
 .schedule-day-cell {
   min-height: 80px;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.35rem;
+  border-radius: var(--radius-xs);
+  padding: var(--space-1);
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .schedule-day-cell-today {
   border-color: var(--accent);
-  background: var(--accent-muted, rgba(55, 138, 221, 0.06));
-}
-
-.schedule-week-range {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.schedule-viewall {
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-}
-
-.schedule-viewall:hover {
-  text-decoration: underline;
+  background: var(--accent-tint);
 }
 
 .schedule-empty {
-  padding: 2rem 1rem;
+  padding: var(--space-8) var(--space-4);
   text-align: center;
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   color: var(--text-tertiary);
 }
 
 @media (max-width: 992px) {
-  .home-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .schedule-days {
-    overflow-x: auto;
-  }
+  .schedule-days { overflow-x: auto; }
 }
 
-/* Home + assistant slide-in drawer.
+@media (max-width: 640px) {
+  .queue-card { flex-wrap: wrap; }
+  .queue-card .btn { width: 100%; }
+  .spine { flex-direction: column; }
+  .spine-stage { border-radius: var(--radius-xs); }
+  .inquiry-card .btn { width: 100%; }
+}
+
+/* =============================================================================
+   Home + assistant slide-in drawer.
+
    Dashboard stays centered (app-main keeps its max-width). The drawer is
-   anchored to the RIGHT EDGE OF THE CENTERED CONTENT (--gutter), not the
-   viewport edge, and content reserves the drawer width + a small gap — so the
-   two sit flush with only a slight breathing space, no dead centered-gutter. */
-:root { --assistant-w: 380px; --content-max: 1400px; }
+   anchored to the RIGHT EDGE OF THE CENTERED CONTENT, not the viewport edge,
+   and content reserves the drawer width + a small gap — so the two sit flush
+   with only a slight breathing space, no dead centered-gutter.
+   ============================================================================= */
+
 .app-main { transition: padding-right 0.28s ease; }
-body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + 1rem); }
+body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--space-4)); }
 
-/* Toggle pinned to the upper-right of the centered content in both states */
-.home-chat-toggle { position: fixed; top: 68px; z-index: 60;
-  right: max(1rem, calc((100vw - var(--content-max)) / 2 + 1rem));
-  background: var(--accent); color: var(--text-inverse); border: none;
-  border-radius: var(--radius-sm); padding: 0.4rem 0.8rem; cursor: pointer;
-  font-size: 0.8rem; box-shadow: var(--shadow-card); }
-.home-chat-toggle:hover { background: var(--accent-hover, var(--accent)); }
+.home-chat-toggle {
+  position: fixed;
+  top: calc(var(--nav-h) + var(--space-3));
+  z-index: var(--z-dropdown);
+  right: max(var(--space-4), calc((100vw - var(--content-max)) / 2 + var(--space-4)));
+  background: var(--accent);
+  color: var(--on-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--shadow-2);
+}
+.home-chat-toggle:hover { background: var(--accent-hover); }
 
-.home-chat-drawer { position: fixed; top: 56px; z-index: 55;
+.home-chat-drawer {
+  position: fixed;
+  top: var(--nav-h);
+  z-index: var(--z-drawer);
   right: max(0px, calc((100vw - var(--content-max)) / 2));
-  width: var(--assistant-w); height: calc(100vh - 56px);
+  width: var(--assistant-w);
+  height: calc(100vh - var(--nav-h));
   transform: translateX(calc(100% + max(0px, (100vw - var(--content-max)) / 2)));
-  transition: transform 0.28s ease; display: flex;
-  background: var(--bg-secondary); border-left: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-elevated); }
+  transition: transform 0.28s ease;
+  display: flex;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-3);
+}
 .home-chat-drawer.is-open { transform: translateX(0); }
 .home-chat-drawer .chat-panel { flex: 1; height: 100%; border: none; border-radius: 0; }
 
+/* Keep the closed drawer out of the tab order rather than only hiding it
+   from assistive tech. */
+.home-chat-drawer[aria-hidden='true'] { visibility: hidden; }
+.home-chat-drawer.is-open[aria-hidden='false'] { visibility: visible; }
+
 @media (max-width: 992px) {
   /* Drawer covers the screen on small viewports; don't reserve desktop width. */
-  body.assistant-open .app-main { padding-right: 1.5rem; }
+  body.assistant-open .app-main { padding-right: var(--gutter); }
   .home-chat-drawer { width: 100%; transform: translateX(100%); }
+}
+
+@media (max-width: 768px) {
+  .home-chat-drawer { height: calc(100vh - var(--nav-h) - var(--bottom-nav-h)); }
 }
