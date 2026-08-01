@@ -66,6 +66,29 @@ cd /Users/kennylee/Development/NeoApex/admindash && uv run pytest backend/tests/
 - **types/** — TypeScript interfaces (Student, Guardian, Tenant, etc.)
 - **i18n/** — Translation JSON files keyed by locale
 
+### Design System
+
+All styling flows through `src/styles/theme.css`. **It is the only file in `src/` that may contain a raw hex or `rgba()` value** — everything else references tokens. If you need a colour that isn't there, add a token rather than a literal.
+
+Layer order (see `src/index.css`):
+1. `@neoapex/ui-tokens` — shared across launchpad/papermite/admindash. **Do not edit it for admindash-only changes**; override locally in `theme.css` instead.
+2. `styles/theme.css` — the admindash system: palette, type scale, 4px spacing scale, radii, elevation, z-index ladder, density tokens, plus a compatibility layer that re-points every legacy token name (`--bg-card`, `--text-primary`, `--color-*`, …) at a primitive. That layer is what lets a palette change re-skin all stylesheets at once.
+3. `styles/buttons.css`, `styles/modal.css` — the shared component CSS.
+
+**Density.** `--row-h`, `--cell-px`, `--table-fs`, `--control-h`, `--nav-h`, `--gutter` and friends are swapped by `:root[data-density='compact']`. Components read them, so comfortable (teachers, front desk) and compact (the registrar's grid) are one component set at two token values. Toggle via `useDensity()`; it persists to `localStorage['admindash_density']`.
+
+**Shared primitives — use these, don't hand-roll:**
+- `components/ui/Modal.tsx` — every overlay, including drawers (`variant="drawer"`) and nested confirms. Provides focus trap, focus restoration, Escape scoped to the topmost overlay, scroll lock, and the dialog ARIA. Never build a bespoke overlay.
+- `components/ui/Button.tsx` — `variant="primary|secondary|danger|ghost|link"`.
+- `hooks/useToast.ts` — every mutation should report itself. Destructive actions pass `onUndo` and get a 10-second Undo instead of a blocking confirm where the backend supports it (see `restoreEntities`).
+- `components/DataTable.tsx` — pass `rowActions` for per-row controls, `rowLabel` for checkbox accessibility, `emptyState` for a useful empty view, and mark the name column `primary: true` so it becomes the card title when rows reflow below 768px.
+
+**Accessibility invariants** (these were absent before and are easy to regress):
+- Never write `outline: none` without a visible replacement. The global `:focus-visible` ring in `index.css` is the default; don't override it.
+- Every form control needs a bound label (`htmlFor`/`id`). Radio and checkbox groups need `<fieldset>` + `<legend>`, not a single `<label>`.
+- Interactive elements are `<button>`, not `<div onClick>`.
+- New user-facing strings go in `src/i18n/translations.ts` for **both** `en-US` and `zh-CN`. A missing key renders the raw key string with no warning.
+
 ### Key Patterns
 - **Authentication**: AuthContext authenticates against the admindash backend's `/auth/login` endpoint (which proxies to DataCore). JWT stored in localStorage under `neoapex_token`. Routes protected via AppRoutes component.
 - **Multi-tenancy**: Tenant selected via Navbar dropdown, passed as prop to page components.

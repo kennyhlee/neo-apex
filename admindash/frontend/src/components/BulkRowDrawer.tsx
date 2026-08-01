@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import DynamicForm from './DynamicForm.tsx';
 import FamilyPicker from './FamilyPicker.tsx';
+import Modal from './ui/Modal.tsx';
+import Button from './ui/Button.tsx';
 import type { BulkRow } from '../types/bulkAdd.ts';
 import type { ModelDefinition, FamilySelection } from '../types/models.ts';
 import { extractFamilyValues } from '../utils/familyBulk.ts';
@@ -71,19 +73,36 @@ export default function BulkRowDrawer({
 
   return (
     <>
-      <div className="bulk-drawer-backdrop" onClick={requestClose} />
-      <aside className="bulk-drawer" role="dialog" aria-modal="true">
-        <header className="bulk-drawer__header">
-          <h2>{t('bulkAdd.drawer.title').replace('{n}', String(activeRowIndex + 1))}</h2>
-          <button className="bulk-drawer__close" onClick={requestClose} aria-label={t('common.close')}>
-            &times;
-          </button>
-        </header>
-
-        <div
-          className="bulk-drawer__body"
-          onChangeCapture={() => setDirty(true)}
-        >
+      <Modal
+        open
+        onClose={requestClose}
+        variant="drawer"
+        title={t('bulkAdd.drawer.title').replace('{n}', String(activeRowIndex + 1))}
+        className="modal-drawer-wide"
+        footerClassName="modal-footer-spread"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={activeRowIndex === 0}
+              onClick={() => requestNavigate(activeRowIndex - 1)}
+            >
+              {t('bulkAdd.drawer.prev')}
+            </Button>
+            <span className="bulk-drawer__nav-pos">
+              {activeRowIndex + 1} / {rows.length}
+            </span>
+            <Button
+              variant="secondary"
+              disabled={activeRowIndex >= rows.length - 1}
+              onClick={() => requestNavigate(activeRowIndex + 1)}
+            >
+              {t('bulkAdd.drawer.next')}
+            </Button>
+          </>
+        }
+      >
+        <div onChangeCapture={() => setDirty(true)}>
           <FamilyPicker
             key={row.id}
             tenant={tenant}
@@ -102,42 +121,26 @@ export default function BulkRowDrawer({
             onCancel={requestClose}
           />
         </div>
+      </Modal>
 
-        <nav className="bulk-drawer__nav">
-          <button
-            disabled={activeRowIndex === 0}
-            onClick={() => requestNavigate(activeRowIndex - 1)}
-          >
-            {t('bulkAdd.drawer.prev')}
-          </button>
-          <span className="bulk-drawer__nav-pos">
-            {activeRowIndex + 1} / {rows.length}
-          </span>
-          <button
-            disabled={activeRowIndex >= rows.length - 1}
-            onClick={() => requestNavigate(activeRowIndex + 1)}
-          >
-            {t('bulkAdd.drawer.next')}
-          </button>
-        </nav>
-      </aside>
-
-      {confirmDiscard && (
-        <div className="bulk-drawer-confirm-overlay">
-          <div className="bulk-drawer-confirm">
-            <p>{t('bulkAdd.drawer.discardPrompt')}</p>
-            <div className="bulk-drawer-confirm__actions">
-              <button onClick={() => setConfirmDiscard(null)}>{t('common.cancel')}</button>
-              <button
-                className="bulk-drawer-confirm__danger"
-                onClick={confirmDiscardAndProceed}
-              >
-                {t('bulkAdd.drawer.discard')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={confirmDiscard != null}
+        onClose={() => setConfirmDiscard(null)}
+        title={t('bulkAdd.drawer.discard')}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmDiscard(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="danger" onClick={confirmDiscardAndProceed}>
+              {t('bulkAdd.drawer.discard')}
+            </Button>
+          </>
+        }
+      >
+        <p className="bulk-drawer-confirm__prompt">{t('bulkAdd.drawer.discardPrompt')}</p>
+      </Modal>
     </>
   );
 }

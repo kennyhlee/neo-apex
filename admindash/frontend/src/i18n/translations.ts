@@ -57,6 +57,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'today.copied': 'Link copied',
     'today.noStages': 'No lead stages are defined in this model yet.',
 
+    // Assistant
+    'assistant.title': 'Assistant',
+    'assistant.empty': 'Ask about students, programs, or leads.',
+    'assistant.placeholder': 'Ask a question…',
+    'assistant.inputLabel': 'Ask the assistant',
+    'assistant.send': 'Send',
+    'assistant.stop': 'Stop',
+    'assistant.clear': 'Clear',
+    'assistant.quickQuestions': 'Quick questions',
+
     // Sites
     'site.headquarters': 'Headquarters',
     'site.east': 'East Campus',
@@ -163,9 +173,23 @@ export const translations: Record<Locale, Record<string, string>> = {
     'students.sortAsc': 'Sorted ascending',
     'students.sortDesc': 'Sorted descending',
     'students.showAll': 'Show All',
+    'students.moreActions': 'More actions',
+    'students.selectedCount': '{n} selected',
+    'students.deleteSelected': 'Archive selected',
+    'students.confirmDeleteTitle': 'Archive these students?',
+    'students.confirmDeleteBody':
+      'They will be removed from the active list. You can undo this straight afterwards.',
+    'students.deleting': 'Archiving…',
+    'students.archivedToast': '{n} archived.',
+    'students.restoredToast': 'Restored.',
+    'students.loadError': "We couldn't load your students just now.",
+    'students.emptyTitle': 'No students match these filters',
+    'students.emptyBody': 'Try clearing a filter, or add your first student.',
 
     // Program
     'program.title': 'Program Management',
+    'program.emptyTitle': 'No programs match these filters',
+    'program.emptyBody': 'Programs are the classes and activities students enrol in.',
     'program.addProgram': 'Add Program',
     'program.noResults': 'No program data',
     'program.search': 'Search',
@@ -327,6 +351,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.submit': 'Sign In',
     'login.noAccount': "Don't have an account?",
     'login.register': 'Register now',
+    'login.invalidCredentials': "That email and password don't match an account.",
+    'login.needAccount': 'Accounts are created by your school administrator.',
+    'login.signingIn': 'Signing in…',
+    'footer.support': 'Support: IT Centre',
 
     // Families
     'nav.family': 'Families',
@@ -344,6 +372,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'families.colStatus': 'Status',
     'families.addStudent': 'Add student',
     'families.empty': 'No families yet',
+    'families.emptyBody': 'Families group students together and hold the contact details you call first.',
+    'families.emptySearchBody': 'No family matches that search. Try part of a name, email or phone number.',
     'families.detailStudents': 'Students in this family',
     'families.addStudentToFamily': '+ Add student to this family',
     'families.linkExistingStudent': 'Link existing student',
@@ -463,6 +493,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'today.copied': '\u94fe\u63a5\u5df2\u590d\u5236',
     'today.noStages': '\u5f53\u524d\u6a21\u578b\u5c1a\u672a\u5b9a\u4e49\u54a8\u8be2\u9636\u6bb5\u3002',
 
+    // Assistant
+    'assistant.title': '\u52a9\u624b',
+    'assistant.empty': '\u53ef\u8be2\u95ee\u5b66\u751f\u3001\u8bfe\u7a0b\u6216\u54a8\u8be2\u76f8\u5173\u95ee\u9898\u3002',
+    'assistant.placeholder': '\u8f93\u5165\u95ee\u9898\u2026',
+    'assistant.inputLabel': '\u5411\u52a9\u624b\u63d0\u95ee',
+    'assistant.send': '\u53d1\u9001',
+    'assistant.stop': '\u505c\u6b62',
+    'assistant.clear': '\u6e05\u7a7a',
+    'assistant.quickQuestions': '\u5feb\u6377\u63d0\u95ee',
+
     // Sites
     'site.headquarters': '\u603b\u90e8\u6821\u533a',
     'site.east': '\u4e1c\u57ce\u5206\u6821',
@@ -569,9 +609,22 @@ export const translations: Record<Locale, Record<string, string>> = {
     'students.sortAsc': '\u5347\u5e8f\u6392\u5217',
     'students.sortDesc': '\u964d\u5e8f\u6392\u5217',
     'students.showAll': '\u663e\u793a\u5168\u90e8',
+    'students.moreActions': '\u66f4\u591a\u64cd\u4f5c',
+    'students.selectedCount': '\u5df2\u9009\u62e9 {n} \u9879',
+    'students.deleteSelected': '\u5f52\u6863\u6240\u9009',
+    'students.confirmDeleteTitle': '\u5f52\u6863\u8fd9\u4e9b\u5b66\u751f\uff1f',
+    'students.confirmDeleteBody': '\u4ed6\u4eec\u5c06\u4ece\u5728\u6821\u540d\u5355\u4e2d\u79fb\u9664\u3002\u5f52\u6863\u540e\u53ef\u7acb\u5373\u64a4\u9500\u3002',
+    'students.deleting': '\u6b63\u5728\u5f52\u6863\u2026',
+    'students.archivedToast': '\u5df2\u5f52\u6863 {n} \u9879\u3002',
+    'students.restoredToast': '\u5df2\u6062\u590d\u3002',
+    'students.loadError': '\u6682\u65f6\u65e0\u6cd5\u52a0\u8f7d\u5b66\u751f\u6570\u636e\u3002',
+    'students.emptyTitle': '\u6ca1\u6709\u7b26\u5408\u7b5b\u9009\u6761\u4ef6\u7684\u5b66\u751f',
+    'students.emptyBody': '\u8bf7\u5c1d\u8bd5\u6e05\u9664\u7b5b\u9009\u6761\u4ef6\uff0c\u6216\u6dfb\u52a0\u7b2c\u4e00\u4f4d\u5b66\u751f\u3002',
 
     // Program
     'program.title': '\u8bfe\u7a0b\u7ba1\u7406',
+    'program.emptyTitle': '\u6ca1\u6709\u7b26\u5408\u7b5b\u9009\u6761\u4ef6\u7684\u8bfe\u7a0b',
+    'program.emptyBody': '\u8bfe\u7a0b\u5373\u5b66\u751f\u62a5\u540d\u53c2\u52a0\u7684\u73ed\u7ea7\u4e0e\u6d3b\u52a8\u3002',
     'program.addProgram': '\u6dfb\u52a0\u8bfe\u7a0b',
     'program.noResults': '\u6682\u65e0\u8bfe\u7a0b\u6570\u636e',
     'program.search': '\u641c\u7d22',
@@ -733,6 +786,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.submit': '\u767b\u5f55',
     'login.noAccount': '\u8fd8\u6ca1\u6709\u8d26\u53f7\uff1f',
     'login.register': '\u7acb\u5373\u6ce8\u518c',
+    'login.invalidCredentials': '\u90ae\u7bb1\u4e0e\u5bc6\u7801\u4e0d\u5339\u914d\u3002',
+    'login.needAccount': '\u8d26\u53f7\u7531\u8d35\u6821\u7ba1\u7406\u5458\u521b\u5efa\u3002',
+    'login.signingIn': '\u6b63\u5728\u767b\u5f55\u2026',
+    'footer.support': '\u6280\u672f\u652f\u6301\uff1a\u4fe1\u606f\u4e2d\u5fc3',
 
     // Families
     'nav.family': '\u5bb6\u5ead',
@@ -750,6 +807,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'families.colStatus': '\u72b6\u6001',
     'families.addStudent': '\u6dfb\u52a0\u5b66\u751f',
     'families.empty': '\u6682\u65e0\u5bb6\u5ead',
+    'families.emptyBody': '\u5bb6\u5ead\u7528\u4e8e\u5173\u8054\u5b66\u751f\uff0c\u5e76\u4fdd\u5b58\u4f18\u5148\u8054\u7cfb\u4eba\u4fe1\u606f\u3002',
+    'families.emptySearchBody': '\u6ca1\u6709\u5339\u914d\u7684\u5bb6\u5ead\u3002\u53ef\u5c1d\u8bd5\u8f93\u5165\u59d3\u540d\u3001\u90ae\u7bb1\u6216\u7535\u8bdd\u7684\u4e00\u90e8\u5206\u3002',
     'families.detailStudents': '\u8be5\u5bb6\u5ead\u7684\u5b66\u751f',
     'families.addStudentToFamily': '+ \u6dfb\u52a0\u5b66\u751f\u5230\u8be5\u5bb6\u5ead',
     'families.linkExistingStudent': '\u5173\u8054\u73b0\u6709\u5b66\u751f',

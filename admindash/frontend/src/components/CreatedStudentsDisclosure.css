@@ -1,12 +1,35 @@
 /* admindash/frontend/src/components/CreatedStudentsDisclosure.css */
-.created-disclosure { margin: 12px 0; }
-.created-disclosure summary { cursor: pointer; font-weight: 500; }
-.created-disclosure ul { list-style: none; padding: 12px 0; margin: 0; }
+.created-disclosure { margin: var(--space-3) 0; }
+
+.created-disclosure summary {
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.created-disclosure ul {
+  list-style: none;
+  padding: var(--space-3) 0;
+  margin: 0;
+}
+
 .created-disclosure li {
   display: grid;
   grid-template-columns: 1fr 120px 1fr;
-  padding: 4px 0;
-  font-size: 13px;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
-.created-disclosure__id { font-family: monospace; }
-.created-disclosure__source { color: var(--color-text-muted, #6b7280); }
+
+.created-disclosure__id { font-family: var(--font-mono); }
+.created-disclosure__source { color: var(--color-text-muted); }
+
+@media (max-width: 768px) {
+  .created-disclosure li {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
+  }
+}

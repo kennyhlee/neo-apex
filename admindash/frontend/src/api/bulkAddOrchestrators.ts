@@ -172,7 +172,9 @@ export interface CreatePayload {
 }
 
 export type CreateOutcome =
-  | { rowId: string; kind: 'created'; assignedStudentId: string }
+  /** `createdEntityId` is what StudentsPage highlights; `assignedStudentId`
+   *  is the human-readable ID shown to the user. */
+  | { rowId: string; kind: 'created'; assignedStudentId: string; createdEntityId: string }
   | { rowId: string; kind: 'failed'; error: string };
 
 export interface BulkCreateOptions {
@@ -190,7 +192,12 @@ export async function bulkCreateStudents(opts: BulkCreateOptions): Promise<Creat
         const studentIdValue = resp.base_data['student_id'];
         const studentId =
           typeof studentIdValue === 'string' ? studentIdValue : resp.entity_id;
-        const out: CreateOutcome = { rowId: p.rowId, kind: 'created', assignedStudentId: studentId };
+        const out: CreateOutcome = {
+          rowId: p.rowId,
+          kind: 'created',
+          assignedStudentId: studentId,
+          createdEntityId: resp.entity_id,
+        };
         opts.onRowResult?.(p.rowId, out);
         return out;
       } catch (e) {

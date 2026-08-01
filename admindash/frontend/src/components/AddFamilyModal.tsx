@@ -60,7 +60,7 @@ export default function AddFamilyModal({ tenant, onClose, onSuccess }: AddFamily
       const { family_id, ...submitData } = baseData;
       const result = await createEntity(tenant, 'family', submitData, customFields);
       setSuccess(t('addFamily.success'));
-      setTimeout(() => onSuccess(result.entity_id), 900);
+      onSuccess(result.entity_id);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('addFamily.error'));
     } finally {

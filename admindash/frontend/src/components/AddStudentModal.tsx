@@ -13,6 +13,8 @@ import { useDashboard } from '../contexts/DashboardContext.tsx';
 import DynamicForm from './DynamicForm.tsx';
 import DocumentUpload from './DocumentUpload.tsx';
 import DuplicateWarningModal from './DuplicateWarningModal.tsx';
+import Modal from './ui/Modal.tsx';
+import Button from './ui/Button.tsx';
 import FamilyPicker from './FamilyPicker.tsx';
 import EditStudentModal from './EditStudentModal.tsx';
 import type { ModelDefinition, DuplicateMatch, FamilySelection } from '../types/models.ts';
@@ -128,7 +130,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
       const result = await createEntity(tenant, 'student', submitData, customFields);
       invalidateStudentCount();
       setSuccessMessage(t('addStudent.success'));
-      setTimeout(() => onSuccess(result.entity_id), 1200);
+      onSuccess(result.entity_id);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : t('addStudent.submitError'));
     } finally {
@@ -344,23 +346,31 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
                       {t('linkStudent.linkAction')}
                     </button>
                   </div>
-                  {linkConfirmMove && (
-                    <div className="students-confirm-overlay" onClick={() => setLinkConfirmMove(null)}>
-                      <div className="students-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-                        <h4>{t('linkStudent.moveTitle')}</h4>
-                        <p>{t('linkStudent.moveBody').replace('{family}', familyLabel)}</p>
-                        <div className="students-confirm-actions">
-                          <button onClick={() => setLinkConfirmMove(null)}>{t('linkStudent.cancel')}</button>
-                          <button
-                            className="students-confirm-danger"
-                            onClick={() => { const s = linkConfirmMove; setLinkConfirmMove(null); setLinkEditing(s); }}
-                          >
-                            {t('linkStudent.moveConfirm')}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <Modal
+                    open={Boolean(linkConfirmMove)}
+                    onClose={() => setLinkConfirmMove(null)}
+                    title={t('linkStudent.moveTitle')}
+                    size="sm"
+                    footer={
+                      <>
+                        <Button variant="secondary" onClick={() => setLinkConfirmMove(null)}>
+                          {t('linkStudent.cancel')}
+                        </Button>
+                        <Button
+                          variant="danger"
+                          onClick={() => {
+                            const s = linkConfirmMove;
+                            setLinkConfirmMove(null);
+                            setLinkEditing(s);
+                          }}
+                        >
+                          {t('linkStudent.moveConfirm')}
+                        </Button>
+                      </>
+                    }
+                  >
+                    <p>{t('linkStudent.moveBody').replace('{family}', familyLabel)}</p>
+                  </Modal>
                 </div>
               )}
             </div>
@@ -377,32 +387,24 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
         )}
 
         {/* Duplicate check failed — let user choose */}
-        {duplicateMatches !== null && duplicateMatches.length === 0 && pendingSubmission && (
-          <div className="duplicate-modal-overlay" onClick={handleGoBack}>
-            <div className="duplicate-modal" onClick={(e) => e.stopPropagation()}>
-              <h3 className="duplicate-modal-title">
-                {t('duplicateWarning.title')}
-              </h3>
-              <p className="duplicate-modal-description">
-                {t('addStudent.duplicateCheckUnavailable')}
-              </p>
-              <div className="duplicate-modal-actions">
-                <button
-                  className="duplicate-modal-btn-secondary"
-                  onClick={handleGoBack}
-                >
-                  {t('duplicateWarning.cancelSave')}
-                </button>
-                <button
-                  className="duplicate-modal-btn-primary"
-                  onClick={handleSaveAnyway}
-                >
-                  {t('duplicateWarning.proceedWithoutCheck')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <Modal
+          open={duplicateMatches !== null && duplicateMatches.length === 0 && Boolean(pendingSubmission)}
+          onClose={handleGoBack}
+          title={t('duplicateWarning.title')}
+          size="sm"
+          footer={
+            <>
+              <Button variant="secondary" onClick={handleGoBack}>
+                {t('duplicateWarning.cancelSave')}
+              </Button>
+              <Button variant="primary" onClick={handleSaveAnyway}>
+                {t('duplicateWarning.proceedWithoutCheck')}
+              </Button>
+            </>
+          }
+        >
+          <p>{t('addStudent.duplicateCheckUnavailable')}</p>
+        </Modal>
       </div>
     </div>
   );

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { type FormEvent } from 'react';
 import { createLead } from '../api/client.ts';
 import { parseInquiryEmail } from '../utils/parseInquiryEmail.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { formModel, formatFieldLabel } from '../utils/leadModel.ts';
 import type { ModelDefinition } from '../types/models.ts';
+import Modal from './ui/Modal.tsx';
+import Button from './ui/Button.tsx';
 import './DynamicForm.css';
 import './LeadModal.css';
 
@@ -17,10 +19,12 @@ export default function ImportEmailModal(
   { tenant, onClose, onCreated }: { tenant: string; onClose: () => void; onCreated: () => void },
 ) {
   const { getModel } = useModel();
+  const formId = useId();
   const [model, setModel] = useState<ModelDefinition | null>(null);
   const [raw, setRaw] = useState('');
   const [parsed, setParsed] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => { getModel(tenant, 'lead').then(setModel).catch(() => setModel(null)); }, [tenant, getModel]);
 
@@ -51,57 +55,63 @@ export default function ImportEmailModal(
   async function confirm(e: FormEvent) {
     e.preventDefault();
     if (!parsed) return;
+    setSubmitting(true);
     try {
       const payload = Object.fromEntries(Object.entries(parsed).filter(([, v]) => v.trim()));
       await createLead(tenant, { ...payload, source: 'email_import' });
       onCreated();
     } catch (err) {
       setError(String(err));
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="lead-modal-overlay" onClick={onClose}>
-      <form className="lead-modal" onClick={(e) => e.stopPropagation()} onSubmit={confirm}>
-        <div className="lead-modal-header"><h3>Import from Email</h3></div>
-        <div className="lead-modal-body">
-          {error && <div className="dynamic-form-error">{error}</div>}
-          {!parsed ? (
-            <>
-              <div className="dynamic-form-field">
-                <textarea
-                  rows={10}
-                  value={raw}
-                  onChange={(e) => setRaw(e.target.value)}
-                  placeholder="Paste the inquiry email here…"
+    <Modal
+      open
+      onClose={onClose}
+      title="Import from Email"
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+      footer={!parsed ? (
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={doParse} disabled={!raw.trim()}>Parse</Button>
+        </>
+      ) : (
+        <>
+          <Button variant="secondary" onClick={() => setParsed(null)} disabled={submitting}>Back</Button>
+          <Button type="submit" form={formId} variant="primary" disabled={submitting}>Create Lead</Button>
+        </>
+      )}
+    >
+      <form id={formId} onSubmit={confirm}>
+        {error && <div className="dynamic-form-error">{error}</div>}
+        {!parsed ? (
+          <div className="dynamic-form-field">
+            <textarea
+              className="lead-import-textarea"
+              rows={10}
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
+              placeholder="Paste the inquiry email here…"
+            />
+          </div>
+        ) : (
+          <div className="dynamic-form-fields">
+            {Object.keys(parsed).map((k) => (
+              <div key={k} className="dynamic-form-field">
+                <label>{formatFieldLabel(k)}</label>
+                <input
+                  value={parsed[k]}
+                  onChange={(e) => setParsed({ ...parsed, [k]: e.target.value })}
                 />
               </div>
-              <div className="dynamic-form-actions">
-                <button type="button" className="dynamic-form-btn-secondary" onClick={onClose}>Cancel</button>
-                <button type="button" className="dynamic-form-btn-primary" onClick={doParse} disabled={!raw.trim()}>Parse</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="dynamic-form-fields">
-                {Object.keys(parsed).map((k) => (
-                  <div key={k} className="dynamic-form-field">
-                    <label>{formatFieldLabel(k)}</label>
-                    <input
-                      value={parsed[k]}
-                      onChange={(e) => setParsed({ ...parsed, [k]: e.target.value })}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="dynamic-form-actions">
-                <button type="button" className="dynamic-form-btn-secondary" onClick={() => setParsed(null)}>Back</button>
-                <button type="submit" className="dynamic-form-btn-primary">Create Lead</button>
-              </div>
-            </>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </form>
-    </div>
+    </Modal>
   );
 }

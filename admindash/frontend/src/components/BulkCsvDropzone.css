@@ -1,24 +1,83 @@
 /* admindash/frontend/src/components/BulkCsvDropzone.css */
-.bulk-csv-dropzone-wrapper { max-width: var(--bulk-content-max-width, 800px); }
+.bulk-csv-dropzone-wrapper { max-width: var(--bulk-content-max-width); }
 
 .bulk-csv-dropzone {
-  border: 2px dashed var(--color-border, #d1d5db);
-  border-radius: 8px;
-  padding: 48px 24px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-12) var(--space-6);
   text-align: center;
   cursor: pointer;
-  background: var(--color-bg-subtle, #f9fafb);
+  background: var(--color-bg-subtle);
+  transition: border-color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
 }
 
 .bulk-csv-dropzone:hover,
 .bulk-csv-dropzone--dragging {
-  border-color: var(--color-primary, #2563eb);
-  background: var(--color-primary-subtle, #eff6ff);
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
 }
 
-.bulk-csv-dropzone__title { font-size: 16px; font-weight: 500; margin: 0 0 4px 0; }
-.bulk-csv-dropzone__hint { font-size: 14px; color: var(--color-text-muted, #6b7280); margin: 0; }
-.bulk-csv-dropzone__parsing { margin-top: 12px; color: var(--color-text-muted, #6b7280); }
-.bulk-csv-dropzone__error { margin-top: 12px; padding: 12px; background: var(--color-error-subtle, #fef2f2); color: var(--color-error, #b91c1c); border-radius: 6px; }
-.bulk-csv-dropzone__actions { margin-top: 16px; display: flex; justify-content: flex-end; }
-.bulk-csv-dropzone__actions button { padding: 8px 16px; border-radius: 6px; background: transparent; border: 1px solid var(--color-border, #d1d5db); cursor: pointer; }
+.bulk-csv-dropzone__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-1) 0;
+}
+
+.bulk-csv-dropzone__hint {
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.bulk-csv-dropzone__parsing {
+  margin-top: var(--space-3);
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
+}
+
+.bulk-csv-dropzone__error {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-error-subtle);
+  color: var(--color-error);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-md);
+}
+
+.bulk-csv-dropzone__actions {
+  margin-top: var(--space-4);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bulk-csv-dropzone__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
+  border-radius: var(--control-r);
+  background: var(--surface);
+  border: 1px solid var(--color-border);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.bulk-csv-dropzone__actions button:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+
+@media (max-width: 768px) {
+  .bulk-csv-dropzone { padding: var(--space-8) var(--space-4); }
+  .bulk-csv-dropzone__actions button { min-height: var(--tap-min); }
+}

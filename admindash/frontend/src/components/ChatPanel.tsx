@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { streamChat, type ChatTurn, type Proposal } from '../api/chat';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../hooks/useTranslation';
 import { QuickActions } from './QuickActions';
 import { CreateEntityForm } from './CreateEntityForm';
 import { Markdown } from './Markdown';
@@ -23,6 +24,7 @@ function loadHistory(): Msg[] {
 
 export function ChatPanel() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [msgs, setMsgs] = useState<Msg[]>(loadHistory);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -67,7 +69,16 @@ export function ChatPanel() {
             ...c[c.length - 1], content: c[c.length - 1].content + `\n⚠ ${ev.message}` }; return c; });
         }
       }
+    } catch (e) {
+      // Aborting is a user action, not a failure — leave what streamed in place.
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        setMsgs((m) => { const c = [...m]; c[c.length - 1] = {
+          ...c[c.length - 1],
+          content: c[c.length - 1].content + `\n⚠ ${e instanceof Error ? e.message : String(e)}`,
+        }; return c; });
+      }
     } finally {
+      abortRef.current = null;
       if (proposals.length) {
         setMsgs((m) => { const c = [...m]; c[c.length - 1] = {
           ...c[c.length - 1], proposals }; return c; });
@@ -80,11 +91,23 @@ export function ChatPanel() {
     setMsgs((m) => [...m, { role: 'assistant', content }]);
 
   return (
-    <aside className="chat-panel">
-      <div className="chat-panel__header">Assistant</div>
-      <div className="chat-panel__log" ref={logRef}>
+    <aside className="chat-panel" aria-label={t('assistant.title')}>
+      <div className="chat-panel__header">
+        {t('assistant.title')}
+        {msgs.length > 0 && (
+          <button
+            type="button"
+            className="chat-panel__clear"
+            onClick={() => setMsgs([])}
+            disabled={busy}
+          >
+            {t('assistant.clear')}
+          </button>
+        )}
+      </div>
+      <div className="chat-panel__log" ref={logRef} aria-live="polite">
         {msgs.length === 0 && (
-          <p className="chat-panel__empty">Ask about students, programs, or leads.</p>
+          <p className="chat-panel__empty">{t('assistant.empty')}</p>
         )}
         {msgs.map((m, i) => (
           <div key={i} className={`chat-msg chat-msg--${m.role}`}>
@@ -102,9 +125,27 @@ export function ChatPanel() {
       </div>
       <QuickActions onPick={send} />
       <form className="chat-panel__input" onSubmit={(e) => { e.preventDefault(); void send(input); }}>
-        <input value={input} placeholder="Ask a question…" disabled={busy}
-          onChange={(e) => setInput(e.target.value)} />
-        <button type="submit" disabled={busy || !input.trim()}>Send</button>
+        <label className="sr-only" htmlFor="chat-panel-input">
+          {t('assistant.inputLabel')}
+        </label>
+        <input
+          id="chat-panel-input"
+          value={input}
+          placeholder={t('assistant.placeholder')}
+          disabled={busy}
+          onChange={(e) => setInput(e.target.value)}
+        />
+        {/* The AbortController was created and stored but never invoked, so a
+            long answer could not be stopped. */}
+        {busy ? (
+          <button type="button" onClick={() => abortRef.current?.abort()}>
+            {t('assistant.stop')}
+          </button>
+        ) : (
+          <button type="submit" disabled={!input.trim()}>
+            {t('assistant.send')}
+          </button>
+        )}
       </form>
     </aside>
   );

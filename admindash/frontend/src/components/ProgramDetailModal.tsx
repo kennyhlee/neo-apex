@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
+import Modal from './ui/Modal.tsx';
+import Button from './ui/Button.tsx';
 import './ProgramDetailModal.css';
 
 type DataRow = Record<string, unknown>;
@@ -48,16 +49,7 @@ const HIDDEN_FIELDS = new Set(['entity_id', 'tenant_id', 'entity_type', 'custom_
 export default function ProgramDetailModal({ program, model, onClose }: Props) {
   const { t } = useTranslation();
 
-  // Close on Escape while the modal is open.
-  useEffect(() => {
-    if (!program) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [program, onClose]);
-
+  // Escape, focus trap and scroll lock all come from the shared Modal.
   if (!program) return null;
 
   const fields: ModelFieldDefinition[] = model
@@ -71,39 +63,24 @@ export default function ProgramDetailModal({ program, model, onClose }: Props) {
   const subtitle = program.program_id ? String(program.program_id) : '';
 
   return (
-    <div className="pdm-overlay" onClick={onClose}>
-      <div
-        className="pdm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="pdm-header">
-          <div className="pdm-header-text">
-            <h3 className="pdm-title">{title}</h3>
-            {subtitle && <span className="pdm-subtitle">{subtitle}</span>}
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      subtitle={subtitle || undefined}
+      size="sm"
+      footer={
+        <Button variant="secondary" onClick={onClose}>{t('common.close')}</Button>
+      }
+    >
+      <div className="pdm-grid">
+        {visibleFields.map((field) => (
+          <div className="pdm-field" key={field.name}>
+            <div className="pdm-label">{formatFieldLabel(field.name)}</div>
+            <div className="pdm-value">{formatValue(program[field.name], field.type)}</div>
           </div>
-          <button className="pdm-x" onClick={onClose} aria-label={t('common.close')}>
-            &times;
-          </button>
-        </div>
-        <div className="pdm-body">
-          <div className="pdm-grid">
-            {visibleFields.map((field) => (
-              <div className="pdm-field" key={field.name}>
-                <div className="pdm-label">{formatFieldLabel(field.name)}</div>
-                <div className="pdm-value">{formatValue(program[field.name], field.type)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="pdm-footer">
-          <button className="pdm-close-btn" onClick={onClose}>
-            {t('common.close')}
-          </button>
-        </div>
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 }

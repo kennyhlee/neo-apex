@@ -3,6 +3,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { postQuery, getStudentsByFamily } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
+import Button from '../components/ui/Button.tsx';
 import AddFamilyModal from '../components/AddFamilyModal.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
@@ -91,17 +92,17 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
 
   const columns: Column<Row>[] = useMemo(() => [
     { key: 'entity_id', label: t('families.colId'), render: (r) => (
-      <button className="families-id-btn" onClick={() => setEditFamily(r)}>
+      <button type="button" className="families-id-btn" onClick={() => setEditFamily(r)}>
         <code className="families-id">{String(r.family_id || r.entity_id || '-')}</code>
       </button>
     ) },
-    { key: 'family_name', label: t('families.colName'), render: (r) => (
-      <button className="families-name-btn" onClick={() => setEditFamily(r)}>
-        {String(r.family_name ?? '-')}
+    { key: 'family_name', label: t('families.colName'), primary: true, render: (r) => (
+      <button type="button" className="families-name-btn" onClick={() => setEditFamily(r)}>
+        {String(r.family_name ?? '—')}
       </button>
     ) },
-    { key: 'primary_email', label: t('families.colEmail'), render: (r) => String(r.primary_email ?? '-') },
-    { key: 'primary_phone', label: t('families.colPhone'), render: (r) => String(r.primary_phone ?? '-') },
+    { key: 'primary_email', label: t('families.colEmail'), render: (r) => String(r.primary_email ?? '—') },
+    { key: 'primary_phone', label: t('families.colPhone'), render: (r) => String(r.primary_phone ?? '—') },
   ], [t]);
 
   function renderExpanded(family: Row): React.ReactNode {
@@ -144,45 +145,70 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
             </tbody>
           </table>
         )}
-        <button
-          className="families-add-btn"
-          onClick={() => setAddStudentTo(family as unknown as Family)}
-        >
+        <Button variant="secondary" size="sm" onClick={() => setAddStudentTo(family as unknown as Family)}>
           {t('families.addStudent')}
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="families-page">
-      <div className="families-header">
-        <h2>{t('families.title')}</h2>
-        <div className="families-actions">
-          <input className="families-search" placeholder={t('families.search')} value={search} onChange={handleSearch} />
-          <button className="families-add-btn" onClick={() => setShowAdd(true)}>{t('families.addFamily')}</button>
+      <header className="page-header">
+        <h1 className="page-title">
+          {t('families.title')}
+          <span className="page-subtitle">
+            {filtered.length} {t('common.records')}
+          </span>
+        </h1>
+        <div className="page-header-actions">
+          <label className="sr-only" htmlFor="families-search">
+            {t('families.search')}
+          </label>
+          <input
+            id="families-search"
+            type="search"
+            className="families-search"
+            placeholder={t('families.search')}
+            value={search}
+            onChange={handleSearch}
+          />
+          <Button variant="primary" onClick={() => setShowAdd(true)}>
+            {t('families.addFamily')}
+          </Button>
         </div>
-      </div>
+      </header>
 
-      {loading ? (
-        <p>{t('common.loading')}</p>
-      ) : filtered.length === 0 ? (
-        <p className="families-empty">{t('families.empty')}</p>
-      ) : (
-        <DataTable<Row>
-          columns={columns}
-          data={paged}
-          total={filtered.length}
-          page={currentPage}
-          pageSize={PAGE_SIZE}
-          loading={false}
-          onPageChange={setPage}
-          rowKey={(r) => String(r.entity_id ?? '')}
-          renderExpanded={renderExpanded}
-          expandedIds={expandedIds}
-          onToggleExpand={toggleExpand}
-        />
-      )}
+      <DataTable<Row>
+        columns={columns}
+        data={paged}
+        total={filtered.length}
+        page={currentPage}
+        pageSize={PAGE_SIZE}
+        loading={loading}
+        onPageChange={setPage}
+        rowKey={(r) => String(r.entity_id ?? '')}
+        rowLabel={(r) => String(r.family_name ?? r.family_id ?? r.entity_id ?? '')}
+        caption={t('families.title')}
+        selectable={false}
+        renderExpanded={renderExpanded}
+        expandedIds={expandedIds}
+        onToggleExpand={toggleExpand}
+        rowActions={(r) => (
+          <Button variant="secondary" size="sm" onClick={() => setEditFamily(r)}>
+            {t('students.edit')}
+          </Button>
+        )}
+        emptyState={{
+          title: t('families.empty'),
+          description: search ? t('families.emptySearchBody') : t('families.emptyBody'),
+          action: (
+            <Button variant="primary" onClick={() => setShowAdd(true)}>
+              {t('families.addFamily')}
+            </Button>
+          ),
+        }}
+      />
 
       {showAdd && (
         <AddFamilyModal tenant={tenant} onClose={() => setShowAdd(false)} onSuccess={() => { setShowAdd(false); handleReload(); }} />

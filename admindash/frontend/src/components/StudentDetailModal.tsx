@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
+import Modal from './ui/Modal.tsx';
+import Button from './ui/Button.tsx';
 import './StudentDetailModal.css';
 
 interface StudentDetailModalProps {
@@ -36,24 +38,23 @@ export default function StudentDetailModal({ student, model, onClose }: StudentD
   const name = `${String(student.first_name ?? '')} ${String(student.last_name ?? '')}`.trim();
 
   return (
-    <div className="students-confirm-overlay" onClick={onClose}>
-      <div className="student-detail-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="student-detail-header">
-          <div>
-            <h3>{t('studentDetail.title')}</h3>
-            {name && <span className="student-detail-subtitle">{name}</span>}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('studentDetail.title')}
+      subtitle={name || undefined}
+      footer={
+        <Button variant="secondary" onClick={onClose}>{t('studentDetail.close')}</Button>
+      }
+    >
+      <dl className="student-detail-fields">
+        {fields.map((f) => (
+          <div key={f.name} className="student-detail-row">
+            <dt>{formatLabel(f.name)}</dt>
+            <dd>{displayValue(f, student[f.name])}</dd>
           </div>
-          <button onClick={onClose}>{t('studentDetail.close')}</button>
-        </div>
-        <dl className="student-detail-fields">
-          {fields.map((f) => (
-            <div key={f.name} className="student-detail-row">
-              <dt>{formatLabel(f.name)}</dt>
-              <dd>{displayValue(f, student[f.name])}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    </div>
+        ))}
+      </dl>
+    </Modal>
   );
 }

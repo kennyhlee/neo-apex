@@ -1,116 +1,129 @@
 .leads-page {
-  animation: fadeIn 0.3s ease;
-}
-
-.leads-page h1 {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-  margin-bottom: 1rem;
-}
-
-.leads-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.leads-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  animation: fadeIn var(--dur-base) var(--ease);
 }
 
 .leads-stage-filter {
   font-family: var(--font-sans);
-  font-size: 0.85rem;
-  padding: 0.45rem 0.6rem;
+  font-size: var(--text-md);
+  height: var(--control-h);
+  padding: 0 var(--space-3);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
+  border-radius: var(--control-r);
+  background: var(--bg-input);
   color: var(--text-primary);
   cursor: pointer;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color var(--dur-fast) var(--ease);
 }
 
-.leads-stage-filter:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
+.leads-stage-filter:hover {
+  border-color: var(--line-strong);
 }
+
+/* --- Empty state ---------------------------------------------------------
+   Previously a bare <p> reading "No leads yet". */
+
+.leads-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-6);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--card-r);
+  max-width: 52ch;
+}
+.leads-empty strong { font-size: var(--text-lg); color: var(--text-primary); }
+.leads-empty span { font-size: var(--text-md); color: var(--text-tertiary); }
+.leads-empty .btn { margin-top: var(--space-2); }
+
+/* --- Board ---------------------------------------------------------------- */
 
 .leads-board {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-3);
   overflow-x: auto;
-  margin-top: 1rem;
+  margin-top: var(--space-4);
+  padding-bottom: var(--space-2);
 }
 
 .leads-column {
-  min-width: 220px;
+  min-width: 230px;
   flex: 1;
-  background: var(--bg-secondary);
+  background: var(--surface-2);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-md);
-  padding: 0.75rem;
+  border-radius: var(--card-r);
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .leads-column h2 {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 700;
+  gap: var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--text-secondary);
-  margin: 0 0 0.25rem 0;
+  margin: 0 0 var(--space-1);
 }
 
 .leads-column h2 span {
-  font-size: 0.7rem;
-  font-weight: 600;
+  margin-left: auto;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
-  background: var(--bg-tertiary);
-  border-radius: 999px;
-  padding: 0.1rem 0.5rem;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-2);
 }
 
 .lead-card {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 2px;
   width: 100%;
   text-align: left;
-  padding: 0.75rem;
+  padding: var(--space-3);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: var(--bg-card);
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  font: inherit;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
 .lead-card:hover {
   border-color: var(--accent);
-  box-shadow: var(--shadow-card);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-1);
 }
 
 .lead-card strong {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
+  line-height: var(--leading-snug);
 }
 
 .lead-card small {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .lead-card small:last-child {
   color: var(--text-tertiary);
+}
+
+@media (max-width: 768px) {
+  /* Columns stack rather than forcing a sideways swipe through the board. */
+  .leads-board {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+  .leads-column { min-width: 0; }
+  .leads-stage-filter { width: 100%; }
 }

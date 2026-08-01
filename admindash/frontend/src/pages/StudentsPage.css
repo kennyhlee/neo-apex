@@ -1,211 +1,117 @@
 .students-page {
-  animation: fadeIn 0.3s ease;
-}
-
-.students-page h1 {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #1A202C;
-  margin-bottom: 1rem;
+  animation: fadeIn var(--dur-base) var(--ease);
 }
 
 .students-toolbar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.students-toolbar-primary {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
-  padding: 0.45rem 0.85rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--text-inverse);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.students-toolbar-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  min-height: var(--control-h);
 }
 
 .students-selection-count {
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
+
+/* --- Column chooser -------------------------------------------------------
+   The Actions section is gone: editing now happens from the row itself, and
+   the Export / batch-edit entries only ever opened a "coming soon" dialog. */
 
 .students-menu-toggle {
   position: relative;
-}
-
-.students-menu-btn {
-  font-family: var(--font-sans);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
-  padding: 0.35rem 0.6rem;
-  border-radius: var(--radius-sm);
-  font-size: 1.1rem;
-  line-height: 1;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.students-menu-btn:hover {
-  background: var(--bg-card);
-  color: var(--text-primary);
 }
 
 .students-menu-popover {
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 100;
-  margin-top: 0.25rem;
+  z-index: var(--z-dropdown);
+  margin-top: var(--space-1);
   background: var(--bg-card);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-elevated);
-  padding: 0.4rem 0;
-  min-width: 200px;
+  box-shadow: var(--shadow-3);
+  padding: var(--space-1) 0;
+  min-width: 220px;
   max-height: 400px;
   overflow-y: auto;
 }
 
 .students-menu-section-label {
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
   color: var(--text-tertiary);
-  padding: 0.4rem 0.75rem 0.2rem;
-}
-
-.students-menu-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  color: var(--text-primary);
-  padding: 0.4rem 0.75rem;
-  cursor: pointer;
-}
-
-.students-menu-item:hover {
-  background: var(--accent-glow);
-}
-
-.students-menu-item:disabled {
-  color: var(--text-tertiary);
-  cursor: not-allowed;
-}
-
-.students-menu-item:disabled:hover {
-  background: none;
-}
-
-.students-menu-item-danger {
-  color: var(--danger);
-}
-
-.students-menu-item-danger:disabled {
-  color: var(--text-tertiary);
-}
-
-.students-menu-divider {
-  height: 1px;
-  background: var(--border-primary);
-  margin: 0.3rem 0;
+  padding: var(--space-2) var(--space-3) var(--space-1);
 }
 
 .students-menu-column-option {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
+  gap: var(--space-2);
+  font-size: var(--text-md);
   color: var(--text-primary);
-  padding: 0.25rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   cursor: pointer;
 }
 
 .students-menu-column-option:hover {
-  background: var(--accent-glow);
+  background: var(--accent-tint);
 }
 
-.students-menu-column-option input[type="checkbox"] {
-  width: 0.9rem;
-  height: 0.9rem;
+.students-menu-column-option input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
 }
 
-/* Archive confirmation dialog */
-.students-confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-bg);
+/* --- Archive confirmation list -------------------------------------------
+   The old dialog said "Delete 3 student(s)?" and named nobody. */
+
+.students-confirm-list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  animation: modal-fade .15s ease;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.students-confirm-dialog {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 1.5rem;
-  min-width: 300px;
-  box-shadow: var(--shadow-elevated);
+.students-confirm-list li {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-xs);
+  padding: var(--space-1) var(--space-2);
 }
 
-.students-confirm-dialog p {
-  font-size: 0.95rem;
-  font-weight: 500;
-  margin-bottom: 1rem;
-}
-
-.students-confirm-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-
-.students-confirm-actions button {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  padding: 0.4rem 0.85rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  border: 1px solid var(--border-primary);
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.students-confirm-danger {
-  background: var(--danger) !important;
-  color: var(--text-inverse) !important;
-  border-color: var(--danger) !important;
-}
-
+/* --- Inline error ---------------------------------------------------------
+   Sits above the table rather than replacing it, so the filters and toolbar
+   the user needs in order to recover stay on screen. */
 
 .student-error {
-  text-align: center;
-  padding: 2rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
   color: var(--danger);
-  background: var(--danger-muted);
-  border-radius: var(--radius-md);
-  margin-top: 1rem;
+  background: var(--danger-tint);
+  border: 1px solid var(--danger);
+  border-radius: var(--card-r);
+  font-size: var(--text-md);
 }
+.student-error span { flex: 1; min-width: 200px; }
 
-/* Edit student modal */
+/* --- Edit student modal (legacy shell, retokenised) ----------------------- */
+
 .students-edit-modal {
   background: var(--bg-card);
   border-radius: var(--radius-md);
@@ -214,48 +120,45 @@
   max-width: 640px;
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--shadow-3);
 }
 
 .students-edit-modal-header {
-  padding: 1.25rem 1.5rem;
+  padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--border-primary);
 }
 
 .students-edit-modal-header h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
   margin: 0;
 }
 
 .students-edit-modal-subtitle {
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   color: var(--text-tertiary);
 }
 
 .students-edit-modal-body {
-  padding: 1rem 1.5rem 1.5rem;
+  padding: var(--space-4) var(--space-6) var(--space-6);
 }
 
-.students-toolbar-secondary {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
-  /* Compensate for 1px border so total box-height matches primary's borderless box. */
-  padding: calc(0.45rem - 1px) calc(0.85rem - 1px);
-  border-radius: var(--radius-sm);
-  background: transparent;
+/* --- Student ID cell ------------------------------------------------------ */
+
+.students-id-btn {
+  background: none;
+  border: none;
   color: var(--accent);
-  border: 1px solid var(--accent);
   cursor: pointer;
-  transition: all 0.2s;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+  padding: 0;
 }
-
-.students-toolbar-secondary:hover {
-  background: rgba(55, 138, 221, 0.08);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px var(--accent-ring);
-}
-
-.students-id-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-family: monospace; padding: 0; }
 .students-id-btn:hover { text-decoration: underline; }
+
+@media (max-width: 768px) {
+  .students-toolbar { flex-wrap: wrap; }
+  .students-menu-popover { right: auto; left: 0; }
+}

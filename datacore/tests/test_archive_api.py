@@ -82,3 +82,65 @@ def test_archive_missing_body(arc_client):
     client, _ = arc_client
     resp = client.post("/api/entities/t1/student/archive", json={})
     assert resp.status_code == 422
+
+
+# ── restore: the inverse, so an archive can be undone from the UI ────────────
+
+
+def test_restore_after_archive(arc_client):
+    client, store = arc_client
+    client.post("/api/entities/t1/student/archive", json={"entity_ids": ["s1"]})
+    assert store.get_active_entity("t1", "student", "s1") is None
+
+    resp = client.post("/api/entities/t1/student/restore", json={"entity_ids": ["s1"]})
+    assert resp.status_code == 200
+    assert resp.json() == {"restored": 1}
+
+    entity = store.get_active_entity("t1", "student", "s1")
+    assert entity is not None
+    assert entity["base_data"]["first_name"] == "Alice"
+
+
+def test_restore_multiple(arc_client):
+    client, store = arc_client
+    client.post("/api/entities/t1/student/archive", json={"entity_ids": ["s1", "s2"]})
+    resp = client.post(
+        "/api/entities/t1/student/restore", json={"entity_ids": ["s1", "s2"]}
+    )
+    assert resp.json() == {"restored": 2}
+    assert store.get_active_entity("t1", "student", "s1") is not None
+    assert store.get_active_entity("t1", "student", "s2") is not None
+
+
+def test_restore_never_active_is_noop(arc_client):
+    """An entity that was never archived stays untouched and reports 0."""
+    client, store = arc_client
+    resp = client.post("/api/entities/t1/student/restore", json={"entity_ids": ["s3"]})
+    assert resp.json() == {"restored": 0}
+    assert store.get_active_entity("t1", "student", "s3") is not None
+
+
+def test_restore_nonexistent(arc_client):
+    client, _ = arc_client
+    resp = client.post(
+        "/api/entities/t1/student/restore", json={"entity_ids": ["nonexistent"]}
+    )
+    assert resp.json() == {"restored": 0}
+
+
+def test_restore_refuses_when_active_version_exists(arc_client):
+    """Restoring must not produce two active rows for one entity_id."""
+    client, store = arc_client
+    client.post("/api/entities/t1/student/archive", json={"entity_ids": ["s1"]})
+
+    # Re-create the same entity_id, so an active version exists again.
+    store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="s1",
+        base_data={"first_name": "Alice", "last_name": "Smith-Reborn"},
+    )
+
+    resp = client.post("/api/entities/t1/student/restore", json={"entity_ids": ["s1"]})
+    assert resp.json() == {"restored": 0}
+
+    entity = store.get_active_entity("t1", "student", "s1")
+    assert entity["base_data"]["last_name"] == "Smith-Reborn"

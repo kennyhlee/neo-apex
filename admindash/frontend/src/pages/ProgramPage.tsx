@@ -6,6 +6,7 @@ import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
 import { postQuery, archiveEntities, updateEntity, createEntity, fetchNextEntityId } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
+import Button from '../components/ui/Button.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -197,7 +198,6 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
   const [editError, setEditError] = useState<string | null>(null);
 
   // Coming soon dialog
-  const [showComingSoon, setShowComingSoon] = useState(false);
 
   // Add program modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -208,6 +208,18 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
   // View toggle
   const [activeView, setActiveView] = useState<'list' | 'week' | 'month'>('list');
   const [weekStartDate, setWeekStartDate] = useState<Date | undefined>(undefined);
+
+  /**
+   * Calendar views get their own unpaginated dataset.
+   *
+   * They previously rendered `data` — the current table page, at most
+   * `pageSize` rows — so any program past page 1 was silently invisible, and
+   * navigating to another week or month only re-bucketed the same rows
+   * instead of fetching. The list view keeps its server-side paging; only the
+   * calendar needs the whole set, and it is bounded by the same filters.
+   */
+  const [calendarPrograms, setCalendarPrograms] = useState<DataRow[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
 
   // Model loading
   useEffect(() => {
@@ -403,6 +415,34 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
     }
   }
 
+  // Fetch the full program set whenever a calendar view is active.
+  useEffect(() => {
+    if (activeView === 'list') return;
+    let cancelled = false;
+    setCalendarLoading(true);
+
+    const conditions: string[] = ["entity_type = 'program'", "_status = 'active'"];
+    for (const [key, value] of Object.entries(filters)) {
+      if (!value) continue;
+      conditions.push(`${key} ILIKE '%${value.replace(/'/g, "''")}%'`);
+    }
+
+    postQuery(tenant, 'entities', `SELECT * FROM data WHERE ${conditions.join(' AND ')}`)
+      .then((res) => {
+        if (!cancelled) setCalendarPrograms((res.data ?? []) as DataRow[]);
+      })
+      .catch(() => {
+        if (!cancelled) setCalendarPrograms([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCalendarLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, activeView, filters]);
+
   // Dynamic filter fields from model
   const dynamicFilterFields = useMemo(() => getDynamicFilterFields(model), [model]);
 
@@ -414,7 +454,14 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
   return (
     <div className="programs-page" ref={containerRef}>
-      <h1>{t('program.title')}</h1>
+      <header className="page-header">
+        <h1 className="page-title">
+          {t('program.title')}
+          <span className="page-subtitle">
+            {total} {t('common.records')}
+          </span>
+        </h1>
+      </header>
 
       {/* View toggle — always visible */}
       <div className="programs-view-toggle-bar">
@@ -427,13 +474,13 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
           </button>
           <button
             className={activeView === 'week' ? 'programs-view-btn programs-view-btn-active' : 'programs-view-btn'}
-            onClick={() => { setActiveView('week'); loadData(1, filters); }}
+            onClick={() => setActiveView('week')}
           >
             {t('program.viewWeek')}
           </button>
           <button
             className={activeView === 'month' ? 'programs-view-btn programs-view-btn-active' : 'programs-view-btn'}
-            onClick={() => { setActiveView('month'); loadData(1, filters); }}
+            onClick={() => setActiveView('month')}
           >
             {t('program.viewMonth')}
           </button>
@@ -475,18 +522,6 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
                 submitting={editSubmitting}
                 error={editError}
               />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Coming soon dialog for batch edit */}
-      {showComingSoon && (
-        <div className="programs-confirm-overlay" onClick={() => setShowComingSoon(false)}>
-          <div className="programs-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <p>{t('program.batchEditComingSoon')}</p>
-            <div className="programs-confirm-actions">
-              <button onClick={() => setShowComingSoon(false)}>{t('common.close')}</button>
             </div>
           </div>
         </div>
@@ -567,38 +602,9 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               </button>
               {showMenu && (
                 <div className="programs-menu-popover">
-                  <div className="programs-menu-section-label">{t('program.actionsLabel')}</div>
-                  <button
-                    className="programs-menu-item"
-                    disabled={selectedIds.size === 0}
-                    onClick={() => {
-                      setShowMenu(false);
-                      if (selectedIds.size === 1) {
-                        const entityId = [...selectedIds][0];
-                        const row = data.find((r) => String(r.entity_id) === entityId);
-                        if (row) setEditingEntity(row);
-                      } else {
-                        setShowComingSoon(true);
-                      }
-                    }}
-                  >
-                    {t('program.editSelected')}
-                  </button>
-                  <button
-                    className="programs-menu-item programs-menu-item-danger"
-                    disabled={selectedIds.size === 0}
-                    onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
-                  >
-                    {t('program.deleteSelected')}
-                  </button>
-                  <button
-                    className="programs-menu-item"
-                    disabled={selectedIds.size === 0}
-                    onClick={() => { setShowMenu(false); setShowComingSoon(true); }}
-                  >
-                    {t('program.exportSelected')}
-                  </button>
-                  <div className="programs-menu-divider" />
+                  {/* Editing happens from the row itself now; the Export and
+                      batch-edit entries only ever opened a "coming soon"
+                      dialog, so they are gone rather than pretending. */}
                   <div className="programs-menu-section-label">{t('program.columnsLabel')}</div>
                   {columns.map((col) => (
                     <label key={col.key} className="programs-menu-column-option">
@@ -627,6 +633,8 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               loading={loading}
               onPageChange={(p) => loadData(p, filters)}
               rowKey={(row) => String(row.entity_id ?? '')}
+              rowLabel={(row) => String(row.name ?? row.program_id ?? row.entity_id ?? '')}
+              caption={t('program.title')}
               sortBy={prefs.sortBy}
               sortDir={prefs.sortDir}
               onSortChange={handleSortChange}
@@ -635,30 +643,50 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               hiddenColumns={prefs.hiddenColumns}
               selectedIds={selectedIds}
               onSelectionChange={setSelectedIds}
+              rowActions={(row) => (
+                <Button variant="secondary" size="sm" onClick={() => setEditingEntity(row)}>
+                  {t('students.edit')}
+                </Button>
+              )}
+              emptyState={{
+                title: t('program.emptyTitle'),
+                description: t('program.emptyBody'),
+                action: (
+                  <Button variant="primary" onClick={() => void handleOpenAddModal()}>
+                    {t('program.addProgram')}
+                  </Button>
+                ),
+              }}
             />
           )}
         </>
       )}
 
       {activeView === 'week' && model && (
-        <ProgramWeekView
-          programs={data}
-          model={model}
-          onEditProgram={setEditingEntity}
-          weekStart={weekStartDate}
-        />
+        <>
+          {calendarLoading && <p className="programs-calendar-loading">{t('common.loading')}</p>}
+          <ProgramWeekView
+            programs={calendarPrograms}
+            model={model}
+            onEditProgram={setEditingEntity}
+            weekStart={weekStartDate}
+          />
+        </>
       )}
 
       {activeView === 'month' && model && (
-        <ProgramMonthView
-          programs={data}
-          model={model}
-          onEditProgram={setEditingEntity}
-          onSwitchToWeek={(date: Date) => {
-            setActiveView('week');
-            setWeekStartDate(date);
-          }}
-        />
+        <>
+          {calendarLoading && <p className="programs-calendar-loading">{t('common.loading')}</p>}
+          <ProgramMonthView
+            programs={calendarPrograms}
+            model={model}
+            onEditProgram={setEditingEntity}
+            onSwitchToWeek={(date: Date) => {
+              setActiveView('week');
+              setWeekStartDate(date);
+            }}
+          />
+        </>
       )}
     </div>
   );
