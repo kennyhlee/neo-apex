@@ -7,6 +7,7 @@ import { useTablePreferences } from '../hooks/useTablePreferences.ts';
 import { postQuery, archiveEntities, updateEntity, createEntity, fetchNextEntityId } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import Button from '../components/ui/Button.tsx';
+import Modal from '../components/ui/Modal.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -487,67 +488,83 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
         </div>
       </div>
 
-      {/* Archive confirmation dialog */}
-      {showArchiveConfirm && (
-        <div className="programs-confirm-overlay" onClick={() => setShowArchiveConfirm(false)}>
-          <div className="programs-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <p>{t('program.archiveConfirmMessage')}</p>
-            <div className="programs-confirm-actions">
-              <button onClick={() => setShowArchiveConfirm(false)}>{t('common.cancel')}</button>
-              <button className="programs-confirm-danger" onClick={handleArchive} disabled={archiving}>
-                {archiving ? t('common.loading') : t('common.confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Archive confirmation */}
+      <Modal
+        open={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        title={t('program.archiveConfirmMessage')}
+        size="sm"
+        dismissOnBackdrop={!archiving}
+        dismissOnEscape={!archiving}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowArchiveConfirm(false)} disabled={archiving}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleArchive}
+              loading={archiving}
+              loadingText={t('common.loading')}
+            >
+              {t('common.confirm')}
+            </Button>
+          </>
+        }
+      >
+        <ul className="students-confirm-list">
+          {[...selectedIds].slice(0, 8).map((id) => {
+            const row = data.find((r) => String(r.entity_id) === id);
+            return <li key={id}>{String(row?.name ?? row?.program_id ?? id)}</li>;
+          })}
+          {selectedIds.size > 8 && <li>+{selectedIds.size - 8}</li>}
+        </ul>
+      </Modal>
 
-      {/* Edit program modal */}
-      {editingEntity && model && (
-        <div className="programs-edit-overlay">
-          <div className="programs-edit-dialog">
-            <div className="programs-edit-dialog-header">
-              <h3>{t('program.editTitle')}</h3>
-              <span className="programs-edit-dialog-subtitle">
-                {String(editingEntity.name ?? editingEntity.program_id ?? '')}
-              </span>
-            </div>
-            <div className="programs-edit-dialog-body">
-              <DynamicForm
-                modelDefinition={model}
-                initialValues={editingEntity as Record<string, unknown>}
-                readOnlyFields={['program_id']}
-                onSubmit={handleEditSave}
-                onCancel={() => { setEditingEntity(null); setEditError(null); }}
-                submitting={editSubmitting}
-                error={editError}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Edit program */}
+      <Modal
+        open={Boolean(editingEntity && model)}
+        onClose={() => { setEditingEntity(null); setEditError(null); }}
+        title={t('program.editTitle')}
+        subtitle={String(editingEntity?.name ?? editingEntity?.program_id ?? '')}
+        size="lg"
+        dismissOnBackdrop={!editSubmitting}
+        dismissOnEscape={!editSubmitting}
+      >
+        {editingEntity && model && (
+          <DynamicForm
+            modelDefinition={model}
+            initialValues={editingEntity as Record<string, unknown>}
+            readOnlyFields={['program_id']}
+            onSubmit={handleEditSave}
+            onCancel={() => { setEditingEntity(null); setEditError(null); }}
+            submitting={editSubmitting}
+            error={editError}
+          />
+        )}
+      </Modal>
 
-      {/* Add program modal */}
-      {showAddModal && model && (
-        <div className="programs-confirm-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="programs-add-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="programs-edit-dialog-header">
-              <h3>{t('program.addProgram')}</h3>
-            </div>
-            <div className="programs-edit-dialog-body">
-              <DynamicForm
-                modelDefinition={model}
-                initialValues={addFormInitialValues}
-                readOnlyFields={['program_id']}
-                onSubmit={handleAddSave}
-                onCancel={() => { setShowAddModal(false); setAddError(null); }}
-                submitting={addSubmitting}
-                error={addError}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Add program */}
+      <Modal
+        open={Boolean(showAddModal && model)}
+        onClose={() => { setShowAddModal(false); setAddError(null); }}
+        title={t('program.addProgram')}
+        size="lg"
+        dismissOnBackdrop={!addSubmitting}
+        dismissOnEscape={!addSubmitting}
+      >
+        {model && (
+          <DynamicForm
+            modelDefinition={model}
+            initialValues={addFormInitialValues}
+            readOnlyFields={['program_id']}
+            onSubmit={handleAddSave}
+            onCancel={() => { setShowAddModal(false); setAddError(null); }}
+            submitting={addSubmitting}
+            error={addError}
+          />
+        )}
+      </Modal>
 
       {/* Views */}
       {activeView === 'list' && (
