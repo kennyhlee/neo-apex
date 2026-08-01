@@ -67,7 +67,7 @@ function formatSelectionValue(val: unknown): string {
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Special rendering for name and status fields.
  */
-function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row: DataRow) => void): Column<DataRow>[] {
+function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row: DataRow) => void, t: (key: string) => string): Column<DataRow>[] {
   const cols: Column<DataRow>[] = [];
 
   for (const field of model.base_fields) {
@@ -113,7 +113,7 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
           <button
             type="button"
             className="students-id-btn"
-            title="Double-click for detail"
+            title={t('studentDetail.dblclickHint')}
             onDoubleClick={() => onStudentIdDblClick(row)}
           >
             {String(row.student_id ?? '-')}
@@ -124,7 +124,6 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
     }
 
     const i18nMap: Record<string, string> = {
-      student_id: 'students.studentId',
       gender: 'students.gender',
       dob: 'students.dob',
       grade_level: 'students.gradeLevel',
@@ -287,9 +286,9 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Build columns from model
   const columns = useMemo<Column<DataRow>[]>(() => {
-    if (model) return buildColumnsFromModel(model, setDetailStudent);
+    if (model) return buildColumnsFromModel(model, setDetailStudent, t);
     return getFallbackColumns();
-  }, [model]); // setDetailStudent is a stable setter — safe to omit from deps
+  }, [model, t]); // setDetailStudent is a stable setter — safe to omit from deps
 
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
 

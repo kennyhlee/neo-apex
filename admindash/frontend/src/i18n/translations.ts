@@ -329,6 +329,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Student Detail
     'studentDetail.title': 'Student Detail',
     'studentDetail.close': 'Close',
+    'studentDetail.dblclickHint': 'Double-click for detail',
 
     // Family Picker
     'familyPicker.label': 'Family',
@@ -686,6 +687,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Student Detail
     'studentDetail.title': '\u5b66\u751f\u8be6\u60c5',
     'studentDetail.close': '\u5173\u95ed',
+    'studentDetail.dblclickHint': '\u53cc\u51fb\u67e5\u770b\u8be6\u60c5',
 
     // Family Picker
     'familyPicker.label': '\u5bb6\u5ead',
