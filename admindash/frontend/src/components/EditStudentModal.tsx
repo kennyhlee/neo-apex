@@ -28,9 +28,11 @@ export default function EditStudentModal({
   );
 
   // Seed the picker from the student's existing family_id (fetch its name for the label).
+  const entityFamilyId = entity.family_id ? String(entity.family_id) : '';
+  const entityId = entity.entity_id ? String(entity.entity_id) : '';
   useEffect(() => {
     if (presetFamily) return; // caller already set the family
-    const fid = entity.family_id ? String(entity.family_id) : '';
+    const fid = entityFamilyId;
     if (!fid) return;
     let cancelled = false;
     getFamilyById(tenant, fid)
@@ -42,7 +44,7 @@ export default function EditStudentModal({
         if (!cancelled) setFamilySelection({ mode: 'existing', familyId: fid, label: fid });
       });
     return () => { cancelled = true; };
-  }, [tenant, entity, presetFamily]);
+  }, [tenant, entityFamilyId, entityId, presetFamily]);
 
   // The picker owns family_id — strip it from the rendered form.
   const formModel = useMemo<ModelDefinition>(() => ({

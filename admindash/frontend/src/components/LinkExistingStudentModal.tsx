@@ -66,6 +66,21 @@ export default function LinkExistingStudentModal({
     );
   }
 
+  // Model failed to load — show an inline error so the user isn't stranded.
+  if (editing && !model) {
+    return (
+      <div className="students-confirm-overlay">
+        <div className="link-student-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="link-student-header">
+            <h3>{t('linkStudent.title')}</h3>
+            <button onClick={onClose}>{t('linkStudent.cancel')}</button>
+          </div>
+          <p className="link-student-empty">{t('linkStudent.modelError')}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="students-confirm-overlay" onClick={onClose}>
       <div className="link-student-modal" onClick={(e) => e.stopPropagation()}>

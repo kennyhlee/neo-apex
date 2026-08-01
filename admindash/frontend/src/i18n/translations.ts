@@ -313,6 +313,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'linkStudent.moveBody': 'This student is already in another family. Move them to {family}?',
     'linkStudent.moveConfirm': 'Move',
     'linkStudent.cancel': 'Cancel',
+    'linkStudent.modelError': 'Could not load the student form. Please try again.',
 
     // Edit Student
     'editStudent.title': 'Edit Student',
@@ -658,6 +659,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'linkStudent.moveBody': '\u8be5\u5b66\u751f\u5df2\u5728\u5176\u4ed6\u5bb6\u5ead\u3002\u5c06\u5176\u79fb\u52a8\u5230 {family}\uff1f',
     'linkStudent.moveConfirm': '\u79fb\u52a8',
     'linkStudent.cancel': '\u53d6\u6d88',
+    'linkStudent.modelError': '\u65e0\u6cd5\u52a0\u8f7d\u5b66\u751f\u8868\u5355\uff0c\u8bf7\u91cd\u8bd5\u3002',
 
     // Edit Student
     'editStudent.title': '\u7f16\u8f91\u5b66\u751f',
