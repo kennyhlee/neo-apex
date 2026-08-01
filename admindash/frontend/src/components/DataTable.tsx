@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, Fragment, type ReactNode } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './DataTable.css';
 
@@ -32,6 +32,10 @@ interface DataTableProps<T> {
   // Selection
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
+  // Expandable rows (opt-in)
+  renderExpanded?: (row: T) => ReactNode;
+  expandedIds?: Set<string>;
+  onToggleExpand?: (id: string) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,11 +57,17 @@ export default function DataTable<T extends Record<string, any>>({
   rowClassName,
   selectedIds: controlledSelectedIds,
   onSelectionChange,
+  renderExpanded,
+  expandedIds,
+  onToggleExpand,
 }: DataTableProps<T>) {
   const { t } = useTranslation();
   const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set());
   const selectedIds = controlledSelectedIds ?? internalSelectedIds;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const expandable = Boolean(renderExpanded);
+  const expanded = expandedIds ?? new Set<string>();
 
   const hiddenSet = hiddenColumns ? new Set(hiddenColumns) : null;
   const visibleColumns = hiddenSet
@@ -110,6 +120,7 @@ export default function DataTable<T extends Record<string, any>>({
         <table className="data-table">
           <thead>
             <tr>
+              {expandable && <th className="data-table-expand" aria-hidden />}
               <th className="data-table-checkbox">
                 <input
                   type="checkbox"
@@ -139,7 +150,7 @@ export default function DataTable<T extends Record<string, any>>({
             {loading ? (
               <tr>
                 <td
-                  colSpan={visibleColumns.length + 1}
+                  colSpan={visibleColumns.length + 1 + (expandable ? 1 : 0)}
                   className="data-table-empty"
                 >
                   {t('common.loading')}
@@ -148,7 +159,7 @@ export default function DataTable<T extends Record<string, any>>({
             ) : data.length === 0 ? (
               <tr>
                 <td
-                  colSpan={visibleColumns.length + 1}
+                  colSpan={visibleColumns.length + 1 + (expandable ? 1 : 0)}
                   className="data-table-empty"
                 >
                   {t('students.noResults')}
@@ -158,23 +169,45 @@ export default function DataTable<T extends Record<string, any>>({
               data.map((row) => {
                 const id = rowKey(row);
                 const extraClass = rowClassName ? rowClassName(row) : '';
+                const isExpanded = expanded.has(id);
                 return (
-                  <tr key={id} className={extraClass || undefined}>
-                    <td className="data-table-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(id)}
-                        onChange={() => toggleRow(id)}
-                      />
-                    </td>
-                    {visibleColumns.map((col) => (
-                      <td key={col.key}>
-                        {col.render
-                          ? col.render(row)
-                          : (String(row[col.key] ?? '-'))}
+                  <Fragment key={id}>
+                    <tr className={extraClass || undefined}>
+                      {expandable && (
+                        <td className="data-table-expand">
+                          <button
+                            type="button"
+                            className="data-table-expand-btn"
+                            aria-expanded={isExpanded}
+                            onClick={() => onToggleExpand?.(id)}
+                          >
+                            {isExpanded ? '▼' : '▶'}
+                          </button>
+                        </td>
+                      )}
+                      <td className="data-table-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(id)}
+                          onChange={() => toggleRow(id)}
+                        />
                       </td>
-                    ))}
-                  </tr>
+                      {visibleColumns.map((col) => (
+                        <td key={col.key}>
+                          {col.render
+                            ? col.render(row)
+                            : (String(row[col.key] ?? '-'))}
+                        </td>
+                      ))}
+                    </tr>
+                    {expandable && isExpanded && (
+                      <tr className="data-table-expanded-row">
+                        <td colSpan={visibleColumns.length + 2}>
+                          {renderExpanded!(row)}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })
             )}

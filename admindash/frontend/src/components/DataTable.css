@@ -156,3 +156,8 @@
 .data-table-row-highlight:hover td {
   background: rgba(55, 138, 221, 0.15) !important;
 }
+
+/* Expandable rows */
+.data-table-expand { width: 32px; text-align: center; }
+.data-table-expand-btn { background: none; border: none; cursor: pointer; color: var(--color-text, #555); font-size: 11px; padding: 4px; }
+.data-table-expanded-row > td { background: var(--color-hover, #f7fafd); padding: 12px 16px; }
