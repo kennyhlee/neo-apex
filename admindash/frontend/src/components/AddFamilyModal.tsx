@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
-import { createEntity } from '../api/client.ts';
+import { createEntity, fetchNextEntityId } from '../api/client.ts';
 import DynamicForm from './DynamicForm.tsx';
 import type { ModelDefinition } from '../types/models.ts';
 import './AddStudentModal.css';
@@ -32,29 +32,33 @@ export default function AddFamilyModal({ tenant, onClose, onSuccess }: AddFamily
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Auto-ID state
+  const [generatedId, setGeneratedId] = useState<string | null>(null);
+
   useEffect(() => {
     setLoading(true);
     getModel(tenant, 'family')
       .then(setModelDef)
       .catch(() => setModelDef(FALLBACK_FAMILY_MODEL))
       .finally(() => setLoading(false));
+    fetchNextEntityId(tenant, 'family').then((r) => setGeneratedId(r.next_id)).catch(() => setGeneratedId(null));
   }, [tenant, getModel]);
 
-  // Strip `family_id` from the form model so a custom family model with a
-  // family_id base field doesn't render an editable/POSTable input.
+  const readOnlyFields = generatedId ? ['family_id'] : [];
+  const initialValues = generatedId ? { family_id: generatedId } : undefined;
+
   const formModelDef = useMemo<ModelDefinition | null>(() => {
     if (!modelDef) return null;
-    return {
-      ...modelDef,
-      base_fields: modelDef.base_fields.filter((f) => f.name !== 'family_id'),
-    };
+    return modelDef;
   }, [modelDef]);
 
   async function handleSubmit(baseData: Record<string, unknown>, customFields: Record<string, unknown>) {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await createEntity(tenant, 'family', baseData, customFields);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { family_id, ...submitData } = baseData;
+      const result = await createEntity(tenant, 'family', submitData, customFields);
       setSuccess(t('addFamily.success'));
       setTimeout(() => onSuccess(result.entity_id), 900);
     } catch (e) {
@@ -75,6 +79,8 @@ export default function AddFamilyModal({ tenant, onClose, onSuccess }: AddFamily
           ) : formModelDef ? (
             <DynamicForm
               modelDefinition={formModelDef}
+              initialValues={initialValues}
+              readOnlyFields={readOnlyFields}
               onSubmit={handleSubmit}
               onCancel={onClose}
               submitting={submitting}
