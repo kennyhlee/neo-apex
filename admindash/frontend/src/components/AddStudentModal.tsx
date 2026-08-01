@@ -1,31 +1,46 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import {
   createEntity,
+  createFamily,
   extractStudentFromDocument,
   fetchNextEntityId,
   checkDuplicateStudents,
+  searchStudents,
 } from '../api/client.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import DynamicForm from './DynamicForm.tsx';
 import DocumentUpload from './DocumentUpload.tsx';
 import DuplicateWarningModal from './DuplicateWarningModal.tsx';
-import type { ModelDefinition, DuplicateMatch } from '../types/models.ts';
+import FamilyPicker from './FamilyPicker.tsx';
+import EditStudentModal from './EditStudentModal.tsx';
+import type { ModelDefinition, DuplicateMatch, FamilySelection } from '../types/models.ts';
 import './AddStudentModal.css';
 
 interface AddStudentModalProps {
   tenant: string;
   onClose: () => void;
   onSuccess: (entityId: string) => void;
+  presetFamilyId?: string;
+  presetFamilyLabel?: string;
+  lockFamily?: boolean;
 }
 
-export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStudentModalProps) {
+export default function AddStudentModal({ tenant, onClose, onSuccess, presetFamilyId, presetFamilyLabel, lockFamily }: AddStudentModalProps) {
   const { t } = useTranslation();
   const { getModel } = useModel();
   const { invalidateStudentCount } = useDashboard();
 
-  const [activeTab, setActiveTab] = useState<'form' | 'upload'>('form');
+  // In a family context the primary intent is usually linking an existing
+  // student, so default to that tab (and render it first).
+  const [activeTab, setActiveTab] = useState<'form' | 'upload' | 'existing'>(presetFamilyId ? 'existing' : 'form');
+  const [linkQuery, setLinkQuery] = useState('');
+  const [linkResults, setLinkResults] = useState<Record<string, unknown>[]>([]);
+  const [linkSelected, setLinkSelected] = useState<Record<string, unknown> | null>(null);
+  const [linkConfirmMove, setLinkConfirmMove] = useState<Record<string, unknown> | null>(null);
+  const [linkEditing, setLinkEditing] = useState<Record<string, unknown> | null>(null);
+  const linkDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [modelDef, setModelDef] = useState<ModelDefinition | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +48,11 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [familySelection, setFamilySelection] = useState<FamilySelection | null>(
+    presetFamilyId
+      ? { mode: 'existing', familyId: presetFamilyId, label: presetFamilyLabel ?? presetFamilyId }
+      : null,
+  );
 
   // Auto-ID state
   const [generatedId, setGeneratedId] = useState<string | null>(null);
@@ -68,6 +88,15 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
       .finally(() => setLoading(false));
   }, [tenant, getModel, t]);
 
+  useEffect(() => {
+    if (linkDebounce.current) clearTimeout(linkDebounce.current);
+    linkDebounce.current = setTimeout(() => {
+      if (!linkQuery.trim()) { setLinkResults([]); return; }
+      searchStudents(tenant, linkQuery).then(setLinkResults).catch(() => setLinkResults([]));
+    }, 250);
+    return () => { if (linkDebounce.current) clearTimeout(linkDebounce.current); };
+  }, [linkQuery, tenant]);
+
   const handleExtracted = (fields: Record<string, string>) => {
     setExtractedValues((prev) => ({ ...prev, ...fields }));
     setActiveTab('form');
@@ -87,6 +116,15 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { student_id, ...submitData } = baseData;
+
+      // Resolve family: create it first if the user chose "new".
+      if (familySelection?.mode === 'existing') {
+        submitData.family_id = familySelection.familyId;
+      } else if (familySelection?.mode === 'new') {
+        const fam = await createFamily(tenant, familySelection.data);
+        submitData.family_id = fam.entity_id;
+      }
+
       const result = await createEntity(tenant, 'student', submitData, customFields);
       invalidateStudentCount();
       setSuccessMessage(t('addStudent.success'));
@@ -96,7 +134,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
     } finally {
       setSubmitting(false);
     }
-  }, [tenant, invalidateStudentCount, onSuccess, t]);
+  }, [tenant, invalidateStudentCount, onSuccess, t, familySelection]);
 
   const handleSubmit = async (
     baseData: Record<string, unknown>,
@@ -148,6 +186,21 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
     setPendingSubmission(null);
   };
 
+  const familyLabel = presetFamilyLabel ?? presetFamilyId ?? '';
+  function pickExisting(student: Record<string, unknown>) {
+    const fid = student.family_id ? String(student.family_id) : '';
+    if (fid && fid !== presetFamilyId) setLinkConfirmMove(student);
+    else setLinkEditing(student);
+  }
+
+  const formModelDef = useMemo<ModelDefinition | null>(() => {
+    if (!modelDef) return null;
+    return {
+      ...modelDef,
+      base_fields: modelDef.base_fields.filter((f) => f.name !== 'family_id'),
+    };
+  }, [modelDef]);
+
   const initialValues: Record<string, unknown> = {
     ...extractedValues,
     ...(generatedId ? { student_id: generatedId } : {}),
@@ -156,6 +209,19 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
   const submitButtonText = checkingDuplicates
     ? t('addStudent.checkingDuplicates')
     : undefined;
+
+  if (linkEditing && modelDef) {
+    return (
+      <EditStudentModal
+        tenant={tenant}
+        entity={linkEditing}
+        model={modelDef}
+        presetFamily={{ familyId: presetFamilyId!, label: familyLabel }}
+        onClose={() => setLinkEditing(null)}
+        onSaved={() => onSuccess(String(linkEditing.entity_id ?? ''))}
+      />
+    );
+  }
 
   return (
     <div className="students-confirm-overlay">
@@ -181,6 +247,14 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
         ) : (
           <>
             <div className="add-modal-tabs">
+              {presetFamilyId && (
+                <button
+                  className={`add-modal-tab ${activeTab === 'existing' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('existing')}
+                >
+                  {t('addStudent.existingStudent')}
+                </button>
+              )}
               <button
                 className={`add-modal-tab ${activeTab === 'form' ? 'active' : ''}`}
                 onClick={() => setActiveTab('form')}
@@ -195,7 +269,7 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
               </button>
             </div>
 
-            <div className="add-modal-body">
+            <div className="add-modal-body add-modal-body--tabbed">
               {successMessage && (
                 <div className="add-modal-success">{successMessage}</div>
               )}
@@ -204,23 +278,90 @@ export default function AddStudentModal({ tenant, onClose, onSuccess }: AddStude
                 <div className="add-modal-id-warning">{idError}</div>
               )}
 
-              {activeTab === 'form' && modelDef && (
-                <DynamicForm
-                  modelDefinition={modelDef}
-                  initialValues={initialValues}
-                  readOnlyFields={readOnlyFields}
-                  onSubmit={handleSubmit}
-                  onCancel={onClose}
-                  submitting={submitting}
-                  error={submitError}
-                  submitButtonText={submitButtonText}
-                />
+              {activeTab === 'form' && formModelDef && (
+                <>
+                  <FamilyPicker tenant={tenant} value={familySelection} onChange={setFamilySelection} locked={lockFamily} />
+                  <DynamicForm
+                    modelDefinition={formModelDef}
+                    initialValues={initialValues}
+                    readOnlyFields={readOnlyFields}
+                    onSubmit={handleSubmit}
+                    onCancel={onClose}
+                    submitting={submitting}
+                    error={submitError}
+                    submitButtonText={submitButtonText}
+                  />
+                </>
               )}
               {activeTab === 'upload' && (
                 <DocumentUpload
                   onExtracted={handleExtracted}
                   onUpload={handleUpload}
                 />
+              )}
+              {activeTab === 'existing' && (
+                <div className="add-modal-existing">
+                  <input
+                    className="link-student-search"
+                    placeholder={t('linkStudent.search')}
+                    value={linkQuery}
+                    onChange={(e) => setLinkQuery(e.target.value)}
+                    autoFocus
+                  />
+                  <ul className="link-student-results">
+                    {linkResults.map((s) => {
+                      const fid = s.family_id ? String(s.family_id) : '';
+                      const label = !fid ? t('linkStudent.unlinked')
+                        : fid === presetFamilyId ? familyLabel : t('linkStudent.alreadyInFamily');
+                      const isSelected = linkSelected != null && linkSelected.entity_id === s.entity_id;
+                      return (
+                        <li key={String(s.entity_id)}>
+                          <button
+                            type="button"
+                            className={isSelected ? 'selected' : ''}
+                            onClick={() => setLinkSelected(s)}
+                          >
+                            <span>{String(s.first_name ?? '')} {String(s.last_name ?? '')}</span>
+                            <span className="link-student-meta">{String(s.student_id ?? '')} · {label}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                    {linkQuery.trim() && linkResults.length === 0 && (
+                      <li className="link-student-empty">{t('linkStudent.noResults')}</li>
+                    )}
+                  </ul>
+                  <div className="add-modal-existing-actions">
+                    <button type="button" className="dynamic-form-btn-secondary" onClick={onClose}>
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      className="dynamic-form-btn-primary"
+                      disabled={!linkSelected}
+                      onClick={() => { if (linkSelected) pickExisting(linkSelected); }}
+                    >
+                      {t('linkStudent.linkAction')}
+                    </button>
+                  </div>
+                  {linkConfirmMove && (
+                    <div className="students-confirm-overlay" onClick={() => setLinkConfirmMove(null)}>
+                      <div className="students-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+                        <h4>{t('linkStudent.moveTitle')}</h4>
+                        <p>{t('linkStudent.moveBody').replace('{family}', familyLabel)}</p>
+                        <div className="students-confirm-actions">
+                          <button onClick={() => setLinkConfirmMove(null)}>{t('linkStudent.cancel')}</button>
+                          <button
+                            className="students-confirm-danger"
+                            onClick={() => { const s = linkConfirmMove; setLinkConfirmMove(null); setLinkEditing(s); }}
+                          >
+                            {t('linkStudent.moveConfirm')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </>

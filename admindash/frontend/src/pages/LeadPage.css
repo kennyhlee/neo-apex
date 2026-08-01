@@ -37,7 +37,7 @@
 
 .leads-stage-filter:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.15);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .leads-board {

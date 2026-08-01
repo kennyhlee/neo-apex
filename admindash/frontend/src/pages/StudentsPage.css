@@ -24,7 +24,7 @@
   padding: 0.45rem 0.85rem;
   border: none;
   border-radius: var(--radius-sm);
-  background: #378ADD;
+  background: var(--accent);
   color: var(--text-inverse);
   cursor: pointer;
   transition: all 0.2s;
@@ -150,11 +150,12 @@
 .students-confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  z-index: var(--z-modal);
+  animation: modal-fade .15s ease;
 }
 
 .students-confirm-dialog {
@@ -194,46 +195,6 @@
   border-color: var(--danger) !important;
 }
 
-.student-name-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  white-space: nowrap;
-  min-width: 160px;
-}
-
-.student-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--info-muted);
-  color: var(--info);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.student-name-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.student-display-name {
-  font-weight: 600;
-  font-size: 0.9rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
-}
-
-.student-preferred-name {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-}
 
 .student-error {
   text-align: center;
@@ -284,8 +245,8 @@
   padding: calc(0.45rem - 1px) calc(0.85rem - 1px);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: #378ADD;
-  border: 1px solid #378ADD;
+  color: var(--accent);
+  border: 1px solid var(--accent);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -293,5 +254,8 @@
 .students-toolbar-secondary:hover {
   background: rgba(55, 138, 221, 0.08);
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.15);
+  box-shadow: 0 8px 32px var(--accent-ring);
 }
+
+.students-id-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-family: monospace; padding: 0; }
+.students-id-btn:hover { text-decoration: underline; }

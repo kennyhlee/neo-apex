@@ -37,8 +37,8 @@
 .filter-field input:focus,
 .filter-field select:focus {
   outline: none;
-  border-color: #378ADD;
-  box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .filter-actions {
@@ -62,7 +62,7 @@
 }
 
 .filter-btn-primary {
-  background: #378ADD;
+  background: var(--accent);
   color: var(--text-inverse);
 }
 

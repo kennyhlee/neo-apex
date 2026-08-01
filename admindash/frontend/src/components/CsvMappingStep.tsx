@@ -5,6 +5,7 @@ import type { ColumnMapping } from '../types/bulkAdd.ts';
 import { SKIP_FIELD } from '../types/bulkAdd.ts';
 import { autoMatchColumns, unmappedRequiredFields } from '../utils/csvMapping.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
+import { FAMILY_TARGETS } from '../utils/familyBulk.ts';
 import './CsvMappingStep.css';
 
 interface Props {
@@ -59,6 +60,11 @@ export default function CsvMappingStep({ headers, modelDef, onApply, onCancel }:
                   {f.name}{f.required ? ' *' : ''}
                 </option>
               ))}
+              <optgroup label={t('bulkAdd.mapping.familyGroup')}>
+                {FAMILY_TARGETS.map((f) => (
+                  <option key={f.target} value={f.target}>{t(f.i18nKey)}</option>
+                ))}
+              </optgroup>
             </select>
           </div>
         ))}

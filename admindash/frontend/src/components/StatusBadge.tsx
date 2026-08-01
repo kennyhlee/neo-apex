@@ -1,39 +1,32 @@
-interface StatusBadgeProps {
-  status?: string;
-}
+import './StatusBadge.css';
 
-const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
-  active:     { bg: '#EAF3DE', color: '#3B6D11' },
-  enrolled:   { bg: '#EAF3DE', color: '#3B6D11' },
-  on_leave:   { bg: '#FAEEDA', color: '#854F0B' },
-  suspended:  { bg: '#E6F1FB', color: '#185FA5' },
-  graduated:  { bg: '#E6F1FB', color: '#378ADD' },
-  dropped:    { bg: '#FBEAF0', color: '#993556' },
-  withdrawn:  { bg: '#FBEAF0', color: '#993556' },
+// Map each status value to a tone class (colors live in CSS/tokens).
+const TONE: Record<string, string> = {
+  active: 'green', enrolled: 'green',
+  on_leave: 'amber', waitlisted: 'amber',
+  suspended: 'blue', graduated: 'blue',
+  dropped: 'rose', withdrawn: 'rose', inactive: 'rose', transferred: 'rose',
 };
 
-export default function StatusBadge({ status }: StatusBadgeProps) {
-  if (!status) return <span>-</span>;
+// Selection fields arrive JSON-encoded (e.g. '["Active"]'); unwrap to a plain label
+// so the badge shows `Active`, not `["Active"]`, and the tone lookup matches.
+function normalizeStatus(raw: unknown): string {
+  if (raw == null) return '';
+  if (Array.isArray(raw)) return raw.join(', ');
+  const s = String(raw).trim();
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr)) return arr.join(', ');
+    } catch { /* not JSON — fall through */ }
+  }
+  return s;
+}
 
-  const key = status.toLowerCase().replace(/\s+/g, '_');
-  const style = STATUS_STYLES[key] ?? {
-    bg: 'var(--bg-tertiary)',
-    color: 'var(--text-secondary)',
-  };
-
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '0.2rem 0.6rem',
-        borderRadius: '20px',
-        fontSize: '12px',
-        fontWeight: 600,
-        background: style.bg,
-        color: style.color,
-      }}
-    >
-      {status}
-    </span>
-  );
+export default function StatusBadge({ status }: { status?: string }) {
+  const label = normalizeStatus(status);
+  if (!label || label === '-') return <span>-</span>;
+  const key = label.toLowerCase().replace(/\s+/g, '_');
+  const tone = TONE[key] ?? 'gray';
+  return <span className={`status-badge status-badge--${tone}`}>{label}</span>;
 }

@@ -6,12 +6,14 @@ import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
-import { postQuery, archiveEntities, updateEntity } from '../api/client.ts';
+import { postQuery, archiveEntities } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
-import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
+import EditStudentModal from '../components/EditStudentModal.tsx';
+import StudentDetailModal from '../components/StudentDetailModal.tsx';
+import StudentNameCell from '../components/StudentNameCell.tsx';
 import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
@@ -66,7 +68,7 @@ function formatSelectionValue(val: unknown): string {
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Special rendering for name and status fields.
  */
-function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
+function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row: DataRow) => void, t: (key: string) => string): Column<DataRow>[] {
   const cols: Column<DataRow>[] = [];
 
   for (const field of model.base_fields) {
@@ -76,25 +78,7 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
         key: 'name',
         label: 'Student Name',
         i18nKey: 'students.name',
-        render: (row: DataRow) => {
-          const fullName =
-            `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || '-';
-          const lastName = String(row.last_name ?? '');
-          const avatarChar = (lastName.charAt(0) || fullName.charAt(0)).toUpperCase();
-          return (
-            <div className="student-name-cell">
-              <div className="student-avatar">{avatarChar}</div>
-              <div className="student-name-info">
-                <span className="student-display-name">{fullName}</span>
-                {row.preferred_name ? (
-                  <span className="student-preferred-name">
-                    {String(row.preferred_name)}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          );
-        },
+        render: (row: DataRow) => <StudentNameCell row={row} />,
       });
       continue;
     }
@@ -103,8 +87,26 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
       continue;
     }
 
+    if (field.name === 'student_id') {
+      cols.push({
+        key: 'student_id',
+        label: formatFieldLabel('student_id'),
+        i18nKey: 'students.studentId',
+        render: (row: DataRow) => (
+          <button
+            type="button"
+            className="students-id-btn"
+            title={t('studentDetail.dblclickHint')}
+            onClick={() => onStudentIdDblClick(row)}
+          >
+            {String(row.student_id ?? '-')}
+          </button>
+        ),
+      });
+      continue;
+    }
+
     const i18nMap: Record<string, string> = {
-      student_id: 'students.studentId',
       gender: 'students.gender',
       dob: 'students.dob',
       grade_level: 'students.gradeLevel',
@@ -169,24 +171,7 @@ function getFallbackColumns(): Column<DataRow>[] {
       key: 'name',
       label: 'Student Name',
       i18nKey: 'students.name',
-      render: (row: DataRow) => {
-        const fullName =
-          `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || '-';
-        const avatarChar = fullName.charAt(0);
-        return (
-          <div className="student-name-cell">
-            <div className="student-avatar">{avatarChar}</div>
-            <div className="student-name-info">
-              <span className="student-display-name">{fullName}</span>
-              {row.preferred_name ? (
-                <span className="student-preferred-name">
-                  {String(row.preferred_name)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        );
-      },
+      render: (row: DataRow) => <StudentNameCell row={row} />,
     },
     { key: 'student_id', label: 'Student ID', i18nKey: 'students.studentId' },
     { key: 'gender', label: 'Gender', i18nKey: 'students.gender' },
@@ -248,8 +233,9 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Edit modal state
   const [editingEntity, setEditingEntity] = useState<DataRow | null>(null);
-  const [editSubmitting, setEditSubmitting] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
+
+  // Detail modal state (read-only, opened via double-click on student_id)
+  const [detailStudent, setDetailStudent] = useState<DataRow | null>(null);
 
   // Coming soon dialog
   const [showComingSoon, setShowComingSoon] = useState(false);
@@ -266,9 +252,9 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Build columns from model
   const columns = useMemo<Column<DataRow>[]>(() => {
-    if (model) return buildColumnsFromModel(model);
+    if (model) return buildColumnsFromModel(model, setDetailStudent, t);
     return getFallbackColumns();
-  }, [model]);
+  }, [model, t]); // setDetailStudent is a stable setter — safe to omit from deps
 
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
 
@@ -435,23 +421,6 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     }
   }
 
-  async function handleEditSave(baseData: Record<string, unknown>, customFields: Record<string, unknown>) {
-    if (!editingEntity) return;
-    setEditSubmitting(true);
-    setEditError(null);
-    try {
-      const entityId = String(editingEntity.entity_id);
-      await updateEntity(tenant, 'student', entityId, baseData, customFields);
-      setEditingEntity(null);
-      setSelectedIds(new Set());
-      loadData(page, filters);
-    } catch (err) {
-      setEditError(`Failed to update student: ${err}`);
-    } finally {
-      setEditSubmitting(false);
-    }
-  }
-
   // Row class for highlight
   function rowClassName(row: DataRow): string {
     if (activeHighlight && String(row.entity_id) === activeHighlight) {
@@ -612,27 +581,22 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
       {/* Edit student modal */}
       {editingEntity && model && (
-        <div className="students-confirm-overlay">
-          <div className="students-edit-modal">
-            <div className="students-edit-modal-header">
-              <h3>Edit Student</h3>
-              <span className="students-edit-modal-subtitle">
-                {String(editingEntity.first_name ?? '')} {String(editingEntity.last_name ?? '')}
-              </span>
-            </div>
-            <div className="students-edit-modal-body">
-              <DynamicForm
-                modelDefinition={model}
-                initialValues={editingEntity as Record<string, unknown>}
-                readOnlyFields={['student_id', 'first_name', 'last_name', 'middle_name', 'family_id']}
-                onSubmit={handleEditSave}
-                onCancel={() => { setEditingEntity(null); setEditError(null); }}
-                submitting={editSubmitting}
-                error={editError}
-              />
-            </div>
-          </div>
-        </div>
+        <EditStudentModal
+          tenant={tenant}
+          entity={editingEntity as Record<string, unknown>}
+          model={model}
+          onClose={() => { setEditingEntity(null); }}
+          onSaved={() => { setEditingEntity(null); setSelectedIds(new Set()); loadData(page, filters); }}
+        />
+      )}
+
+      {/* Student detail modal (read-only, opened via double-click on student_id) */}
+      {detailStudent && model && (
+        <StudentDetailModal
+          student={detailStudent as Record<string, unknown>}
+          model={model}
+          onClose={() => setDetailStudent(null)}
+        />
       )}
 
       {/* Coming soon dialog for batch edit */}

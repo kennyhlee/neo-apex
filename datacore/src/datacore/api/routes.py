@@ -21,6 +21,7 @@ DEFAULT_ABBREVS = {
     "student": "ST",
     "program": "PR",
     "lead": "LD",
+    "family": "FA",
 }
 
 

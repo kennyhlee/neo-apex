@@ -1,0 +1,8 @@
+.student-detail-modal { background: #fff; border-radius: 10px; padding: 20px; width: min(560px, 92vw); max-height: 82vh; overflow-y: auto; }
+.student-detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.student-detail-subtitle { display: block; color: #888; font-size: 13px; }
+.student-detail-header button { background: none; border: none; color: var(--color-primary, var(--accent)); cursor: pointer; }
+.student-detail-fields { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.student-detail-row { display: grid; grid-template-columns: 40% 1fr; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--color-border, #eee); }
+.student-detail-row dt { font-weight: 600; color: #555; }
+.student-detail-row dd { margin: 0; }

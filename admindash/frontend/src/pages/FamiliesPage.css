@@ -1,0 +1,28 @@
+.families-page { padding: 24px; }
+.families-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.families-actions { display: flex; gap: 8px; }
+.families-search { padding: 8px 10px; border: 1px solid var(--color-border, #ccc); border-radius: 6px; min-width: 260px; }
+.families-add-btn { padding: 8px 14px; background: var(--color-primary, var(--accent)); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.families-name-btn { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; font-size: inherit; text-align: left; font-weight: 500; }
+.families-name-btn:hover { text-decoration: underline; }
+.families-id-btn { background: none; border: none; padding: 0; cursor: pointer; }
+.families-id-btn .families-id { color: var(--accent); font-family: monospace; font-size: 12px; }
+.families-id-btn:hover .families-id { text-decoration: underline; }
+.families-empty { color: #888; }
+.families-detail { background: #fff; border-radius: 10px; padding: 20px; width: min(560px, 92vw); max-height: 82vh; overflow-y: auto; }
+.families-detail-header { display: flex; justify-content: space-between; align-items: center; }
+.families-detail-header button { background: none; border: none; color: var(--color-primary, var(--accent)); cursor: pointer; }
+.families-detail-fields { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 12px 0; }
+.families-detail-fields dt { font-weight: 600; color: #555; }
+.families-detail-students { list-style: none; padding: 0; margin: 8px 0 16px; }
+.families-detail-students li { padding: 8px; border-bottom: 1px solid var(--color-border, #eee); }
+.families-grade { color: #888; }
+.families-id { font-size: 12px; color: #555; }
+.families-expanded { display: flex; flex-direction: column; gap: 10px; }
+.families-students-table { width: 100%; border-collapse: collapse; background: var(--bg-card, #fff); border-radius: var(--radius-sm, 6px); overflow: hidden; }
+.families-students-table thead th { background: var(--bg-tertiary); padding: 0.7rem 1rem; font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); text-align: left; border-bottom: 2px solid var(--border-primary); }
+.families-students-table td { padding: 0.7rem 1rem; border-bottom: 1px solid var(--border-subtle); font-size: 0.9rem; vertical-align: middle; color: var(--text-primary); background: #FFFFFF; }
+.families-students-table tbody tr:hover td { background: var(--accent-tint); }
+.families-student-id { background: none; border: none; color: var(--accent); cursor: pointer; font-family: monospace; padding: 0; }
+.families-student-id:hover { text-decoration: underline; }
+.families-expanded .families-add-btn { align-self: flex-start; }

@@ -13,6 +13,7 @@ export interface Student {
   last_name: string;
   middle_name?: string;
   preferred_name?: string;
+  family_id?: string;
   dob?: string;
   grade_level?: string;
   email?: string;
@@ -150,3 +151,25 @@ export interface LeadActivity {
   created_by: string;
   _created_at?: string;
 }
+
+export interface Family {
+  entity_id: string;
+  family_name: string;
+  primary_email?: string;
+  primary_phone?: string;
+  primary_address?: string;
+  student_count?: number;
+  custom_fields?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface FamilyData {
+  family_name: string;
+  primary_email?: string;
+  primary_phone?: string;
+  primary_address?: string;
+}
+
+export type FamilySelection =
+  | { mode: 'existing'; familyId: string; label: string }
+  | { mode: 'new'; data: FamilyData };

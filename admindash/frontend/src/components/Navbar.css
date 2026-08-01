@@ -108,7 +108,7 @@
   border-radius: 50%;
   background: var(--tint-blue-bg, #EBF5FF);
   border: 1px solid var(--border-primary, #E5E7EB);
-  color: var(--tint-blue-text, #378ADD);
+  color: var(--tint-blue-text, var(--accent));
   display: flex;
   align-items: center;
   justify-content: center;

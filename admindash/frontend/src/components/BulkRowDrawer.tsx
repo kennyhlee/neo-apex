@@ -2,21 +2,25 @@
 import { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import DynamicForm from './DynamicForm.tsx';
+import FamilyPicker from './FamilyPicker.tsx';
 import type { BulkRow } from '../types/bulkAdd.ts';
-import type { ModelDefinition } from '../types/models.ts';
+import type { ModelDefinition, FamilySelection } from '../types/models.ts';
+import { extractFamilyValues } from '../utils/familyBulk.ts';
 import './BulkRowDrawer.css';
 
 interface Props {
   rows: BulkRow[];
   activeRowIndex: number;
   modelDef: ModelDefinition;
+  tenant: string;
   onSaveRow: (rowId: string, baseData: Record<string, unknown>, customFields: Record<string, unknown>) => void;
+  onSetRowFamily: (rowId: string, selection: FamilySelection | null) => void;
   onClose: () => void;
   onNavigate: (newIndex: number) => void;
 }
 
 export default function BulkRowDrawer({
-  rows, activeRowIndex, modelDef, onSaveRow, onClose, onNavigate,
+  rows, activeRowIndex, modelDef, tenant, onSaveRow, onSetRowFamily, onClose, onNavigate,
 }: Props) {
   const { t } = useTranslation();
   const [dirty, setDirty] = useState(false);
@@ -24,6 +28,13 @@ export default function BulkRowDrawer({
 
   const row = rows[activeRowIndex];
   if (!row) return null;
+
+  const currentSelection: FamilySelection | null = row.familyLink
+    ? { mode: 'existing', familyId: row.familyLink.familyId, label: row.familyLink.label }
+    : (() => {
+        const fam = extractFamilyValues(row.values);
+        return fam ? { mode: 'new', data: fam } : null;
+      })();
 
   const handleSubmit = (baseData: Record<string, unknown>, customFields: Record<string, unknown>) => {
     onSaveRow(row.id, baseData, customFields);
@@ -73,6 +84,13 @@ export default function BulkRowDrawer({
           className="bulk-drawer__body"
           onChangeCapture={() => setDirty(true)}
         >
+          <FamilyPicker
+            key={row.id}
+            tenant={tenant}
+            value={currentSelection}
+            onChange={(sel) => onSetRowFamily(row.id, sel)}
+          />
+
           {/* CRITICAL: key={row.id} forces unmount/remount across Prev/Next so
               DynamicForm's initialValues-merge-not-replace effect cannot leak
               values between rows (DynamicForm.tsx:235-245). DO NOT remove. */}

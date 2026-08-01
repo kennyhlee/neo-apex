@@ -151,3 +151,112 @@ def test_lead_gets_sequential_human_id():
         assert resp.status_code == 201
         lead_id = resp.json()["base_data"]["lead_id"]
         assert "-LD" in lead_id  # e.g. ACC-LD260001
+
+
+def test_family_gets_auto_family_id():
+    """Creating a family without family_id should auto-assign one with -FA prefix."""
+    with tempfile.TemporaryDirectory() as tmp:
+        mock_embedder = MagicMock()
+        mock_embedder.embed.return_value = [0.0] * 1024
+        store = Store(data_dir=tmp, embedder=mock_embedder)
+        app = create_app(store)
+        client = TestClient(app)
+        client.put(
+            "/api/tenants/t1",
+            json={
+                "base_data": {
+                    "tenant_id": "t1",
+                    "name": "Acme Child Center",
+                    "primary_address": "123 Main St",
+                },
+            },
+        )
+        resp = client.post(
+            "/api/entities/t1/family",
+            json={"base_data": {"family_name": "Nguyen"}},
+        )
+        assert resp.status_code == 201
+        import re
+        fam_id = resp.json()["base_data"]["family_id"]
+        assert re.match(r"^[A-Z]+-FA\d{6}$", fam_id), fam_id  # e.g. ACC-FA260001
+
+
+def test_family_next_id_supported():
+    """GET /api/entities/{tenant}/family/next-id should return a -FA id."""
+    with tempfile.TemporaryDirectory() as tmp:
+        mock_embedder = MagicMock()
+        mock_embedder.embed.return_value = [0.0] * 1024
+        store = Store(data_dir=tmp, embedder=mock_embedder)
+        app = create_app(store)
+        client = TestClient(app)
+        client.put(
+            "/api/tenants/t1",
+            json={
+                "base_data": {
+                    "tenant_id": "t1",
+                    "name": "Acme Child Center",
+                    "primary_address": "123 Main St",
+                },
+            },
+        )
+        resp = client.get("/api/entities/t1/family/next-id")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "-FA" in data["next_id"]
+        assert data["entity_abbrev"] == "FA"
+
+
+def test_family_sequential_ids():
+    """Two families should get sequential IDs."""
+    with tempfile.TemporaryDirectory() as tmp:
+        mock_embedder = MagicMock()
+        mock_embedder.embed.return_value = [0.0] * 1024
+        store = Store(data_dir=tmp, embedder=mock_embedder)
+        app = create_app(store)
+        client = TestClient(app)
+        client.put(
+            "/api/tenants/t1",
+            json={
+                "base_data": {
+                    "tenant_id": "t1",
+                    "name": "Acme Child Center",
+                    "primary_address": "123 Main St",
+                },
+            },
+        )
+        r1 = client.post(
+            "/api/entities/t1/family",
+            json={"base_data": {"family_name": "Nguyen"}},
+        )
+        r2 = client.post(
+            "/api/entities/t1/family",
+            json={"base_data": {"family_name": "Smith"}},
+        )
+        assert r1.json()["base_data"]["family_id"].endswith("0001")
+        assert r2.json()["base_data"]["family_id"].endswith("0002")
+
+
+def test_family_preserves_provided_id():
+    """If family_id is provided, don't override it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        mock_embedder = MagicMock()
+        mock_embedder.embed.return_value = [0.0] * 1024
+        store = Store(data_dir=tmp, embedder=mock_embedder)
+        app = create_app(store)
+        client = TestClient(app)
+        client.put(
+            "/api/tenants/t1",
+            json={
+                "base_data": {
+                    "tenant_id": "t1",
+                    "name": "Acme Child Center",
+                    "primary_address": "123 Main St",
+                },
+            },
+        )
+        resp = client.post(
+            "/api/entities/t1/family",
+            json={"base_data": {"family_name": "Lee", "family_id": "CUSTOM-FA-001"}},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["base_data"]["family_id"] == "CUSTOM-FA-001"
