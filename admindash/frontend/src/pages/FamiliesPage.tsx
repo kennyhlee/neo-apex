@@ -4,6 +4,7 @@ import { postQuery, getStudentsByFamily } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import AddFamilyModal from '../components/AddFamilyModal.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
+import LinkExistingStudentModal from '../components/LinkExistingStudentModal.tsx';
 import type { Family } from '../types/models.ts';
 import './FamiliesPage.css';
 
@@ -23,6 +24,7 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
   const [detail, setDetail] = useState<Family | null>(null);
   const [detailStudents, setDetailStudents] = useState<Row[]>([]);
   const [addStudentTo, setAddStudentTo] = useState<Family | null>(null);
+  const [linkTo, setLinkTo] = useState<Family | null>(null);
 
   useEffect(() => {
     postQuery(tenant, 'entities',
@@ -162,6 +164,12 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
             >
               {t('families.addStudentToFamily')}
             </button>
+            <button
+              className="families-add-btn"
+              onClick={() => { setLinkTo(detail); setDetail(null); }}
+            >
+              {t('families.linkExistingStudent')}
+            </button>
           </div>
         </div>
       )}
@@ -173,6 +181,15 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
           presetFamilyLabel={String(addStudentTo.family_name ?? '')}
           onClose={() => setAddStudentTo(null)}
           onSuccess={() => { setAddStudentTo(null); handleReload(); }}
+        />
+      )}
+
+      {linkTo && (
+        <LinkExistingStudentModal
+          tenant={tenant}
+          family={linkTo}
+          onClose={() => setLinkTo(null)}
+          onLinked={() => { setLinkTo(null); handleReload(); }}
         />
       )}
     </div>

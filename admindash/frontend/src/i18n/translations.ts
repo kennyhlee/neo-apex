@@ -296,11 +296,23 @@ export const translations: Record<Locale, Record<string, string>> = {
     'families.empty': 'No families yet',
     'families.detailStudents': 'Students in this family',
     'families.addStudentToFamily': '+ Add student to this family',
+    'families.linkExistingStudent': 'Link existing student',
     'families.noStudents': 'No students linked yet',
     'families.close': 'Close',
     'addFamily.title': 'Add Family',
     'addFamily.success': 'Family created',
     'addFamily.error': 'Could not create family',
+
+    // Link Existing Student
+    'linkStudent.title': 'Link existing student',
+    'linkStudent.search': 'Search students by name or ID…',
+    'linkStudent.noResults': 'No matching students',
+    'linkStudent.alreadyInFamily': 'In another family',
+    'linkStudent.unlinked': 'No family',
+    'linkStudent.moveTitle': 'Move student?',
+    'linkStudent.moveBody': 'This student is already in another family. Move them to {family}?',
+    'linkStudent.moveConfirm': 'Move',
+    'linkStudent.cancel': 'Cancel',
 
     // Edit Student
     'editStudent.title': 'Edit Student',
@@ -629,11 +641,23 @@ export const translations: Record<Locale, Record<string, string>> = {
     'families.empty': '\u6682\u65e0\u5bb6\u5ead',
     'families.detailStudents': '\u8be5\u5bb6\u5ead\u7684\u5b66\u751f',
     'families.addStudentToFamily': '+ \u6dfb\u52a0\u5b66\u751f\u5230\u8be5\u5bb6\u5ead',
+    'families.linkExistingStudent': '\u5173\u8054\u73b0\u6709\u5b66\u751f',
     'families.noStudents': '\u6682\u65e0\u5173\u8054\u5b66\u751f',
     'families.close': '\u5173\u95ed',
     'addFamily.title': '\u6dfb\u52a0\u5bb6\u5ead',
     'addFamily.success': '\u5bb6\u5ead\u5df2\u521b\u5efa',
     'addFamily.error': '\u65e0\u6cd5\u521b\u5efa\u5bb6\u5ead',
+
+    // Link Existing Student
+    'linkStudent.title': '\u5173\u8054\u73b0\u6709\u5b66\u751f',
+    'linkStudent.search': '\u6309\u59d3\u540d\u6216\u5b66\u53f7\u641c\u7d22\u5b66\u751f\u2026',
+    'linkStudent.noResults': '\u6ca1\u6709\u5339\u914d\u7684\u5b66\u751f',
+    'linkStudent.alreadyInFamily': '\u5df2\u5728\u5176\u4ed6\u5bb6\u5ead',
+    'linkStudent.unlinked': '\u65e0\u5bb6\u5ead',
+    'linkStudent.moveTitle': '\u79fb\u52a8\u5b66\u751f\uff1f',
+    'linkStudent.moveBody': '\u8be5\u5b66\u751f\u5df2\u5728\u5176\u4ed6\u5bb6\u5ead\u3002\u5c06\u5176\u79fb\u52a8\u5230 {family}\uff1f',
+    'linkStudent.moveConfirm': '\u79fb\u52a8',
+    'linkStudent.cancel': '\u53d6\u6d88',
 
     // Edit Student
     'editStudent.title': '\u7f16\u8f91\u5b66\u751f',
