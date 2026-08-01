@@ -21,7 +21,7 @@
 .families-expanded { display: flex; flex-direction: column; gap: 10px; }
 .families-students-table { width: 100%; border-collapse: collapse; background: var(--bg-card, #fff); border-radius: var(--radius-sm, 6px); overflow: hidden; }
 .families-students-table thead th { background: var(--bg-tertiary); padding: 0.7rem 1rem; font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); text-align: left; border-bottom: 2px solid var(--border-primary); }
-.families-students-table td { padding: 0.7rem 1rem; border-bottom: 1px solid var(--border-subtle); font-size: 0.9rem; vertical-align: middle; }
+.families-students-table td { padding: 0.7rem 1rem; border-bottom: 1px solid var(--border-subtle); font-size: 0.9rem; vertical-align: middle; color: var(--text-primary); background: #FFFFFF; }
 .families-students-table tbody tr:hover td { background: var(--accent-tint); }
 .families-student-id { background: none; border: none; color: var(--accent); cursor: pointer; font-family: monospace; padding: 0; }
 .families-student-id:hover { text-decoration: underline; }
