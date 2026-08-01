@@ -32,9 +32,9 @@
 }
 
 .resume-prompt__btn--primary {
-  background: #378ADD;
+  background: var(--accent);
   color: var(--text-inverse);
-  border-color: #378ADD;
+  border-color: var(--accent);
 }
 
 .resume-prompt__btn--primary:hover {

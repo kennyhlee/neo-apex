@@ -37,7 +37,7 @@
 .dynamic-form-field select:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.15);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .dynamic-form-field-checkbox {
@@ -105,7 +105,7 @@
 }
 
 .dynamic-form-btn-primary {
-  background: #378ADD;
+  background: var(--accent);
   color: var(--text-inverse);
 }
 

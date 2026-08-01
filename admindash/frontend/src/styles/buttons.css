@@ -1,0 +1,11 @@
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  font: inherit; font-weight: 600; padding: 0.5rem 0.9rem; border-radius: var(--radius-sm, 8px);
+  border: 1px solid transparent; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, background .12s ease; }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
+.btn-primary { background: var(--accent); color: var(--text-inverse, #fff); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px var(--accent-tint-strong); }
+.btn-secondary { background: var(--bg-tertiary); color: var(--text-secondary); border-color: var(--border-primary); }
+.btn-secondary:hover { background: var(--bg-secondary); }
+.btn-danger { background: var(--danger, #C53030); color: #fff; }
+.btn-ghost { background: none; border: none; color: var(--accent); }
+.btn-ghost:hover { text-decoration: underline; }

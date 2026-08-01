@@ -38,9 +38,9 @@
 }
 
 .post-submit-summary__btn-done {
-  background: #378ADD;
+  background: var(--accent);
   color: var(--text-inverse);
-  border-color: #378ADD;
+  border-color: var(--accent);
 }
 
 .post-submit-summary__btn-done:hover {

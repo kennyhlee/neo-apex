@@ -42,7 +42,7 @@
 }
 
 .data-table tbody tr:hover td {
-  background: rgba(55, 138, 221, 0.06);
+  background: var(--accent-tint);
 }
 
 .data-table tbody tr:last-child td {
@@ -100,7 +100,7 @@
 }
 
 .data-table-pagination-controls button.active {
-  background: #378ADD;
+  background: var(--accent);
   color: var(--text-inverse);
   border-color: transparent;
 }
@@ -154,7 +154,7 @@
 }
 
 .data-table-row-highlight:hover td {
-  background: rgba(55, 138, 221, 0.15) !important;
+  background: var(--accent-ring) !important;
 }
 
 /* Expandable rows */

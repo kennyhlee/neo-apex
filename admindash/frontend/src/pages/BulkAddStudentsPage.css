@@ -26,9 +26,9 @@
 }
 
 .bulk-add-page__btn-primary {
-  background: #378ADD;
+  background: var(--accent);
   color: var(--text-inverse);
-  border-color: #378ADD;
+  border-color: var(--accent);
 }
 
 .bulk-add-page__btn-primary:hover:not(:disabled) {

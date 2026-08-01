@@ -55,5 +55,5 @@
 
 .lead-modal-body textarea:focus {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.15);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
