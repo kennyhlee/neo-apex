@@ -53,6 +53,40 @@
   padding: 1rem 1.5rem 1.5rem;
 }
 
+/* Keep the three tabs a consistent height so switching tabs doesn't resize the
+   modal. Scoped to the tabbed (Add Student) modal — not the Add Family modal. */
+.add-modal-body--tabbed {
+  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+}
+
+.add-modal-existing {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.add-modal-existing .link-student-results {
+  flex: 1;
+  min-height: 220px;
+  max-height: 340px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 8px);
+  margin-top: 0.5rem;
+}
+.add-modal-existing .link-student-results li button.selected {
+  background: var(--accent-tint);
+  outline: 1px solid var(--accent);
+}
+.add-modal-existing-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .add-modal-success {
   background: rgba(99, 153, 34, 0.1);
   color: var(--color-success);

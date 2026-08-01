@@ -32,9 +32,12 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
   const { getModel } = useModel();
   const { invalidateStudentCount } = useDashboard();
 
-  const [activeTab, setActiveTab] = useState<'form' | 'upload' | 'existing'>('form');
+  // In a family context the primary intent is usually linking an existing
+  // student, so default to that tab (and render it first).
+  const [activeTab, setActiveTab] = useState<'form' | 'upload' | 'existing'>(presetFamilyId ? 'existing' : 'form');
   const [linkQuery, setLinkQuery] = useState('');
   const [linkResults, setLinkResults] = useState<Record<string, unknown>[]>([]);
+  const [linkSelected, setLinkSelected] = useState<Record<string, unknown> | null>(null);
   const [linkConfirmMove, setLinkConfirmMove] = useState<Record<string, unknown> | null>(null);
   const [linkEditing, setLinkEditing] = useState<Record<string, unknown> | null>(null);
   const linkDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -244,6 +247,14 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
         ) : (
           <>
             <div className="add-modal-tabs">
+              {presetFamilyId && (
+                <button
+                  className={`add-modal-tab ${activeTab === 'existing' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('existing')}
+                >
+                  {t('addStudent.existingStudent')}
+                </button>
+              )}
               <button
                 className={`add-modal-tab ${activeTab === 'form' ? 'active' : ''}`}
                 onClick={() => setActiveTab('form')}
@@ -256,17 +267,9 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
               >
                 {t('addStudent.uploadDocument')}
               </button>
-              {presetFamilyId && (
-                <button
-                  className={`add-modal-tab ${activeTab === 'existing' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('existing')}
-                >
-                  {t('addStudent.existingStudent')}
-                </button>
-              )}
             </div>
 
-            <div className="add-modal-body">
+            <div className="add-modal-body add-modal-body--tabbed">
               {successMessage && (
                 <div className="add-modal-success">{successMessage}</div>
               )}
@@ -310,9 +313,14 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
                       const fid = s.family_id ? String(s.family_id) : '';
                       const label = !fid ? t('linkStudent.unlinked')
                         : fid === presetFamilyId ? familyLabel : t('linkStudent.alreadyInFamily');
+                      const isSelected = linkSelected != null && linkSelected.entity_id === s.entity_id;
                       return (
                         <li key={String(s.entity_id)}>
-                          <button type="button" onClick={() => pickExisting(s)}>
+                          <button
+                            type="button"
+                            className={isSelected ? 'selected' : ''}
+                            onClick={() => setLinkSelected(s)}
+                          >
                             <span>{String(s.first_name ?? '')} {String(s.last_name ?? '')}</span>
                             <span className="link-student-meta">{String(s.student_id ?? '')} · {label}</span>
                           </button>
@@ -323,6 +331,19 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
                       <li className="link-student-empty">{t('linkStudent.noResults')}</li>
                     )}
                   </ul>
+                  <div className="add-modal-existing-actions">
+                    <button type="button" className="dynamic-form-btn-secondary" onClick={onClose}>
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      className="dynamic-form-btn-primary"
+                      disabled={!linkSelected}
+                      onClick={() => { if (linkSelected) pickExisting(linkSelected); }}
+                    >
+                      {t('linkStudent.linkAction')}
+                    </button>
+                  </div>
                   {linkConfirmMove && (
                     <div className="students-confirm-overlay" onClick={() => setLinkConfirmMove(null)}>
                       <div className="students-confirm-dialog" onClick={(e) => e.stopPropagation()}>
