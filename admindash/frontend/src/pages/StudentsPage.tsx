@@ -12,6 +12,7 @@ import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
 import EditStudentModal from '../components/EditStudentModal.tsx';
+import StudentDetailModal from '../components/StudentDetailModal.tsx';
 import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
@@ -66,7 +67,7 @@ function formatSelectionValue(val: unknown): string {
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Special rendering for name and status fields.
  */
-function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
+function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row: DataRow) => void): Column<DataRow>[] {
   const cols: Column<DataRow>[] = [];
 
   for (const field of model.base_fields) {
@@ -100,6 +101,25 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
     }
     if (field.name === 'last_name' || field.name === 'preferred_name') {
       // Consumed by composite name column
+      continue;
+    }
+
+    if (field.name === 'student_id') {
+      cols.push({
+        key: 'student_id',
+        label: formatFieldLabel('student_id'),
+        i18nKey: 'students.studentId',
+        render: (row: DataRow) => (
+          <button
+            type="button"
+            className="students-id-btn"
+            title="Double-click for detail"
+            onDoubleClick={() => onStudentIdDblClick(row)}
+          >
+            {String(row.student_id ?? '-')}
+          </button>
+        ),
+      });
       continue;
     }
 
@@ -249,6 +269,9 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   // Edit modal state
   const [editingEntity, setEditingEntity] = useState<DataRow | null>(null);
 
+  // Detail modal state (read-only, opened via double-click on student_id)
+  const [detailStudent, setDetailStudent] = useState<DataRow | null>(null);
+
   // Coming soon dialog
   const [showComingSoon, setShowComingSoon] = useState(false);
 
@@ -264,9 +287,9 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Build columns from model
   const columns = useMemo<Column<DataRow>[]>(() => {
-    if (model) return buildColumnsFromModel(model);
+    if (model) return buildColumnsFromModel(model, setDetailStudent);
     return getFallbackColumns();
-  }, [model]);
+  }, [model]); // setDetailStudent is a stable setter — safe to omit from deps
 
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
 
@@ -599,6 +622,15 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           model={model}
           onClose={() => { setEditingEntity(null); }}
           onSaved={() => { setEditingEntity(null); setSelectedIds(new Set()); loadData(page, filters); }}
+        />
+      )}
+
+      {/* Student detail modal (read-only, opened via double-click on student_id) */}
+      {detailStudent && model && (
+        <StudentDetailModal
+          student={detailStudent as Record<string, unknown>}
+          model={model}
+          onClose={() => setDetailStudent(null)}
         />
       )}
 

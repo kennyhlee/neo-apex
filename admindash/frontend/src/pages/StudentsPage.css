@@ -295,3 +295,5 @@
   transform: translateY(-2px);
   box-shadow: 0 8px 32px rgba(55, 138, 221, 0.15);
 }
+
+.students-id-btn { background: none; border: none; color: var(--color-primary, #378ADD); cursor: pointer; font-family: monospace; padding: 0; }
