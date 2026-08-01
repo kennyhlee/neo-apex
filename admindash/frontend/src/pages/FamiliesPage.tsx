@@ -6,6 +6,7 @@ import DataTable, { type Column } from '../components/DataTable.tsx';
 import AddFamilyModal from '../components/AddFamilyModal.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
+import EditFamilyModal from '../components/EditFamilyModal.tsx';
 import type { Family, ModelDefinition } from '../types/models.ts';
 import './FamiliesPage.css';
 
@@ -26,10 +27,13 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [studentsByFamily, setStudentsByFamily] = useState<Record<string, Row[]>>({});
   const [studentModel, setStudentModel] = useState<ModelDefinition | null>(null);
+  const [familyModel, setFamilyModel] = useState<ModelDefinition | null>(null);
   const [addStudentTo, setAddStudentTo] = useState<Family | null>(null);
   const [detailStudent, setDetailStudent] = useState<Row | null>(null);
+  const [editFamily, setEditFamily] = useState<Row | null>(null);
 
   useEffect(() => { getModel(tenant, 'student').then(setStudentModel).catch(() => setStudentModel(null)); }, [tenant, getModel]);
+  useEffect(() => { getModel(tenant, 'family').then(setFamilyModel).catch(() => setFamilyModel(null)); }, [tenant, getModel]);
 
   useEffect(() => {
     postQuery(tenant, 'entities',
@@ -67,7 +71,8 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
       String(f.family_name ?? '').toLowerCase().includes(q) ||
       String(f.primary_email ?? '').toLowerCase().includes(q) ||
       String(f.primary_phone ?? '').toLowerCase().includes(q) ||
-      String(f.entity_id ?? '').toLowerCase().includes(q));
+      String(f.entity_id ?? '').toLowerCase().includes(q) ||
+      String(f.family_id ?? '').toLowerCase().includes(q));
   }, [rows, search]);
 
   const currentPage = useMemo(() => {
@@ -83,8 +88,16 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
   function handleSearch(e: React.ChangeEvent<HTMLInputElement>) { setSearch(e.target.value); setPage(1); }
 
   const columns: Column<Row>[] = useMemo(() => [
-    { key: 'entity_id', label: t('families.colId'), render: (r) => <code className="families-id">{String(r.entity_id ?? '-')}</code> },
-    { key: 'family_name', label: t('families.colName'), render: (r) => String(r.family_name ?? '-') },
+    { key: 'entity_id', label: t('families.colId'), render: (r) => (
+      <button className="families-id-btn" onClick={() => setEditFamily(r)}>
+        <code className="families-id">{String(r.family_id || r.entity_id || '-')}</code>
+      </button>
+    ) },
+    { key: 'family_name', label: t('families.colName'), render: (r) => (
+      <button className="families-name-btn" onClick={() => setEditFamily(r)}>
+        {String(r.family_name ?? '-')}
+      </button>
+    ) },
     { key: 'primary_email', label: t('families.colEmail'), render: (r) => String(r.primary_email ?? '-') },
     { key: 'primary_phone', label: t('families.colPhone'), render: (r) => String(r.primary_phone ?? '-') },
   ], [t]);
@@ -186,6 +199,16 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
 
       {detailStudent && studentModel && (
         <StudentDetailModal student={detailStudent} model={studentModel} onClose={() => setDetailStudent(null)} />
+      )}
+
+      {editFamily && familyModel && (
+        <EditFamilyModal
+          tenant={tenant}
+          family={editFamily}
+          model={familyModel}
+          onClose={() => setEditFamily(null)}
+          onSaved={() => { setEditFamily(null); handleReload(); }}
+        />
       )}
     </div>
   );

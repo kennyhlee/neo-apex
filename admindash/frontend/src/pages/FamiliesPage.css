@@ -5,6 +5,7 @@
 .families-add-btn { padding: 8px 14px; background: var(--color-primary, #378ADD); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
 .families-name-btn { background: none; border: none; color: var(--color-primary, #378ADD); cursor: pointer; padding: 0; font-size: inherit; text-align: left; font-weight: 500; }
 .families-name-btn:hover { text-decoration: underline; }
+.families-id-btn { background: none; border: none; padding: 0; cursor: pointer; }
 .families-empty { color: #888; }
 .families-detail { background: #fff; border-radius: 10px; padding: 20px; width: min(560px, 92vw); max-height: 82vh; overflow-y: auto; }
 .families-detail-header { display: flex; justify-content: space-between; align-items: center; }
