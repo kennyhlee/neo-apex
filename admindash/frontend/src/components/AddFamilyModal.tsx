@@ -3,6 +3,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { createEntity, fetchNextEntityId } from '../api/client.ts';
 import DynamicForm from './DynamicForm.tsx';
+import Modal from './ui/Modal.tsx';
 import type { ModelDefinition } from '../types/models.ts';
 import './AddStudentModal.css';
 
@@ -60,7 +61,7 @@ export default function AddFamilyModal({ tenant, onClose, onSuccess }: AddFamily
       const { family_id, ...submitData } = baseData;
       const result = await createEntity(tenant, 'family', submitData, customFields);
       setSuccess(t('addFamily.success'));
-      setTimeout(() => onSuccess(result.entity_id), 900);
+      onSuccess(result.entity_id);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('addFamily.error'));
     } finally {
@@ -69,9 +70,15 @@ export default function AddFamilyModal({ tenant, onClose, onSuccess }: AddFamily
   }
 
   return (
-    <div className="students-confirm-overlay">
-      <div className="add-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="add-modal-header"><h3>{t('addFamily.title')}</h3></div>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('addFamily.title')}
+      size="lg"
+      className="modal-flush"
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+    >
         <div className="add-modal-body">
           {success && <div className="add-modal-success">{success}</div>}
           {loading ? (
@@ -88,7 +95,6 @@ export default function AddFamilyModal({ tenant, onClose, onSuccess }: AddFamily
             />
           ) : null}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

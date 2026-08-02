@@ -1,52 +1,74 @@
-/* admindash/frontend/src/components/PreSubmitGate.css */
-.pre-submit-gate-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 80;
-  display: flex; align-items: center; justify-content: center;
+/* admindash/frontend/src/components/PreSubmitGate.css
+   Shell and buttons come from the shared Modal / Button systems; what remains
+   is the triage bucket list. */
+
+.pre-submit-gate__section {
+  margin-bottom: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--line);
 }
-.pre-submit-gate {
-  background: white;
-  border-radius: 8px;
-  width: 600px; max-width: 90vw;
-  max-height: 80vh; overflow-y: auto;
-  padding: 20px;
-}
-.pre-submit-gate header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.pre-submit-gate header h2 { margin: 0; font-size: 18px; }
-.pre-submit-gate__close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--color-text-muted, #6b7280); }
-.pre-submit-gate__section { margin-bottom: 8px; padding: 8px; border-radius: 6px; border: 1px solid var(--color-border, #e5e7eb); }
-.pre-submit-gate__section--ready { background: var(--color-success-subtle, #f0fdf4); }
-.pre-submit-gate__section--warn { background: var(--color-warning-subtle, #fef3c7); }
-.pre-submit-gate__section--error { background: var(--color-error-subtle, #fef2f2); }
-.pre-submit-gate__section--info { background: var(--color-info-subtle, #eff6ff); }
-.pre-submit-gate__count { color: var(--color-text-muted, #6b7280); font-weight: 400; }
-.pre-submit-gate__body { padding: 8px 0; }
-.pre-submit-gate__body ul { list-style: none; padding-left: 0; margin: 0; }
-.pre-submit-gate__body li { padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.05); }
-.pre-submit-gate__body li:first-child { border-top: none; }
-.pre-submit-gate__choices { margin-top: 4px; display: flex; gap: 12px; align-items: center; font-size: 13px; }
-.pre-submit-gate__choices button {
-  padding: 2px 8px; border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 4px; background: white; cursor: pointer; font-size: 12px;
-}
-.pre-submit-gate__footer {
-  margin-top: 16px;
-  display: flex; justify-content: space-between; align-items: center;
-  padding-top: 12px; border-top: 1px solid var(--color-border, #e5e7eb);
-}
-.pre-submit-gate__footer p { margin: 0; font-weight: 500; }
-.pre-submit-gate__footer button {
-  margin-left: 8px;
-  padding: 8px 16px;
-  border-radius: 6px;
+
+.pre-submit-gate__section--ready { background: var(--success-tint); }
+.pre-submit-gate__section--warn  { background: var(--attn-tint); }
+.pre-submit-gate__section--error { background: var(--danger-tint); }
+.pre-submit-gate__section--info  { background: var(--info-tint); }
+
+.pre-submit-gate__section summary {
   cursor: pointer;
-  border: 1px solid var(--color-border, #d1d5db);
-  background: white;
+  font-weight: var(--weight-medium);
+  color: var(--ink);
 }
-.pre-submit-gate__confirm {
-  background: var(--color-primary, #2563eb) !important;
-  color: white;
-  border-color: var(--color-primary, #2563eb) !important;
+
+.pre-submit-gate__count {
+  color: var(--ink-faint);
+  font-weight: var(--weight-normal);
 }
-.pre-submit-gate__confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pre-submit-gate__body {
+  padding: var(--space-2) 0;
+}
+
+.pre-submit-gate__body ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.pre-submit-gate__body li {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line-subtle);
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.pre-submit-gate__body li:first-child {
+  border-top: none;
+}
+
+/* Inline "Edit" affordance sitting after the row's error summary. */
+.pre-submit-gate__body > ul > li > .btn {
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+
+.pre-submit-gate__choices {
+  margin-top: var(--space-1);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.pre-submit-gate__summary {
+  margin: 0;
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
+.pre-submit-gate__footer-actions {
+  display: flex;
+  gap: var(--space-3);
+}

@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { useDensity } from '../hooks/useDensity.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
 import { postQuery, archiveEntities, updateEntity, createEntity, fetchNextEntityId } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
+import Button from '../components/ui/Button.tsx';
+import Modal from '../components/ui/Modal.tsx';
+import SearchField from '../components/ui/SearchField.tsx';
+import ViewChips from '../components/ui/ViewChips.tsx';
+import NameCell from '../components/ui/NameCell.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -13,7 +19,9 @@ import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import ProgramWeekView from '../components/ProgramWeekView.tsx';
 import ProgramMonthView from '../components/ProgramMonthView.tsx';
+import ProgramDetailModal from '../components/ProgramDetailModal.tsx';
 import './ProgramPage.css';
+import { toLabel, toValues } from '../utils/listValue.ts';
 
 type DataRow = Record<string, unknown>;
 
@@ -42,22 +50,43 @@ function formatFieldLabel(key: string): string {
  * a comma-separated string (e.g. "Active").
  */
 function formatSelectionValue(val: unknown): string {
-  if (val == null) return '-';
-  const s = String(val);
-  if (s.startsWith('[')) {
-    try {
-      const arr = JSON.parse(s);
-      if (Array.isArray(arr)) return arr.join(', ') || '-';
-    } catch { /* not JSON */ }
-  }
-  return s || '-';
+  return toLabel(val, '—');
+}
+
+/** Abbreviated weekday names for the schedule line. */
+const DAY_ABBR: Record<string, string> = {
+  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
+  friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
+};
+
+/**
+ * A program reads as a thing with a schedule, not a row. The secondary line
+ * says what a colleague would say next: which days it runs and when.
+ */
+function ProgramNameCell({ row, onOpen }: { row: DataRow; onOpen?: () => void }) {
+  const name = String(row.name ?? '').trim() || '—';
+  const initials = name.slice(0, 2).toUpperCase();
+
+  const days = toValues(row.days_of_week)
+    .map((d) => DAY_ABBR[d.trim().toLowerCase()] ?? d.trim())
+    .filter(Boolean);
+
+  const start = String(row.start_time ?? '').trim();
+  const end = String(row.end_time ?? '').trim();
+  const time = start && end ? `${start}–${end}` : start || '';
+
+  const secondary = [days.join(', '), time].filter(Boolean).join(' · ');
+
+  return (
+    <NameCell name={name} initials={initials} secondary={secondary || undefined} onOpen={onOpen} />
+  );
 }
 
 /**
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Default sort by 'name'.
  */
-function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
+function buildColumnsFromModel(model: ModelDefinition, onOpenRecord: (row: DataRow) => void): Column<DataRow>[] {
   const cols: Column<DataRow>[] = [];
 
   for (const field of model.base_fields) {
@@ -65,16 +94,8 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
       cols.push({
         key: 'name',
         label: 'Program Name',
-        render: (row: DataRow) => {
-          const name = String(row.name ?? '').trim() || '-';
-          const avatarChar = name.charAt(0).toUpperCase();
-          return (
-            <div className="program-name-cell">
-              <div className="program-avatar">{avatarChar}</div>
-              <span className="program-display-name">{name}</span>
-            </div>
-          );
-        },
+        primary: true,
+        render: (row: DataRow) => <ProgramNameCell row={row} onOpen={() => onOpenRecord(row)} />,
       });
       continue;
     }
@@ -128,21 +149,13 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
 /**
  * Build fallback columns when no model is available.
  */
-function getFallbackColumns(): Column<DataRow>[] {
+function getFallbackColumns(onOpenRecord: (row: DataRow) => void): Column<DataRow>[] {
   return [
     {
       key: 'name',
       label: 'Program Name',
-      render: (row: DataRow) => {
-        const name = String(row.name ?? '').trim() || '-';
-        const avatarChar = name.charAt(0).toUpperCase();
-        return (
-          <div className="program-name-cell">
-            <div className="program-avatar">{avatarChar}</div>
-            <span className="program-display-name">{name}</span>
-          </div>
-        );
-      },
+      primary: true,
+      render: (row: DataRow) => <ProgramNameCell row={row} onOpen={() => onOpenRecord(row)} />,
     },
     { key: 'program_id', label: 'Program ID' },
     {
@@ -165,6 +178,7 @@ function getDynamicFilterFields(model: ModelDefinition | undefined): ModelFieldD
 
 export default function ProgramPage({ tenant }: ProgramPageProps) {
   const { t } = useTranslation();
+  const { density } = useDensity();
   const { user } = useAuth();
   const { getModel, getCachedModel } = useModel();
   const { invalidateProgramCount } = useDashboard();
@@ -180,6 +194,14 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
   // Filter state
   const [filters, setFilters] = useState<Record<string, string>>({});
 
+  /** One search box plus saved-view chips, as on Students. The full
+   *  column-per-field panel stays available behind "More filters". */
+  const [search, setSearch] = useState('');
+  const searchRef = useRef('');
+  const [statusView, setStatusView] = useState('');
+  const [viewCounts, setViewCounts] = useState<Record<string, number> | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -193,11 +215,12 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
   // Edit modal state
   const [editingEntity, setEditingEntity] = useState<DataRow | null>(null);
+  /** The record opened from a list row (the calendar has its own entry point). */
+  const [detailProgram, setDetailProgram] = useState<DataRow | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
   // Coming soon dialog
-  const [showComingSoon, setShowComingSoon] = useState(false);
 
   // Add program modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -209,6 +232,18 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
   const [activeView, setActiveView] = useState<'list' | 'week' | 'month'>('list');
   const [weekStartDate, setWeekStartDate] = useState<Date | undefined>(undefined);
 
+  /**
+   * Calendar views get their own unpaginated dataset.
+   *
+   * They previously rendered `data` — the current table page, at most
+   * `pageSize` rows — so any program past page 1 was silently invisible, and
+   * navigating to another week or month only re-bucketed the same rows
+   * instead of fetching. The list view keeps its server-side paging; only the
+   * calendar needs the whole set, and it is bounded by the same filters.
+   */
+  const [calendarPrograms, setCalendarPrograms] = useState<DataRow[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+
   // Model loading
   useEffect(() => {
     getModel(tenant, 'program').then(() => setModelLoaded(true)).catch(() => setModelLoaded(true));
@@ -218,8 +253,8 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
   // Build columns from model
   const columns = useMemo<Column<DataRow>[]>(() => {
-    if (model) return buildColumnsFromModel(model);
-    return getFallbackColumns();
+    if (model) return buildColumnsFromModel(model, setDetailProgram);
+    return getFallbackColumns(setDetailProgram);
   }, [model]);
 
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
@@ -264,6 +299,14 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
           if (!value) continue;
           const safeVal = value.replace(/'/g, "''");
           conditions.push(`${key} ILIKE '%${safeVal}%'`);
+        }
+
+        const q = searchRef.current.trim();
+        if (q) {
+          const sq = q.replace(/'/g, "''");
+          conditions.push(
+            `(name ILIKE '%${sq}%' OR program_id ILIKE '%${sq}%' OR location ILIKE '%${sq}%')`,
+          );
         }
 
         const where = conditions.join(' AND ');
@@ -320,13 +363,23 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSearch() {
+  /** Committing the term (including an empty one) is what re-runs the query. */
+  function commitSearch(q: string) {
+    searchRef.current = q;
+    setSearch(q);
     loadData(1, filters);
+  }
+
+  function handleSearch() {
+    commitSearch(search);
   }
 
   function handleReset() {
     const resetFilters: Record<string, string> = {};
     setFilters(resetFilters);
+    setSearch('');
+    setStatusView('');
+    searchRef.current = '';
     loadData(1, resetFilters);
   }
 
@@ -403,8 +456,87 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
     }
   }
 
+  // Fetch the full program set whenever a calendar view is active.
+  useEffect(() => {
+    if (activeView === 'list') return;
+    let cancelled = false;
+    setCalendarLoading(true);
+
+    const conditions: string[] = ["entity_type = 'program'", "_status = 'active'"];
+    for (const [key, value] of Object.entries(filters)) {
+      if (!value) continue;
+      conditions.push(`${key} ILIKE '%${value.replace(/'/g, "''")}%'`);
+    }
+
+    postQuery(tenant, 'entities', `SELECT * FROM data WHERE ${conditions.join(' AND ')}`)
+      .then((res) => {
+        if (!cancelled) setCalendarPrograms((res.data ?? []) as DataRow[]);
+      })
+      .catch(() => {
+        if (!cancelled) setCalendarPrograms([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCalendarLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, activeView, filters]);
+
   // Dynamic filter fields from model
   const dynamicFilterFields = useMemo(() => getDynamicFilterFields(model), [model]);
+
+  /** The model's own status field drives the chips, same as on Students. */
+  const statusFilter = useMemo(() => {
+    const fields = [...(model?.base_fields ?? []), ...(model?.custom_fields ?? [])];
+    const field = fields.find((f) => f.name === 'status' && f.options && f.options.length > 0);
+    if (!field?.options) return null;
+    return {
+      column: field.name,
+      options: field.options.map((o) => ({ value: o, label: o })),
+    };
+  }, [model]);
+
+  useEffect(() => {
+    const column = statusFilter?.column;
+    if (!column || !tenant) return;
+    let cancelled = false;
+    postQuery(
+      tenant,
+      'entities',
+      `SELECT ${column}, COUNT(*) AS count FROM data WHERE entity_type = 'program' AND _status = 'active' GROUP BY ${column}`,
+    )
+      .then((res) => {
+        if (cancelled) return;
+        // Values arrive in whatever shape they were written, so `Upcoming`
+        // and `['Upcoming']` must fold into one bucket.
+        const next: Record<string, number> = {};
+        for (const row of res.data ?? []) {
+          const key = toLabel(row[column], '');
+          if (key) next[key] = (next[key] ?? 0) + Number(row.count ?? 0);
+        }
+        setViewCounts(next);
+      })
+      .catch(() => {
+        if (!cancelled) setViewCounts({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, statusFilter?.column, total]);
+
+  function pickView(value: string) {
+    const column = statusFilter?.column;
+    setStatusView(value);
+    const next = { ...filters };
+    if (column) {
+      if (value) next[column] = value;
+      else delete next[column];
+    }
+    setFilters(next);
+    loadData(1, next);
+  }
 
   // Visible columns (respecting hidden)
   const visibleColumns = useMemo(
@@ -414,7 +546,28 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
   return (
     <div className="programs-page" ref={containerRef}>
-      <h1>{t('program.title')}</h1>
+      <header className="page-header">
+        <h1 className="page-title">
+          {t('program.title')}
+          <span className="page-subtitle">
+            {total} {t('common.records')}
+          </span>
+        </h1>
+        {activeView === 'list' && (
+          <div className="page-header-actions">
+            <SearchField
+              id="programs-search"
+              value={search}
+              placeholder={t('program.searchPlaceholder')}
+              onChange={setSearch}
+              onCommit={commitSearch}
+            />
+            <Button variant="primary" onClick={() => void handleOpenAddModal()}>
+              {t('program.addProgram')}
+            </Button>
+          </div>
+        )}
+      </header>
 
       {/* View toggle — always visible */}
       <div className="programs-view-toggle-bar">
@@ -427,102 +580,142 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
           </button>
           <button
             className={activeView === 'week' ? 'programs-view-btn programs-view-btn-active' : 'programs-view-btn'}
-            onClick={() => { setActiveView('week'); loadData(1, filters); }}
+            onClick={() => setActiveView('week')}
           >
             {t('program.viewWeek')}
           </button>
           <button
             className={activeView === 'month' ? 'programs-view-btn programs-view-btn-active' : 'programs-view-btn'}
-            onClick={() => { setActiveView('month'); loadData(1, filters); }}
+            onClick={() => setActiveView('month')}
           >
             {t('program.viewMonth')}
           </button>
         </div>
       </div>
 
-      {/* Archive confirmation dialog */}
-      {showArchiveConfirm && (
-        <div className="programs-confirm-overlay" onClick={() => setShowArchiveConfirm(false)}>
-          <div className="programs-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <p>{t('program.archiveConfirmMessage')}</p>
-            <div className="programs-confirm-actions">
-              <button onClick={() => setShowArchiveConfirm(false)}>{t('common.cancel')}</button>
-              <button className="programs-confirm-danger" onClick={handleArchive} disabled={archiving}>
-                {archiving ? t('common.loading') : t('common.confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Archive confirmation */}
+      <Modal
+        open={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        title={t('program.archiveConfirmMessage')}
+        size="sm"
+        dismissOnBackdrop={!archiving}
+        dismissOnEscape={!archiving}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowArchiveConfirm(false)} disabled={archiving}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleArchive}
+              loading={archiving}
+              loadingText={t('common.loading')}
+            >
+              {t('common.confirm')}
+            </Button>
+          </>
+        }
+      >
+        <ul className="students-confirm-list">
+          {[...selectedIds].slice(0, 8).map((id) => {
+            const row = data.find((r) => String(r.entity_id) === id);
+            return <li key={id}>{String(row?.name ?? row?.program_id ?? id)}</li>;
+          })}
+          {selectedIds.size > 8 && <li>+{selectedIds.size - 8}</li>}
+        </ul>
+      </Modal>
 
-      {/* Edit program modal */}
-      {editingEntity && model && (
-        <div className="programs-edit-overlay">
-          <div className="programs-edit-dialog">
-            <div className="programs-edit-dialog-header">
-              <h3>{t('program.editTitle')}</h3>
-              <span className="programs-edit-dialog-subtitle">
-                {String(editingEntity.name ?? editingEntity.program_id ?? '')}
-              </span>
-            </div>
-            <div className="programs-edit-dialog-body">
-              <DynamicForm
-                modelDefinition={model}
-                initialValues={editingEntity as Record<string, unknown>}
-                readOnlyFields={['program_id']}
-                onSubmit={handleEditSave}
-                onCancel={() => { setEditingEntity(null); setEditError(null); }}
-                submitting={editSubmitting}
-                error={editError}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Edit program */}
+      <Modal
+        open={Boolean(editingEntity && model)}
+        onClose={() => { setEditingEntity(null); setEditError(null); }}
+        title={t('program.editTitle')}
+        subtitle={String(editingEntity?.name ?? editingEntity?.program_id ?? '')}
+        size="lg"
+        dismissOnBackdrop={!editSubmitting}
+        dismissOnEscape={!editSubmitting}
+      >
+        {editingEntity && model && (
+          <DynamicForm
+            modelDefinition={model}
+            initialValues={editingEntity as Record<string, unknown>}
+            readOnlyFields={['program_id']}
+            onSubmit={handleEditSave}
+            onCancel={() => { setEditingEntity(null); setEditError(null); }}
+            submitting={editSubmitting}
+            error={editError}
+          />
+        )}
+      </Modal>
 
-      {/* Coming soon dialog for batch edit */}
-      {showComingSoon && (
-        <div className="programs-confirm-overlay" onClick={() => setShowComingSoon(false)}>
-          <div className="programs-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <p>{t('program.batchEditComingSoon')}</p>
-            <div className="programs-confirm-actions">
-              <button onClick={() => setShowComingSoon(false)}>{t('common.close')}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Add program */}
+      <Modal
+        open={Boolean(showAddModal && model)}
+        onClose={() => { setShowAddModal(false); setAddError(null); }}
+        title={t('program.addProgram')}
+        size="lg"
+        dismissOnBackdrop={!addSubmitting}
+        dismissOnEscape={!addSubmitting}
+      >
+        {model && (
+          <DynamicForm
+            modelDefinition={model}
+            initialValues={addFormInitialValues}
+            readOnlyFields={['program_id']}
+            onSubmit={handleAddSave}
+            onCancel={() => { setShowAddModal(false); setAddError(null); }}
+            submitting={addSubmitting}
+            error={addError}
+          />
+        )}
+      </Modal>
 
-      {/* Add program modal */}
-      {showAddModal && model && (
-        <div className="programs-confirm-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="programs-add-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="programs-edit-dialog-header">
-              <h3>{t('program.addProgram')}</h3>
-            </div>
-            <div className="programs-edit-dialog-body">
-              <DynamicForm
-                modelDefinition={model}
-                initialValues={addFormInitialValues}
-                readOnlyFields={['program_id']}
-                onSubmit={handleAddSave}
-                onCancel={() => { setShowAddModal(false); setAddError(null); }}
-                submitting={addSubmitting}
-                error={addError}
-              />
-            </div>
-          </div>
-        </div>
+      {/* Record opened from a list row */}
+      {detailProgram && (
+        <ProgramDetailModal
+          program={detailProgram}
+          model={model ?? null}
+          onClose={() => setDetailProgram(null)}
+          onEdit={(row) => {
+            setDetailProgram(null);
+            setEditingEntity(row);
+          }}
+          onArchive={(row) => {
+            setDetailProgram(null);
+            setSelectedIds(new Set([String(row.entity_id ?? '')]));
+            setShowArchiveConfirm(true);
+          }}
+        />
       )}
 
       {/* Views */}
       {activeView === 'list' && (
         <>
+          {statusFilter && (
+            <ViewChips
+              options={statusFilter.options}
+              active={statusView}
+              onPick={pickView}
+              counts={viewCounts}
+              total={total}
+              allLabel={t('program.filterAll')}
+              ariaLabel={t('program.statusLabel')}
+              showAdvanced={showAdvanced}
+              onToggleAdvanced={() => setShowAdvanced((v) => !v)}
+            />
+          )}
+
+          {(showAdvanced || !statusFilter) && (
           <FilterForm onSearch={handleSearch} onReset={handleReset}>
             {dynamicFilterFields.map((field) => (
               <div className="filter-field" key={field.name}>
-                <label>{formatFieldLabel(field.name)}</label>
+                <label htmlFor={`programs-filter-${field.name}`}>
+                  {formatFieldLabel(field.name)}
+                </label>
                 {field.type === 'selection' && field.options ? (
                   <select
+                    id={`programs-filter-${field.name}`}
                     value={filters[field.name] ?? ''}
                     onChange={(e) => updateFilter(field.name, e.target.value)}
                   >
@@ -533,6 +726,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
                   </select>
                 ) : (
                   <input
+                    id={`programs-filter-${field.name}`}
                     type="text"
                     placeholder={`${t('program.search')} ${formatFieldLabel(field.name).toLowerCase()}`}
                     value={filters[field.name] ?? ''}
@@ -542,63 +736,38 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               </div>
             ))}
           </FilterForm>
+          )}
 
           <div className="programs-toolbar">
-            <button className="programs-toolbar-primary" onClick={handleOpenAddModal}>
-              {t('program.addProgram')}
-            </button>
+            {selectedIds.size > 0 && (
+              <>
+                <span className="programs-selected-count">
+                  {selectedIds.size} {t('program.selectedSuffix')}
+                </span>
+                <Button variant="danger" size="sm" onClick={() => setShowArchiveConfirm(true)}>
+                  {t('program.deleteSelected')}
+                </Button>
+              </>
+            )}
 
             <div className="programs-toolbar-spacer" />
 
-            {selectedIds.size > 0 && (
-              <span className="programs-selected-count">
-                {selectedIds.size} {t('program.selectedSuffix')}
-              </span>
-            )}
-
             {/* Three-dot action menu */}
             <div className="programs-menu-toggle" ref={menuRef}>
-              <button
-                className="programs-menu-btn"
+              <Button
+                variant="ghost"
+                icon
                 onClick={() => setShowMenu((prev) => !prev)}
                 aria-label={t('program.moreActions')}
+                aria-expanded={showMenu}
               >
                 ⋮
-              </button>
+              </Button>
               {showMenu && (
                 <div className="programs-menu-popover">
-                  <div className="programs-menu-section-label">{t('program.actionsLabel')}</div>
-                  <button
-                    className="programs-menu-item"
-                    disabled={selectedIds.size === 0}
-                    onClick={() => {
-                      setShowMenu(false);
-                      if (selectedIds.size === 1) {
-                        const entityId = [...selectedIds][0];
-                        const row = data.find((r) => String(r.entity_id) === entityId);
-                        if (row) setEditingEntity(row);
-                      } else {
-                        setShowComingSoon(true);
-                      }
-                    }}
-                  >
-                    {t('program.editSelected')}
-                  </button>
-                  <button
-                    className="programs-menu-item programs-menu-item-danger"
-                    disabled={selectedIds.size === 0}
-                    onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
-                  >
-                    {t('program.deleteSelected')}
-                  </button>
-                  <button
-                    className="programs-menu-item"
-                    disabled={selectedIds.size === 0}
-                    onClick={() => { setShowMenu(false); setShowComingSoon(true); }}
-                  >
-                    {t('program.exportSelected')}
-                  </button>
-                  <div className="programs-menu-divider" />
+                  {/* Editing happens from the row itself now; the Export and
+                      batch-edit entries only ever opened a "coming soon"
+                      dialog, so they are gone rather than pretending. */}
                   <div className="programs-menu-section-label">{t('program.columnsLabel')}</div>
                   {columns.map((col) => (
                     <label key={col.key} className="programs-menu-column-option">
@@ -627,6 +796,8 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               loading={loading}
               onPageChange={(p) => loadData(p, filters)}
               rowKey={(row) => String(row.entity_id ?? '')}
+              rowLabel={(row) => String(row.name ?? row.program_id ?? row.entity_id ?? '')}
+              caption={t('program.title')}
               sortBy={prefs.sortBy}
               sortDir={prefs.sortDir}
               onSortChange={handleSortChange}
@@ -635,30 +806,78 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               hiddenColumns={prefs.hiddenColumns}
               selectedIds={selectedIds}
               onSelectionChange={setSelectedIds}
+              // Clicking the row opens the record; Edit lives inside it. On a
+              // 26-column program table the trailing button needed a
+              // horizontal scroll to reach.
+              onRowClick={setDetailProgram}
+              rowActions={
+                density === 'compact'
+                  ? (row) => (
+                      <Button variant="secondary" size="sm" onClick={() => setEditingEntity(row)}>
+                        {t('students.edit')}
+                      </Button>
+                    )
+                  : undefined
+              }
+              emptyState={
+                // When a search emptied the table, the useful action is
+                // clearing it — not adding a program.
+                searchRef.current || statusView
+                  ? {
+                      title: t('program.emptySearchTitle'),
+                      description: t('program.emptySearchBody'),
+                      action: (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setStatusView('');
+                            handleReset();
+                          }}
+                        >
+                          {t('students.clearSearch')}
+                        </Button>
+                      ),
+                    }
+                  : {
+                      title: t('program.emptyTitle'),
+                      description: t('program.emptyBody'),
+                      action: (
+                        <Button variant="primary" onClick={() => void handleOpenAddModal()}>
+                          {t('program.addProgram')}
+                        </Button>
+                      ),
+                    }
+              }
             />
           )}
         </>
       )}
 
       {activeView === 'week' && model && (
-        <ProgramWeekView
-          programs={data}
-          model={model}
-          onEditProgram={setEditingEntity}
-          weekStart={weekStartDate}
-        />
+        <>
+          {calendarLoading && <p className="programs-calendar-loading">{t('common.loading')}</p>}
+          <ProgramWeekView
+            programs={calendarPrograms}
+            model={model}
+            onOpenProgram={setDetailProgram}
+            weekStart={weekStartDate}
+          />
+        </>
       )}
 
       {activeView === 'month' && model && (
-        <ProgramMonthView
-          programs={data}
-          model={model}
-          onEditProgram={setEditingEntity}
-          onSwitchToWeek={(date: Date) => {
-            setActiveView('week');
-            setWeekStartDate(date);
-          }}
-        />
+        <>
+          {calendarLoading && <p className="programs-calendar-loading">{t('common.loading')}</p>}
+          <ProgramMonthView
+            programs={calendarPrograms}
+            model={model}
+            onOpenProgram={setDetailProgram}
+            onSwitchToWeek={(date: Date) => {
+              setActiveView('week');
+              setWeekStartDate(date);
+            }}
+          />
+        </>
       )}
     </div>
   );

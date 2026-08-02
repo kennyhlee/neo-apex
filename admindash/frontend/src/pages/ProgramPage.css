@@ -17,24 +17,6 @@
   margin-bottom: 1rem;
 }
 
-.programs-toolbar-primary {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
-  padding: 0.45rem 0.85rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--text-inverse);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.programs-toolbar-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-elevated);
-}
-
 .programs-toolbar-spacer {
   flex: 1;
 }
@@ -92,24 +74,6 @@
 /* Three-dot menu */
 .programs-menu-toggle {
   position: relative;
-}
-
-.programs-menu-btn {
-  font-family: var(--font-sans);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
-  padding: 0.35rem 0.6rem;
-  border-radius: var(--radius-sm);
-  font-size: 1.1rem;
-  line-height: 1;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.programs-menu-btn:hover {
-  background: var(--bg-card);
-  color: var(--text-primary);
 }
 
 .programs-menu-popover {
@@ -196,141 +160,9 @@
   height: 0.9rem;
 }
 
-/* Archive / coming soon confirmation dialog */
-.programs-confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  animation: fadeIn 0.15s ease;
-}
-
-.programs-confirm-dialog {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 1.5rem;
-  min-width: 300px;
-  box-shadow: var(--shadow-elevated);
-}
-
-.programs-confirm-dialog p {
-  font-size: 0.95rem;
-  font-weight: 500;
-  margin-bottom: 1rem;
-}
-
-.programs-confirm-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-
-.programs-confirm-actions button {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  padding: 0.4rem 0.85rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  border: 1px solid var(--border-primary);
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.programs-confirm-danger {
-  background: var(--danger) !important;
-  color: var(--text-inverse) !important;
-  border-color: var(--danger) !important;
-}
-
-/* Add program dialog (wider) */
-.programs-add-dialog {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 0;
-  width: 90%;
-  max-width: 600px;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-elevated);
-}
-
 /* Edit program overlay + dialog */
-.programs-edit-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  animation: fadeIn 0.15s ease;
-}
-
-.programs-edit-dialog {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 0;
-  width: 90%;
-  max-width: 640px;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-elevated);
-}
-
-.programs-edit-dialog-header {
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--border-primary);
-}
-
-.programs-edit-dialog-header h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.programs-edit-dialog-subtitle {
-  font-size: 0.85rem;
-  color: var(--text-tertiary);
-}
-
-.programs-edit-dialog-body {
-  padding: 1rem 1.5rem 1.5rem;
-}
 
 /* Program name cell in table */
-.program-name-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  white-space: nowrap;
-  min-width: 160px;
-}
-
-.program-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--accent-glow);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.program-display-name {
-  font-weight: 600;
-  font-size: 0.9rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
-}
 
 /* View-only detail grid */
 .programs-detail-grid {
@@ -367,4 +199,11 @@
   background: var(--danger-muted);
   border-radius: var(--radius-md);
   margin-top: 1rem;
+}
+
+/* Calendar views load the full program set, not just the current table page. */
+.programs-calendar-loading {
+  padding: var(--space-3) 0;
+  font-size: var(--text-md);
+  color: var(--text-tertiary);
 }

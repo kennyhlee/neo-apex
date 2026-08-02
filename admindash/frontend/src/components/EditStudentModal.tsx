@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { updateEntity, createFamily, getFamilyById } from '../api/client.ts';
 import DynamicForm from './DynamicForm.tsx';
+import Modal from './ui/Modal.tsx';
 import FamilyPicker from './FamilyPicker.tsx';
 import type { ModelDefinition, FamilySelection } from '../types/models.ts';
 import '../pages/StudentsPage.css';
@@ -75,27 +76,25 @@ export default function EditStudentModal({
   }
 
   return (
-    <div className="students-confirm-overlay">
-      <div className="students-edit-modal">
-        <div className="students-edit-modal-header">
-          <h3>{t('editStudent.title')}</h3>
-          <span className="students-edit-modal-subtitle">
-            {String(entity.first_name ?? '')} {String(entity.last_name ?? '')}
-          </span>
-        </div>
-        <div className="students-edit-modal-body">
-          <FamilyPicker tenant={tenant} value={familySelection} onChange={setFamilySelection} />
-          <DynamicForm
-            modelDefinition={formModel}
-            initialValues={entity}
-            readOnlyFields={['student_id', 'first_name', 'last_name', 'middle_name']}
-            onSubmit={handleSubmit}
-            onCancel={onClose}
-            submitting={submitting}
-            error={error}
-          />
-        </div>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('editStudent.title')}
+      subtitle={`${String(entity.first_name ?? '')} ${String(entity.last_name ?? '')}`.trim()}
+      size="md"
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+    >
+      <FamilyPicker tenant={tenant} value={familySelection} onChange={setFamilySelection} />
+      <DynamicForm
+        modelDefinition={formModel}
+        initialValues={entity}
+        readOnlyFields={['student_id', 'first_name', 'last_name', 'middle_name']}
+        onSubmit={handleSubmit}
+        onCancel={onClose}
+        submitting={submitting}
+        error={error}
+      />
+    </Modal>
   );
 }

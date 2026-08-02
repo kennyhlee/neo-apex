@@ -3,6 +3,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import CalendarChip from './CalendarChip.tsx';
 import './ProgramCalendar.css';
+import { toValues } from '../utils/listValue.ts';
 
 type DataRow = Record<string, unknown>;
 
@@ -12,7 +13,7 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 interface ProgramMonthViewProps {
   programs: DataRow[];
   model: ModelDefinition | null;
-  onEditProgram: (program: DataRow) => void;
+  onOpenProgram: (program: DataRow) => void;
   onSwitchToWeek: (date: Date) => void;
 }
 
@@ -96,13 +97,8 @@ const JS_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
  */
 function parseDaysOfWeek(value: unknown): Set<number> | null {
   if (value == null || value === '') return null;
-  let dayNames: string[] = [];
-  const s = String(value).trim();
-  if (s.startsWith('[')) {
-    try { dayNames = JSON.parse(s); } catch { dayNames = [s]; }
-  } else {
-    dayNames = s.split(',').map((d) => d.trim());
-  }
+  // Handles JSON, Python-repr and bare bracketed lists alike.
+  const dayNames = toValues(value);
   const indices = new Set<number>();
   for (const name of dayNames) {
     const idx = JS_DAY_NAMES.findIndex((d) => d.toLowerCase() === name.toLowerCase());
@@ -123,7 +119,7 @@ function isSameDay(a: Date, b: Date): boolean {
 export default function ProgramMonthView({
   programs,
   model,
-  onEditProgram,
+  onOpenProgram,
   onSwitchToWeek,
 }: ProgramMonthViewProps) {
   const { t } = useTranslation();
@@ -268,7 +264,7 @@ export default function ProgramMonthView({
                   <CalendarChip
                     key={String(prog.entity_id ?? chipIdx)}
                     program={prog}
-                    onEdit={onEditProgram}
+                    onEdit={onOpenProgram}
                   />
                 ))}
 
@@ -312,7 +308,7 @@ export default function ProgramMonthView({
                         onEdit={(p) => {
                           setMorePopover(null);
                           onSwitchToWeek(cell);
-                          onEditProgram(p);
+                          onOpenProgram(p);
                         }}
                         extraClassName="calendar-chip-popover"
                       />

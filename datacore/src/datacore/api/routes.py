@@ -275,6 +275,15 @@ def register_routes(app: FastAPI, store: Store) -> None:
                 count += 1
         return {"archived": count}
 
+    @app.post("/api/entities/{tenant_id}/{entity_type}/restore")
+    def restore_entities(tenant_id: str, entity_type: str, body: ArchiveRequest):
+        """Inverse of archive, so the UI can offer a real undo."""
+        count = 0
+        for eid in body.entity_ids:
+            if store.restore_entity(tenant_id, entity_type, eid):
+                count += 1
+        return {"restored": count}
+
     @app.put("/api/entities/{tenant_id}/{entity_type}/{entity_id}")
     def update_entity(
         tenant_id: str, entity_type: str, entity_id: str, body: CreateEntityRequest

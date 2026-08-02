@@ -2,10 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
+import type { Locale } from '../i18n/translations.ts';
 import './LoginPage.css';
 
 export default function LoginPage() {
-  const { t } = useTranslation();
+  const { t, locale, setLocale } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState('');
@@ -23,7 +24,7 @@ export default function LoginPage() {
     if (success) {
       navigate('/home');
     } else {
-      setError('Invalid credentials');
+      setError(t('login.invalidCredentials'));
     }
   }
 
@@ -39,7 +40,7 @@ export default function LoginPage() {
           </div>
           <h1 className="login-title">{t('login.title')}</h1>
           {error && (
-            <div style={{ color: 'var(--danger)', textAlign: 'center', marginBottom: '1rem', fontSize: '0.85rem' }}>
+            <div className="login-error" role="alert">
               {error}
             </div>
           )}
@@ -63,13 +64,25 @@ export default function LoginPage() {
               />
             </div>
             <button type="submit" className="login-submit" disabled={loading}>
-              {loading ? '...' : t('login.submit')}
+              {loading ? t('login.signingIn') : t('login.submit')}
             </button>
           </form>
         </div>
-        <div className="login-footer">
-          {t('login.noAccount')}{' '}
-          <a href="#">{t('login.register')}</a>
+        {/* The old "Register" link pointed at href="#" — a dead end. AdminDash
+            has no self-registration; accounts come from LaunchPad onboarding. */}
+        <div className="login-footer">{t('login.needAccount')}</div>
+        <div className="login-lang">
+          <label className="sr-only" htmlFor="login-lang">
+            {t('nav.language')}
+          </label>
+          <select
+            id="login-lang"
+            value={locale}
+            onChange={(e) => setLocale(e.target.value as Locale)}
+          >
+            <option value="en-US">English</option>
+            <option value="zh-CN">中文</option>
+          </select>
         </div>
         <div className="login-platform">
           <svg width="140" height="24" viewBox="0 0 140 24" fill="none">

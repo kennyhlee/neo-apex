@@ -282,6 +282,7 @@ export default function BulkAddStudentsPage({ tenant }: BulkAddStudentsPageProps
           updateRow(rowId, {
             status: 'created',
             assignedStudentId: outcome.assignedStudentId,
+            createdEntityId: outcome.createdEntityId,
             error: undefined,
           });
         } else {

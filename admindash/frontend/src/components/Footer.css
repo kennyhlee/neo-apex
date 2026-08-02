@@ -1,16 +1,21 @@
 .app-footer {
   margin-top: auto;
-  padding: 0.75rem 1.5rem;
+  padding: var(--space-3) var(--space-6);
   text-align: center;
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  border-top: 1px solid #E2E8F0;
-  background: #FFFFFF;
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-card);
 }
 
 @media (max-width: 768px) {
   .app-footer {
-    padding: 0.5rem 1rem;
-    font-size: 0.75rem;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-2xs);
   }
+}
+
+.app-footer-sep {
+  color: var(--text-tertiary);
+  margin: 0 var(--space-2);
 }

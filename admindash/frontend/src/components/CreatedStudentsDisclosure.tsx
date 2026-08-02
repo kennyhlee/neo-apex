@@ -23,7 +23,13 @@ export default function CreatedStudentsDisclosure({ rows, defaultOpen = false }:
             <span>{String(r.values.first_name ?? '')} {String(r.values.last_name ?? '')}</span>
             <span className="created-disclosure__id">
               {r.assignedStudentId && (
-                <Link to={`/students?id=${encodeURIComponent(r.assignedStudentId)}`}>
+                // StudentsPage reads `location.state.highlightEntityId`; the
+                // previous `?id=` query param was read by nothing, so these
+                // links landed on an unfiltered, unhighlighted list.
+                <Link
+                  to="/students"
+                  state={{ highlightEntityId: r.createdEntityId ?? r.assignedStudentId }}
+                >
                   {r.assignedStudentId}
                 </Link>
               )}

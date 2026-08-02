@@ -106,13 +106,17 @@ export function CreateEntityForm({ proposal, tenantId, onDone }: Props) {
   };
 
   if (done) {
-    return <div className="create-form create-form--done">✓ {label} created.</div>;
+    return (
+      <div className="create-form create-form--done" role="status">
+        <span aria-hidden="true">✓ </span>{label} created.
+      </div>
+    );
   }
   if (loadError) {
-    return <div className="create-form create-form--error">{loadError}</div>;
+    return <div className="create-form create-form--error" role="alert">{loadError}</div>;
   }
   if (!model || !requiredModel || !optionalModel) {
-    return <div className="create-form">Loading form…</div>;
+    return <div className="create-form" role="status">Loading form…</div>;
   }
 
   if (step === 'required') {
@@ -120,8 +124,9 @@ export function CreateEntityForm({ proposal, tenantId, onDone }: Props) {
       <div className="create-form">
         <div className="create-form__title">New {label} — required details</div>
         {proposal.duplicates.length > 0 && (
-          <div className="create-form__warn">
-            ⚠ {proposal.duplicates.length} possible duplicate {label}(s) already exist.
+          <div className="create-form__warn" role="alert">
+            <span aria-hidden="true">⚠ </span>
+            {proposal.duplicates.length} possible duplicate {label}(s) already exist.
           </div>
         )}
         <DynamicForm

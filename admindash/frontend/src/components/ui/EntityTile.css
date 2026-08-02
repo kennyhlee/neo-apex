@@ -1,0 +1,26 @@
+.entity-tile {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.01em;
+  background: var(--tile-bg);
+  color: var(--tile-fg);
+}
+
+.entity-tile--pine  { --tile-bg: var(--accent-tint);  --tile-fg: var(--accent); }
+.entity-tile--slate { --tile-bg: var(--info-tint);    --tile-fg: var(--info); }
+.entity-tile--clay  { --tile-bg: var(--attn-tint);    --tile-fg: var(--attn); }
+.entity-tile--plum  { --tile-bg: var(--away-tint);    --tile-fg: var(--away); }
+.entity-tile--teal  { --tile-bg: var(--success-tint); --tile-fg: var(--success); }
+.entity-tile--moss  { --tile-bg: var(--neutral-tint); --tile-fg: var(--neutral); }
+
+/* Compact density is a grid, not a roster — the tile is ink the registrar
+   does not need at 34px rows. */
+:root[data-density='compact'] .entity-tile {
+  display: none;
+}

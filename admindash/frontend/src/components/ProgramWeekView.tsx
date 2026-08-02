@@ -12,14 +12,14 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 interface ProgramWeekViewProps {
   programs: DataRow[];
   model: ModelDefinition | null;
-  onEditProgram: (program: DataRow) => void;
+  onOpenProgram: (program: DataRow) => void;
   weekStart?: Date;
 }
 
 export default function ProgramWeekView({
   programs,
   model,
-  onEditProgram,
+  onOpenProgram,
   weekStart,
 }: ProgramWeekViewProps) {
   const { t } = useTranslation();
@@ -130,7 +130,7 @@ export default function ProgramWeekView({
                   <CalendarChip
                     key={String(program.entity_id ?? index)}
                     program={program}
-                    onEdit={onEditProgram}
+                    onEdit={onOpenProgram}
                   />
                 ))}
               </div>

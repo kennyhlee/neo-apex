@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { formatTimeRangeFromStrings } from './calendarTime.ts';
+import { toValues } from '../utils/listValue.ts';
 
 interface CalendarChipTooltipProps {
   anchorRect: DOMRect | null;
@@ -30,17 +31,8 @@ const JS_DAY_NAMES = [
  */
 function parseDaysOfWeek(value: unknown): Set<number> | null {
   if (value == null || value === '') return null;
-  let dayNames: string[] = [];
-  const s = String(value).trim();
-  if (s.startsWith('[')) {
-    try {
-      dayNames = JSON.parse(s);
-    } catch {
-      dayNames = [s];
-    }
-  } else {
-    dayNames = s.split(',').map((d) => d.trim());
-  }
+  // Handles JSON, Python-repr and bare bracketed lists alike.
+  const dayNames = toValues(value);
   const indices = new Set<number>();
   for (const name of dayNames) {
     const idx = JS_DAY_NAMES.findIndex(

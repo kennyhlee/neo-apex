@@ -8,6 +8,8 @@ import {
   bulkCheckDuplicates,
   type DupCheckOutcome,
 } from '../api/bulkAddOrchestrators.ts';
+import Modal from './ui/Modal.tsx';
+import Button from './ui/Button.tsx';
 import './PreSubmitGate.css';
 
 export type DuplicateChoice = 'skip' | 'save_anyway';
@@ -95,123 +97,136 @@ export default function PreSubmitGate({
     return [...out];
   }, [buckets, duplicateChoices]);
 
+  // Triage step: a stray backdrop click must not throw the batch away, but
+  // Escape (an explicit dismissal) is allowed.
   if (buckets == null) {
     return (
-      <div className="pre-submit-gate-overlay">
-        <div className="pre-submit-gate"><p>{t('bulkAdd.gate.checking')}</p></div>
-      </div>
+      <Modal
+        open
+        onClose={onCancel}
+        title={t('bulkAdd.gate.title')}
+        dismissOnBackdrop={false}
+      >
+        <p>{t('bulkAdd.gate.checking')}</p>
+      </Modal>
     );
   }
 
   return (
-    <div className="pre-submit-gate-overlay">
-      <div className="pre-submit-gate">
-        <header>
-          <h2>{t('bulkAdd.gate.title')}</h2>
-          <button onClick={onCancel} className="pre-submit-gate__close" aria-label={t('common.close')}>&times;</button>
-        </header>
-
-        <Section
-          label={t('bulkAdd.gate.ready')}
-          count={buckets.ready.length}
-          tone="ready"
-        />
-        <Section
-          label={t('bulkAdd.gate.missing')}
-          count={buckets.missing.length}
-          tone="warn"
-          renderBody={() => (
-            <ul>
-              {buckets.missing.map(({ row, errors }) => (
-                <li key={row.id}>
-                  <strong>{row.source}</strong>: {Object.keys(errors).join(', ')}
-                  <button onClick={() => onCancelAndEdit(row.id)}>{t('bulkAdd.gate.edit')}</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        />
-        <Section
-          label={t('bulkAdd.gate.duplicates')}
-          count={buckets.duplicates.length}
-          tone="warn"
-          renderBody={() => (
-            <ul>
-              {buckets.duplicates.map(({ row, matches }) => {
-                const choice = duplicateChoices[row.id] ?? 'skip';
-                return (
-                  <li key={row.id}>
-                    <div>
-                      <strong>{String(row.values.first_name ?? '')} {String(row.values.last_name ?? '')}</strong>
-                      {' — matches '}{matches.length}{' existing'}
-                    </div>
-                    <div className="pre-submit-gate__choices">
-                      <label>
-                        <input
-                          type="radio"
-                          checked={choice === 'skip'}
-                          onChange={() => setDuplicateChoices((p) => ({ ...p, [row.id]: 'skip' }))}
-                        /> {t('bulkAdd.gate.choiceSkip')}
-                      </label>
-                      <label>
-                        <input
-                          type="radio"
-                          checked={choice === 'save_anyway'}
-                          onChange={() => setDuplicateChoices((p) => ({ ...p, [row.id]: 'save_anyway' }))}
-                        /> {t('bulkAdd.gate.choiceSaveAnyway')}
-                      </label>
-                      <button onClick={() => onCancelAndEdit(row.id)}>{t('bulkAdd.gate.choiceEdit')}</button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        />
-        <Section
-          label={t('bulkAdd.gate.skipped')}
-          count={buckets.skipped.length}
-          tone="info"
-          renderBody={() => (
-            <ul>
-              {buckets.skipped.map(({ row, missingFields }) => (
-                <li key={row.id}>
-                  <strong>{row.source}</strong>: {t('bulkAdd.gate.skippedFields')} {missingFields.join(', ')}
-                </li>
-              ))}
-            </ul>
-          )}
-        />
-        <Section
-          label={t('bulkAdd.gate.failed')}
-          count={buckets.failed.length}
-          tone="error"
-          renderBody={() => (
-            <ul>
-              {buckets.failed.map(({ row, error }) => (
-                <li key={row.id}>
-                  <strong>{row.source}</strong>: {error}
-                </li>
-              ))}
-            </ul>
-          )}
-        />
-
-        <footer className="pre-submit-gate__footer">
-          <p>{t('bulkAdd.gate.willCreate').replace('{n}', String(rowIdsToCreate.length))}</p>
-          <div>
-            <button onClick={onCancel}>{t('common.cancel')}</button>
-            <button
-              className="pre-submit-gate__confirm"
+    <Modal
+      open
+      onClose={onCancel}
+      title={t('bulkAdd.gate.title')}
+      dismissOnBackdrop={false}
+      footerClassName="modal-footer-spread"
+      footer={
+        <>
+          <p className="pre-submit-gate__summary">
+            {t('bulkAdd.gate.willCreate').replace('{n}', String(rowIdsToCreate.length))}
+          </p>
+          <div className="pre-submit-gate__footer-actions">
+            <Button variant="secondary" onClick={onCancel}>{t('common.cancel')}</Button>
+            <Button
+              variant="primary"
               disabled={rowIdsToCreate.length === 0}
               onClick={() => onConfirm({ rowIdsToCreate, duplicateChoices })}
             >
               {t('bulkAdd.gate.confirm')}
-            </button>
+            </Button>
           </div>
-        </footer>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <Section
+        label={t('bulkAdd.gate.ready')}
+        count={buckets.ready.length}
+        tone="ready"
+      />
+      <Section
+        label={t('bulkAdd.gate.missing')}
+        count={buckets.missing.length}
+        tone="warn"
+        renderBody={() => (
+          <ul>
+            {buckets.missing.map(({ row, errors }) => (
+              <li key={row.id}>
+                <strong>{row.source}</strong>: {Object.keys(errors).join(', ')}
+                <Button variant="secondary" size="sm" onClick={() => onCancelAndEdit(row.id)}>
+                  {t('bulkAdd.gate.edit')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      />
+      <Section
+        label={t('bulkAdd.gate.duplicates')}
+        count={buckets.duplicates.length}
+        tone="warn"
+        renderBody={() => (
+          <ul>
+            {buckets.duplicates.map(({ row, matches }) => {
+              const choice = duplicateChoices[row.id] ?? 'skip';
+              return (
+                <li key={row.id}>
+                  <div>
+                    <strong>{String(row.values.first_name ?? '')} {String(row.values.last_name ?? '')}</strong>
+                    {' — matches '}{matches.length}{' existing'}
+                  </div>
+                  <div className="pre-submit-gate__choices">
+                    <label>
+                      <input
+                        type="radio"
+                        checked={choice === 'skip'}
+                        onChange={() => setDuplicateChoices((p) => ({ ...p, [row.id]: 'skip' }))}
+                      /> {t('bulkAdd.gate.choiceSkip')}
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        checked={choice === 'save_anyway'}
+                        onChange={() => setDuplicateChoices((p) => ({ ...p, [row.id]: 'save_anyway' }))}
+                      /> {t('bulkAdd.gate.choiceSaveAnyway')}
+                    </label>
+                    <Button variant="secondary" size="sm" onClick={() => onCancelAndEdit(row.id)}>
+                      {t('bulkAdd.gate.choiceEdit')}
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      />
+      <Section
+        label={t('bulkAdd.gate.skipped')}
+        count={buckets.skipped.length}
+        tone="info"
+        renderBody={() => (
+          <ul>
+            {buckets.skipped.map(({ row, missingFields }) => (
+              <li key={row.id}>
+                <strong>{row.source}</strong>: {t('bulkAdd.gate.skippedFields')} {missingFields.join(', ')}
+              </li>
+            ))}
+          </ul>
+        )}
+      />
+      <Section
+        label={t('bulkAdd.gate.failed')}
+        count={buckets.failed.length}
+        tone="error"
+        renderBody={() => (
+          <ul>
+            {buckets.failed.map(({ row, error }) => (
+              <li key={row.id}>
+                <strong>{row.source}</strong>: {error}
+              </li>
+            ))}
+          </ul>
+        )}
+      />
+    </Modal>
   );
 }
 

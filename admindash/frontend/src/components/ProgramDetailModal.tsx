@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
+import Modal from './ui/Modal.tsx';
+import Button from './ui/Button.tsx';
 import './ProgramDetailModal.css';
+import { toLabel } from '../utils/listValue.ts';
 
 type DataRow = Record<string, unknown>;
 
@@ -10,6 +12,9 @@ interface Props {
   program: DataRow | null;
   model: ModelDefinition | null;
   onClose: () => void;
+  /** Hands off to the edit form. Omit to keep the panel read-only. */
+  onEdit?: (program: DataRow) => void;
+  onArchive?: (program: DataRow) => void;
 }
 
 /** Title Case a snake_case / camelCase field name. */
@@ -24,17 +29,7 @@ function formatFieldLabel(key: string): string {
 function formatValue(raw: unknown, type?: ModelFieldDefinition['type']): string {
   if (raw == null || raw === '') return '—';
   if (type === 'bool') return toBool(raw) ? 'Yes' : 'No';
-  if (Array.isArray(raw)) return raw.map((x) => String(x)).join(', ') || '—';
-  const s = String(raw);
-  if (s.startsWith('[')) {
-    try {
-      const arr = JSON.parse(s);
-      if (Array.isArray(arr)) return arr.map((x) => String(x)).join(', ') || '—';
-    } catch {
-      /* not JSON — fall through */
-    }
-  }
-  return s;
+  return toLabel(raw, '—');
 }
 
 // System/internal fields never shown in the read-only detail.
@@ -45,19 +40,10 @@ const HIDDEN_FIELDS = new Set(['entity_id', 'tenant_id', 'entity_type', 'custom_
  * program's fields as label/value pairs, driven by the model definition when
  * available (falling back to the row's own keys otherwise).
  */
-export default function ProgramDetailModal({ program, model, onClose }: Props) {
+export default function ProgramDetailModal({ program, model, onClose, onEdit, onArchive }: Props) {
   const { t } = useTranslation();
 
-  // Close on Escape while the modal is open.
-  useEffect(() => {
-    if (!program) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [program, onClose]);
-
+  // Escape, focus trap and scroll lock all come from the shared Modal.
   if (!program) return null;
 
   const fields: ModelFieldDefinition[] = model
@@ -71,39 +57,42 @@ export default function ProgramDetailModal({ program, model, onClose }: Props) {
   const subtitle = program.program_id ? String(program.program_id) : '';
 
   return (
-    <div className="pdm-overlay" onClick={onClose}>
-      <div
-        className="pdm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="pdm-header">
-          <div className="pdm-header-text">
-            <h3 className="pdm-title">{title}</h3>
-            {subtitle && <span className="pdm-subtitle">{subtitle}</span>}
+    <Modal
+      open
+      onClose={onClose}
+      // The record opens beside the list rather than on top of it, so the row
+      // you came from stays in view.
+      variant="drawer"
+      title={title}
+      subtitle={subtitle || undefined}
+      footerClassName={onEdit || onArchive ? 'modal-footer-spread' : undefined}
+      footer={
+        onEdit || onArchive ? (
+          <>
+            {onArchive ? (
+              <Button variant="secondary" size="sm" onClick={() => onArchive(program)}>
+                {t('program.deleteSelected')}
+              </Button>
+            ) : <span />}
+            {onEdit ? (
+              <Button variant="primary" onClick={() => onEdit(program)}>
+                {t('students.edit')}
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          <Button variant="secondary" onClick={onClose}>{t('common.close')}</Button>
+        )
+      }
+    >
+      <div className="pdm-grid">
+        {visibleFields.map((field) => (
+          <div className="pdm-field" key={field.name}>
+            <div className="pdm-label">{formatFieldLabel(field.name)}</div>
+            <div className="pdm-value">{formatValue(program[field.name], field.type)}</div>
           </div>
-          <button className="pdm-x" onClick={onClose} aria-label={t('common.close')}>
-            &times;
-          </button>
-        </div>
-        <div className="pdm-body">
-          <div className="pdm-grid">
-            {visibleFields.map((field) => (
-              <div className="pdm-field" key={field.name}>
-                <div className="pdm-label">{formatFieldLabel(field.name)}</div>
-                <div className="pdm-value">{formatValue(program[field.name], field.type)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="pdm-footer">
-          <button className="pdm-close-btn" onClick={onClose}>
-            {t('common.close')}
-          </button>
-        </div>
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 }

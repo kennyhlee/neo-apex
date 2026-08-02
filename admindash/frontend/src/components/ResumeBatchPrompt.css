@@ -1,73 +1,37 @@
-/* admindash/frontend/src/components/ResumeBatchPrompt.css */
-.resume-prompt-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 70;
-  display: flex; align-items: center; justify-content: center;
-}
-.resume-prompt {
-  background: white; padding: 24px;
-  border-radius: 8px; max-width: 480px; width: 90%;
-}
-.resume-prompt h2 { margin: 0 0 12px 0; font-size: 18px; }
-.resume-prompt__actions {
-  margin-top: 16px;
-  display: flex; gap: 8px; justify-content: flex-end;
+/* admindash/frontend/src/components/ResumeBatchPrompt.css
+   Shell and buttons come from the shared Modal / Button systems. */
+
+.resume-prompt__primary p {
+  margin: 0;
+  color: var(--ink);
 }
 
-.resume-prompt__btn {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
-  padding: 0.45rem 0.85rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
+.resume-prompt__others {
+  margin-top: var(--space-4);
+}
+
+.resume-prompt__others summary {
   cursor: pointer;
-  transition: all 0.2s;
+  font-size: var(--text-md);
+  color: var(--ink-2);
 }
 
-.resume-prompt__btn--small {
-  font-size: 0.75rem;
-  padding: 0.3rem 0.6rem;
+.resume-prompt__others ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0;
 }
 
-.resume-prompt__btn--primary {
-  background: var(--accent);
-  color: var(--text-inverse);
-  border-color: var(--accent);
-}
-
-.resume-prompt__btn--primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(55, 138, 221, 0.25);
-}
-
-.resume-prompt__btn--secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border-color: var(--border-primary);
-}
-
-.resume-prompt__btn--secondary:hover {
-  background: var(--bg-secondary);
-}
-
-.resume-prompt__btn--danger {
-  background: transparent;
-  color: var(--text-secondary);
-  border-color: var(--border-primary);
-}
-
-.resume-prompt__btn--danger:hover {
-  background: rgba(229, 62, 62, 0.08);
-  color: #c53030;
-  border-color: #c53030;
-}
-
-.resume-prompt__others { margin-top: 16px; }
-.resume-prompt__others summary { cursor: pointer; font-size: 14px; }
-.resume-prompt__others ul { list-style: none; padding: 0; margin: 8px 0; }
 .resume-prompt__others li {
-  display: flex; gap: 8px; align-items: center; padding: 4px 0;
-  font-size: 13px;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.resume-prompt__others li span {
+  flex: 1;
+  min-width: 0;
 }

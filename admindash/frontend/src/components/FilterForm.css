@@ -1,39 +1,42 @@
 .filter-card {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
-  padding: 1.25rem;
-  margin-bottom: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--card-r);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
 }
 
 .filter-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .filter-field label {
   display: block;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: var(--text-secondary);
-  margin-bottom: 0.35rem;
+  margin-bottom: var(--space-1);
 }
 
 .filter-field input,
 .filter-field select {
   width: 100%;
+  height: var(--control-h);
   font-family: var(--font-sans);
-  font-size: 0.85rem;
-  padding: 0.45rem 0.6rem;
+  font-size: var(--text-md);
+  padding: 0 var(--space-3);
   border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--control-r);
   background: var(--bg-input);
   color: var(--text-primary);
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
 }
 
+/* outline is replaced here by a visible accent border + ring, not removed. */
 .filter-field input:focus,
 .filter-field select:focus {
   outline: none;
@@ -44,21 +47,30 @@
 .filter-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
 }
 
 .filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
   font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
-  padding: 0.45rem 1rem;
-  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: var(--control-r);
   cursor: pointer;
-  transition: all 0.15s;
-  border: none;
+  border: 1px solid transparent;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
 }
 
 .filter-btn-primary {
@@ -67,8 +79,7 @@
 }
 
 .filter-btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
+  background: var(--accent-hover);
 }
 
 .filter-btn-secondary {
@@ -77,5 +88,15 @@
 }
 
 .filter-btn-secondary:hover {
-  background: #F1F5F9;
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+  .filter-card { padding: var(--space-4); }
+
+  .filter-grid { grid-template-columns: 1fr; }
+
+  .filter-actions { flex-direction: column-reverse; }
+  .filter-btn { width: 100%; min-height: var(--tap-min); }
 }

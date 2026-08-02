@@ -441,6 +441,41 @@ class Store:
         table.add(active_rows)
         return True
 
+    def restore_entity(
+        self, tenant_id: str, entity_type: str, entity_id: str
+    ) -> bool:
+        """Set _status back to 'active' on an archived entity.
+
+        The inverse of :meth:`archive_entity`, so an archive can be undone.
+
+        Refuses to act if an active version already exists, which would
+        otherwise leave two active rows for the same entity_id.
+
+        Returns True if an archived entity was found and restored.
+        """
+        table_name = self._entities_table_name(tenant_id)
+        if table_name not in self._table_names():
+            return False
+
+        table = self._db.open_table(table_name)
+        base = f"entity_type = '{entity_type}' AND entity_id = '{entity_id}'"
+
+        if table.search().where(f"{base} AND _status = 'active'").to_list():
+            return False
+
+        where = f"{base} AND _status = 'archived'"
+        archived_rows = table.search().where(where).to_list()
+        if not archived_rows:
+            return False
+
+        now = self._now()
+        table.delete(where)
+        for row in archived_rows:
+            row["_status"] = "active"
+            row["_updated_at"] = now
+        table.add(archived_rows)
+        return True
+
     def get_entity_history(
         self, tenant_id: str, entity_type: str, entity_id: str
     ) -> list[dict]:

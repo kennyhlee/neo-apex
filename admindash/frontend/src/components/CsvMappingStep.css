@@ -1,21 +1,32 @@
-.csv-mapping-step { max-width: var(--bulk-content-max-width, 800px); }
-.csv-mapping-step h2 { font-size: 18px; margin: 0 0 8px 0; }
-.csv-mapping-step__subtitle { color: var(--color-text-muted, #6b7280); margin: 0 0 16px 0; }
+.csv-mapping-step { max-width: var(--bulk-content-max-width); }
+
+.csv-mapping-step h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.csv-mapping-step__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  margin: 0 0 var(--space-4) 0;
+}
 
 .csv-mapping-step__error {
-  padding: 12px;
-  background: var(--color-error-subtle, #fef2f2);
-  color: var(--color-error, #b91c1c);
-  border-radius: 6px;
-  margin-bottom: 16px;
+  padding: var(--space-3);
+  background: var(--color-error-subtle);
+  color: var(--color-error);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-md);
+  margin-bottom: var(--space-4);
 }
 
 .csv-mapping-step__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -24,47 +35,86 @@
 }
 
 .csv-mapping-step__head > span {
-  background: var(--color-bg-subtle, #f9fafb);
-  padding: 12px;
-  font-weight: 500;
-  font-size: 14px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3);
+  font-weight: var(--weight-semibold);
+  font-size: var(--table-head-fs);
+  letter-spacing: var(--table-head-spacing);
+  text-transform: var(--table-head-transform);
 }
 
 .csv-mapping-step__row > * {
-  padding: 12px;
-  border-top: 1px solid var(--color-border, #d1d5db);
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
 }
 
 .csv-mapping-step__header {
-  font-family: monospace;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
 }
 
 .csv-mapping-step__row select {
   width: 100%;
-  padding: 6px;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 4px;
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-md);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--control-r);
 }
 
 .csv-mapping-step__actions {
-  margin-top: 16px;
+  margin-top: var(--space-4);
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: flex-end;
 }
+
 .csv-mapping-step__actions button {
-  padding: 8px 16px;
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
+  border: 1px solid transparent;
+  border-radius: var(--control-r);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-color: var(--line);
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
 }
+
 .csv-mapping-step__apply {
-  background: var(--color-primary, #2563eb);
-  color: white;
-  border: 1px solid var(--color-primary, #2563eb);
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border-color: var(--color-primary);
 }
+
+.csv-mapping-step__apply:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
 .csv-mapping-step__apply:disabled {
-  background: var(--color-disabled, #9ca3af);
-  border-color: var(--color-disabled, #9ca3af);
+  background: var(--color-disabled);
+  border-color: var(--color-disabled);
   cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .csv-mapping-step__grid { grid-template-columns: 1fr; }
+
+  .csv-mapping-step__actions { flex-direction: column-reverse; }
+  .csv-mapping-step__actions button { min-height: var(--tap-min); width: 100%; }
 }

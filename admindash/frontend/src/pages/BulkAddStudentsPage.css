@@ -1,28 +1,40 @@
 .bulk-add-page {
+  /* Narrower than the global --bulk-content-max-width: the upload column in
+     this flow reads better at 800. Scoped override, not a hardcoded usage. */
   --bulk-content-max-width: 800px;
-  padding: 24px 32px;
-  max-width: 1400px;
+  padding: var(--space-6) var(--space-8);
+  max-width: var(--content-max);
   margin: 0 auto;
 }
 
 .bulk-add-page h1 {
-  font-size: 28px;
-  font-weight: 800;
+  font-family: var(--page-title-family);
+  font-size: var(--page-title-size);
+  font-weight: var(--page-title-weight);
   letter-spacing: -0.02em;
-  color: #1A202C;
-  margin-bottom: 1rem;
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
 }
 
 .bulk-add-page__btn-primary,
 .bulk-add-page__btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
   font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
-  padding: 0.45rem 0.85rem;
-  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: var(--control-r);
   cursor: pointer;
   border: 1px solid transparent;
-  transition: all 0.2s;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
 }
 
 .bulk-add-page__btn-primary {
@@ -32,8 +44,8 @@
 }
 
 .bulk-add-page__btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .bulk-add-page__btn-primary:disabled {
@@ -49,6 +61,7 @@
 
 .bulk-add-page__btn-secondary:hover:not(:disabled) {
   background: var(--bg-secondary);
+  border-color: var(--line-strong);
 }
 
 .bulk-add-page__btn-secondary:disabled {
@@ -59,27 +72,47 @@
 .bulk-add-page__toolbar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
 .bulk-add-page__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: var(--space-3);
   /* Match the content max-width used by the mode selector and dropzones so the
      button's right-edge aligns with the upload column above it, instead of
      floating to the page container's right edge. */
-  max-width: var(--bulk-content-max-width, 800px);
-  margin-top: 4rem;
-  padding-top: 1rem;
+  max-width: var(--bulk-content-max-width);
+  margin-top: var(--space-16);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--border-subtle);
 }
 
 .bulk-add-page--error .bulk-add-page__no-model {
   background: var(--bg-secondary);
-  border-radius: 8px;
-  padding: 32px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--card-r);
+  padding: var(--space-8);
   text-align: center;
   color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .bulk-add-page { padding: var(--space-4); }
+
+  .bulk-add-page__toolbar { flex-wrap: wrap; }
+
+  .bulk-add-page__actions {
+    flex-direction: column-reverse;
+    margin-top: var(--space-8);
+  }
+
+  .bulk-add-page__btn-primary,
+  .bulk-add-page__btn-secondary {
+    width: 100%;
+    min-height: var(--tap-min);
+  }
+
+  .bulk-add-page--error .bulk-add-page__no-model { padding: var(--space-6); }
 }

@@ -1,166 +1,266 @@
+/* =============================================================================
+   DynamicForm — the generated create/edit form.
+
+   Shared with several hand-written forms (AddLeadModal, ConvertToFamilyModal,
+   ImportEmailModal, LeadDetailDrawer, PublicInquiryPage), so the class names
+   are load-bearing. Everything here reads from the design tokens; no hex, no
+   off-grid spacing.
+   ========================================================================== */
+
 .dynamic-form-fields {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .dynamic-form-field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.dynamic-form-field label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-secondary);
+.dynamic-form-field label,
+.dynamic-form-legend {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-3);
+}
+
+/* Radio / checkbox groups are a <fieldset>; strip the UA chrome so they sit
+   in the grid exactly like a plain field. */
+.dynamic-form-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;   /* fieldsets refuse to shrink in a grid without this */
+}
+
+.dynamic-form-legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
 }
 
 .dynamic-form-required {
-  color: var(--color-danger);
-  margin-left: 0.2rem;
+  color: var(--danger);
+  margin-left: var(--space-1);
 }
 
 .dynamic-form-field input,
-.dynamic-form-field select {
-  font-size: 0.85rem;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid var(--border-primary);
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  transition: border-color 0.2s, box-shadow 0.2s;
+.dynamic-form-field select,
+.dynamic-form-field textarea {
+  font-size: var(--text-md);
+  padding: 0 var(--space-3);
+  height: var(--control-h);
+  border: 1px solid var(--line);
+  border-radius: var(--control-r);
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
 }
 
-.dynamic-form-field input:focus,
-.dynamic-form-field select:focus {
-  outline: none;
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
+.dynamic-form-field textarea {
+  height: auto;
+  min-height: calc(var(--control-h) * 2);
+  padding: var(--space-2) var(--space-3);
+  line-height: var(--leading-snug);
+  resize: vertical;
 }
+
+.dynamic-form-field input:hover:not(:disabled),
+.dynamic-form-field select:hover:not(:disabled),
+.dynamic-form-field textarea:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+/* Focus is the one global ring from index.css — do not restyle it here. */
 
 .dynamic-form-field-checkbox {
   flex-direction: row;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
-.dynamic-form-field-checkbox input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
+.dynamic-form-field input[type="checkbox"],
+.dynamic-form-field input[type="radio"] {
+  width: var(--space-4);
+  height: var(--space-4);
+  padding: 0;
+  accent-color: var(--accent);
 }
 
-.dynamic-form-multi-select {
+.dynamic-form-multi-select,
+.dynamic-form-radio-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2) var(--space-4);
 }
 
-.dynamic-form-checkbox-label {
+.dynamic-form-checkbox-label,
+.dynamic-form-radio-label {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-  color: var(--text-primary);
+  gap: var(--space-2);
+  font-size: var(--text-md);
+  font-weight: var(--weight-normal);
+  color: var(--ink);
+  min-height: var(--space-6);
+  cursor: pointer;
 }
 
+/* --- Error states --------------------------------------------------------- */
+
 .dynamic-form-input-error {
-  border-color: var(--color-danger) !important;
-  box-shadow: 0 0 0 3px rgba(212, 83, 126, 0.15) !important;
+  border-color: var(--danger) !important;
+  background: var(--danger-tint) !important;
 }
 
 .dynamic-form-field-error {
-  font-size: 0.75rem;
-  color: var(--color-danger);
+  font-size: var(--text-xs);
+  color: var(--danger);
 }
 
 .dynamic-form-error {
-  background: rgba(212, 83, 126, 0.1);
-  color: var(--color-danger);
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  margin-bottom: 1rem;
-  font-size: 0.85rem;
+  background: var(--danger-tint);
+  color: var(--danger);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-md);
 }
+
+/* Post-submit summary: the one place that says "this did not save, and here
+   is what to fix". Focus lands here, so it must be visibly distinct. */
+.dynamic-form-error-summary {
+  border: 1px solid var(--danger);
+  border-left-width: var(--space-1);
+  background: var(--danger-tint);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.dynamic-form-error-summary-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--danger);
+  margin-bottom: var(--space-2);
+}
+
+.dynamic-form-error-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.dynamic-form-error-summary-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--danger);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.dynamic-form-error-summary-link:hover {
+  color: var(--ink);
+}
+
+/* --- Actions -------------------------------------------------------------- */
 
 .dynamic-form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-subtle);
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line-subtle);
 }
 
+/* Aliases. DynamicForm itself now renders <Button>, but several hand-written
+   forms still ship these class names; they compose the shared button look so
+   there is exactly one button design in the product. */
 .dynamic-form-btn-primary,
 .dynamic-form-btn-secondary {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
-  padding: 0.45rem 1rem;
-  border-radius: var(--radius-sm);
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
+  border: 1px solid transparent;
+  border-radius: var(--control-r);
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
 }
 
 .dynamic-form-btn-primary {
   background: var(--accent);
-  color: var(--text-inverse);
+  color: var(--on-accent);
 }
 
 .dynamic-form-btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
+  background: var(--accent-hover);
 }
 
-.dynamic-form-btn-primary:disabled {
-  opacity: 0.6;
+.dynamic-form-btn-primary:active:not(:disabled) {
+  background: var(--accent-active);
+}
+
+.dynamic-form-btn-primary:disabled,
+.dynamic-form-btn-secondary:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.dynamic-form-btn-invalid {
-  background: #94a3b8;
-  cursor: not-allowed;
-}
-
+.dynamic-form-btn-invalid,
 .dynamic-form-btn-invalid:hover {
-  transform: none;
-  box-shadow: none;
+  background: var(--ink-faint);
+  cursor: not-allowed;
 }
 
 .dynamic-form-btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-color: var(--line);
 }
 
-.dynamic-form-btn-secondary:hover {
-  background: #F1F5F9;
+.dynamic-form-btn-secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
 }
+
+@media (pointer: coarse) {
+  .dynamic-form-btn-primary,
+  .dynamic-form-btn-secondary {
+    min-height: var(--tap-min);
+  }
+}
+
+/* --- Read-only / helper --------------------------------------------------- */
 
 .dynamic-form-input-readonly {
-  background: var(--bg-tertiary) !important;
-  color: var(--text-secondary) !important;
+  background: var(--surface-sunken) !important;
+  color: var(--ink-3) !important;
   cursor: not-allowed;
-  opacity: 0.8;
 }
 
 .dynamic-form-field-helper {
-  font-size: 0.7rem;
-  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
   font-style: italic;
-}
-
-.dynamic-form-radio-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.dynamic-form-radio-label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-  color: var(--text-primary);
 }

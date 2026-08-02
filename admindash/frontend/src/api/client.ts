@@ -52,6 +52,24 @@ export async function archiveEntities(
   return resp.json();
 }
 
+/** Inverse of archiveEntities — powers the Undo control on the archive toast. */
+export async function restoreEntities(
+  tenantId: string,
+  entityType: string,
+  entityIds: string[],
+): Promise<{ restored: number }> {
+  const resp = await fetch(
+    `${API_BASE}/api/entities/${tenantId}/${entityType}/restore`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ entity_ids: entityIds }),
+    },
+  );
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
 export async function updateEntity(
   tenantId: string,
   entityType: string,
@@ -282,7 +300,7 @@ export async function searchStudents(
   const q = escapeSql(query.trim().toLowerCase());
   const safeLimit = Math.max(1, Math.floor(limit));
   const where = q
-    ? ` AND (LOWER(first_name) LIKE '%${q}%' OR LOWER(last_name) LIKE '%${q}%' OR LOWER(student_id) LIKE '%${q}%' OR LOWER(email) LIKE '%${q}%')`
+    ? ` AND (LOWER(first_name) LIKE '%${q}%' OR LOWER(last_name) LIKE '%${q}%' OR LOWER(preferred_name) LIKE '%${q}%' OR LOWER(student_id) LIKE '%${q}%' OR LOWER(email) LIKE '%${q}%')`
     : '';
   const sql =
     `SELECT * FROM data WHERE entity_type = 'student' AND _status = 'active'${where} LIMIT ${safeLimit}`;

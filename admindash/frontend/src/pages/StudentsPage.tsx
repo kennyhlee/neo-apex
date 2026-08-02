@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ADMINDASH_API_URL } from '../config.ts';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { useDensity } from '../hooks/useDensity.ts';
+import { useToast } from '../hooks/useToast.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useTablePreferences } from '../hooks/useTablePreferences.ts';
-import { postQuery, archiveEntities } from '../api/client.ts';
+import { postQuery, archiveEntities, restoreEntities } from '../api/client.ts';
+import Modal from '../components/ui/Modal.tsx';
+import Button from '../components/ui/Button.tsx';
+import SearchField from '../components/ui/SearchField.tsx';
+import ViewChips from '../components/ui/ViewChips.tsx';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -15,6 +20,7 @@ import EditStudentModal from '../components/EditStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
 import StudentNameCell from '../components/StudentNameCell.tsx';
 import { toBool } from '../utils/boolValue.ts';
+import { toLabel } from '../utils/listValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
 
@@ -49,26 +55,20 @@ function formatFieldLabel(key: string): string {
 }
 
 /**
- * Format a cell value that may be a JSON-encoded array (e.g. '["Male"]') into
- * a comma-separated string (e.g. "Male").
+ * Format a cell value that may be a wrapped selection (`["Male"]`, `['Male']`
+ * or `[Male]`) into a plain label. See utils/listValue.ts — the extraction
+ * pipeline writes the single-quoted form, which the old JSON-only unwrapping
+ * let through verbatim.
  */
 function formatSelectionValue(val: unknown): string {
-  if (val == null) return '-';
-  const s = String(val);
-  if (s.startsWith('[')) {
-    try {
-      const arr = JSON.parse(s);
-      if (Array.isArray(arr)) return arr.join(', ') || '-';
-    } catch { /* not JSON */ }
-  }
-  return s || '-';
+  return toLabel(val, '—');
 }
 
 /**
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Special rendering for name and status fields.
  */
-function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row: DataRow) => void, t: (key: string) => string): Column<DataRow>[] {
+function buildColumnsFromModel(model: ModelDefinition, onOpenRecord: (row: DataRow) => void, t: (key: string) => string): Column<DataRow>[] {
   const cols: Column<DataRow>[] = [];
 
   for (const field of model.base_fields) {
@@ -78,7 +78,10 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
         key: 'name',
         label: 'Student Name',
         i18nKey: 'students.name',
-        render: (row: DataRow) => <StudentNameCell row={row} />,
+        primary: true,
+        render: (row: DataRow) => (
+          <StudentNameCell row={row} onOpen={() => onOpenRecord(row)} />
+        ),
       });
       continue;
     }
@@ -97,7 +100,7 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
             type="button"
             className="students-id-btn"
             title={t('studentDetail.dblclickHint')}
-            onClick={() => onStudentIdDblClick(row)}
+            onClick={() => onOpenRecord(row)}
           >
             {String(row.student_id ?? '-')}
           </button>
@@ -165,13 +168,14 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
 /**
  * Build fallback columns when no model is available.
  */
-function getFallbackColumns(): Column<DataRow>[] {
+function getFallbackColumns(onOpenRecord: (row: DataRow) => void): Column<DataRow>[] {
   return [
     {
       key: 'name',
       label: 'Student Name',
       i18nKey: 'students.name',
-      render: (row: DataRow) => <StudentNameCell row={row} />,
+      primary: true,
+      render: (row: DataRow) => <StudentNameCell row={row} onOpen={() => onOpenRecord(row)} />,
     },
     { key: 'student_id', label: 'Student ID', i18nKey: 'students.studentId' },
     { key: 'gender', label: 'Gender', i18nKey: 'students.gender' },
@@ -199,6 +203,8 @@ function getDynamicFilterFields(model: ModelDefinition | undefined): ModelFieldD
 
 export default function StudentsPage({ tenant }: StudentsPageProps) {
   const { t } = useTranslation();
+  const { density } = useDensity();
+  const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -215,6 +221,18 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   // Filter state
   const [filters, setFilters] = useState<Record<string, string>>({});
+
+  /**
+   * Direction B replaces the permanent column-per-input panel with one search
+   * box plus saved-view chips: filtering becomes a decision, not a form. The
+   * full panel is still available, just folded away behind "More filters".
+   */
+  const [search, setSearch] = useState('');
+  // Held in a ref so loadData's identity doesn't churn on every keystroke.
+  const searchRef = useRef('');
+  const [activeView, setActiveView] = useState('');
+  const [viewCounts, setViewCounts] = useState<Record<string, number> | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Highlight state from navigation
   const highlightEntityId = (location.state as { highlightEntityId?: string } | null)?.highlightEntityId ?? null;
@@ -237,9 +255,6 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   // Detail modal state (read-only, opened via double-click on student_id)
   const [detailStudent, setDetailStudent] = useState<DataRow | null>(null);
 
-  // Coming soon dialog
-  const [showComingSoon, setShowComingSoon] = useState(false);
-
   // Add student modal
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -253,7 +268,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   // Build columns from model
   const columns = useMemo<Column<DataRow>[]>(() => {
     if (model) return buildColumnsFromModel(model, setDetailStudent, t);
-    return getFallbackColumns();
+    return getFallbackColumns(setDetailStudent);
   }, [model, t]); // setDetailStudent is a stable setter — safe to omit from deps
 
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
@@ -302,6 +317,16 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           conditions.push(`${key} ILIKE '%${safeVal}%'`);
         }
 
+        // One search box across the fields a person actually recalls, rather
+        // than a column-per-input panel.
+        const q = searchRef.current.trim();
+        if (q) {
+          const s = q.replace(/'/g, "''");
+          conditions.push(
+            `(first_name ILIKE '%${s}%' OR last_name ILIKE '%${s}%' OR preferred_name ILIKE '%${s}%' OR student_id ILIKE '%${s}%')`,
+          );
+        }
+
         const where = conditions.join(' AND ');
         const sortCol = prefs.sortBy;
         const dir = prefs.sortDir.toUpperCase();
@@ -340,17 +365,17 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         setData(rows);
         setTotal(totalCount);
         setPage(p);
-      } catch (err) {
-        setError(
-          `Failed to load students. Is the admindash backend at ${ADMINDASH_API_URL} running? (${err})`,
-        );
+      } catch {
+        // Plain language, and no internal host names in front of a school
+        // administrator. The table keeps its toolbar and filters.
+        setError(t('students.loadError'));
         setData([]);
         setTotal(0);
       } finally {
         setLoading(false);
       }
     },
-    [tenant, prefs.sortBy, prefs.sortDir, prefs.pageSize, activeHighlight],
+    [tenant, prefs.sortBy, prefs.sortDir, prefs.pageSize, activeHighlight, t],
   );
 
   // Fetch on mount and when sort/page-size prefs change
@@ -379,13 +404,30 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSearch() {
+  /**
+   * Applies a search term and reloads.
+   *
+   * The committed term lives in a ref so loadData's identity does not churn on
+   * every keystroke — but that means nothing re-runs until something calls
+   * this. Clearing the field therefore has to commit too, otherwise the list
+   * stays filtered by a term that is no longer on screen.
+   */
+  function commitSearch(q: string) {
+    searchRef.current = q;
+    setSearch(q);
     loadData(1, filters);
+  }
+
+  function handleSearch() {
+    commitSearch(search);
   }
 
   function handleReset() {
     const resetFilters: Record<string, string> = {};
     setFilters(resetFilters);
+    setSearch('');
+    setActiveView('');
+    searchRef.current = '';
     loadData(1, resetFilters);
   }
 
@@ -407,15 +449,33 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
   async function handleArchive() {
     if (selectedIds.size === 0) return;
-    setShowArchiveConfirm(false);
+    const ids = [...selectedIds];
     setArchiving(true);
     try {
-      await archiveEntities(tenant, 'student', [...selectedIds]);
+      await archiveEntities(tenant, 'student', ids);
+      setShowArchiveConfirm(false);
       setSelectedIds(new Set());
       invalidateStudentCount();
       loadData(1, filters);
-    } catch (err) {
-      setError(`Failed to archive students: ${err}`);
+
+      // A real undo, backed by the restore endpoint — not a confirm dialog
+      // pretending to be safety.
+      toast({
+        message: t('students.archivedToast').replace('{n}', String(ids.length)),
+        tone: 'success',
+        onUndo: async () => {
+          await restoreEntities(tenant, 'student', ids);
+          invalidateStudentCount();
+          loadData(page, filters);
+        },
+      });
+    } catch {
+      // Errors no longer replace the table, and no longer leak the API host.
+      toast({
+        message: t('students.loadError'),
+        detail: t('common.retry'),
+        tone: 'danger',
+      });
     } finally {
       setArchiving(false);
     }
@@ -442,113 +502,192 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   // Dynamic filter fields from model
   const dynamicFilterFields = useMemo(() => getDynamicFilterFields(model), [model]);
 
+  /**
+   * The dedicated Status dropdown has to target the column the tenant's model
+   * actually defines. It previously always wrote `status`, while the query
+   * hardcodes `_status = 'active'` separately — so on any tenant without a
+   * literal `status` column, choosing Graduated or Dropped silently matched
+   * nothing. Resolve the real column, and hide the control if there isn't one.
+   */
+  const statusFilter = useMemo(() => {
+    const fields = model?.base_fields ?? [];
+    const field =
+      fields.find((f) => f.name === 'enrollment_status') ??
+      fields.find((f) => f.name === 'status');
+    if (!field) return null;
+    return {
+      column: field.name,
+      options:
+        field.options && field.options.length > 0
+          ? field.options.map((o) => ({ value: o, label: o }))
+          : STATUS_OPTIONS.map((o) => ({ value: o.value, label: t(o.i18nKey) })),
+    };
+  }, [model, t]);
+
+  /**
+   * Counts for the saved-view chips — one GROUP BY rather than a query per
+   * chip. Refreshed whenever the underlying list reloads.
+   */
+  useEffect(() => {
+    const column = statusFilter?.column;
+    if (!column || !tenant) return;
+    let cancelled = false;
+    postQuery(
+      tenant,
+      'entities',
+      `SELECT ${column}, COUNT(*) AS count FROM data WHERE entity_type = 'student' AND _status = 'active' GROUP BY ${column}`,
+    )
+      .then((res) => {
+        if (cancelled) return;
+        // Values come back in whatever shape they were written, so `Active`,
+        // `["Active"]` and `['Active']` must fold into one bucket.
+        const next: Record<string, number> = {};
+        for (const row of res.data ?? []) {
+          const key = toLabel(row[column], '');
+          if (key) next[key] = (next[key] ?? 0) + Number(row.count ?? 0);
+        }
+        setViewCounts(next);
+      })
+      .catch(() => {
+        if (!cancelled) setViewCounts({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, statusFilter?.column, total]);
+
+  /** Selecting a chip is just a one-field filter, applied immediately. */
+  function pickView(value: string) {
+    const column = statusFilter?.column;
+    setActiveView(value);
+    const next = { ...filters };
+    if (column) {
+      if (value) next[column] = value;
+      else delete next[column];
+    }
+    setFilters(next);
+    loadData(1, next);
+  }
+
   return (
     <div className="students-page" ref={containerRef}>
-      <h1>{t('students.title')}</h1>
+      <header className="page-header">
+        <h1 className="page-title">
+          {t('students.title')}
+          <span className="page-subtitle">
+            {total} {t('common.records')}
+          </span>
+        </h1>
+        <div className="page-header-actions">
+          <SearchField
+            id="students-search"
+            value={search}
+            placeholder={t('students.searchPlaceholder')}
+            onChange={setSearch}
+            onCommit={commitSearch}
+          />
+          <Button variant="secondary" onClick={() => navigate('/students/bulk-add')}>
+            {t('bulkAdd.entryButton')}
+          </Button>
+          <Button variant="primary" onClick={() => setShowAddModal(true)}>
+            {t('students.addStudent')}
+          </Button>
+        </div>
+      </header>
 
+      {/* Saved views — the everyday filter, in one row */}
+      {statusFilter && (
+        <ViewChips
+          options={statusFilter.options}
+          active={activeView}
+          onPick={pickView}
+          counts={viewCounts}
+          total={total}
+          allLabel={t('students.allStatus')}
+          ariaLabel={t('students.searchStatus')}
+          showAdvanced={showAdvanced}
+          onToggleAdvanced={() => setShowAdvanced((v) => !v)}
+        />
+      )}
+
+      {/* The full column-per-field panel, folded away by default */}
+      {(showAdvanced || !statusFilter) && (
       <FilterForm onSearch={handleSearch} onReset={handleReset}>
         {dynamicFilterFields.map((field) => (
           <div className="filter-field" key={field.name}>
-            <label>{formatFieldLabel(field.name)}</label>
+            <label htmlFor={`students-filter-${field.name}`}>
+              {formatFieldLabel(field.name)}
+            </label>
             {field.type === 'selection' && field.options ? (
               <select
+                id={`students-filter-${field.name}`}
                 value={filters[field.name] ?? ''}
                 onChange={(e) => updateFilter(field.name, e.target.value)}
               >
-                <option value="">All</option>
+                <option value="">{t('students.allStatus')}</option>
                 {field.options.map((opt) => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
               </select>
             ) : (
               <input
+                id={`students-filter-${field.name}`}
                 type="text"
-                placeholder={`Search ${formatFieldLabel(field.name).toLowerCase()}`}
+                placeholder={`${t('students.search')} ${formatFieldLabel(field.name).toLowerCase()}`}
                 value={filters[field.name] ?? ''}
                 onChange={(e) => updateFilter(field.name, e.target.value)}
               />
             )}
           </div>
         ))}
-        {/* Dedicated Status dropdown */}
-        <div className="filter-field">
-          <label>{t('students.searchStatus')}</label>
-          <select
-            value={filters.status ?? ''}
-            onChange={(e) => updateFilter('status', e.target.value)}
-          >
-            <option value="">{t('students.allStatus')}</option>
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {t(opt.i18nKey)}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Dedicated Status dropdown, bound to the model's real status column */}
+        {statusFilter && (
+          <div className="filter-field">
+            <label htmlFor="students-filter-status">{t('students.searchStatus')}</label>
+            <select
+              id="students-filter-status"
+              value={filters[statusFilter.column] ?? ''}
+              onChange={(e) => updateFilter(statusFilter.column, e.target.value)}
+            >
+              <option value="">{t('students.allStatus')}</option>
+              {statusFilter.options.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </FilterForm>
+      )}
 
       <div className="students-toolbar">
-        <button className="students-toolbar-primary" onClick={() => setShowAddModal(true)}>
-          {t('students.addStudent')}
-        </button>
-        <button
-          className="students-toolbar-secondary"
-          onClick={() => navigate('/students/bulk-add')}
-        >
-          {t('bulkAdd.entryButton')}
-        </button>
+        {selectedIds.size > 0 && (
+          <>
+            <span className="students-selection-count">
+              {t('students.selectedCount').replace('{n}', String(selectedIds.size))}
+            </span>
+            <Button variant="danger" size="sm" onClick={() => setShowArchiveConfirm(true)}>
+              {t('students.deleteSelected')}
+            </Button>
+          </>
+        )}
 
         <div style={{ flex: 1 }} />
 
-        {selectedIds.size > 0 && (
-          <span className="students-selection-count">
-            {selectedIds.size} selected
-          </span>
-        )}
-
         <div className="students-menu-toggle" ref={menuRef}>
-          <button
-            className="students-menu-btn"
+          <Button
+            variant="ghost"
+            icon
             onClick={() => setShowMenu((prev) => !prev)}
-            aria-label="More actions"
+            aria-label={t('students.moreActions')}
+            aria-expanded={showMenu}
           >
             ⋮
-          </button>
+          </Button>
           {showMenu && (
             <div className="students-menu-popover">
-              <div className="students-menu-section-label">Actions</div>
-              <button
-                className="students-menu-item"
-                disabled={selectedIds.size === 0}
-                onClick={() => {
-                  setShowMenu(false);
-                  if (selectedIds.size === 1) {
-                    const entityId = [...selectedIds][0];
-                    const row = data.find((r) => String(r.entity_id) === entityId);
-                    if (row) setEditingEntity(row);
-                  } else {
-                    setShowComingSoon(true);
-                  }
-                }}
-              >
-                Edit Selected
-              </button>
-              <button
-                className="students-menu-item students-menu-item-danger"
-                disabled={selectedIds.size === 0}
-                onClick={() => { setShowMenu(false); setShowArchiveConfirm(true); }}
-              >
-                Delete Selected
-              </button>
-              <button
-                className="students-menu-item"
-                disabled={selectedIds.size === 0}
-                onClick={() => { setShowMenu(false); alert('Export coming soon'); }}
-              >
-                Export Selected
-              </button>
-              <div className="students-menu-divider" />
-              <div className="students-menu-section-label">Columns</div>
+              <div className="students-menu-section-label">{t('students.columnSettings')}</div>
               {columns.map((col) => (
                 <label key={col.key} className="students-menu-column-option">
                   <input
@@ -564,20 +703,42 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         </div>
       </div>
 
-      {/* Archive confirmation dialog */}
-      {showArchiveConfirm && (
-        <div className="students-confirm-overlay" onClick={() => setShowArchiveConfirm(false)}>
-          <div className="students-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <p>Delete {selectedIds.size} student(s)?</p>
-            <div className="students-confirm-actions">
-              <button onClick={() => setShowArchiveConfirm(false)}>Cancel</button>
-              <button className="students-confirm-danger" onClick={handleArchive} disabled={archiving}>
-                {archiving ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Archive confirmation */}
+      <Modal
+        open={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        title={t('students.confirmDeleteTitle')}
+        size="sm"
+        dismissOnBackdrop={!archiving}
+        dismissOnEscape={!archiving}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowArchiveConfirm(false)} disabled={archiving}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleArchive}
+              loading={archiving}
+              loadingText={t('students.deleting')}
+            >
+              {t('students.deleteSelected')}
+            </Button>
+          </>
+        }
+      >
+        <p>{t('students.confirmDeleteBody')}</p>
+        <ul className="students-confirm-list">
+          {[...selectedIds].slice(0, 8).map((id) => {
+            const row = data.find((r) => String(r.entity_id) === id);
+            const name = row
+              ? [row.first_name, row.last_name].filter(Boolean).join(' ') || String(row.student_id ?? id)
+              : id;
+            return <li key={id}>{name}</li>;
+          })}
+          {selectedIds.size > 8 && <li>+{selectedIds.size - 8}</li>}
+        </ul>
+      </Modal>
 
       {/* Edit student modal */}
       {editingEntity && model && (
@@ -596,19 +757,16 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           student={detailStudent as Record<string, unknown>}
           model={model}
           onClose={() => setDetailStudent(null)}
+          onEdit={(row) => {
+            setDetailStudent(null);
+            setEditingEntity(row as DataRow);
+          }}
+          onArchive={(row) => {
+            setDetailStudent(null);
+            setSelectedIds(new Set([String(row.entity_id ?? '')]));
+            setShowArchiveConfirm(true);
+          }}
         />
-      )}
-
-      {/* Coming soon dialog for batch edit */}
-      {showComingSoon && (
-        <div className="students-confirm-overlay" onClick={() => setShowComingSoon(false)}>
-          <div className="students-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <p>Batch edit is coming soon.</p>
-            <div className="students-confirm-actions">
-              <button onClick={() => setShowComingSoon(false)}>OK</button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Add student modal */}
@@ -624,29 +782,85 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         />
       )}
 
-      {error ? (
-        <div className="student-error">{error}</div>
-      ) : (
-        <DataTable<DataRow>
-          columns={columns}
-          data={data}
-          total={total}
-          page={page}
-          pageSize={prefs.pageSize}
-          loading={loading}
-          onPageChange={(p) => loadData(p, filters)}
-          rowKey={(row) => String(row.entity_id ?? '')}
-          sortBy={prefs.sortBy === 'last_name' ? 'name' : prefs.sortBy}
-          sortDir={prefs.sortDir}
-          onSortChange={handleSortChange}
-          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
-          onPageSizeChange={handlePageSizeChange}
-          hiddenColumns={prefs.hiddenColumns}
-          rowClassName={rowClassName}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      {/* An error no longer replaces the table, so the toolbar and filters
+          the user needs in order to recover stay on screen. */}
+      {error && (
+        <div className="student-error" role="alert">
+          <span>{error}</span>
+          <Button variant="secondary" size="sm" onClick={() => loadData(page, filters)}>
+            {t('common.retry')}
+          </Button>
+        </div>
       )}
+
+      <DataTable<DataRow>
+        columns={columns}
+        data={data}
+        total={total}
+        page={page}
+        pageSize={prefs.pageSize}
+        loading={loading}
+        onPageChange={(p) => loadData(p, filters)}
+        rowKey={(row) => String(row.entity_id ?? '')}
+        rowLabel={(row) =>
+          [row.first_name, row.last_name].filter(Boolean).join(' ') ||
+          String(row.student_id ?? row.entity_id ?? '')
+        }
+        caption={t('students.title')}
+        sortBy={prefs.sortBy === 'last_name' ? 'name' : prefs.sortBy}
+        sortDir={prefs.sortDir}
+        onSortChange={handleSortChange}
+        pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+        onPageSizeChange={handlePageSizeChange}
+        hiddenColumns={prefs.hiddenColumns}
+        rowClassName={rowClassName}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        // Clicking the row opens the record; Edit lives inside it. That keeps
+        // the action off the far end of a 17-column table, where it needed a
+        // horizontal scroll to reach.
+        onRowClick={setDetailStudent}
+        // Compact is the registrar's grid — throughput matters more there, so
+        // it keeps a one-click inline edit.
+        rowActions={
+          density === 'compact'
+            ? (row) => (
+                <Button variant="secondary" size="sm" onClick={() => setEditingEntity(row)}>
+                  {t('students.edit')}
+                </Button>
+              )
+            : undefined
+        }
+        emptyState={
+          // When a search is what emptied the table, the useful action is
+          // clearing it — not adding a student.
+          searchRef.current || activeView
+            ? {
+                title: t('students.emptySearchTitle'),
+                description: t('students.emptySearchBody'),
+                action: (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setActiveView('');
+                      handleReset();
+                    }}
+                  >
+                    {t('students.clearSearch')}
+                  </Button>
+                ),
+              }
+            : {
+                title: t('students.emptyTitle'),
+                description: t('students.emptyBody'),
+                action: (
+                  <Button variant="primary" onClick={() => setShowAddModal(true)}>
+                    {t('students.addStudent')}
+                  </Button>
+                ),
+              }
+        }
+      />
     </div>
   );
 }

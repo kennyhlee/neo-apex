@@ -1,24 +1,4 @@
 /* Add Student Modal — wider than edit modal for tabbed interface */
-.add-modal {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 0;
-  width: 92%;
-  max-width: 780px;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-elevated);
-}
-
-.add-modal-header {
-  padding: 1.25rem 1.5rem 0;
-}
-
-.add-modal-header h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0 0 1rem 0;
-}
 
 .add-modal-tabs {
   display: flex;
@@ -88,7 +68,7 @@
 }
 
 .add-modal-success {
-  background: rgba(99, 153, 34, 0.1);
+  background: var(--success-tint);
   color: var(--color-success);
   padding: 0.75rem 1rem;
   border-radius: 8px;
@@ -97,7 +77,7 @@
 }
 
 .add-modal-error {
-  background: rgba(212, 83, 126, 0.1);
+  background: var(--danger-tint);
   color: var(--color-danger);
   padding: 1rem 1.25rem;
   border-radius: 8px;
@@ -106,8 +86,8 @@
 }
 
 .add-modal-id-warning {
-  background: rgba(229, 160, 13, 0.1);
-  color: var(--color-warning, #e5a00d);
+  background: var(--attn-tint);
+  color: var(--attn);
   padding: 0.6rem 1rem;
   border-radius: 8px;
   margin-bottom: 1rem;
@@ -126,12 +106,12 @@
 }
 
 /* Link-student styles (moved from LinkExistingStudentModal.css — used by the Existing Student tab) */
-.link-student-modal { background: #fff; border-radius: 10px; padding: 20px; width: min(520px, 92vw); max-height: 82vh; display: flex; flex-direction: column; }
+.link-student-modal { background: var(--bg-card); border-radius: var(--radius-md); padding: var(--space-5); width: min(520px, 92vw); max-height: 82vh; display: flex; flex-direction: column; }
 .link-student-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .link-student-header button { background: none; border: none; color: var(--color-primary, var(--accent)); cursor: pointer; }
-.link-student-search { padding: 8px 10px; border: 1px solid var(--color-border, #ccc); border-radius: 6px; margin-bottom: 8px; }
+.link-student-search { padding: var(--space-2) var(--space-3); border: 1px solid var(--border-primary); border-radius: var(--radius-xs); margin-bottom: var(--space-2); }
 .link-student-results { list-style: none; padding: 0; margin: 0; overflow-y: auto; }
 .link-student-results li button { width: 100%; text-align: left; background: none; border: none; padding: 10px 8px; cursor: pointer; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.link-student-results li button:hover { background: var(--color-hover, #f2f7fc); }
-.link-student-meta { color: #888; font-size: 12px; white-space: nowrap; }
-.link-student-empty { padding: 10px 8px; color: #888; }
+.link-student-results li button:hover { background: var(--accent-tint); }
+.link-student-meta { color: var(--text-tertiary); font-size: var(--text-xs); white-space: nowrap; }
+.link-student-empty { padding: var(--space-3) var(--space-2); color: var(--text-tertiary); }

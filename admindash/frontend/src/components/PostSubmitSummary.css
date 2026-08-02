@@ -1,40 +1,70 @@
 /* admindash/frontend/src/components/PostSubmitSummary.css */
 .post-submit-summary {
-  background: var(--color-bg-subtle, #f9fafb);
-  border-radius: 8px;
-  padding: 16px;
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 16px;
-}
-.post-submit-summary__counts { display: flex; gap: 12px; }
-.post-submit-summary__success {
-  font-weight: 500; color: var(--color-success, #065f46);
-}
-.post-submit-summary__failed {
-  font-weight: 500; color: var(--color-error, #b91c1c);
-}
-.post-submit-summary__actions { display: flex; gap: 8px; }
-.post-submit-summary__btn-retry,
-.post-submit-summary__btn-done {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
-  padding: 0.45rem 0.85rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.2s;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--card-r);
+  padding: var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 
+.post-submit-summary__counts {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+}
+
+.post-submit-summary__success {
+  font-weight: var(--weight-semibold);
+  color: var(--color-success);
+}
+
+.post-submit-summary__failed {
+  font-weight: var(--weight-semibold);
+  color: var(--color-error);
+}
+
+.post-submit-summary__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Both buttons share the .btn geometry from buttons.css. */
+.post-submit-summary__btn-retry,
+.post-submit-summary__btn-done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: var(--control-r);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+/* Retry is the "a person must act on these rows" affordance, so it carries the
+   warm secondary rather than a second saturated brand colour. */
 .post-submit-summary__btn-retry {
-  background: #DD8A37;
+  background: var(--attn);
   color: var(--text-inverse);
-  border-color: #DD8A37;
+  border-color: var(--attn);
 }
 
 .post-submit-summary__btn-retry:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(221, 138, 55, 0.3);
+  filter: brightness(0.92);
+  box-shadow: var(--shadow-1);
 }
 
 .post-submit-summary__btn-done {
@@ -44,6 +74,20 @@
 }
 
 .post-submit-summary__btn-done:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(55, 138, 221, 0.3);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: var(--shadow-1);
+}
+
+@media (max-width: 768px) {
+  .post-submit-summary {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .post-submit-summary__actions { justify-content: flex-end; }
+
+  .post-submit-summary__btn-retry,
+  .post-submit-summary__btn-done { min-height: var(--tap-min); }
 }

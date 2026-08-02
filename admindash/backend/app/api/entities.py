@@ -65,6 +65,21 @@ async def archive_entities(
     )
 
 
+@router.post("/entities/{tenant_id}/{entity_type}/restore")
+async def restore_entities(
+    tenant_id: str,
+    entity_type: str,
+    request: Request,
+    user=Depends(require_authenticated_user),
+) -> Response:
+    return await _proxy_to_datacore(
+        "POST",
+        f"/api/entities/{tenant_id}/{entity_type}/restore",
+        request,
+        user["_token"],
+    )
+
+
 @router.get("/entities/{tenant_id}/{entity_type}/next-id")
 async def next_id(
     tenant_id: str,

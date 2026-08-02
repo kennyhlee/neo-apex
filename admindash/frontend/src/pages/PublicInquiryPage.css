@@ -1,26 +1,56 @@
+/* =============================================================================
+   Public inquiry form — the one page prospective families see. It is not
+   inside the app shell, so it carries its own frame; everything else comes
+   from the design tokens.
+   ========================================================================== */
+
 .inquiry-page {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 3rem 1rem;
+  padding: var(--space-12) var(--space-4);
   min-height: 100vh;
-  background: var(--bg-primary, #F8FAFC);
+  background: var(--ground);
+  color: var(--ink);
 }
 
 .inquiry-page h1 {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--text-primary, #1A202C);
-  margin-bottom: 1rem;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin-bottom: var(--space-6);
+}
+
+.inquiry-page p {
+  font-size: var(--text-base);
+  color: var(--ink-2);
 }
 
 .inquiry-page form {
   width: 100%;
   max-width: 640px;
-  background: var(--bg-card, #FFF);
-  border: 1px solid var(--border-primary, #E2E8F0);
-  border-radius: var(--radius-md, 12px);
-  box-shadow: var(--shadow-card);
-  padding: 2rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--card-r);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-8);
+}
+
+/* Free-text answers get the full width rather than a 280px column. */
+.inquiry-page .dynamic-form-field:has(textarea) {
+  grid-column: 1 / -1;
+}
+
+/* Single-button footer: the action belongs at the full width of the card on
+   narrow screens, where a right-aligned button is easy to miss. */
+@media (max-width: 480px) {
+  .inquiry-page form {
+    padding: var(--space-5);
+  }
+
+  .inquiry-page .dynamic-form-actions .btn {
+    width: 100%;
+  }
 }

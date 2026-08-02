@@ -28,6 +28,8 @@ export interface BulkRow {
   dupCheckSkipped?: boolean;
   duplicateMatches?: import('./models.ts').DuplicateMatch[];
   assignedStudentId?: string;
+  /** DataCore entity_id of the created student — what StudentsPage highlights. */
+  createdEntityId?: string;
   /** Manually-chosen existing family for this row (drawer override). New-family
    *  values live in `values` under family_name/family_email/family_phone/family_address. */
   familyLink?: { familyId: string; label: string };
