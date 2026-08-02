@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useDensity } from '../hooks/useDensity.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
-import { postQuery } from '../api/client.ts';
+import { postQuery, searchStudents } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import Button from '../components/ui/Button.tsx';
 import SearchField from '../components/ui/SearchField.tsx';
@@ -45,6 +45,13 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
   const [detailStudent, setDetailStudent] = useState<Row | null>(null);
   const [detailFamily, setDetailFamily] = useState<Row | null>(null);
   const [editFamily, setEditFamily] = useState<Row | null>(null);
+  /**
+   * "Which family is this student in?" is the question people actually bring
+   * to this page, so the search also matches students and surfaces the family
+   * they belong to. familyId -> the student names that matched.
+   */
+  const [studentHits, setStudentHits] = useState<Map<string, string[]>>(new Map());
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => { getModel(tenant, 'student').then(setStudentModel).catch(() => setStudentModel(null)); }, [tenant, getModel]);
   useEffect(() => { getModel(tenant, 'family').then(setFamilyModel).catch(() => setFamilyModel(null)); }, [tenant, getModel]);
@@ -69,8 +76,9 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
       String(f.primary_email ?? '').toLowerCase().includes(q) ||
       String(f.primary_phone ?? '').toLowerCase().includes(q) ||
       String(f.entity_id ?? '').toLowerCase().includes(q) ||
-      String(f.family_id ?? '').toLowerCase().includes(q));
-  }, [rows, applied]);
+      String(f.family_id ?? '').toLowerCase().includes(q) ||
+      studentHits.has(String(f.entity_id ?? '')));
+  }, [rows, applied, studentHits]);
 
   const currentPage = useMemo(() => {
     const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -82,11 +90,40 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, currentPage]);
 
-  function commitSearch(q: string) {
-    setSearch(q);
-    setApplied(q);
-    setPage(1);
-  }
+  const commitSearch = useCallback(
+    (q: string) => {
+      setSearch(q);
+      setApplied(q);
+      setPage(1);
+
+      const term = q.trim();
+      if (!term) {
+        setStudentHits(new Map());
+        setSearching(false);
+        return;
+      }
+
+      // One query on commit, not per keystroke. The limit is generous because
+      // a missed student silently hides the family it belongs to.
+      setSearching(true);
+      searchStudents(tenant, term, 200)
+        .then((list) => {
+          const next = new Map<string, string[]>();
+          for (const st of list) {
+            const fid = String(st.family_id ?? '');
+            if (!fid) continue;
+            const name =
+              [st.first_name, st.last_name].filter(Boolean).join(' ') ||
+              String(st.student_id ?? '');
+            next.set(fid, [...(next.get(fid) ?? []), name]);
+          }
+          setStudentHits(next);
+        })
+        .catch(() => setStudentHits(new Map()))
+        .finally(() => setSearching(false));
+    },
+    [tenant],
+  );
 
   const columns: Column<Row>[] = useMemo(() => [
     {
@@ -95,11 +132,20 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
       primary: true,
       render: (r) => {
         const name = String(r.family_name ?? '—');
+        const hits = studentHits.get(String(r.entity_id ?? ''));
         return (
           <NameCell
             name={name}
             initials={initialsOf(name)}
-            secondary={String(r.family_id ?? r.entity_id ?? '')}
+            // When the family surfaced because one of its students matched,
+            // say which — otherwise the result looks arbitrary.
+            secondary={
+              hits?.length
+                ? `${t('families.matchedStudent')} ${hits.slice(0, 2).join(', ')}${
+                    hits.length > 2 ? ` +${hits.length - 2}` : ''
+                  }`
+                : String(r.family_id ?? r.entity_id ?? '')
+            }
             onOpen={() => setDetailFamily(r)}
           />
         );
@@ -107,7 +153,7 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
     },
     { key: 'primary_email', label: t('families.colEmail'), render: (r) => String(r.primary_email ?? '—') },
     { key: 'primary_phone', label: t('families.colPhone'), render: (r) => String(r.primary_phone ?? '—') },
-  ], [t]);
+  ], [t, studentHits]);
 
   return (
     <div className="families-page">
@@ -138,7 +184,7 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
         total={filtered.length}
         page={currentPage}
         pageSize={PAGE_SIZE}
-        loading={loading}
+        loading={loading || searching}
         onPageChange={setPage}
         rowKey={(r) => String(r.entity_id ?? '')}
         rowLabel={(r) => String(r.family_name ?? r.family_id ?? r.entity_id ?? '')}

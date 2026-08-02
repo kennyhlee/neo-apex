@@ -300,7 +300,7 @@ export async function searchStudents(
   const q = escapeSql(query.trim().toLowerCase());
   const safeLimit = Math.max(1, Math.floor(limit));
   const where = q
-    ? ` AND (LOWER(first_name) LIKE '%${q}%' OR LOWER(last_name) LIKE '%${q}%' OR LOWER(student_id) LIKE '%${q}%' OR LOWER(email) LIKE '%${q}%')`
+    ? ` AND (LOWER(first_name) LIKE '%${q}%' OR LOWER(last_name) LIKE '%${q}%' OR LOWER(preferred_name) LIKE '%${q}%' OR LOWER(student_id) LIKE '%${q}%' OR LOWER(email) LIKE '%${q}%')`
     : '';
   const sql =
     `SELECT * FROM data WHERE entity_type = 'student' AND _status = 'active'${where} LIMIT ${safeLimit}`;
