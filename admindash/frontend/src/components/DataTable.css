@@ -382,3 +382,9 @@
   .data-table-pagination-controls { justify-content: center; }
   .data-table-pagination-controls button { min-width: var(--tap-min); height: var(--tap-min); }
 }
+
+/* The whole row opens the record. The keyboard path is the button in the
+   primary cell, so the row itself is not a focus stop. */
+.data-table tbody tr.is-clickable {
+  cursor: pointer;
+}

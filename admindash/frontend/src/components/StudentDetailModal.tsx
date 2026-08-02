@@ -11,6 +11,9 @@ interface StudentDetailModalProps {
   student: Record<string, unknown>;
   model: ModelDefinition;
   onClose: () => void;
+  /** Hands off to the edit form. Omit to keep the panel read-only. */
+  onEdit?: (student: Record<string, unknown>) => void;
+  onArchive?: (student: Record<string, unknown>) => void;
 }
 
 function formatLabel(name: string): string {
@@ -23,7 +26,13 @@ function displayValue(field: ModelFieldDefinition, raw: unknown): string {
   return toLabel(raw, '—');
 }
 
-export default function StudentDetailModal({ student, model, onClose }: StudentDetailModalProps) {
+export default function StudentDetailModal({
+  student,
+  model,
+  onClose,
+  onEdit,
+  onArchive,
+}: StudentDetailModalProps) {
   const { t } = useTranslation();
   const fields = useMemo(
     () => [...model.base_fields, ...model.custom_fields],
@@ -35,10 +44,31 @@ export default function StudentDetailModal({ student, model, onClose }: StudentD
     <Modal
       open
       onClose={onClose}
-      title={t('studentDetail.title')}
-      subtitle={name || undefined}
+      // The record opens beside the list rather than on top of it, so the row
+      // you came from stays in view.
+      variant="drawer"
+      title={name || t('studentDetail.title')}
+      subtitle={
+        [student.student_id, student.grade_level].filter(Boolean).map(String).join(' · ') || undefined
+      }
+      footerClassName={onEdit || onArchive ? 'modal-footer-spread' : undefined}
       footer={
-        <Button variant="secondary" onClick={onClose}>{t('studentDetail.close')}</Button>
+        onEdit || onArchive ? (
+          <>
+            {onArchive ? (
+              <Button variant="secondary" size="sm" onClick={() => onArchive(student)}>
+                {t('students.deleteSelected')}
+              </Button>
+            ) : <span />}
+            {onEdit ? (
+              <Button variant="primary" onClick={() => onEdit(student)}>
+                {t('students.edit')}
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          <Button variant="secondary" onClick={onClose}>{t('studentDetail.close')}</Button>
+        )
       }
     >
       <dl className="student-detail-fields">

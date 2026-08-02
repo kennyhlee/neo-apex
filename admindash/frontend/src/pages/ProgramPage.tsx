@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { useDensity } from '../hooks/useDensity.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
@@ -18,6 +19,7 @@ import { toBool } from '../utils/boolValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import ProgramWeekView from '../components/ProgramWeekView.tsx';
 import ProgramMonthView from '../components/ProgramMonthView.tsx';
+import ProgramDetailModal from '../components/ProgramDetailModal.tsx';
 import './ProgramPage.css';
 import { toLabel, toValues } from '../utils/listValue.ts';
 
@@ -61,7 +63,7 @@ const DAY_ABBR: Record<string, string> = {
  * A program reads as a thing with a schedule, not a row. The secondary line
  * says what a colleague would say next: which days it runs and when.
  */
-function ProgramNameCell({ row }: { row: DataRow }) {
+function ProgramNameCell({ row, onOpen }: { row: DataRow; onOpen?: () => void }) {
   const name = String(row.name ?? '').trim() || '—';
   const initials = name.slice(0, 2).toUpperCase();
 
@@ -75,14 +77,16 @@ function ProgramNameCell({ row }: { row: DataRow }) {
 
   const secondary = [days.join(', '), time].filter(Boolean).join(' · ');
 
-  return <NameCell name={name} initials={initials} secondary={secondary || undefined} />;
+  return (
+    <NameCell name={name} initials={initials} secondary={secondary || undefined} onOpen={onOpen} />
+  );
 }
 
 /**
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Default sort by 'name'.
  */
-function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
+function buildColumnsFromModel(model: ModelDefinition, onOpenRecord: (row: DataRow) => void): Column<DataRow>[] {
   const cols: Column<DataRow>[] = [];
 
   for (const field of model.base_fields) {
@@ -91,7 +95,7 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
         key: 'name',
         label: 'Program Name',
         primary: true,
-        render: (row: DataRow) => <ProgramNameCell row={row} />,
+        render: (row: DataRow) => <ProgramNameCell row={row} onOpen={() => onOpenRecord(row)} />,
       });
       continue;
     }
@@ -145,13 +149,13 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
 /**
  * Build fallback columns when no model is available.
  */
-function getFallbackColumns(): Column<DataRow>[] {
+function getFallbackColumns(onOpenRecord: (row: DataRow) => void): Column<DataRow>[] {
   return [
     {
       key: 'name',
       label: 'Program Name',
       primary: true,
-      render: (row: DataRow) => <ProgramNameCell row={row} />,
+      render: (row: DataRow) => <ProgramNameCell row={row} onOpen={() => onOpenRecord(row)} />,
     },
     { key: 'program_id', label: 'Program ID' },
     {
@@ -174,6 +178,7 @@ function getDynamicFilterFields(model: ModelDefinition | undefined): ModelFieldD
 
 export default function ProgramPage({ tenant }: ProgramPageProps) {
   const { t } = useTranslation();
+  const { density } = useDensity();
   const { user } = useAuth();
   const { getModel, getCachedModel } = useModel();
   const { invalidateProgramCount } = useDashboard();
@@ -210,6 +215,8 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
   // Edit modal state
   const [editingEntity, setEditingEntity] = useState<DataRow | null>(null);
+  /** The record opened from a list row (the calendar has its own entry point). */
+  const [detailProgram, setDetailProgram] = useState<DataRow | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -246,8 +253,8 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
   // Build columns from model
   const columns = useMemo<Column<DataRow>[]>(() => {
-    if (model) return buildColumnsFromModel(model);
-    return getFallbackColumns();
+    if (model) return buildColumnsFromModel(model, setDetailProgram);
+    return getFallbackColumns(setDetailProgram);
   }, [model]);
 
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
@@ -664,6 +671,24 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
         )}
       </Modal>
 
+      {/* Record opened from a list row */}
+      {detailProgram && (
+        <ProgramDetailModal
+          program={detailProgram}
+          model={model ?? null}
+          onClose={() => setDetailProgram(null)}
+          onEdit={(row) => {
+            setDetailProgram(null);
+            setEditingEntity(row);
+          }}
+          onArchive={(row) => {
+            setDetailProgram(null);
+            setSelectedIds(new Set([String(row.entity_id ?? '')]));
+            setShowArchiveConfirm(true);
+          }}
+        />
+      )}
+
       {/* Views */}
       {activeView === 'list' && (
         <>
@@ -781,11 +806,19 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               hiddenColumns={prefs.hiddenColumns}
               selectedIds={selectedIds}
               onSelectionChange={setSelectedIds}
-              rowActions={(row) => (
-                <Button variant="secondary" size="sm" onClick={() => setEditingEntity(row)}>
-                  {t('students.edit')}
-                </Button>
-              )}
+              // Clicking the row opens the record; Edit lives inside it. On a
+              // 26-column program table the trailing button needed a
+              // horizontal scroll to reach.
+              onRowClick={setDetailProgram}
+              rowActions={
+                density === 'compact'
+                  ? (row) => (
+                      <Button variant="secondary" size="sm" onClick={() => setEditingEntity(row)}>
+                        {t('students.edit')}
+                      </Button>
+                    )
+                  : undefined
+              }
               emptyState={
                 // When a search emptied the table, the useful action is
                 // clearing it — not adding a program.
@@ -826,7 +859,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
           <ProgramWeekView
             programs={calendarPrograms}
             model={model}
-            onEditProgram={setEditingEntity}
+            onOpenProgram={setDetailProgram}
             weekStart={weekStartDate}
           />
         </>
@@ -838,7 +871,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
           <ProgramMonthView
             programs={calendarPrograms}
             model={model}
-            onEditProgram={setEditingEntity}
+            onOpenProgram={setDetailProgram}
             onSwitchToWeek={(date: Date) => {
               setActiveView('week');
               setWeekStartDate(date);

@@ -55,6 +55,15 @@ interface DataTableProps<T> {
    * previous checkbox -> overflow-menu -> "Edit Selected" path.
    */
   rowActions?: (row: T) => ReactNode;
+  /**
+   * Clicking anywhere on the row opens the record. Clicks landing on the
+   * selection cell, the action cell, or any control inside a cell are ignored,
+   * so selecting and per-cell buttons keep working.
+   *
+   * Pointer convenience only — the keyboard path is the button in the primary
+   * cell, so the row itself never needs to be a focus stop.
+   */
+  onRowClick?: (row: T) => void;
   /** Shown when there are no rows. Falls back to a generic message. */
   emptyState?: EmptyState;
   /** Describes the table for screen readers. */
@@ -88,6 +97,7 @@ export default function DataTable<T extends Record<string, any>>({
   expandedIds,
   onToggleExpand,
   rowActions,
+  onRowClick,
   emptyState,
   caption,
 }: DataTableProps<T>) {
@@ -240,7 +250,21 @@ export default function DataTable<T extends Record<string, any>>({
                 return (
                   <Fragment key={id}>
                     <tr
-                      className={[extraClass, isSelected ? 'is-selected' : ''].filter(Boolean).join(' ') || undefined}
+                      className={
+                        [extraClass, isSelected ? 'is-selected' : '', onRowClick ? 'is-clickable' : '']
+                          .filter(Boolean)
+                          .join(' ') || undefined
+                      }
+                      onClick={
+                        onRowClick
+                          ? (e) => {
+                              const el = e.target as HTMLElement;
+                              if (el.closest('.data-table-checkbox, .data-table-actions, .data-table-expand')) return;
+                              if (el.closest('button, a, input, select, textarea, label')) return;
+                              onRowClick(row);
+                            }
+                          : undefined
+                      }
                     >
                       {expandable && (
                         <td className="data-table-expand">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { useDensity } from '../hooks/useDensity.ts';
 import { useToast } from '../hooks/useToast.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
@@ -67,7 +68,7 @@ function formatSelectionValue(val: unknown): string {
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Special rendering for name and status fields.
  */
-function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row: DataRow) => void, t: (key: string) => string): Column<DataRow>[] {
+function buildColumnsFromModel(model: ModelDefinition, onOpenRecord: (row: DataRow) => void, t: (key: string) => string): Column<DataRow>[] {
   const cols: Column<DataRow>[] = [];
 
   for (const field of model.base_fields) {
@@ -78,7 +79,9 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
         label: 'Student Name',
         i18nKey: 'students.name',
         primary: true,
-        render: (row: DataRow) => <StudentNameCell row={row} />,
+        render: (row: DataRow) => (
+          <StudentNameCell row={row} onOpen={() => onOpenRecord(row)} />
+        ),
       });
       continue;
     }
@@ -97,7 +100,7 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
             type="button"
             className="students-id-btn"
             title={t('studentDetail.dblclickHint')}
-            onClick={() => onStudentIdDblClick(row)}
+            onClick={() => onOpenRecord(row)}
           >
             {String(row.student_id ?? '-')}
           </button>
@@ -165,14 +168,14 @@ function buildColumnsFromModel(model: ModelDefinition, onStudentIdDblClick: (row
 /**
  * Build fallback columns when no model is available.
  */
-function getFallbackColumns(): Column<DataRow>[] {
+function getFallbackColumns(onOpenRecord: (row: DataRow) => void): Column<DataRow>[] {
   return [
     {
       key: 'name',
       label: 'Student Name',
       i18nKey: 'students.name',
       primary: true,
-      render: (row: DataRow) => <StudentNameCell row={row} />,
+      render: (row: DataRow) => <StudentNameCell row={row} onOpen={() => onOpenRecord(row)} />,
     },
     { key: 'student_id', label: 'Student ID', i18nKey: 'students.studentId' },
     { key: 'gender', label: 'Gender', i18nKey: 'students.gender' },
@@ -200,6 +203,7 @@ function getDynamicFilterFields(model: ModelDefinition | undefined): ModelFieldD
 
 export default function StudentsPage({ tenant }: StudentsPageProps) {
   const { t } = useTranslation();
+  const { density } = useDensity();
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -264,7 +268,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   // Build columns from model
   const columns = useMemo<Column<DataRow>[]>(() => {
     if (model) return buildColumnsFromModel(model, setDetailStudent, t);
-    return getFallbackColumns();
+    return getFallbackColumns(setDetailStudent);
   }, [model, t]); // setDetailStudent is a stable setter — safe to omit from deps
 
   const columnKeys = useMemo(() => columns.map((c) => c.key), [columns]);
@@ -753,6 +757,15 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           student={detailStudent as Record<string, unknown>}
           model={model}
           onClose={() => setDetailStudent(null)}
+          onEdit={(row) => {
+            setDetailStudent(null);
+            setEditingEntity(row as DataRow);
+          }}
+          onArchive={(row) => {
+            setDetailStudent(null);
+            setSelectedIds(new Set([String(row.entity_id ?? '')]));
+            setShowArchiveConfirm(true);
+          }}
         />
       )}
 
@@ -803,18 +816,21 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         rowClassName={rowClassName}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
-        // One click to edit the row you are already looking at, replacing the
-        // checkbox -> overflow-menu -> "Edit Selected" path.
-        rowActions={(row) => (
-          <>
-            <Button variant="ghost" size="sm" onClick={() => setDetailStudent(row)}>
-              {t('students.view')}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setEditingEntity(row)}>
-              {t('students.edit')}
-            </Button>
-          </>
-        )}
+        // Clicking the row opens the record; Edit lives inside it. That keeps
+        // the action off the far end of a 17-column table, where it needed a
+        // horizontal scroll to reach.
+        onRowClick={setDetailStudent}
+        // Compact is the registrar's grid — throughput matters more there, so
+        // it keeps a one-click inline edit.
+        rowActions={
+          density === 'compact'
+            ? (row) => (
+                <Button variant="secondary" size="sm" onClick={() => setEditingEntity(row)}>
+                  {t('students.edit')}
+                </Button>
+              )
+            : undefined
+        }
         emptyState={
           // When a search is what emptied the table, the useful action is
           // clearing it — not adding a student.

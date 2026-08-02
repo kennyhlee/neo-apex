@@ -13,7 +13,7 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 interface ProgramMonthViewProps {
   programs: DataRow[];
   model: ModelDefinition | null;
-  onEditProgram: (program: DataRow) => void;
+  onOpenProgram: (program: DataRow) => void;
   onSwitchToWeek: (date: Date) => void;
 }
 
@@ -119,7 +119,7 @@ function isSameDay(a: Date, b: Date): boolean {
 export default function ProgramMonthView({
   programs,
   model,
-  onEditProgram,
+  onOpenProgram,
   onSwitchToWeek,
 }: ProgramMonthViewProps) {
   const { t } = useTranslation();
@@ -264,7 +264,7 @@ export default function ProgramMonthView({
                   <CalendarChip
                     key={String(prog.entity_id ?? chipIdx)}
                     program={prog}
-                    onEdit={onEditProgram}
+                    onEdit={onOpenProgram}
                   />
                 ))}
 
@@ -308,7 +308,7 @@ export default function ProgramMonthView({
                         onEdit={(p) => {
                           setMorePopover(null);
                           onSwitchToWeek(cell);
-                          onEditProgram(p);
+                          onOpenProgram(p);
                         }}
                         extraClassName="calendar-chip-popover"
                       />

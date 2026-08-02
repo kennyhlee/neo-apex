@@ -12,6 +12,9 @@ interface Props {
   program: DataRow | null;
   model: ModelDefinition | null;
   onClose: () => void;
+  /** Hands off to the edit form. Omit to keep the panel read-only. */
+  onEdit?: (program: DataRow) => void;
+  onArchive?: (program: DataRow) => void;
 }
 
 /** Title Case a snake_case / camelCase field name. */
@@ -37,7 +40,7 @@ const HIDDEN_FIELDS = new Set(['entity_id', 'tenant_id', 'entity_type', 'custom_
  * program's fields as label/value pairs, driven by the model definition when
  * available (falling back to the row's own keys otherwise).
  */
-export default function ProgramDetailModal({ program, model, onClose }: Props) {
+export default function ProgramDetailModal({ program, model, onClose, onEdit, onArchive }: Props) {
   const { t } = useTranslation();
 
   // Escape, focus trap and scroll lock all come from the shared Modal.
@@ -57,11 +60,29 @@ export default function ProgramDetailModal({ program, model, onClose }: Props) {
     <Modal
       open
       onClose={onClose}
+      // The record opens beside the list rather than on top of it, so the row
+      // you came from stays in view.
+      variant="drawer"
       title={title}
       subtitle={subtitle || undefined}
-      size="sm"
+      footerClassName={onEdit || onArchive ? 'modal-footer-spread' : undefined}
       footer={
-        <Button variant="secondary" onClick={onClose}>{t('common.close')}</Button>
+        onEdit || onArchive ? (
+          <>
+            {onArchive ? (
+              <Button variant="secondary" size="sm" onClick={() => onArchive(program)}>
+                {t('program.deleteSelected')}
+              </Button>
+            ) : <span />}
+            {onEdit ? (
+              <Button variant="primary" onClick={() => onEdit(program)}>
+                {t('students.edit')}
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          <Button variant="secondary" onClick={onClose}>{t('common.close')}</Button>
+        )
       }
     >
       <div className="pdm-grid">

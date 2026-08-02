@@ -12,7 +12,13 @@ function ageFrom(dob: unknown): number | null {
   return age >= 0 && age < 120 ? age : null;
 }
 
-export default function StudentNameCell({ row }: { row: Record<string, unknown> }) {
+export default function StudentNameCell({
+  row,
+  onOpen,
+}: {
+  row: Record<string, unknown>;
+  onOpen?: () => void;
+}) {
   const first = String(row.first_name ?? '').trim();
   const last = String(row.last_name ?? '').trim();
   const fullName = `${first} ${last}`.trim() || '—';
@@ -32,5 +38,7 @@ export default function StudentNameCell({ row }: { row: Record<string, unknown> 
     .filter(Boolean)
     .join(' · ');
 
-  return <NameCell name={fullName} initials={initials} secondary={secondary || undefined} />;
+  return (
+    <NameCell name={fullName} initials={initials} secondary={secondary || undefined} onOpen={onOpen} />
+  );
 }
