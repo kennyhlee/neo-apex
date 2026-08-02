@@ -132,7 +132,7 @@
 .data-table-actions-inner {
   display: inline-flex;
   gap: var(--space-1);
-  opacity: 0;
+  opacity: var(--row-action-opacity);
   transition: opacity var(--dur-fast) var(--ease);
 }
 

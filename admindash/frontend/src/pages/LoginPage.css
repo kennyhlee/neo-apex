@@ -223,3 +223,31 @@
 
   .login-alt { padding-left: 0; }
 }
+
+.login-error {
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-xs);
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: var(--text-md);
+  text-align: center;
+}
+
+.login-lang {
+  display: flex;
+  justify-content: center;
+  padding-bottom: var(--space-4);
+}
+
+.login-lang select {
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xs);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}

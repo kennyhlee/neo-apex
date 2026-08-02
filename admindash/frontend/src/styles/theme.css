@@ -164,6 +164,10 @@
      The header still needs an opaque colour — it is sticky, so a transparent
      one would let rows scroll through it. --surface matches the card. */
   --table-head-bg: var(--surface);
+  /* Row actions are always visible at comfortable density: a teacher opening
+     this twice a term should not have to discover that hovering a row reveals
+     the only way to edit it. */
+  --row-action-opacity: 1;
   --card-border:   transparent;
   --card-shadow:   var(--shadow-2);
   --ui-fs:        var(--text-base);
@@ -191,6 +195,8 @@
   --table-numeric: tabular-nums;
   /* Compact reads as an instrument: filled header, hairline edge, no lift. */
   --table-head-bg: var(--surface-2);
+  /* The registrar's grid stays quiet — actions appear on hover or focus. */
+  --row-action-opacity: 0;
   --card-border:   var(--line);
   --card-shadow:   none;
   --ui-fs:        var(--text-sm);

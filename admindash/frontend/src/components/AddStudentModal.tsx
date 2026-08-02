@@ -226,11 +226,15 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
   }
 
   return (
-    <div className="students-confirm-overlay">
-      <div className="add-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="add-modal-header">
-          <h3>{t('addStudent.title')}</h3>
-        </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('addStudent.title')}
+      size="lg"
+      className="modal-flush"
+      dismissOnBackdrop={false}
+      dismissOnEscape={!submitting}
+    >
 
         {loading ? (
           <div className="add-modal-body">
@@ -405,7 +409,6 @@ export default function AddStudentModal({ tenant, onClose, onSuccess, presetFami
         >
           <p>{t('addStudent.duplicateCheckUnavailable')}</p>
         </Modal>
-      </div>
-    </div>
+    </Modal>
   );
 }

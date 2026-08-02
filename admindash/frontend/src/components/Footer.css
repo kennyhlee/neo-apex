@@ -14,3 +14,8 @@
     font-size: var(--text-2xs);
   }
 }
+
+.app-footer-sep {
+  color: var(--text-tertiary);
+  margin: 0 var(--space-2);
+}

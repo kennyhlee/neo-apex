@@ -1,24 +1,4 @@
 /* Add Student Modal — wider than edit modal for tabbed interface */
-.add-modal {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 0;
-  width: 92%;
-  max-width: 780px;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-elevated);
-}
-
-.add-modal-header {
-  padding: 1.25rem 1.5rem 0;
-}
-
-.add-modal-header h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0 0 1rem 0;
-}
 
 .add-modal-tabs {
   display: flex;

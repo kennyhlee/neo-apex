@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { updateEntity } from '../api/client.ts';
 import DynamicForm from './DynamicForm.tsx';
+import Modal from './ui/Modal.tsx';
 import type { ModelDefinition } from '../types/models.ts';
 import '../pages/StudentsPage.css';
 
@@ -32,24 +33,24 @@ export default function EditFamilyModal({ tenant, family, model, onClose, onSave
   }
 
   return (
-    <div className="students-confirm-overlay">
-      <div className="students-edit-modal">
-        <div className="students-edit-modal-header">
-          <h3>{t('editFamily.title')}</h3>
-          <span className="students-edit-modal-subtitle">{String(family.family_name ?? '')}</span>
-        </div>
-        <div className="students-edit-modal-body">
-          <DynamicForm
-            modelDefinition={model}
-            initialValues={family}
-            readOnlyFields={['family_id']}
-            onSubmit={handleSubmit}
-            onCancel={onClose}
-            submitting={submitting}
-            error={error}
-          />
-        </div>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('editFamily.title')}
+      subtitle={String(family.family_name ?? '')}
+      size="md"
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+    >
+      <DynamicForm
+        modelDefinition={model}
+        initialValues={family}
+        readOnlyFields={['family_id']}
+        onSubmit={handleSubmit}
+        onCancel={onClose}
+        submitting={submitting}
+        error={error}
+      />
+    </Modal>
   );
 }

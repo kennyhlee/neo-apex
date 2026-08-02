@@ -102,6 +102,11 @@
   flex: 1 1 auto;
 }
 
+/* For panels that supply their own body padding (tabbed shells, wizards). */
+.modal-flush > .modal-body {
+  padding: 0;
+}
+
 .modal-footer {
   display: flex;
   align-items: center;
@@ -165,7 +170,12 @@
 
   .modal-header { padding: var(--space-4) var(--space-4) var(--space-3); }
   .modal-body   { padding: var(--space-4); }
-  .modal-footer {
+  /* For panels that supply their own body padding (tabbed shells, wizards). */
+.modal-flush > .modal-body {
+  padding: 0;
+}
+
+.modal-footer {
     padding: var(--space-3) var(--space-4) var(--space-5);
     flex-direction: column-reverse;
     align-items: stretch;
