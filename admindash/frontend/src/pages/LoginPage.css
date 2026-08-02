@@ -95,7 +95,7 @@
   padding: 0 var(--control-px);
   border: none;
   border-radius: var(--control-r);
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--text-inverse);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease),
@@ -154,7 +154,7 @@
 }
 
 .login-footer a {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: var(--weight-medium);
   text-decoration: none;
 }

@@ -38,7 +38,7 @@
 }
 
 .bulk-add-page__btn-primary {
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--text-inverse);
   border-color: var(--accent);
 }

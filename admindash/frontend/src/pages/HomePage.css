@@ -225,7 +225,7 @@
 .inquiry-url {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  color: var(--accent);
+  color: var(--accent-ink);
   background: var(--accent-tint);
   border-radius: var(--radius-xs);
   padding: var(--space-2) var(--space-3);
@@ -284,7 +284,7 @@
 
 .schedule-day-header-today {
   background: var(--accent-tint);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .schedule-day-label { display: block; }
@@ -297,7 +297,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.schedule-day-header-today .schedule-day-num { color: var(--accent); }
+.schedule-day-header-today .schedule-day-num { color: var(--accent-ink); }
 
 .schedule-day-cell {
   min-height: 80px;
@@ -350,7 +350,7 @@ body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--s
   top: calc(var(--nav-h) + var(--space-3));
   z-index: var(--z-dropdown);
   right: max(var(--space-4), calc((100vw - var(--content-max)) / 2 + var(--space-4)));
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--on-accent);
   border: none;
   border-radius: var(--radius-sm);

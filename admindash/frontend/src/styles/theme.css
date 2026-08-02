@@ -14,9 +14,11 @@
      C. Compatibility   — every legacy token name in the codebase, re-pointed
                           at a primitive so all 43 stylesheets re-skin at once
 
-   Direction: "Homeroom" — chalk-green neutrals biased toward the accent, a
-   pine accent, and one warm secondary reserved exclusively for "this needs a
-   human". Semantic colour is never used decoratively.
+   Direction: "Homeroom" — calm, people-first, generous. The palette is the
+   shared suite brand (see @neoapex/ui-tokens) so AdminDash reads as part of
+   the same product family as LaunchPad and Papermite; the direction lives in
+   the density, spacing, typography and layout rather than in a private hue.
+   Semantic colour sits outside the accent and is never used decoratively.
    ============================================================================= */
 
 :root {
@@ -25,39 +27,51 @@
      ========================================================================= */
 
   /* --- Neutrals -----------------------------------------------------------
-     A chalk-green grey rather than a blue-grey: the ground carries a slight
-     hue bias toward the accent so the palette reads as chosen. */
-  --ground:          #F2F5F3;
-  --surface:         #FFFFFF;
-  --surface-2:       #F8FAF9;
-  --surface-sunken:  #E9EFEC;
-  --line:            #DCE4DF;
-  --line-subtle:     #E8EDEA;
-  --line-strong:     #C6D2CB;
+     The suite's blue-grey, matching @neoapex/ui-tokens exactly, so AdminDash
+     sits beside LaunchPad and Papermite rather than beside itself. The values
+     are written out rather than inherited because the compatibility layer at
+     the bottom of this file redefines the same names — see ui-tokens for the
+     source of truth, and change it there if the suite palette moves. */
+  --ground:          #F8FAFC;   /* ui-tokens --bg-primary   */
+  --surface:         #FFFFFF;   /* ui-tokens --bg-card      */
+  --surface-2:       #FBFCFD;
+  --surface-sunken:  #F1F5F9;   /* ui-tokens --bg-tertiary  */
+  --line:            #E2E8F0;   /* ui-tokens --border-primary */
+  --line-subtle:     #EDF2F7;   /* ui-tokens --border-subtle  */
+  --line-strong:     #CBD5E0;
 
-  --ink:             #1D2622;
-  --ink-2:           #46524C;
-  --ink-3:           #5C6B64;
-  --ink-faint:       #7C8A83;
+  --ink:             #1A202C;   /* ui-tokens --text-primary   */
+  --ink-2:           #3D4757;
+  --ink-3:           #4A5568;   /* ui-tokens --text-secondary */
+  --ink-faint:       #8A94A6;
   --on-accent:       #FFFFFF;
 
-  /* --- Accent: pine ------------------------------------------------------- */
-  --accent:            #1F6F5C;
-  --accent-hover:      #1A5B4C;
-  --accent-active:     #15493D;
-  --accent-tint:       #E4EFEB;
-  --accent-tint-strong:#D2E4DD;
-  --accent-ring:       rgba(31, 111, 92, 0.30);
-  --accent-glow:       rgba(31, 111, 92, 0.08);
+  /* --- Accent: the suite brand blue ---------------------------------------- */
+  --accent:            #378ADD;   /* ui-tokens --accent       */
+  --accent-hover:      #2B6FB5;   /* ui-tokens --accent-hover */
+  --accent-active:     #225A95;
+  --accent-tint:       #E6F1FB;   /* ui-tokens --tint-blue-bg */
+  --accent-tint-strong:#CFE4F7;
+  --accent-ring:       rgba(55, 138, 221, 0.30);
+  --accent-glow:       rgba(55, 138, 221, 0.08);
+  /* The brand blue is only 3.59:1 against white — fine for borders and large
+     marks, below AA for text. Anything that IS text, or that sits under white
+     text, uses this one step down (5.19:1). It is the suite's own
+     --accent-hover, so the family is unchanged. */
+  --accent-ink:        #2B6FB5;
 
   /* --- Semantic ------------------------------------------------------------
-     Deliberately outside the accent hue. `attn` means a person must act. */
-  --success:       #2F7D4F;  --success-tint: #E4F1E9;
+     Deliberately outside the accent hue — a status must never read as a
+     button. `info` is an indigo rather than the blue it used to be, because
+     with a blue accent a blue "Suspended" badge sitting beside a blue action
+     is exactly the collision this rule exists to prevent. `attn` means a
+     person must act. */
+  --success:       #2A7145;  --success-tint: #E4F1E9;
   --attn:          #8A5220;  --attn-tint:    #F7EADD;
   --danger:        #A3352F;  --danger-tint:  #F8E8E7;
-  --info:          #3E5A7A;  --info-tint:    #E9EDF3;
-  --away:          #5B4478;  --away-tint:    #EDE7F2;
-  --neutral:       #5C6B64;  --neutral-tint: #E7EBE9;
+  --info:          #4F4B94;  --info-tint:    #EBEAF5;
+  --away:          #7A4A72;  --away-tint:    #F3E9F1;
+  --neutral:       #55606E;  --neutral-tint: #EAEEF2;
 
   /* --- Enrollment stage ramp ----------------------------------------------
      A sequential progression, cool to committed. Colour encodes how far along
@@ -119,9 +133,9 @@
   --radius-full: 999px;
 
   /* --- Elevation: three steps, no bespoke shadows -------------------------- */
-  --shadow-1: 0 1px 2px rgba(29, 38, 34, 0.05);
-  --shadow-2: 0 1px 2px rgba(29, 38, 34, 0.04), 0 6px 18px rgba(29, 38, 34, 0.06);
-  --shadow-3: 0 2px 4px rgba(29, 38, 34, 0.05), 0 16px 40px rgba(29, 38, 34, 0.12);
+  --shadow-1: 0 1px 2px rgba(26, 32, 44, 0.05);
+  --shadow-2: 0 1px 2px rgba(26, 32, 44, 0.04), 0 6px 18px rgba(26, 32, 44, 0.06);
+  --shadow-3: 0 2px 4px rgba(26, 32, 44, 0.05), 0 16px 40px rgba(26, 32, 44, 0.12);
 
   /* --- On-dark surface (toasts) -------------------------------------------
      The toast sits on --ink, so it needs its own lightened accents to stay
@@ -134,9 +148,9 @@
   --on-dark-success:   #6FBF8F;
   --on-dark-attn:      #E0A45F;
   --on-dark-danger:    #E08A85;
-  --on-dark-neutral:   #8FA79C;
-  --on-dark-action:    #9FD9BF;
-  --on-dark-action-hover: #C7ECD9;
+  --on-dark-neutral:   #94A1B2;
+  --on-dark-action:    #8FC4F2;
+  --on-dark-action-hover: #BCDDF8;
 
   /* --- Motion -------------------------------------------------------------- */
   --ease:      cubic-bezier(0.2, 0, 0.2, 1);
@@ -151,7 +165,7 @@
   --z-drawer:   500;
   --z-popover:  600;
   --z-toast:    900;
-  --overlay-bg: rgba(29, 38, 34, 0.42);
+  --overlay-bg: rgba(26, 32, 44, 0.42);
 
   /* --- Layout -------------------------------------------------------------- */
   --content-max: 1400px;

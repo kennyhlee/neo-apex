@@ -73,7 +73,7 @@ input, select, textarea, button {
   top: -100px;
   z-index: var(--z-toast);
   background: var(--surface);
-  color: var(--accent);
+  color: var(--accent-ink);
   border: 1px solid var(--accent);
   border-radius: var(--radius-xs);
   padding: var(--space-2) var(--space-4);

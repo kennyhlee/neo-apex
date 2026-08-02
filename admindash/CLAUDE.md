@@ -84,6 +84,8 @@ Layer order (see `src/index.css`):
 - `components/ui/CommandPalette.tsx` — ⌘K / Ctrl-K search across students, families and programs, plus navigation commands. Mounted once in the shell; open it from anywhere with `openCommandPalette()` from `components/ui/paletteBus.ts`.
 - `components/DataTable.tsx` — pass `rowActions` for per-row controls, `rowLabel` for checkbox accessibility, `emptyState` for a useful empty view, and mark the name column `primary: true` so it becomes the card title when rows reflow below 768px.
 
+**Accent vs accent-ink.** `--accent` (#378ADD) is the shared suite brand and is used for borders, focus rings, `accent-color` and tint derivation. It is only 3.59:1 against white, so **anything that is text, or that sits under white text, must use `--accent-ink`** (#2B6FB5, 5.19:1). A quick check before changing either: `color:`/`background:` take `--accent-ink`; `border-color:`/`accent-color:` take `--accent`.
+
 **Accessibility invariants** (these were absent before and are easy to regress):
 - Never write `outline: none` without a visible replacement. The global `:focus-visible` ring in `index.css` is the default; don't override it.
 - Every form control needs a bound label (`htmlFor`/`id`). Radio and checkbox groups need `<fieldset>` + `<legend>`, not a single `<label>`.
