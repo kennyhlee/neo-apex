@@ -10,6 +10,7 @@ import NameCell from '../components/ui/NameCell.tsx';
 import AddFamilyModal from '../components/AddFamilyModal.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
+import EditStudentModal from '../components/EditStudentModal.tsx';
 import EditFamilyModal from '../components/EditFamilyModal.tsx';
 import FamilyDetailModal from '../components/FamilyDetailModal.tsx';
 import type { Family, ModelDefinition } from '../types/models.ts';
@@ -43,6 +44,12 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
   const [familyModel, setFamilyModel] = useState<ModelDefinition | null>(null);
   const [addStudentTo, setAddStudentTo] = useState<Family | null>(null);
   const [detailStudent, setDetailStudent] = useState<Row | null>(null);
+  const [editStudent, setEditStudent] = useState<Row | null>(null);
+  /** The family we drilled in from, so closing a student returns there
+   *  rather than dumping the user back on the list they had left. Only the
+   *  setter is bound: backToFamily reads it through the functional updater,
+   *  which keeps it free of stale-closure hazards and needs no deps. */
+  const [, setReturnToFamily] = useState<Row | null>(null);
   const [detailFamily, setDetailFamily] = useState<Row | null>(null);
   const [editFamily, setEditFamily] = useState<Row | null>(null);
   /**
@@ -62,6 +69,14 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
       .then((res) => { setRows(res.data as unknown as Family[]); setLoading(false); })
       .catch(() => { setRows([]); setLoading(false); });
   }, [tenant, loadTick]);
+
+  /** Re-open the family we drilled in from, if there was one. */
+  const backToFamily = useCallback(() => {
+    setReturnToFamily((fam) => {
+      if (fam) setDetailFamily(fam);
+      return null;
+    });
+  }, []);
 
   const handleReload = useCallback(() => {
     setLoading(true);
@@ -224,7 +239,11 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
           onClose={() => setDetailFamily(null)}
           onEdit={(f) => { setDetailFamily(null); setEditFamily(f); }}
           onAddStudent={(f) => { setDetailFamily(null); setAddStudentTo(f as unknown as Family); }}
-          onOpenStudent={(s) => { setDetailFamily(null); setDetailStudent(s); }}
+          onOpenStudent={(s) => {
+            setReturnToFamily(detailFamily);
+            setDetailFamily(null);
+            setDetailStudent(s);
+          }}
         />
       )}
 
@@ -244,7 +263,25 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
       )}
 
       {detailStudent && studentModel && (
-        <StudentDetailModal student={detailStudent} model={studentModel} onClose={() => setDetailStudent(null)} />
+        <StudentDetailModal
+          student={detailStudent}
+          model={studentModel}
+          onClose={() => { setDetailStudent(null); backToFamily(); }}
+          // A student opened from a family was read-only, while the same panel
+          // opened from Students had an Edit button. Same record, same panel —
+          // it should offer the same thing.
+          onEdit={(st) => { setDetailStudent(null); setEditStudent(st as Row); }}
+        />
+      )}
+
+      {editStudent && studentModel && (
+        <EditStudentModal
+          tenant={tenant}
+          entity={editStudent}
+          model={studentModel}
+          onClose={() => { setEditStudent(null); backToFamily(); }}
+          onSaved={() => { setEditStudent(null); handleReload(); backToFamily(); }}
+        />
       )}
 
       {editFamily && familyModel && (
