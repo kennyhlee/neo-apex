@@ -4,6 +4,7 @@ import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import Modal from './ui/Modal.tsx';
 import Button from './ui/Button.tsx';
 import './ProgramDetailModal.css';
+import { toLabel } from '../utils/listValue.ts';
 
 type DataRow = Record<string, unknown>;
 
@@ -25,17 +26,7 @@ function formatFieldLabel(key: string): string {
 function formatValue(raw: unknown, type?: ModelFieldDefinition['type']): string {
   if (raw == null || raw === '') return '—';
   if (type === 'bool') return toBool(raw) ? 'Yes' : 'No';
-  if (Array.isArray(raw)) return raw.map((x) => String(x)).join(', ') || '—';
-  const s = String(raw);
-  if (s.startsWith('[')) {
-    try {
-      const arr = JSON.parse(s);
-      if (Array.isArray(arr)) return arr.map((x) => String(x)).join(', ') || '—';
-    } catch {
-      /* not JSON — fall through */
-    }
-  }
-  return s;
+  return toLabel(raw, '—');
 }
 
 // System/internal fields never shown in the read-only detail.

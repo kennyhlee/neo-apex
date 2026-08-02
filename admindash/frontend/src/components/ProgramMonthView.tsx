@@ -3,6 +3,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import CalendarChip from './CalendarChip.tsx';
 import './ProgramCalendar.css';
+import { toValues } from '../utils/listValue.ts';
 
 type DataRow = Record<string, unknown>;
 
@@ -96,13 +97,8 @@ const JS_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
  */
 function parseDaysOfWeek(value: unknown): Set<number> | null {
   if (value == null || value === '') return null;
-  let dayNames: string[] = [];
-  const s = String(value).trim();
-  if (s.startsWith('[')) {
-    try { dayNames = JSON.parse(s); } catch { dayNames = [s]; }
-  } else {
-    dayNames = s.split(',').map((d) => d.trim());
-  }
+  // Handles JSON, Python-repr and bare bracketed lists alike.
+  const dayNames = toValues(value);
   const indices = new Set<number>();
   for (const name of dayNames) {
     const idx = JS_DAY_NAMES.findIndex((d) => d.toLowerCase() === name.toLowerCase());

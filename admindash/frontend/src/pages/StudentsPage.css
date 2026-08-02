@@ -248,3 +248,43 @@
   .view-chip { flex: none; }
   .view-chip-more { margin-left: 0; }
 }
+
+.students-search-clear {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.students-search-clear:hover { background: var(--line-strong); color: var(--text-primary); }
+
+/* Chip tones mirror StatusBadge, so the chip row and the Status column read
+   as one palette rather than two unrelated controls. */
+.view-chip--ok      { --chip-fg: var(--success); --chip-bg: var(--success-tint); }
+.view-chip--attn    { --chip-fg: var(--attn);    --chip-bg: var(--attn-tint); }
+.view-chip--info    { --chip-fg: var(--info);    --chip-bg: var(--info-tint); }
+.view-chip--risk    { --chip-fg: var(--danger);  --chip-bg: var(--danger-tint); }
+.view-chip--neutral { --chip-fg: var(--neutral); --chip-bg: var(--neutral-tint); }
+
+.view-chip[class*='view-chip--']::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--chip-fg);
+}
+
+.view-chip[class*='view-chip--'].is-active {
+  background: var(--chip-bg);
+  border-color: var(--chip-fg);
+  color: var(--chip-fg);
+}
+.view-chip[class*='view-chip--'].is-active span { color: var(--chip-fg); }

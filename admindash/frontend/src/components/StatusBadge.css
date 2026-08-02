@@ -49,3 +49,5 @@
   border-radius: 50%;
   background: currentColor;
 }
+
+.status-badge--plum { background: var(--away-tint); color: var(--away); }

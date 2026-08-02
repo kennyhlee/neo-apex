@@ -262,7 +262,9 @@
   --status-green-bg: var(--success-tint); --status-green-fg: var(--success);
   --status-amber-bg: var(--attn-tint);    --status-amber-fg: var(--attn);
   --status-blue-bg:  var(--info-tint);    --status-blue-fg:  var(--info);
-  --status-rose-bg:  var(--away-tint);    --status-rose-fg:  var(--away);
+  /* rose carries dropped / withdrawn / inactive, so it reads as the danger
+     hue; the away/plum purple is kept for values the tone map doesn't know. */
+  --status-rose-bg:  var(--danger-tint);  --status-rose-fg:  var(--danger);
   --status-gray-bg:  var(--neutral-tint); --status-gray-fg:  var(--neutral);
 
   /* ---- The `--color-*` namespace ----------------------------------------

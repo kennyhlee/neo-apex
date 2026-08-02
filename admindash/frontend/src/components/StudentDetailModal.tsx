@@ -5,6 +5,7 @@ import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import Modal from './ui/Modal.tsx';
 import Button from './ui/Button.tsx';
 import './StudentDetailModal.css';
+import { toLabel } from '../utils/listValue.ts';
 
 interface StudentDetailModalProps {
   student: Record<string, unknown>;
@@ -19,14 +20,7 @@ function formatLabel(name: string): string {
 function displayValue(field: ModelFieldDefinition, raw: unknown): string {
   if (raw == null || raw === '') return '-';
   if (field.type === 'bool') return toBool(raw) ? 'Yes' : 'No';
-  const s = String(raw);
-  if (s.startsWith('[')) {
-    try {
-      const arr = JSON.parse(s);
-      if (Array.isArray(arr)) return arr.join(', ') || '-';
-    } catch { /* not JSON */ }
-  }
-  return s;
+  return toLabel(raw, '—');
 }
 
 export default function StudentDetailModal({ student, model, onClose }: StudentDetailModalProps) {

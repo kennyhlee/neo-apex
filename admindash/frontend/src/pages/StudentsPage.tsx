@@ -17,6 +17,7 @@ import EditStudentModal from '../components/EditStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
 import StudentNameCell from '../components/StudentNameCell.tsx';
 import { toBool } from '../utils/boolValue.ts';
+import { toLabel, toToneKey } from '../utils/listValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
 
@@ -36,6 +37,16 @@ const STATUS_OPTIONS = [
 /** Fields that get a dedicated Status dropdown instead of a dynamic input */
 const SKIP_DYNAMIC_FIELDS = new Set(['_status', 'status']);
 
+/** Chip tones, mirroring StatusBadge so the chip row and the Status column
+ *  read as one palette. */
+const STATUS_TONE: Record<string, string> = {
+  active: 'ok', enrolled: 'ok', registered: 'ok', attending: 'ok',
+  on_leave: 'attn', waitlisted: 'attn', pending: 'attn', applied: 'attn',
+  suspended: 'info', graduated: 'info', alumni: 'info', paused: 'info',
+  dropped: 'risk', dropped_out: 'risk', withdrawn: 'risk',
+  inactive: 'risk', transferred: 'risk',
+};
+
 interface StudentsPageProps {
   tenant: string;
 }
@@ -51,19 +62,13 @@ function formatFieldLabel(key: string): string {
 }
 
 /**
- * Format a cell value that may be a JSON-encoded array (e.g. '["Male"]') into
- * a comma-separated string (e.g. "Male").
+ * Format a cell value that may be a wrapped selection (`["Male"]`, `['Male']`
+ * or `[Male]`) into a plain label. See utils/listValue.ts — the extraction
+ * pipeline writes the single-quoted form, which the old JSON-only unwrapping
+ * let through verbatim.
  */
 function formatSelectionValue(val: unknown): string {
-  if (val == null) return '-';
-  const s = String(val);
-  if (s.startsWith('[')) {
-    try {
-      const arr = JSON.parse(s);
-      if (Array.isArray(arr)) return arr.join(', ') || '-';
-    } catch { /* not JSON */ }
-  }
-  return s || '-';
+  return toLabel(val, '—');
 }
 
 /**
@@ -403,9 +408,28 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSearch() {
-    searchRef.current = search;
+  /**
+   * Applies a search term and reloads.
+   *
+   * The committed term lives in a ref so loadData's identity does not churn on
+   * every keystroke — but that means nothing re-runs until something calls
+   * this. Clearing the field therefore has to commit too, otherwise the list
+   * stays filtered by a term that is no longer on screen.
+   */
+  function commitSearch(q: string) {
+    searchRef.current = q;
+    setSearch(q);
     loadData(1, filters);
+  }
+
+  function handleSearch() {
+    commitSearch(search);
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    // An emptied field restores the full list immediately — no Enter needed.
+    if (value.trim() === '' && searchRef.current !== '') commitSearch('');
   }
 
   function handleReset() {
@@ -525,10 +549,12 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     )
       .then((res) => {
         if (cancelled) return;
+        // Values come back in whatever shape they were written, so `Active`,
+        // `["Active"]` and `['Active']` must fold into one bucket.
         const next: Record<string, number> = {};
         for (const row of res.data ?? []) {
-          const key = String(row[column] ?? '').replace(/^\["|"\]$/g, '');
-          if (key) next[key] = Number(row.count ?? 0);
+          const key = toLabel(row[column], '');
+          if (key) next[key] = (next[key] ?? 0) + Number(row.count ?? 0);
         }
         setViewCounts(next);
       })
@@ -580,11 +606,21 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
             </svg>
             <input
               id="students-search"
-              type="search"
+              type="text"
               value={search}
               placeholder={t('students.searchPlaceholder')}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
+            {search && (
+              <button
+                type="button"
+                className="students-search-clear"
+                onClick={() => commitSearch('')}
+                aria-label={t('students.clearSearch')}
+              >
+                &times;
+              </button>
+            )}
           </form>
           <Button variant="secondary" onClick={() => navigate('/students/bulk-add')}>
             {t('bulkAdd.entryButton')}
@@ -615,7 +651,11 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
               <button
                 key={opt.value}
                 type="button"
-                className={`view-chip${activeView === opt.value ? ' is-active' : ''}`}
+                // Each chip carries its own status tone, so the row of chips
+                // reads as the same palette as the Status column beside it.
+                className={`view-chip view-chip--${STATUS_TONE[toToneKey(opt.value)] ?? 'neutral'}${
+                  activeView === opt.value ? ' is-active' : ''
+                }`}
                 aria-pressed={activeView === opt.value}
                 onClick={() => pickView(opt.value)}
               >
@@ -845,15 +885,35 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
             </Button>
           </>
         )}
-        emptyState={{
-          title: t('students.emptyTitle'),
-          description: t('students.emptyBody'),
-          action: (
-            <Button variant="primary" onClick={() => setShowAddModal(true)}>
-              {t('students.addStudent')}
-            </Button>
-          ),
-        }}
+        emptyState={
+          // When a search is what emptied the table, the useful action is
+          // clearing it — not adding a student.
+          searchRef.current || activeView
+            ? {
+                title: t('students.emptySearchTitle'),
+                description: t('students.emptySearchBody'),
+                action: (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setActiveView('');
+                      handleReset();
+                    }}
+                  >
+                    {t('students.clearSearch')}
+                  </Button>
+                ),
+              }
+            : {
+                title: t('students.emptyTitle'),
+                description: t('students.emptyBody'),
+                action: (
+                  <Button variant="primary" onClick={() => setShowAddModal(true)}>
+                    {t('students.addStudent')}
+                  </Button>
+                ),
+              }
+        }
       />
     </div>
   );

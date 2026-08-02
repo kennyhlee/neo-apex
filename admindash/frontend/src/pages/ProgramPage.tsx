@@ -16,6 +16,7 @@ import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import ProgramWeekView from '../components/ProgramWeekView.tsx';
 import ProgramMonthView from '../components/ProgramMonthView.tsx';
 import './ProgramPage.css';
+import { toLabel } from '../utils/listValue.ts';
 
 type DataRow = Record<string, unknown>;
 
@@ -44,15 +45,7 @@ function formatFieldLabel(key: string): string {
  * a comma-separated string (e.g. "Active").
  */
 function formatSelectionValue(val: unknown): string {
-  if (val == null) return '-';
-  const s = String(val);
-  if (s.startsWith('[')) {
-    try {
-      const arr = JSON.parse(s);
-      if (Array.isArray(arr)) return arr.join(', ') || '-';
-    } catch { /* not JSON */ }
-  }
-  return s || '-';
+  return toLabel(val, '—');
 }
 
 /**
