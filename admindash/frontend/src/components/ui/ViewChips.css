@@ -1,0 +1,75 @@
+.view-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.view-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.view-chip:hover { border-color: var(--line-strong); color: var(--text-primary); }
+
+.view-chip span {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.view-chip.is-active {
+  background: var(--accent-tint);
+  border-color: var(--accent-tint-strong);
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+}
+.view-chip.is-active span { color: var(--accent); }
+
+/* Tones mirror StatusBadge, so the chip row and the Status column read as one
+   palette rather than two unrelated controls. */
+.view-chip--ok      { --chip-fg: var(--success); --chip-bg: var(--success-tint); }
+.view-chip--attn    { --chip-fg: var(--attn);    --chip-bg: var(--attn-tint); }
+.view-chip--info    { --chip-fg: var(--info);    --chip-bg: var(--info-tint); }
+.view-chip--risk    { --chip-fg: var(--danger);  --chip-bg: var(--danger-tint); }
+.view-chip--away    { --chip-fg: var(--away);    --chip-bg: var(--away-tint); }
+.view-chip--neutral { --chip-fg: var(--neutral); --chip-bg: var(--neutral-tint); }
+
+.view-chip[class*='view-chip--']::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--chip-fg);
+}
+
+.view-chip[class*='view-chip--'].is-active {
+  background: var(--chip-bg);
+  border-color: var(--chip-fg);
+  color: var(--chip-fg);
+}
+.view-chip[class*='view-chip--'].is-active span { color: var(--chip-fg); }
+
+.view-chip-more {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  border-style: dashed;
+}
+
+@media (max-width: 768px) {
+  .view-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--space-1); }
+  .view-chip { flex: none; }
+  .view-chip-more { margin-left: 0; }
+}

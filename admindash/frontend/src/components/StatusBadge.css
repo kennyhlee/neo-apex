@@ -15,11 +15,13 @@
   white-space: nowrap;
 }
 
-.status-badge--green { background: var(--status-green-bg); color: var(--status-green-fg); }
-.status-badge--amber { background: var(--status-amber-bg); color: var(--status-amber-fg); }
-.status-badge--blue  { background: var(--status-blue-bg);  color: var(--status-blue-fg); }
-.status-badge--rose  { background: var(--status-rose-bg);  color: var(--status-rose-fg); }
-.status-badge--gray  { background: var(--status-gray-bg);  color: var(--status-gray-fg); }
+/* Tone names match utils/tone.ts and the .view-chip--* set. */
+.status-badge--ok      { background: var(--success-tint); color: var(--success); }
+.status-badge--attn    { background: var(--attn-tint);    color: var(--attn); }
+.status-badge--info    { background: var(--info-tint);    color: var(--info); }
+.status-badge--risk    { background: var(--danger-tint);  color: var(--danger); }
+.status-badge--away    { background: var(--away-tint);    color: var(--away); }
+.status-badge--neutral { background: var(--neutral-tint); color: var(--neutral); }
 
 /* -----------------------------------------------------------------------------
    Compact density: a dot plus a word, not a filled pill.
@@ -49,5 +51,3 @@
   border-radius: 50%;
   background: currentColor;
 }
-
-.status-badge--plum { background: var(--away-tint); color: var(--away); }

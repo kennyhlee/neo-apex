@@ -8,6 +8,9 @@ import { postQuery, archiveEntities, updateEntity, createEntity, fetchNextEntity
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import Button from '../components/ui/Button.tsx';
 import Modal from '../components/ui/Modal.tsx';
+import SearchField from '../components/ui/SearchField.tsx';
+import ViewChips from '../components/ui/ViewChips.tsx';
+import NameCell from '../components/ui/NameCell.tsx';
 import DynamicForm from '../components/DynamicForm.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -16,7 +19,7 @@ import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import ProgramWeekView from '../components/ProgramWeekView.tsx';
 import ProgramMonthView from '../components/ProgramMonthView.tsx';
 import './ProgramPage.css';
-import { toLabel } from '../utils/listValue.ts';
+import { toLabel, toValues } from '../utils/listValue.ts';
 
 type DataRow = Record<string, unknown>;
 
@@ -48,6 +51,33 @@ function formatSelectionValue(val: unknown): string {
   return toLabel(val, '—');
 }
 
+/** Abbreviated weekday names for the schedule line. */
+const DAY_ABBR: Record<string, string> = {
+  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
+  friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
+};
+
+/**
+ * A program reads as a thing with a schedule, not a row. The secondary line
+ * says what a colleague would say next: which days it runs and when.
+ */
+function ProgramNameCell({ row }: { row: DataRow }) {
+  const name = String(row.name ?? '').trim() || '—';
+  const initials = name.slice(0, 2).toUpperCase();
+
+  const days = toValues(row.days_of_week)
+    .map((d) => DAY_ABBR[d.trim().toLowerCase()] ?? d.trim())
+    .filter(Boolean);
+
+  const start = String(row.start_time ?? '').trim();
+  const end = String(row.end_time ?? '').trim();
+  const time = start && end ? `${start}–${end}` : start || '';
+
+  const secondary = [days.join(', '), time].filter(Boolean).join(' · ');
+
+  return <NameCell name={name} initials={initials} secondary={secondary || undefined} />;
+}
+
 /**
  * Build columns from a model definition. Base fields first, then custom fields,
  * in model definition order. Default sort by 'name'.
@@ -60,16 +90,8 @@ function buildColumnsFromModel(model: ModelDefinition): Column<DataRow>[] {
       cols.push({
         key: 'name',
         label: 'Program Name',
-        render: (row: DataRow) => {
-          const name = String(row.name ?? '').trim() || '-';
-          const avatarChar = name.charAt(0).toUpperCase();
-          return (
-            <div className="program-name-cell">
-              <div className="program-avatar">{avatarChar}</div>
-              <span className="program-display-name">{name}</span>
-            </div>
-          );
-        },
+        primary: true,
+        render: (row: DataRow) => <ProgramNameCell row={row} />,
       });
       continue;
     }
@@ -128,16 +150,8 @@ function getFallbackColumns(): Column<DataRow>[] {
     {
       key: 'name',
       label: 'Program Name',
-      render: (row: DataRow) => {
-        const name = String(row.name ?? '').trim() || '-';
-        const avatarChar = name.charAt(0).toUpperCase();
-        return (
-          <div className="program-name-cell">
-            <div className="program-avatar">{avatarChar}</div>
-            <span className="program-display-name">{name}</span>
-          </div>
-        );
-      },
+      primary: true,
+      render: (row: DataRow) => <ProgramNameCell row={row} />,
     },
     { key: 'program_id', label: 'Program ID' },
     {
@@ -174,6 +188,14 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
 
   // Filter state
   const [filters, setFilters] = useState<Record<string, string>>({});
+
+  /** One search box plus saved-view chips, as on Students. The full
+   *  column-per-field panel stays available behind "More filters". */
+  const [search, setSearch] = useState('');
+  const searchRef = useRef('');
+  const [statusView, setStatusView] = useState('');
+  const [viewCounts, setViewCounts] = useState<Record<string, number> | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -272,6 +294,14 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
           conditions.push(`${key} ILIKE '%${safeVal}%'`);
         }
 
+        const q = searchRef.current.trim();
+        if (q) {
+          const sq = q.replace(/'/g, "''");
+          conditions.push(
+            `(name ILIKE '%${sq}%' OR program_id ILIKE '%${sq}%' OR location ILIKE '%${sq}%')`,
+          );
+        }
+
         const where = conditions.join(' AND ');
         const sortCol = prefs.sortBy;
         const dir = prefs.sortDir.toUpperCase();
@@ -326,13 +356,23 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSearch() {
+  /** Committing the term (including an empty one) is what re-runs the query. */
+  function commitSearch(q: string) {
+    searchRef.current = q;
+    setSearch(q);
     loadData(1, filters);
+  }
+
+  function handleSearch() {
+    commitSearch(search);
   }
 
   function handleReset() {
     const resetFilters: Record<string, string> = {};
     setFilters(resetFilters);
+    setSearch('');
+    setStatusView('');
+    searchRef.current = '';
     loadData(1, resetFilters);
   }
 
@@ -440,6 +480,57 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
   // Dynamic filter fields from model
   const dynamicFilterFields = useMemo(() => getDynamicFilterFields(model), [model]);
 
+  /** The model's own status field drives the chips, same as on Students. */
+  const statusFilter = useMemo(() => {
+    const fields = [...(model?.base_fields ?? []), ...(model?.custom_fields ?? [])];
+    const field = fields.find((f) => f.name === 'status' && f.options && f.options.length > 0);
+    if (!field?.options) return null;
+    return {
+      column: field.name,
+      options: field.options.map((o) => ({ value: o, label: o })),
+    };
+  }, [model]);
+
+  useEffect(() => {
+    const column = statusFilter?.column;
+    if (!column || !tenant) return;
+    let cancelled = false;
+    postQuery(
+      tenant,
+      'entities',
+      `SELECT ${column}, COUNT(*) AS count FROM data WHERE entity_type = 'program' AND _status = 'active' GROUP BY ${column}`,
+    )
+      .then((res) => {
+        if (cancelled) return;
+        // Values arrive in whatever shape they were written, so `Upcoming`
+        // and `['Upcoming']` must fold into one bucket.
+        const next: Record<string, number> = {};
+        for (const row of res.data ?? []) {
+          const key = toLabel(row[column], '');
+          if (key) next[key] = (next[key] ?? 0) + Number(row.count ?? 0);
+        }
+        setViewCounts(next);
+      })
+      .catch(() => {
+        if (!cancelled) setViewCounts({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, statusFilter?.column, total]);
+
+  function pickView(value: string) {
+    const column = statusFilter?.column;
+    setStatusView(value);
+    const next = { ...filters };
+    if (column) {
+      if (value) next[column] = value;
+      else delete next[column];
+    }
+    setFilters(next);
+    loadData(1, next);
+  }
+
   // Visible columns (respecting hidden)
   const visibleColumns = useMemo(
     () => columns.filter((c) => !prefs.hiddenColumns.includes(c.key)),
@@ -455,6 +546,20 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
             {total} {t('common.records')}
           </span>
         </h1>
+        {activeView === 'list' && (
+          <div className="page-header-actions">
+            <SearchField
+              id="programs-search"
+              value={search}
+              placeholder={t('program.searchPlaceholder')}
+              onChange={setSearch}
+              onCommit={commitSearch}
+            />
+            <Button variant="primary" onClick={() => void handleOpenAddModal()}>
+              {t('program.addProgram')}
+            </Button>
+          </div>
+        )}
       </header>
 
       {/* View toggle — always visible */}
@@ -562,12 +667,30 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
       {/* Views */}
       {activeView === 'list' && (
         <>
+          {statusFilter && (
+            <ViewChips
+              options={statusFilter.options}
+              active={statusView}
+              onPick={pickView}
+              counts={viewCounts}
+              total={total}
+              allLabel={t('program.filterAll')}
+              ariaLabel={t('program.statusLabel')}
+              showAdvanced={showAdvanced}
+              onToggleAdvanced={() => setShowAdvanced((v) => !v)}
+            />
+          )}
+
+          {(showAdvanced || !statusFilter) && (
           <FilterForm onSearch={handleSearch} onReset={handleReset}>
             {dynamicFilterFields.map((field) => (
               <div className="filter-field" key={field.name}>
-                <label>{formatFieldLabel(field.name)}</label>
+                <label htmlFor={`programs-filter-${field.name}`}>
+                  {formatFieldLabel(field.name)}
+                </label>
                 {field.type === 'selection' && field.options ? (
                   <select
+                    id={`programs-filter-${field.name}`}
                     value={filters[field.name] ?? ''}
                     onChange={(e) => updateFilter(field.name, e.target.value)}
                   >
@@ -578,6 +701,7 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
                   </select>
                 ) : (
                   <input
+                    id={`programs-filter-${field.name}`}
                     type="text"
                     placeholder={`${t('program.search')} ${formatFieldLabel(field.name).toLowerCase()}`}
                     value={filters[field.name] ?? ''}
@@ -587,29 +711,33 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
               </div>
             ))}
           </FilterForm>
+          )}
 
           <div className="programs-toolbar">
-            <button className="programs-toolbar-primary" onClick={handleOpenAddModal}>
-              {t('program.addProgram')}
-            </button>
+            {selectedIds.size > 0 && (
+              <>
+                <span className="programs-selected-count">
+                  {selectedIds.size} {t('program.selectedSuffix')}
+                </span>
+                <Button variant="danger" size="sm" onClick={() => setShowArchiveConfirm(true)}>
+                  {t('program.deleteSelected')}
+                </Button>
+              </>
+            )}
 
             <div className="programs-toolbar-spacer" />
 
-            {selectedIds.size > 0 && (
-              <span className="programs-selected-count">
-                {selectedIds.size} {t('program.selectedSuffix')}
-              </span>
-            )}
-
             {/* Three-dot action menu */}
             <div className="programs-menu-toggle" ref={menuRef}>
-              <button
-                className="programs-menu-btn"
+              <Button
+                variant="ghost"
+                icon
                 onClick={() => setShowMenu((prev) => !prev)}
                 aria-label={t('program.moreActions')}
+                aria-expanded={showMenu}
               >
                 ⋮
-              </button>
+              </Button>
               {showMenu && (
                 <div className="programs-menu-popover">
                   {/* Editing happens from the row itself now; the Export and
@@ -658,15 +786,35 @@ export default function ProgramPage({ tenant }: ProgramPageProps) {
                   {t('students.edit')}
                 </Button>
               )}
-              emptyState={{
-                title: t('program.emptyTitle'),
-                description: t('program.emptyBody'),
-                action: (
-                  <Button variant="primary" onClick={() => void handleOpenAddModal()}>
-                    {t('program.addProgram')}
-                  </Button>
-                ),
-              }}
+              emptyState={
+                // When a search emptied the table, the useful action is
+                // clearing it — not adding a program.
+                searchRef.current || statusView
+                  ? {
+                      title: t('program.emptySearchTitle'),
+                      description: t('program.emptySearchBody'),
+                      action: (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setStatusView('');
+                            handleReset();
+                          }}
+                        >
+                          {t('students.clearSearch')}
+                        </Button>
+                      ),
+                    }
+                  : {
+                      title: t('program.emptyTitle'),
+                      description: t('program.emptyBody'),
+                      action: (
+                        <Button variant="primary" onClick={() => void handleOpenAddModal()}>
+                          {t('program.addProgram')}
+                        </Button>
+                      ),
+                    }
+              }
             />
           )}
         </>

@@ -1,17 +1,4 @@
-import './StudentNameCell.css';
-
-/**
- * Six tints from the palette. The choice is a stable hash of the person's
- * name, so the same student always reads the same colour — it aids
- * recognition when scanning, and encodes nothing else.
- */
-const TINTS = ['pine', 'slate', 'clay', 'plum', 'teal', 'moss'] as const;
-
-function tintFor(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return TINTS[h % TINTS.length];
-}
+import NameCell from './ui/NameCell.tsx';
 
 /** "2016-03-11" -> 10. Returns null for missing or unparseable dates. */
 function ageFrom(dob: unknown): number | null {
@@ -45,15 +32,5 @@ export default function StudentNameCell({ row }: { row: Record<string, unknown> 
     .filter(Boolean)
     .join(' · ');
 
-  return (
-    <div className="student-name-cell">
-      <span className={`student-avatar student-avatar--${tintFor(fullName)}`} aria-hidden="true">
-        {initials}
-      </span>
-      <span className="student-name-info">
-        <span className="student-display-name">{fullName}</span>
-        {secondary ? <span className="student-preferred-name">{secondary}</span> : null}
-      </span>
-    </div>
-  );
+  return <NameCell name={fullName} initials={initials} secondary={secondary || undefined} />;
 }

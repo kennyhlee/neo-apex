@@ -9,6 +9,8 @@ import { useTablePreferences } from '../hooks/useTablePreferences.ts';
 import { postQuery, archiveEntities, restoreEntities } from '../api/client.ts';
 import Modal from '../components/ui/Modal.tsx';
 import Button from '../components/ui/Button.tsx';
+import SearchField from '../components/ui/SearchField.tsx';
+import ViewChips from '../components/ui/ViewChips.tsx';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import FilterForm from '../components/FilterForm.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -17,7 +19,7 @@ import EditStudentModal from '../components/EditStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
 import StudentNameCell from '../components/StudentNameCell.tsx';
 import { toBool } from '../utils/boolValue.ts';
-import { toLabel, toToneKey } from '../utils/listValue.ts';
+import { toLabel } from '../utils/listValue.ts';
 import type { ModelDefinition, ModelFieldDefinition } from '../types/models.ts';
 import './StudentsPage.css';
 
@@ -36,16 +38,6 @@ const STATUS_OPTIONS = [
 
 /** Fields that get a dedicated Status dropdown instead of a dynamic input */
 const SKIP_DYNAMIC_FIELDS = new Set(['_status', 'status']);
-
-/** Chip tones, mirroring StatusBadge so the chip row and the Status column
- *  read as one palette. */
-const STATUS_TONE: Record<string, string> = {
-  active: 'ok', enrolled: 'ok', registered: 'ok', attending: 'ok',
-  on_leave: 'attn', waitlisted: 'attn', pending: 'attn', applied: 'attn',
-  suspended: 'info', graduated: 'info', alumni: 'info', paused: 'info',
-  dropped: 'risk', dropped_out: 'risk', withdrawn: 'risk',
-  inactive: 'risk', transferred: 'risk',
-};
 
 interface StudentsPageProps {
   tenant: string;
@@ -426,12 +418,6 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     commitSearch(search);
   }
 
-  function handleSearchChange(value: string) {
-    setSearch(value);
-    // An emptied field restores the full list immediately — no Enter needed.
-    if (value.trim() === '' && searchRef.current !== '') commitSearch('');
-  }
-
   function handleReset() {
     const resetFilters: Record<string, string> = {};
     setFilters(resetFilters);
@@ -589,39 +575,13 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           </span>
         </h1>
         <div className="page-header-actions">
-          <form
-            className="students-search"
-            role="search"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSearch();
-            }}
-          >
-            <label className="sr-only" htmlFor="students-search">
-              {t('students.searchPlaceholder')}
-            </label>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
-              <circle cx="11" cy="11" r="6.5" />
-              <path d="m16 16 4.5 4.5" />
-            </svg>
-            <input
-              id="students-search"
-              type="text"
-              value={search}
-              placeholder={t('students.searchPlaceholder')}
-              onChange={(e) => handleSearchChange(e.target.value)}
-            />
-            {search && (
-              <button
-                type="button"
-                className="students-search-clear"
-                onClick={() => commitSearch('')}
-                aria-label={t('students.clearSearch')}
-              >
-                &times;
-              </button>
-            )}
-          </form>
+          <SearchField
+            id="students-search"
+            value={search}
+            placeholder={t('students.searchPlaceholder')}
+            onChange={setSearch}
+            onCommit={commitSearch}
+          />
           <Button variant="secondary" onClick={() => navigate('/students/bulk-add')}>
             {t('bulkAdd.entryButton')}
           </Button>
@@ -633,47 +593,17 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
 
       {/* Saved views — the everyday filter, in one row */}
       {statusFilter && (
-        <div className="view-chips" role="group" aria-label={t('students.searchStatus')}>
-          <button
-            type="button"
-            className={`view-chip${activeView === '' ? ' is-active' : ''}`}
-            aria-pressed={activeView === ''}
-            onClick={() => pickView('')}
-          >
-            {t('students.allStatus')}
-            <span>{total}</span>
-          </button>
-
-          {statusFilter.options.map((opt) => {
-            const n = viewCounts?.[opt.value];
-            if (viewCounts && !n) return null;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                // Each chip carries its own status tone, so the row of chips
-                // reads as the same palette as the Status column beside it.
-                className={`view-chip view-chip--${STATUS_TONE[toToneKey(opt.value)] ?? 'neutral'}${
-                  activeView === opt.value ? ' is-active' : ''
-                }`}
-                aria-pressed={activeView === opt.value}
-                onClick={() => pickView(opt.value)}
-              >
-                {opt.label}
-                {n != null && <span>{n}</span>}
-              </button>
-            );
-          })}
-
-          <button
-            type="button"
-            className={`view-chip view-chip-more${showAdvanced ? ' is-active' : ''}`}
-            aria-expanded={showAdvanced}
-            onClick={() => setShowAdvanced((v) => !v)}
-          >
-            {showAdvanced ? t('students.fewerFilters') : t('students.moreFilters')}
-          </button>
-        </div>
+        <ViewChips
+          options={statusFilter.options}
+          active={activeView}
+          onPick={pickView}
+          counts={viewCounts}
+          total={total}
+          allLabel={t('students.allStatus')}
+          ariaLabel={t('students.searchStatus')}
+          showAdvanced={showAdvanced}
+          onToggleAdvanced={() => setShowAdvanced((v) => !v)}
+        />
       )}
 
       {/* The full column-per-field panel, folded away by default */}
