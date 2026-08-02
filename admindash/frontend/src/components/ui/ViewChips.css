@@ -62,6 +62,13 @@
 }
 .view-chip[class*='view-chip--'].is-active span { color: var(--chip-fg); }
 
+.view-chip--stage-0 { --chip-fg: var(--stage-0); --chip-bg: var(--stage-0-tint); }
+.view-chip--stage-1 { --chip-fg: var(--stage-1); --chip-bg: var(--stage-1-tint); }
+.view-chip--stage-2 { --chip-fg: var(--stage-2); --chip-bg: var(--stage-2-tint); }
+.view-chip--stage-3 { --chip-fg: var(--stage-3); --chip-bg: var(--stage-3-tint); }
+.view-chip--stage-4 { --chip-fg: var(--stage-4); --chip-bg: var(--stage-4-tint); }
+.view-chip--stage-5 { --chip-fg: var(--stage-5); --chip-bg: var(--stage-5-tint); }
+
 .view-chip-more {
   margin-left: auto;
   color: var(--text-tertiary);

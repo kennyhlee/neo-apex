@@ -5,6 +5,9 @@ import './ViewChips.css';
 export interface ViewOption {
   value: string;
   label: string;
+  /** Overrides the status-derived tone — used for pipeline stages, where
+   *  position in the funnel carries the meaning, not the label. */
+  tone?: string;
 }
 
 interface ViewChipsProps {
@@ -63,7 +66,7 @@ export default function ViewChips({
           <button
             key={opt.value}
             type="button"
-            className={`view-chip view-chip--${toneFor(opt.value)}${
+            className={`view-chip view-chip--${opt.tone ?? toneFor(opt.value)}${
               active === opt.value ? ' is-active' : ''
             }`}
             aria-pressed={active === opt.value}

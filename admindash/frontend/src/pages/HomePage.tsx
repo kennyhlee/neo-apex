@@ -6,6 +6,7 @@ import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
 import { listLeads, postQuery } from '../api/client.ts';
 import { leadStages } from '../utils/leadModel.ts';
+import { stageTone } from '../utils/tone.ts';
 import type { Lead } from '../types/models.ts';
 import CalendarChip from '../components/CalendarChip.tsx';
 import ProgramDetailModal from '../components/ProgramDetailModal.tsx';
@@ -23,9 +24,6 @@ import './HomePage.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const STALE_DAYS = 7;
-
-/** Sequential ramp, cool to committed. Colour encodes progress, nothing else. */
-const STAGE_RAMP = ['#7A86A8', '#4F7FC4', '#2E9BA8', '#3F9E6B', '#2F7D4F', '#8C93A1'];
 
 interface HomePageProps {
   tenant: string;
@@ -375,7 +373,9 @@ export default function HomePage({ tenant }: HomePageProps) {
                 <li
                   key={s.stage}
                   className="spine-stage"
-                  style={{ '--stage-c': STAGE_RAMP[Math.min(i, STAGE_RAMP.length - 1)] } as React.CSSProperties}
+                  style={
+                    { '--stage-c': `var(--${stageTone(i, stageCounts.length)})` } as React.CSSProperties
+                  }
                 >
                   <b>{leadsLoaded ? s.count : '—'}</b>
                   <span>{s.stage}</span>

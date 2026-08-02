@@ -59,6 +59,18 @@
   --away:          #5B4478;  --away-tint:    #EDE7F2;
   --neutral:       #5C6B64;  --neutral-tint: #E7EBE9;
 
+  /* --- Enrollment stage ramp ----------------------------------------------
+     A sequential progression, cool to committed. Colour encodes how far along
+     the journey a lead is and nothing else, so it is deliberately separate
+     from both the accent and the semantic tones. Shared by the Today pipeline
+     spine and the Leads stage chips. */
+  --stage-0: #7A86A8;  --stage-0-tint: #EDEFF4;
+  --stage-1: #4F7FC4;  --stage-1-tint: #E8EFF9;
+  --stage-2: #2E9BA8;  --stage-2-tint: #E4F2F4;
+  --stage-3: #3F9E6B;  --stage-3-tint: #E6F3EC;
+  --stage-4: #2F7D4F;  --stage-4-tint: #E4F1E9;
+  --stage-5: #8C93A1;  --stage-5-tint: #EDEEF1;
+
   /* --- Typography ----------------------------------------------------------
      Inter arrives from the shared token package. The display face is a system
      serif — names are the content of this product, so they get the good face.

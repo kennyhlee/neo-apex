@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { useDensity } from '../hooks/useDensity.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
-import { postQuery, getStudentsByFamily } from '../api/client.ts';
+import { postQuery } from '../api/client.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import Button from '../components/ui/Button.tsx';
+import SearchField from '../components/ui/SearchField.tsx';
+import NameCell from '../components/ui/NameCell.tsx';
 import AddFamilyModal from '../components/AddFamilyModal.tsx';
 import AddStudentModal from '../components/AddStudentModal.tsx';
 import StudentDetailModal from '../components/StudentDetailModal.tsx';
 import EditFamilyModal from '../components/EditFamilyModal.tsx';
-import StudentNameCell from '../components/StudentNameCell.tsx';
-import StatusBadge from '../components/StatusBadge.tsx';
+import FamilyDetailModal from '../components/FamilyDetailModal.tsx';
 import type { Family, ModelDefinition } from '../types/models.ts';
 import './FamiliesPage.css';
 
@@ -18,21 +20,30 @@ type Row = Record<string, unknown>;
 
 const PAGE_SIZE = 20;
 
+/** Two initials read as a household; one reads as a filing code. */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '—';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export default function FamiliesPage({ tenant }: FamiliesPageProps) {
   const { t } = useTranslation();
+  const { density } = useDensity();
   const { getModel } = useModel();
   const [rows, setRows] = useState<Family[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadTick, setLoadTick] = useState(0);
   const [search, setSearch] = useState('');
+  const [applied, setApplied] = useState('');
   const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [studentsByFamily, setStudentsByFamily] = useState<Record<string, Row[]>>({});
   const [studentModel, setStudentModel] = useState<ModelDefinition | null>(null);
   const [familyModel, setFamilyModel] = useState<ModelDefinition | null>(null);
   const [addStudentTo, setAddStudentTo] = useState<Family | null>(null);
   const [detailStudent, setDetailStudent] = useState<Row | null>(null);
+  const [detailFamily, setDetailFamily] = useState<Row | null>(null);
   const [editFamily, setEditFamily] = useState<Row | null>(null);
 
   useEffect(() => { getModel(tenant, 'student').then(setStudentModel).catch(() => setStudentModel(null)); }, [tenant, getModel]);
@@ -45,30 +56,13 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
       .catch(() => { setRows([]); setLoading(false); });
   }, [tenant, loadTick]);
 
-  const loadStudents = useCallback((familyId: string) => {
-    getStudentsByFamily(tenant, familyId)
-      .then((list) => setStudentsByFamily((prev) => ({ ...prev, [familyId]: list })))
-      .catch(() => setStudentsByFamily((prev) => ({ ...prev, [familyId]: [] })));
-  }, [tenant]);
-
-  function toggleExpand(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else { next.add(id); loadStudents(id); }
-      return next;
-    });
-  }
-
-  function handleReload() {
+  const handleReload = useCallback(() => {
     setLoading(true);
-    // refresh any currently-expanded families' students too
-    expandedIds.forEach((id) => loadStudents(id));
     setLoadTick((n) => n + 1);
-  }
+  }, []);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = applied.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((f) =>
       String(f.family_name ?? '').toLowerCase().includes(q) ||
@@ -76,7 +70,7 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
       String(f.primary_phone ?? '').toLowerCase().includes(q) ||
       String(f.entity_id ?? '').toLowerCase().includes(q) ||
       String(f.family_id ?? '').toLowerCase().includes(q));
-  }, [rows, search]);
+  }, [rows, applied]);
 
   const currentPage = useMemo(() => {
     const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -88,69 +82,32 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, currentPage]);
 
-  function handleSearch(e: React.ChangeEvent<HTMLInputElement>) { setSearch(e.target.value); setPage(1); }
+  function commitSearch(q: string) {
+    setSearch(q);
+    setApplied(q);
+    setPage(1);
+  }
 
   const columns: Column<Row>[] = useMemo(() => [
-    { key: 'entity_id', label: t('families.colId'), render: (r) => (
-      <button type="button" className="families-id-btn" onClick={() => setEditFamily(r)}>
-        <code className="families-id">{String(r.family_id || r.entity_id || '-')}</code>
-      </button>
-    ) },
-    { key: 'family_name', label: t('families.colName'), primary: true, render: (r) => (
-      <button type="button" className="families-name-btn" onClick={() => setEditFamily(r)}>
-        {String(r.family_name ?? '—')}
-      </button>
-    ) },
+    {
+      key: 'family_name',
+      label: t('families.colName'),
+      primary: true,
+      render: (r) => {
+        const name = String(r.family_name ?? '—');
+        return (
+          <NameCell
+            name={name}
+            initials={initialsOf(name)}
+            secondary={String(r.family_id ?? r.entity_id ?? '')}
+            onOpen={() => setDetailFamily(r)}
+          />
+        );
+      },
+    },
     { key: 'primary_email', label: t('families.colEmail'), render: (r) => String(r.primary_email ?? '—') },
     { key: 'primary_phone', label: t('families.colPhone'), render: (r) => String(r.primary_phone ?? '—') },
   ], [t]);
-
-  function renderExpanded(family: Row): React.ReactNode {
-    const fid = String(family.entity_id ?? '');
-    const students = studentsByFamily[fid];
-    return (
-      <div className="families-expanded">
-        {students == null ? (
-          <p>{t('common.loading')}</p>
-        ) : students.length === 0 ? (
-          <p className="families-empty">{t('families.noStudents')}</p>
-        ) : (
-          <table className="families-students-table">
-            <thead>
-              <tr>
-                <th>{t('families.colStudentId')}</th>
-                <th>{t('families.colStudentName')}</th>
-                <th>{t('families.colGrade')}</th>
-                <th>{t('families.colStatus')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s) => (
-                <tr key={String(s.entity_id)}>
-                  <td>
-                    <button
-                      type="button"
-                      className="families-student-id"
-                      title={t('studentDetail.dblclickHint')}
-                      onClick={() => setDetailStudent(s)}
-                    >
-                      {String(s.student_id ?? '-')}
-                    </button>
-                  </td>
-                  <td><StudentNameCell row={s} /></td>
-                  <td>{String(s.grade_level ?? '-')}</td>
-                  <td><StatusBadge status={String(s.status ?? '-')} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <Button variant="secondary" size="sm" onClick={() => setAddStudentTo(family as unknown as Family)}>
-          {t('families.addStudent')}
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="families-page">
@@ -162,16 +119,12 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
           </span>
         </h1>
         <div className="page-header-actions">
-          <label className="sr-only" htmlFor="families-search">
-            {t('families.search')}
-          </label>
-          <input
+          <SearchField
             id="families-search"
-            type="search"
-            className="families-search"
-            placeholder={t('families.search')}
             value={search}
-            onChange={handleSearch}
+            placeholder={t('families.search')}
+            onChange={setSearch}
+            onCommit={commitSearch}
           />
           <Button variant="primary" onClick={() => setShowAdd(true)}>
             {t('families.addFamily')}
@@ -191,24 +144,43 @@ export default function FamiliesPage({ tenant }: FamiliesPageProps) {
         rowLabel={(r) => String(r.family_name ?? r.family_id ?? r.entity_id ?? '')}
         caption={t('families.title')}
         selectable={false}
-        renderExpanded={renderExpanded}
-        expandedIds={expandedIds}
-        onToggleExpand={toggleExpand}
-        rowActions={(r) => (
-          <Button variant="secondary" size="sm" onClick={() => setEditFamily(r)}>
-            {t('students.edit')}
-          </Button>
-        )}
+        // The row opens the family record, which now holds the students the
+        // row used to expand to reveal.
+        onRowClick={setDetailFamily}
+        rowActions={
+          density === 'compact'
+            ? (r) => (
+                <Button variant="secondary" size="sm" onClick={() => setEditFamily(r)}>
+                  {t('students.edit')}
+                </Button>
+              )
+            : undefined
+        }
         emptyState={{
           title: t('families.empty'),
-          description: search ? t('families.emptySearchBody') : t('families.emptyBody'),
-          action: (
+          description: applied ? t('families.emptySearchBody') : t('families.emptyBody'),
+          action: applied ? (
+            <Button variant="secondary" onClick={() => commitSearch('')}>
+              {t('students.clearSearch')}
+            </Button>
+          ) : (
             <Button variant="primary" onClick={() => setShowAdd(true)}>
               {t('families.addFamily')}
             </Button>
           ),
         }}
       />
+
+      {detailFamily && (
+        <FamilyDetailModal
+          tenant={tenant}
+          family={detailFamily}
+          onClose={() => setDetailFamily(null)}
+          onEdit={(f) => { setDetailFamily(null); setEditFamily(f); }}
+          onAddStudent={(f) => { setDetailFamily(null); setAddStudentTo(f as unknown as Family); }}
+          onOpenStudent={(s) => { setDetailFamily(null); setDetailStudent(s); }}
+        />
+      )}
 
       {showAdd && (
         <AddFamilyModal tenant={tenant} onClose={() => setShowAdd(false)} onSuccess={() => { setShowAdd(false); handleReload(); }} />

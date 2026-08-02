@@ -81,3 +81,22 @@ export const TILE_TINTS = ['pine', 'slate', 'clay', 'plum', 'teal', 'moss'] as c
 export function tileTintFor(seed: string): string {
   return TILE_TINTS[hashIndex(seed, TILE_TINTS.length)];
 }
+
+/** How many steps the stage ramp defines (see --stage-N in theme.css). */
+export const STAGE_STEPS = 6;
+
+/**
+ * Class suffix for a pipeline stage, by position rather than by name.
+ *
+ * Stage labels are tenant-defined ("Tour Scheduled", "Toured"), so a semantic
+ * lookup would miss most of them. Position is what actually carries meaning
+ * in a funnel. The last stage is usually the lost/closed one, so it takes the
+ * muted end of the ramp.
+ */
+export function stageTone(index: number, total: number): string {
+  if (total <= 1) return 'stage-0';
+  if (index >= total - 1) return 'stage-5';
+  const span = Math.max(1, total - 2);
+  const step = Math.round((index / span) * (STAGE_STEPS - 3));
+  return `stage-${Math.min(step, STAGE_STEPS - 3)}`;
+}

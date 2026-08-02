@@ -2,23 +2,6 @@
   animation: fadeIn var(--dur-base) var(--ease);
 }
 
-.leads-stage-filter {
-  font-family: var(--font-sans);
-  font-size: var(--text-md);
-  height: var(--control-h);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--control-r);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease);
-}
-
-.leads-stage-filter:hover {
-  border-color: var(--line-strong);
-}
-
 /* --- Empty state ---------------------------------------------------------
    Previously a bare <p> reading "No leads yet". */
 
@@ -47,6 +30,15 @@
   padding-bottom: var(--space-2);
 }
 
+/* Column headers carry the stage ramp, so the board shows how far along the
+   funnel each group is — the same colours as the Today pipeline spine. */
+.leads-column--stage-0 { --stage-c: var(--stage-0); --stage-t: var(--stage-0-tint); }
+.leads-column--stage-1 { --stage-c: var(--stage-1); --stage-t: var(--stage-1-tint); }
+.leads-column--stage-2 { --stage-c: var(--stage-2); --stage-t: var(--stage-2-tint); }
+.leads-column--stage-3 { --stage-c: var(--stage-3); --stage-t: var(--stage-3-tint); }
+.leads-column--stage-4 { --stage-c: var(--stage-4); --stage-t: var(--stage-4-tint); }
+.leads-column--stage-5 { --stage-c: var(--stage-5); --stage-t: var(--stage-5-tint); }
+
 .leads-column {
   min-width: 230px;
   flex: 1;
@@ -57,6 +49,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  border-top: 3px solid var(--stage-c, var(--line-strong));
 }
 
 .leads-column h2 {
@@ -76,16 +69,22 @@
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
-  color: var(--text-tertiary);
-  background: var(--surface-sunken);
+  color: var(--stage-c, var(--text-tertiary));
+  background: var(--stage-t, var(--surface-sunken));
   border-radius: var(--radius-full);
   padding: 2px var(--space-2);
 }
 
+.leads-column-empty {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  padding: var(--space-2) 0;
+}
+
 .lead-card {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--space-3);
   width: 100%;
   text-align: left;
   padding: var(--space-3);
@@ -100,6 +99,14 @@
 .lead-card:hover {
   border-color: var(--accent);
   box-shadow: var(--shadow-1);
+}
+
+.lead-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  text-align: left;
 }
 
 .lead-card strong {
@@ -125,5 +132,4 @@
     overflow-x: visible;
   }
   .leads-column { min-width: 0; }
-  .leads-stage-filter { width: 100%; }
 }
