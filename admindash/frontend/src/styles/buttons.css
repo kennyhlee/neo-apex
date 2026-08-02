@@ -40,7 +40,7 @@
 /* --- Variants ------------------------------------------------------------ */
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--on-accent);
 }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
@@ -77,7 +77,7 @@
   height: auto;
   min-height: 0;
   padding: 0;
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: var(--weight-semibold);
 }
 .btn-link:hover:not(:disabled) { text-decoration: underline; }

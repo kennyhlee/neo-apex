@@ -68,7 +68,7 @@
 }
 
 .post-submit-summary__btn-done {
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--text-inverse);
   border-color: var(--accent);
 }

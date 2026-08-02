@@ -68,11 +68,11 @@
   font-size: 0.85em;
   color: var(--text-tertiary);
 }
-.data-table-sort-btn:hover .data-table-sort-indicator { color: var(--accent); }
+.data-table-sort-btn:hover .data-table-sort-indicator { color: var(--accent-ink); }
 
 .data-table th[aria-sort='ascending'] .data-table-sort-indicator,
 .data-table th[aria-sort='descending'] .data-table-sort-indicator {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* --- Body ---------------------------------------------------------------- */
@@ -116,7 +116,7 @@
   border-radius: var(--radius-xs);
   line-height: 1;
 }
-.data-table-expand-btn:hover { color: var(--accent); background: var(--accent-tint); }
+.data-table-expand-btn:hover { color: var(--accent-ink); background: var(--accent-tint); }
 
 /* --- Row actions ---------------------------------------------------------
    Hidden until the row is hovered or something inside it takes focus, so the
@@ -279,12 +279,12 @@
 
 .data-table-pagination-controls button:hover:not(:disabled) {
   background: var(--accent-tint);
-  color: var(--accent);
+  color: var(--accent-ink);
   border-color: var(--accent-tint-strong);
 }
 
 .data-table-pagination-controls button.active {
-  background: var(--accent);
+  background: var(--accent-ink);
   border-color: var(--accent);
   color: var(--on-accent);
   font-weight: var(--weight-semibold);

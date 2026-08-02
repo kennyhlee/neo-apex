@@ -32,10 +32,10 @@
 .view-chip.is-active {
   background: var(--accent-tint);
   border-color: var(--accent-tint-strong);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: var(--weight-semibold);
 }
-.view-chip.is-active span { color: var(--accent); }
+.view-chip.is-active span { color: var(--accent-ink); }
 
 /* Tones mirror StatusBadge, so the chip row and the Status column read as one
    palette rather than two unrelated controls. */

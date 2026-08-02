@@ -207,7 +207,7 @@
 }
 
 .calendar-more-link:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .calendar-more-popover {
@@ -262,7 +262,7 @@
 }
 
 .calendar-month-cell-number-today {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 700;
 }
 
@@ -286,7 +286,7 @@
 }
 
 .calendar-chip-more:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* calendar-month-popover: overflow popover for a cell */

@@ -209,7 +209,7 @@
 }
 
 .dynamic-form-btn-primary {
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--on-accent);
 }
 

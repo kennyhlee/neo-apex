@@ -71,7 +71,7 @@
 
 .cmdk-item.is-active {
   background: var(--accent-tint);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .cmdk-label {

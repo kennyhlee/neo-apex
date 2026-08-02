@@ -62,7 +62,7 @@
 }
 
 .programs-view-btn-active {
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--text-inverse);
 }
 

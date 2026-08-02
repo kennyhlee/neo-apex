@@ -35,7 +35,7 @@
 
 .chat-msg--user .chat-msg__text {
   align-self: flex-end;
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--text-inverse);
 }
 
@@ -75,7 +75,7 @@
 }
 
 .chat-panel__input button {
-  background: var(--accent);
+  background: var(--accent-ink);
   color: var(--text-inverse);
   border: none;
   border-radius: var(--control-r);
