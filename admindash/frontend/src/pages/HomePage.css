@@ -65,9 +65,13 @@
   border-radius: var(--card-r);
 }
 
-.queue-danger { --queue-c: var(--danger); }
+/* Two tones, ~122 apart in RGB, so the one distinction colour still makes —
+   needs a person vs ready to go — is unmistakable. `danger` stays defined for
+   genuine faults (duplicate suspects, failed imports); routine backlog uses
+   `attn`, because red on ordinary work dilutes red where it matters. */
 .queue-attn   { --queue-c: var(--attn); }
 .queue-ok     { --queue-c: var(--success); }
+.queue-danger { --queue-c: var(--danger); }
 
 .queue-count {
   flex: none;

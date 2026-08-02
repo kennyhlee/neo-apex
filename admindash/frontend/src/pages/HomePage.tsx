@@ -185,19 +185,44 @@ export default function HomePage({ tenant }: HomePageProps) {
     const advanced = new Set(stages.slice(Math.max(0, stages.length - 2), stages.length - 1));
     const readyToConvert = open.filter((l) => advanced.has(l.stage));
 
+    /** Oldest age in a group, for the line that says why it is urgent. */
+    const oldest = (rows: Lead[]): number | null => {
+      const ages = rows.map((l) => daysSince(l._created_at)).filter((a): a is number => a != null);
+      return ages.length ? Math.max(...ages) : null;
+    };
+
+    /** "1 day" and "4 days" need different strings; there is no plural support. */
+    const days = (n: number, oneKey: string, manyKey: string) =>
+      (n === 1 ? t(oneKey) : t(manyKey)).replace('{n}', String(n));
+
+    const untouchedAge = oldest(untouched);
+    const staleAge = oldest(stale);
+
     const items: QueueItem[] = [
       {
         key: 'untouched',
         count: untouched.length,
         label: t('today.unassignedLeads'),
+        // How long the oldest has been sitting ranks this better than a hue.
+        detail:
+          untouchedAge != null
+            ? days(untouchedAge, 'today.oldestWaitingOne', 'today.oldestWaiting')
+            : undefined,
         action: t('today.unassignedLeadsAction'),
-        tone: 'danger',
+        // Deliberately not `danger`: an inquiry awaiting a first call is
+        // routine backlog, not a fault. Red is kept for genuine problems so
+        // it still means something when it appears.
+        tone: 'attn',
         onAct: () => navigate('/leads'),
       },
       {
         key: 'stale',
         count: stale.length,
         label: t('today.staleLeads'),
+        detail:
+          staleAge != null
+            ? days(staleAge, 'today.longestWaitingOne', 'today.longestWaiting')
+            : undefined,
         action: t('today.staleLeadsAction'),
         tone: 'attn',
         onAct: () => navigate('/leads'),
@@ -205,8 +230,11 @@ export default function HomePage({ tenant }: HomePageProps) {
       {
         key: 'unreachable',
         count: unreachable.length,
-        label: t('today.incompleteStudents'),
-        action: t('today.incompleteStudentsAction'),
+        // This counts inquiries with no email and no phone — the old label
+        // said "students missing required details", naming the wrong entity.
+        label: t('today.unreachableLeads'),
+        detail: t('today.unreachableLeadsDetail'),
+        action: t('today.unreachableLeadsAction'),
         tone: 'attn',
         onAct: () => navigate('/leads'),
       },
@@ -214,6 +242,7 @@ export default function HomePage({ tenant }: HomePageProps) {
         key: 'convert',
         count: readyToConvert.length,
         label: t('today.readyToEnroll'),
+        detail: t('today.readyToEnrollDetail'),
         action: t('today.readyToEnrollAction'),
         tone: 'ok',
         onAct: () => navigate('/leads'),

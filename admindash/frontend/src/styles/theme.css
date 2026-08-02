@@ -67,7 +67,9 @@
      is exactly the collision this rule exists to prevent. `attn` means a
      person must act. */
   --success:       #2A7145;  --success-tint: #E4F1E9;
-  --attn:          #8A5220;  --attn-tint:    #F7EADD;
+  /* A truer amber than the old #8A5220, which read muddy once the ground
+     moved from green to cool blue-grey. 5.28:1 on white, 4.65:1 on tint. */
+  --attn:          #96600F;  --attn-tint:    #FAEFE1;
   --danger:        #A3352F;  --danger-tint:  #F8E8E7;
   --info:          #4F4B94;  --info-tint:    #EBEAF5;
   --away:          #7A4A72;  --away-tint:    #F3E9F1;
