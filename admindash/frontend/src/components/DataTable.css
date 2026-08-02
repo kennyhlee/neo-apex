@@ -8,8 +8,9 @@
 
 .data-table-card {
   background: var(--bg-card);
-  border: 1px solid var(--border-primary);
+  border: 1px solid var(--card-border);
   border-radius: var(--card-r);
+  box-shadow: var(--card-shadow);
   overflow: hidden;
 }
 
@@ -30,7 +31,7 @@
   top: 0;
   z-index: 1;
   text-align: left;
-  background: var(--surface-2);
+  background: var(--table-head-bg);
   color: var(--text-secondary);
   font-size: var(--table-head-fs);
   font-weight: var(--weight-semibold);

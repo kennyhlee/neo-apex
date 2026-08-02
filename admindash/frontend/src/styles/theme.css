@@ -160,6 +160,12 @@
   --table-head-transform: none;
   --table-head-spacing: 0;
   --table-numeric: normal;
+  /* Comfortable reads as a calm sheet: no header fill, no hard card edge.
+     The header still needs an opaque colour — it is sticky, so a transparent
+     one would let rows scroll through it. --surface matches the card. */
+  --table-head-bg: var(--surface);
+  --card-border:   transparent;
+  --card-shadow:   var(--shadow-2);
   --ui-fs:        var(--text-base);
   --control-h:    40px;
   --control-px:   16px;
@@ -183,6 +189,10 @@
   --table-head-transform: uppercase;
   --table-head-spacing: 0.05em;
   --table-numeric: tabular-nums;
+  /* Compact reads as an instrument: filled header, hairline edge, no lift. */
+  --table-head-bg: var(--surface-2);
+  --card-border:   var(--line);
+  --card-shadow:   none;
   --ui-fs:        var(--text-sm);
   --control-h:    30px;
   --control-px:   12px;

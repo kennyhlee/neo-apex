@@ -221,6 +221,18 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   // Filter state
   const [filters, setFilters] = useState<Record<string, string>>({});
 
+  /**
+   * Direction B replaces the permanent column-per-input panel with one search
+   * box plus saved-view chips: filtering becomes a decision, not a form. The
+   * full panel is still available, just folded away behind "More filters".
+   */
+  const [search, setSearch] = useState('');
+  // Held in a ref so loadData's identity doesn't churn on every keystroke.
+  const searchRef = useRef('');
+  const [activeView, setActiveView] = useState('');
+  const [viewCounts, setViewCounts] = useState<Record<string, number> | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   // Highlight state from navigation
   const highlightEntityId = (location.state as { highlightEntityId?: string } | null)?.highlightEntityId ?? null;
   const [activeHighlight, setActiveHighlight] = useState<string | null>(highlightEntityId);
@@ -304,6 +316,16 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           conditions.push(`${key} ILIKE '%${safeVal}%'`);
         }
 
+        // One search box across the fields a person actually recalls, rather
+        // than a column-per-input panel.
+        const q = searchRef.current.trim();
+        if (q) {
+          const s = q.replace(/'/g, "''");
+          conditions.push(
+            `(first_name ILIKE '%${s}%' OR last_name ILIKE '%${s}%' OR preferred_name ILIKE '%${s}%' OR student_id ILIKE '%${s}%')`,
+          );
+        }
+
         const where = conditions.join(' AND ');
         const sortCol = prefs.sortBy;
         const dir = prefs.sortDir.toUpperCase();
@@ -382,12 +404,16 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
   }
 
   function handleSearch() {
+    searchRef.current = search;
     loadData(1, filters);
   }
 
   function handleReset() {
     const resetFilters: Record<string, string> = {};
     setFilters(resetFilters);
+    setSearch('');
+    setActiveView('');
+    searchRef.current = '';
     loadData(1, resetFilters);
   }
 
@@ -484,6 +510,49 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
     };
   }, [model, t]);
 
+  /**
+   * Counts for the saved-view chips — one GROUP BY rather than a query per
+   * chip. Refreshed whenever the underlying list reloads.
+   */
+  useEffect(() => {
+    const column = statusFilter?.column;
+    if (!column || !tenant) return;
+    let cancelled = false;
+    postQuery(
+      tenant,
+      'entities',
+      `SELECT ${column}, COUNT(*) AS count FROM data WHERE entity_type = 'student' AND _status = 'active' GROUP BY ${column}`,
+    )
+      .then((res) => {
+        if (cancelled) return;
+        const next: Record<string, number> = {};
+        for (const row of res.data ?? []) {
+          const key = String(row[column] ?? '').replace(/^\["|"\]$/g, '');
+          if (key) next[key] = Number(row.count ?? 0);
+        }
+        setViewCounts(next);
+      })
+      .catch(() => {
+        if (!cancelled) setViewCounts({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant, statusFilter?.column, total]);
+
+  /** Selecting a chip is just a one-field filter, applied immediately. */
+  function pickView(value: string) {
+    const column = statusFilter?.column;
+    setActiveView(value);
+    const next = { ...filters };
+    if (column) {
+      if (value) next[column] = value;
+      else delete next[column];
+    }
+    setFilters(next);
+    loadData(1, next);
+  }
+
   return (
     <div className="students-page" ref={containerRef}>
       <header className="page-header">
@@ -494,6 +563,29 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           </span>
         </h1>
         <div className="page-header-actions">
+          <form
+            className="students-search"
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSearch();
+            }}
+          >
+            <label className="sr-only" htmlFor="students-search">
+              {t('students.searchPlaceholder')}
+            </label>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 4.5 4.5" />
+            </svg>
+            <input
+              id="students-search"
+              type="search"
+              value={search}
+              placeholder={t('students.searchPlaceholder')}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </form>
           <Button variant="secondary" onClick={() => navigate('/students/bulk-add')}>
             {t('bulkAdd.entryButton')}
           </Button>
@@ -503,6 +595,49 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
         </div>
       </header>
 
+      {/* Saved views — the everyday filter, in one row */}
+      {statusFilter && (
+        <div className="view-chips" role="group" aria-label={t('students.searchStatus')}>
+          <button
+            type="button"
+            className={`view-chip${activeView === '' ? ' is-active' : ''}`}
+            aria-pressed={activeView === ''}
+            onClick={() => pickView('')}
+          >
+            {t('students.allStatus')}
+            <span>{total}</span>
+          </button>
+
+          {statusFilter.options.map((opt) => {
+            const n = viewCounts?.[opt.value];
+            if (viewCounts && !n) return null;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                className={`view-chip${activeView === opt.value ? ' is-active' : ''}`}
+                aria-pressed={activeView === opt.value}
+                onClick={() => pickView(opt.value)}
+              >
+                {opt.label}
+                {n != null && <span>{n}</span>}
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            className={`view-chip view-chip-more${showAdvanced ? ' is-active' : ''}`}
+            aria-expanded={showAdvanced}
+            onClick={() => setShowAdvanced((v) => !v)}
+          >
+            {showAdvanced ? t('students.fewerFilters') : t('students.moreFilters')}
+          </button>
+        </div>
+      )}
+
+      {/* The full column-per-field panel, folded away by default */}
+      {(showAdvanced || !statusFilter) && (
       <FilterForm onSearch={handleSearch} onReset={handleReset}>
         {dynamicFilterFields.map((field) => (
           <div className="filter-field" key={field.name}>
@@ -550,6 +685,7 @@ export default function StudentsPage({ tenant }: StudentsPageProps) {
           </div>
         )}
       </FilterForm>
+      )}
 
       <div className="students-toolbar">
         {selectedIds.size > 0 && (
