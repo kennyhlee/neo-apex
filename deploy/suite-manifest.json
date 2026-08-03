@@ -10,8 +10,8 @@
     "actually running on Fly, so it records reality rather than intention.",
     "The `deployable` git tag points at the commit where it was last promoted."
   ],
-  "promoted_at": "2026-08-03T07:57:44Z",
-  "promoted_from": "e0ea5aa",
+  "promoted_at": "2026-08-03T08:00:20Z",
+  "promoted_from": "a935752",
   "modules": {
     "datacore": "datacore-v0.5.0",
     "launchpad": "launchpad-v0.3.1",
