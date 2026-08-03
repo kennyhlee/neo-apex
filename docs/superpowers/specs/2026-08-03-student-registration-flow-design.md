@@ -65,7 +65,8 @@ Staff-side reads and invariant-free writes add **zero** bespoke endpoints — en
 
 | Endpoint | Why it can't be generic |
 |---|---|
-| `POST /api/registration/{tenant}/applications/{app_id}/actions` | Single typed-action endpoint: `submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link`. Enforces transition guards, derives status, writes activity, runs approval side effects — invariants a raw entity write would bypass. Also callable (submit/save actions only) by familyhub-backend over the private network. |
+| `POST /api/registration/{tenant}/applications` | Creates an application plus its `application_item` set derived from the published config — item derivation is an invariant a generic entity write would bypass. |
+| `POST /api/registration/{tenant}/applications/{app_id}/actions` | Single typed-action endpoint: `save_draft, complete_item, submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link`. Enforces transition guards, derives status, writes activity, runs approval side effects — invariants a raw entity write would bypass. familyhub reaches a parent-restricted subset (`save_draft, complete_item, submit`) via token-scoped internal routes guarded by a shared `X-Internal-Key` secret over the private network. |
 | `POST /api/registration/{tenant}/applications/{app_id}/checkout` | Creates the Stripe Checkout Session on the tenant's connected account. |
 | `POST /api/webhooks/stripe` | Stripe callback (unauthenticated by nature; verified by signature + connected-account→tenant mapping). |
 | `POST /api/documents/{tenant}` / `GET /api/documents/{tenant}/{doc_id}/url` | Thin proxies to DataCore's blob API (§8) — presigned URLs are not entity data. |

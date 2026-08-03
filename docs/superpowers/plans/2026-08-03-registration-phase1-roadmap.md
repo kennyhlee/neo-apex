@@ -25,10 +25,25 @@ Plans must use these names/types exactly. They restate spec §4–§5; the spec 
 **Item status** (`application_item.base_data.status`):
 `not_started | in_progress | submitted | verified | rejected | waived`
 
-**Action endpoint** (Plan 2): `POST /api/registration/{tenant_id}/applications/{application_id}/actions` with JSON body `{"action": <name>, ...params}`; action names:
-`submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link` (Plan 3 adds no new action; checkout is its own route).
+**Application creation** (Plan 2): `POST /api/registration/{tenant_id}/applications` body `{program_id, school_year, channel: "parent"|"admin", applicant_email?}` → `201` with the application entity; creates the `application_item` set derived from the program's published `registration_config` (an invariant — never created via generic entity writes).
 
-**Magic-link token** (Plan 2 issues; Plan 5 validates via enrollx internal call): HMAC-SHA256 over `{tenant_id}.{application_id}.{token_version}` with server secret `ENROLLX_LINK_SECRET`; URL-safe base64; `token_version` stored on the application entity, incremented to revoke.
+**Action endpoint** (Plan 2): `POST /api/registration/{tenant_id}/applications/{application_id}/actions` with JSON body `{"action": <name>, ...params}`; action names:
+`save_draft, complete_item, submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link` (Plan 3 adds no new action; checkout is its own route). `save_draft`/`complete_item` are the runtime actions used by both channels; the parent channel may invoke ONLY `save_draft, complete_item, submit` (enforced by the internal routes below).
+
+**Identifier convention (all plans):** wherever an API payload, token, or SQL filter says `application_id`, it means the application's **entity_id** (the DataCore row id), NOT the RA-prefixed display id in `base_data.application_id`. Documents, actions, tokens, and checkout all key on entity_id.
+
+**Internal service auth** (Plan 2 produces; Plans 3/5 consume): familyhub-backend calls enrollx-backend over the private network with header `X-Internal-Key` equal to env `ENROLLX_INTERNAL_KEY` (familyhub reads it as `FAMILYHUB_ENROLLX_INTERNAL_KEY`). Internal routes as built (no JWT):
+- `POST /internal/registration/{tenant_id}/{program_id}/start` → `201 {application, items, token, link}`.
+- `GET /internal/registration/{tenant_id}/{program_id}/config` → `{config, program, capacity: {capacity, approved, enrolled, full}}`.
+- `GET /internal/application-by-token/{token}` → `{application, items, config}`.
+- `POST /internal/application-by-token/{token}/actions` — parent-permitted actions only (`save_draft, complete_item, submit`); others 403.
+- `GET /internal/application-by-token/{token}/documents` → `{documents: [{entity_id, document_id, filename, uploaded_by, item_id}]}`; sensitive docs included only when uploaded by this parent.
+- `POST /internal/registration/{tenant_id}/request-link` body `{email, program_id?}` — token-less lost-link recovery; always `200 {}` (no enumeration).
+- `POST /internal/application-by-token/{token}/checkout` (Plan 3) — parent Stripe Checkout.
+
+Parent-uploaded documents are tagged `uploaded_by = "parent:{application entity_id}"`; staff uploads use the staff `user_id`.
+
+**Magic-link token** (Plan 2 issues; Plan 5 consumes via the internal routes): HMAC-SHA256 over `{tenant_id}.{application_id}.{token_version}` with server secret `ENROLLX_LINK_SECRET`; URL-safe base64 of `{tenant_id}.{application_id}.{signature}`; `token_version` stored on the application entity, incremented to revoke.
 
 **flow-runtime types** (Plan 1 defines in `flow-runtime/src/types.ts`; Plans 4–5 consume):
 ```ts
