@@ -22,24 +22,43 @@ Tenants (afterschool programs/schools) design their own student registration flo
 
 ## 2. Architecture
 
-All new backend surface lives in **admindash-backend** (FastAPI, port 5610), following its existing pattern of proxying storage to DataCore. All new UI lives in **admindash-frontend**. DataCore changes are limited to ID abbreviations and (if needed) query support. Papermite changes are limited to un-hardcoding the extraction entity type in the AdminDash proxy and adding image extensions.
+**Storage principle: DataCore is the only persistence layer.** Every registration record — configs, applications, items, activities, payments, document metadata — is a plain entity in the tenant's DataCore tables, written through DataCore's existing entity API and read through the generic query endpoint. Document *blobs* also become a DataCore capability (§8) so no other service owns durable state. admindash-backend holds workflow logic and integration glue (Stripe, email, magic-link auth) but persists nothing itself.
+
+**API principle: generic endpoints first.** Reads use the existing generic query passthrough wherever possible (pipeline, matrix, detail, hub data are all SQL over entities); writes with no invariants use the existing generic entity endpoints (e.g. builder drafts). New bespoke endpoints exist only where a server must enforce invariants or handle non-entity concerns, and are consolidated into a single action endpoint plus a handful of integration routes (§2.1). Two payoffs: the endpoint count stays close to today's, and the AI chatbot (`chat.py`) can answer registration questions ("how many applications are pending documents for Fall 2026?") through the same generic query with zero registration-specific integration.
+
+All new UI lives in **admindash-frontend**. DataCore changes: ID abbreviations, the document blob API (§8). Papermite changes: un-hardcoding the extraction entity type in the AdminDash proxy and adding image extensions.
 
 ```
-Parent (magic link)                    Admin (JWT, role-checked)
-      │                                        │
-      ▼                                        ▼
-AdminDash public routes  ──────────►  AdminDash authed routes
-  /register/{tenant}/{program}          /programs/{id}/registration-config  (builder)
-  /application/{token}      (hub)       /applications…                      (tracking)
-      │                                        │
-      └────────────► admindash-backend ◄───────┘
-                       │        │        │
-                       ▼        ▼        ▼
-                   DataCore   R2 (docs)  Stripe Connect (per-tenant acct)
-                (entities)                Resend (email)
-                       ▼
-                 Papermite (optional extract-to-prefill)
+Parent (magic link)                        Admin (JWT, role-checked)
+      │                                            │
+      ▼                                            ▼
+Public facade (narrow, token-scoped)      Generic endpoints (existing):
+  flow bundle / save draft /                POST /api/query          ← all reads (+ chatbot)
+  complete item / request link              POST /api/entities/…     ← invariant-free writes
+      │                                    Action endpoint (new, single):
+      │                                      POST …/applications/{id}/actions
+      └──────────► admindash-backend ◄───────┘
+                    (logic + glue,  │  Stripe Connect (per-tenant) · Resend (email)
+                     no storage)    │
+                                    ▼
+                               DataCore  ── entities + query + document blobs (R2 behind it)
+                                    ▲
+                               Papermite (optional extract-to-prefill)
 ```
+
+### 2.1 API surface (complete list of new endpoints)
+
+Admin-side reads and invariant-free writes add **zero** endpoints — they use the existing `POST /api/query` and `POST /api/entities/{tenant}/{type}` routes (now tenant-match enforced, §3). New endpoints, in full:
+
+| Endpoint | Why it can't be generic |
+|---|---|
+| `POST /api/registration/{tenant}/applications/{app_id}/actions` | Single typed-action endpoint: `submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link`. Enforces transition guards, derives status, writes activity, runs approval side effects — invariants a raw entity write would bypass. |
+| `POST /api/registration/{tenant}/applications/{app_id}/checkout` | Creates the Stripe Checkout Session on the tenant's connected account. |
+| `POST /api/webhooks/stripe` | Stripe callback (unauthenticated by nature; verified by signature + connected-account→tenant mapping). |
+| `POST /api/documents/{tenant}` / `GET /api/documents/{tenant}/{doc_id}/url` | Thin proxies to DataCore's blob API (§8) — presigned URLs are not entity data. |
+| Public facade (4): `GET /api/public/registration/{tenant}/{program}` (config bundle) · `POST …/start` · `PUT …/application/{token}` (save draft / complete item) · `POST …/request-link` | Parents are unauthenticated token holders — they can never touch the generic query/entity endpoints, so a narrow facade scoped to one application is required. Precedent: public lead routes. |
+
+The Flow Builder needs no bespoke authoring API: configs are drafted via generic entity writes; only `publish_config` (validation + version pinning) is an action.
 
 ### Components
 
@@ -47,7 +66,7 @@ AdminDash public routes  ──────────►  AdminDash authed rou
 2. **FlowRenderer** (shared runtime) — walks the config's step blocks; mounts in the public parent route and inside AdminDash for staff-assisted entry.
 3. **Parent Hub** (public UI via magic link) — application status + outstanding actions after first submission.
 4. **Application service** (backend) — application/item lifecycle, status derivation, transition validation, activity logging.
-5. **Document service** (backend) — R2 presigned uploads, `document` records, sensitive-doc gating, optional Papermite extract-to-prefill.
+5. **Document blob API** (DataCore) — R2-backed blob storage behind DataCore; admindash-backend proxies presign requests and enforces sensitive-doc gating; optional Papermite extract-to-prefill.
 6. **Payment service** (backend) — Stripe Connect checkout sessions, webhook handling, offline payment recording.
 7. **Notification service** (backend) — Resend integration: magic links, submission receipts, action-needed notices.
 8. **Tracking UI** (admin) — applications pipeline, application detail, requirements matrix.
@@ -60,7 +79,7 @@ All configuration, flows, applications, documents, payments, and tracking are te
 - **API enforcement.** A shared FastAPI dependency `require_tenant_match` asserts `user.tenant_id == path.tenant_id` on every authenticated route (403 on mismatch). **Prerequisite fix:** apply the same dependency to the existing AdminDash proxy routes (`entities.py`, `query.py`, `leads.py`), which today validate the JWT but not tenant match.
 - **Query passthrough.** `/api/query` (raw SQL to DataCore) is restricted so a caller can only address their own tenant's tables. Matrix/pipeline queries are constructed server-side against `{tenant}_entities`, never from client-supplied table names.
 - **Magic links.** Tokens are signed (HMAC, server secret), scoped to `(tenant_id, application_id)`, expiring, and revocable (token version stamped on the application). A token grants access to exactly one application. Entity IDs remain opaque/sequential per tenant; public endpoints never enumerate.
-- **Documents.** R2 keys are prefixed `{tenant_id}/{application_id}/…`. Presigned URLs (upload and download) are issued only after tenant-match (admin) or token-scope (parent) checks. Documents flagged `sensitive: true` (medical) additionally require an admin role within the tenant to view; parents can view only documents they themselves uploaded.
+- **Documents.** Blobs live in R2 behind DataCore's blob API (§8); keys are prefixed `{tenant_id}/{application_id}/…`. Presigned URLs (upload and download) are issued only after tenant-match (admin) or token-scope (parent) checks. Documents flagged `sensitive: true` (medical) additionally require an admin role within the tenant to view; parents can view only documents they themselves uploaded.
 - **Payments.** Each tenant connects **their own Stripe account via Stripe Connect** (Standard). Checkout sessions are created on the tenant's connected account; funds settle directly to the tenant. Webhook events carry the connected account ID, which maps to exactly one tenant before any state is touched. No cross-tenant money flow; platform never pools funds.
 - **Email.** All links in email carry tenant-scoped tokens. Per-tenant sender branding is Phase 2; v1 sends from a platform address with the tenant's display name.
 - **Roles.** admindash-backend gains `require_role` (mirroring LaunchPad's factory). Builder and tracking routes require `admin` or `staff` of the matching tenant. This is a prerequisite for exposing any parent-facing surface.
@@ -94,7 +113,7 @@ Ordered array; each block: `{block_id, type, title, required, blocking (bool), d
 
 ## 5. Status lifecycle
 
-Application status is **derived** from item states plus explicit admin actions; transitions are validated server-side and every change logged to `application_activity`.
+Application status is **derived** from item states plus explicit admin actions. Derivation happens at write time inside the action endpoint and is stored on the application entity — so the generic query endpoint (and the chatbot) reads status as plain data, and no consumer needs derivation logic. Transitions are validated server-side and every change is logged to `application_activity`.
 
 ```
 Draft ──submit──► Submitted ──► In Review ──approve──► Approved ──all post-approval
@@ -126,8 +145,9 @@ Waitlisted ──admin promote──► In Review
 
 ## 8. Documents
 
-- Upload: backend issues R2 presigned PUT after auth (admin tenant-match or parent token-scope); accepts pdf/docx/images (phone photos); size-limited; `document` entity written on confirm.
-- Download: presigned GET, same authorization; `sensitive` documents additionally require tenant admin/staff role — parents see only their own uploads.
+- **Blob storage lives in DataCore**, keeping all persistence in one service: DataCore gains a small blob API (`POST /documents/{tenant}` → presigned R2 PUT + `document` entity write; `GET /documents/{tenant}/{doc_id}/url` → presigned GET), with R2 as its storage backend the same way LanceDB is. Other services never talk to R2 directly.
+- admindash-backend thin-proxies these two routes (DataCore is private-network only) and enforces authorization before proxying: admin tenant-match or parent token-scope on upload; `sensitive` documents additionally require tenant admin/staff role on download — parents see only their own uploads. Accepts pdf/docx/images (phone photos); size-limited.
+- Document *metadata* is a normal entity, so document status queries (and the chatbot) go through the generic query endpoint like everything else.
 - Retention: kept while the application/student is active; deletion follows entity archival. Configurable retention policy is a deferred follow-up (documented default; revisit for compliance).
 
 ## 9. Notifications (v1 minimum)
@@ -135,6 +155,8 @@ Waitlisted ──admin promote──► In Review
 Resend integration in admindash-backend; all sends logged as `application_activity(type: email_sent)`. V1 templates: magic link, submission receipt, status change (approved/declined/waitlisted), action needed (item rejected or documents due), payment receipt/balance reminder. Scheduled reminders for incomplete drafts and upcoming due dates are Phase 2.
 
 ## 10. Admin tracking UI
+
+All tracking views read exclusively through the generic query endpoint (server-side-constructed SQL over `registration_application` / `application_item` / `application_activity` entities) — no bespoke read APIs. The same queries are available to the AI chatbot.
 
 - **Applications page** (`/applications`): list + Kanban by status; filters: program, school year, status, "has outstanding items"; counts per column. Follows the leads page patterns.
 - **Application detail**: item checklist with verify/reject/waive actions, activity timeline, document viewer, payment state, channel indicators (who completed what), "resend parent link", approve/decline/request-changes actions.
