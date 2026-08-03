@@ -18,7 +18,7 @@ Tenants (afterschool programs/schools) design their own student registration flo
 | Waitlist v1 | Programs get a capacity number; when full, submissions land `Waitlisted`; admins promote manually. Automated offers Phase 3 |
 | Tenant isolation | All config, applications, documents, payments, and tracking are strictly per-tenant (see §3) |
 | Parent identity v1 | Magic links (no parent accounts); parent accounts are Phase 3 |
-| Public runtime location | AdminDash public routes (precedent: `PublicInquiryPage`) |
+| Service topology | Two placeholder modules activated: **enrollx** (staff: builder, lifecycle, tracking) and **familyhub** (parents: runtime, hub); shared `flow-runtime` frontend package; AdminDash scope unchanged |
 
 ## 2. Architecture
 
@@ -26,63 +26,88 @@ Tenants (afterschool programs/schools) design their own student registration flo
 
 **API principle: generic endpoints first.** Reads use the existing generic query passthrough wherever possible (pipeline, matrix, detail, hub data are all SQL over entities); writes with no invariants use the existing generic entity endpoints (e.g. builder drafts). New bespoke endpoints exist only where a server must enforce invariants or handle non-entity concerns, and are consolidated into a single action endpoint plus a handful of integration routes (§2.1). Two payoffs: the endpoint count stays close to today's, and the AI chatbot (`chat.py`) can answer registration questions ("how many applications are pending documents for Fall 2026?") through the same generic query with zero registration-specific integration.
 
-All new UI lives in **admindash-frontend**. DataCore changes: ID abbreviations, the document blob API (§8). Papermite changes: un-hardcoding the extraction entity type in the AdminDash proxy and adding image extensions.
+**Service principle: modular services, one concern each.** The feature activates two placeholder modules rather than growing AdminDash:
+
+- **enrollx** (new module, React + FastAPI like admindash) — the enrollment system of action for staff: Flow Builder, application lifecycle (the action endpoint), admin tracking (pipeline, detail, matrix), Stripe integration, waitlist. Persists nothing; DataCore only. Ports 5900 (frontend) / 5910 (backend).
+- **familyhub** (new module) — the family-facing channel: public registration runtime, magic-link parent hub ("where does my application stand, what's still needed"), later parent accounts and household management. Its backend is the narrow token-scoped facade; it never exposes generic query/entity endpoints, and application writes are proxied to enrollx's internal API over the private network (precedent: admindash → papermite proxying) so lifecycle invariants live in exactly one service. Ports 6000 / 6010.
+- **admindash** — unchanged scope (day-to-day ops: students, families, leads, programs). Cross-links to enrollx; its AI chatbot can query registration entities anyway since all data is in DataCore.
+- **datacore** — ID abbreviations + the document blob API (§8).
+- **papermite** — image extensions; enrollx (not admindash) hosts the un-hardcoded extraction proxy for extract-to-prefill.
+- **flow-runtime** (new shared frontend package, sibling of `ui-tokens`) — the FlowRenderer + block components, consumed by both enrollx (admin-assisted entry, builder live preview) and familyhub (parent runtime). One implementation, two hosts.
+
+Physically separating the parent surface (familyhub) from the staff API (enrollx) also strengthens tenant isolation: the public-internet-facing service simply has no admin routes to leak.
+
+**Deployment/infra additions:** `services.json` entries for the four new ports; two Fly apps (`enrollx-api`, `familyhub-api`) + two Cloudflare Workers (`enrollx.floatify.com`, `familyhub.floatify.com`, APIs at `api.enrollx.` / `api.familyhub.`); `enrollx-v*` / `familyhub-v*` release tags and deploy jobs; suite-manifest entries. All apps scale to zero like the existing ones. **Fallback** if two new modules prove too heavy for v1: host both surfaces in enrollx initially and split familyhub out at Phase 3 (parent accounts) — the facade/proxy boundary is designed in from day one either way.
 
 ```
-Parent (magic link)                        Admin (JWT, role-checked)
-      │                                            │
+Parent (magic link)                          Staff (JWT, role + tenant-checked)
+      │                                                │
+      ▼                                                ▼
+familyhub-frontend (6000)                    enrollx-frontend (5900)
+  registration runtime · parent hub            flow builder · pipeline · matrix · detail
+      │  [flow-runtime pkg]                        │  [flow-runtime pkg]
       ▼                                            ▼
-Public facade (narrow, token-scoped)      Generic endpoints (existing):
-  flow bundle / save draft /                POST /api/query          ← all reads (+ chatbot)
-  complete item / request link              POST /api/entities/…     ← invariant-free writes
-      │                                    Action endpoint (new, single):
-      │                                      POST …/applications/{id}/actions
-      └──────────► admindash-backend ◄───────┘
-                    (logic + glue,  │  Stripe Connect (per-tenant) · Resend (email)
-                     no storage)    │
-                                    ▼
-                               DataCore  ── entities + query + document blobs (R2 behind it)
-                                    ▲
-                               Papermite (optional extract-to-prefill)
+familyhub-backend (6010)                     enrollx-backend (5910)
+  token-scoped public facade ──private──►      generic query/entity proxy → DataCore
+  (no admin routes exist here)  network        action endpoint · Stripe · doc proxy
+                                                   │           │
+                                                   ▼           ▼
+                                              DataCore (5800)  Papermite (extract-to-prefill)
+                                                entities + query + document blobs (R2 behind it)
+                                              Stripe Connect (per-tenant) · Resend (email)
 ```
 
 ### 2.1 API surface (complete list of new endpoints)
 
-Admin-side reads and invariant-free writes add **zero** endpoints — they use the existing `POST /api/query` and `POST /api/entities/{tenant}/{type}` routes (now tenant-match enforced, §3). New endpoints, in full:
+Staff-side reads and invariant-free writes add **zero** bespoke endpoints — enrollx-backend exposes the same generic `POST /api/query` and `POST /api/entities/{tenant}/{type}` proxy routes AdminDash already has (tenant-match enforced, §3). New endpoints, in full:
+
+**enrollx-backend** (staff, JWT + role + tenant-match):
 
 | Endpoint | Why it can't be generic |
 |---|---|
-| `POST /api/registration/{tenant}/applications/{app_id}/actions` | Single typed-action endpoint: `submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link`. Enforces transition guards, derives status, writes activity, runs approval side effects — invariants a raw entity write would bypass. |
+| `POST /api/registration/{tenant}/applications/{app_id}/actions` | Single typed-action endpoint: `submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link`. Enforces transition guards, derives status, writes activity, runs approval side effects — invariants a raw entity write would bypass. Also callable (submit/save actions only) by familyhub-backend over the private network. |
 | `POST /api/registration/{tenant}/applications/{app_id}/checkout` | Creates the Stripe Checkout Session on the tenant's connected account. |
 | `POST /api/webhooks/stripe` | Stripe callback (unauthenticated by nature; verified by signature + connected-account→tenant mapping). |
 | `POST /api/documents/{tenant}` / `GET /api/documents/{tenant}/{doc_id}/url` | Thin proxies to DataCore's blob API (§8) — presigned URLs are not entity data. |
-| Public facade (4): `GET /api/public/registration/{tenant}/{program}` (config bundle) · `POST …/start` · `PUT …/application/{token}` (save draft / complete item) · `POST …/request-link` | Parents are unauthenticated token holders — they can never touch the generic query/entity endpoints, so a narrow facade scoped to one application is required. Precedent: public lead routes. |
+| `POST /api/extract/{tenant}/{entity_type}` | Papermite proxy for extract-to-prefill (generic entity type, unlike AdminDash's student-only proxy). |
+
+**familyhub-backend** (parents, magic-link token only — generic query/entity endpoints do not exist in this service):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/registration/{tenant}/{program}` | Public config bundle (published flow + program info) |
+| `POST …/start` | Start a draft application; issue magic link |
+| `GET /api/application/{token}` | Hub bundle: application + items + statuses (server-side-scoped DataCore query) |
+| `PUT /api/application/{token}` | Save draft / complete item (writes proxied to enrollx actions) |
+| `POST /api/application/request-link` | Re-issue magic link by email match |
 
 The Flow Builder needs no bespoke authoring API: configs are drafted via generic entity writes; only `publish_config` (validation + version pinning) is an action.
 
 ### Components
 
-1. **Flow Builder** (admin UI) — authors `registration_config` per program.
-2. **FlowRenderer** (shared runtime) — walks the config's step blocks; mounts in the public parent route and inside AdminDash for staff-assisted entry.
-3. **Parent Hub** (public UI via magic link) — application status + outstanding actions after first submission.
-4. **Application service** (backend) — application/item lifecycle, status derivation, transition validation, activity logging.
-5. **Document blob API** (DataCore) — R2-backed blob storage behind DataCore; admindash-backend proxies presign requests and enforces sensitive-doc gating; optional Papermite extract-to-prefill.
-6. **Payment service** (backend) — Stripe Connect checkout sessions, webhook handling, offline payment recording.
-7. **Notification service** (backend) — Resend integration: magic links, submission receipts, action-needed notices.
-8. **Tracking UI** (admin) — applications pipeline, application detail, requirements matrix.
+1. **Flow Builder** (enrollx-frontend) — authors `registration_config` per program.
+2. **FlowRenderer** (`flow-runtime` shared package) — walks the config's step blocks; mounted by familyhub (parent runtime) and enrollx (staff-assisted entry, builder live preview).
+3. **Parent Hub** (familyhub-frontend, via magic link) — application status + outstanding actions after first submission.
+4. **Application service** (enrollx-backend) — application/item lifecycle, status derivation, transition validation, activity logging.
+5. **Document blob API** (DataCore) — R2-backed blob storage behind DataCore; enrollx/familyhub backends proxy presign requests and enforce sensitive-doc gating.
+6. **Payment service** (enrollx-backend) — Stripe Connect checkout sessions, webhook handling, offline payment recording.
+7. **Notification service** (enrollx-backend) — Resend integration: magic links, submission receipts, action-needed notices.
+8. **Tracking UI** (enrollx-frontend) — applications pipeline, application detail, requirements matrix.
+9. **Public facade** (familyhub-backend) — token-scoped parent API; proxies lifecycle writes to enrollx over the private network.
 
 ## 3. Tenant isolation (cross-cutting requirement)
 
 All configuration, flows, applications, documents, payments, and tracking are tenant-scoped and inaccessible across tenants.
 
 - **Storage.** Every new entity is stored in the tenant's own LanceDB tables (`{tenant}_entities` / `{tenant}_models`) — physical separation, no shared tables. Flow configs reference only the owning tenant's model definitions and programs.
-- **API enforcement.** A shared FastAPI dependency `require_tenant_match` asserts `user.tenant_id == path.tenant_id` on every authenticated route (403 on mismatch). **Prerequisite fix:** apply the same dependency to the existing AdminDash proxy routes (`entities.py`, `query.py`, `leads.py`), which today validate the JWT but not tenant match.
+- **API enforcement.** A shared FastAPI dependency `require_tenant_match` asserts `user.tenant_id == path.tenant_id` on every authenticated enrollx route (403 on mismatch). **Prerequisite fix:** apply the same dependency to the existing AdminDash proxy routes (`entities.py`, `query.py`, `leads.py`), which today validate the JWT but not tenant match — the same generic proxies enrollx replicates.
+- **Service separation.** familyhub — the only service parents touch — contains no generic query/entity routes and no staff routes at all; a compromise of the public surface exposes token-scoped application access, not tenant data access.
 - **Query passthrough.** `/api/query` (raw SQL to DataCore) is restricted so a caller can only address their own tenant's tables. Matrix/pipeline queries are constructed server-side against `{tenant}_entities`, never from client-supplied table names.
 - **Magic links.** Tokens are signed (HMAC, server secret), scoped to `(tenant_id, application_id)`, expiring, and revocable (token version stamped on the application). A token grants access to exactly one application. Entity IDs remain opaque/sequential per tenant; public endpoints never enumerate.
 - **Documents.** Blobs live in R2 behind DataCore's blob API (§8); keys are prefixed `{tenant_id}/{application_id}/…`. Presigned URLs (upload and download) are issued only after tenant-match (admin) or token-scope (parent) checks. Documents flagged `sensitive: true` (medical) additionally require an admin role within the tenant to view; parents can view only documents they themselves uploaded.
 - **Payments.** Each tenant connects **their own Stripe account via Stripe Connect** (Standard). Checkout sessions are created on the tenant's connected account; funds settle directly to the tenant. Webhook events carry the connected account ID, which maps to exactly one tenant before any state is touched. No cross-tenant money flow; platform never pools funds.
 - **Email.** All links in email carry tenant-scoped tokens. Per-tenant sender branding is Phase 2; v1 sends from a platform address with the tenant's display name.
-- **Roles.** admindash-backend gains `require_role` (mirroring LaunchPad's factory). Builder and tracking routes require `admin` or `staff` of the matching tenant. This is a prerequisite for exposing any parent-facing surface.
+- **Roles.** enrollx-backend enforces `require_role` (mirroring LaunchPad's factory) from day one: builder and tracking routes require `admin` or `staff` of the matching tenant. AdminDash gets the same treatment as part of the prerequisite hardening.
 
 ## 4. Data model
 
@@ -130,15 +155,15 @@ Waitlisted ──admin promote──► In Review
 
 ## 6. Runtime and channels
 
-**Parent self-serve.** `GET /register/{tenant_id}/{program_id}` (public) starts a draft and issues a magic link (entered email → link sent; also shown once on screen). FlowRenderer walks blocks; every field change autosaves server-side (draft data on the application — server-side, unlike bulk-add's IndexedDB, because drafts must be visible to assisting admins). After submission the same link opens the **Parent Hub**: current status, per-item checklist with statuses, outstanding actions, payment state, and upload/complete affordances for anything still open.
+**Parent self-serve (familyhub).** `familyhub.floatify.com/register/{tenant_id}/{program_id}` starts a draft and issues a magic link (entered email → link sent; also shown once on screen). FlowRenderer walks blocks; every field change autosaves server-side (draft data on the application — server-side, unlike bulk-add's IndexedDB, because drafts must be visible to assisting admins). After submission the same link opens the **Parent Hub**: current status, per-item checklist with statuses, outstanding actions, payment state, and upload/complete affordances for anything still open.
 
-**Admin-assisted.** Admins open the same FlowRenderer inside AdminDash against any application of their tenant (new or in-progress), enter data on behalf of the family, upload scanned/photographed paper forms, and record offline payments. Items track `completed_by`. Admins can trigger "send/resend parent link" at any time, enabling handoff in either direction mid-application.
+**Admin-assisted (enrollx).** Staff open the same FlowRenderer inside enrollx against any application of their tenant (new or in-progress), enter data on behalf of the family, upload scanned/photographed paper forms, and record offline payments. Items track `completed_by`. Staff can trigger "send/resend parent link" at any time, enabling handoff in either direction mid-application.
 
-**Extract-to-prefill (optional enhancer).** On any document upload, the runtime offers "prefill from this document": AdminDash proxies to Papermite `POST /api/extract/{tenant}/{entity_type}` (proxy un-hardcoded from `student`; image extensions added). Extracted fields prefill the form block for confirmation — useful mainly on the admin-assisted path with paper forms.
+**Extract-to-prefill (optional enhancer).** On any document upload, the runtime offers "prefill from this document": enrollx proxies to Papermite `POST /api/extract/{tenant}/{entity_type}` (generic entity type; image extensions added to Papermite). Extracted fields prefill the form block for confirmation — useful mainly on the admin-assisted path with paper forms. The packets in `sampledoc/` (2025-2026 Afterschool Admission Packet + two filled applications) are the reference fixtures for this path and for seeding a default flow template.
 
 ## 7. Payments
 
-- Tenant onboarding: admin connects the tenant's Stripe account (Connect Standard OAuth) in a new AdminDash settings page; account ID stored on the tenant entity.
+- Tenant onboarding: admin connects the tenant's Stripe account (Connect Standard OAuth) in an enrollx settings page; account ID stored on the tenant entity.
 - Parent path: `payment` block creates a Stripe Checkout Session on the tenant's connected account for the chosen plan (full or deposit); webhook (`checkout.session.completed`, keyed by connected account → tenant) marks the payment item `paid` and writes a `payment` entity. Balance-due for deposits is tracked as a second, non-blocking payment item with a due date (collected via emailed pay link; autopay is Phase 2).
 - Admin path: "record offline payment" (cash/check) writes a `payment` entity with `provider: offline` and marks the item paid; requires staff role and is logged with `recorded_by`.
 - All money state is mirrored into `payment` entities — reporting never depends on Stripe queries.
@@ -146,13 +171,13 @@ Waitlisted ──admin promote──► In Review
 ## 8. Documents
 
 - **Blob storage lives in DataCore**, keeping all persistence in one service: DataCore gains a small blob API (`POST /documents/{tenant}` → presigned R2 PUT + `document` entity write; `GET /documents/{tenant}/{doc_id}/url` → presigned GET), with R2 as its storage backend the same way LanceDB is. Other services never talk to R2 directly.
-- admindash-backend thin-proxies these two routes (DataCore is private-network only) and enforces authorization before proxying: admin tenant-match or parent token-scope on upload; `sensitive` documents additionally require tenant admin/staff role on download — parents see only their own uploads. Accepts pdf/docx/images (phone photos); size-limited.
+- enrollx-backend (staff) and familyhub-backend (parents) thin-proxy these two routes (DataCore is private-network only) and enforce authorization before proxying: admin tenant-match or parent token-scope on upload; `sensitive` documents additionally require tenant admin/staff role on download — parents see only their own uploads. Accepts pdf/docx/images (phone photos); size-limited.
 - Document *metadata* is a normal entity, so document status queries (and the chatbot) go through the generic query endpoint like everything else.
 - Retention: kept while the application/student is active; deletion follows entity archival. Configurable retention policy is a deferred follow-up (documented default; revisit for compliance).
 
 ## 9. Notifications (v1 minimum)
 
-Resend integration in admindash-backend; all sends logged as `application_activity(type: email_sent)`. V1 templates: magic link, submission receipt, status change (approved/declined/waitlisted), action needed (item rejected or documents due), payment receipt/balance reminder. Scheduled reminders for incomplete drafts and upcoming due dates are Phase 2.
+Resend integration in enrollx-backend (familyhub requests link emails via the private-network proxy); all sends logged as `application_activity(type: email_sent)`. V1 templates: magic link, submission receipt, status change (approved/declined/waitlisted), action needed (item rejected or documents due), payment receipt/balance reminder. Scheduled reminders for incomplete drafts and upcoming due dates are Phase 2.
 
 ## 10. Admin tracking UI
 
@@ -178,7 +203,7 @@ All tracking views read exclusively through the generic query endpoint (server-s
 
 ## 13. Phasing
 
-- **Phase 1 (v1):** prerequisites (tenant-match fix, `require_role`, R2, Resend, Stripe Connect onboarding); entities + status engine; builder with `form`/`documents`/`payment_plan`/`payment`/`message` blocks; FlowRenderer in both channels; magic links + hub; pipeline + detail views; basic capacity/waitlist; v1 notifications.
+- **Phase 1 (v1):** prerequisites (scaffold enrollx + familyhub modules and `flow-runtime` package, services.json + deploy pipeline entries, AdminDash tenant-match fix, `require_role`, DataCore blob API on R2, Resend, Stripe Connect onboarding); entities + status engine; builder with `form`/`documents`/`payment_plan`/`payment`/`message` blocks; FlowRenderer in both channels; magic links + hub; pipeline + detail views; basic capacity/waitlist; v1 notifications.
 - **Phase 2:** question-level conditional logic, `esign` block, requirements matrix, scheduled reminders, installment plans + autopay + retry, per-tenant email branding, extract-to-prefill polish.
 - **Phase 3:** parent accounts (activate `parent` role, user↔family link, household prefill/re-enrollment, multi-child), automated waitlist offer-accept-expire, discounts (sibling/early-bird), refund workflows tied to withdrawal.
 
@@ -191,4 +216,5 @@ Lottery-based admission (SchoolMint-style), attendance, subscription billing for
 - Builder UX is the largest unknown; live preview via the real renderer removes drift risk but the editor itself needs design iteration.
 - Stripe Connect onboarding adds tenant-setup friction; offline recording keeps tenants unblocked meanwhile.
 - Draft PII lives on the application entity pre-approval; DataCore version trimming (5 versions) bounds accumulation but frequent autosave may need batching (autosave debounce + dirty-field patch, not whole-form writes).
-- No new service is introduced; if the public surface grows (marketing pages, multi-program carts), revisit splitting a dedicated parent-portal Worker.
+- Two new modules mean two more Fly apps + Workers + cert renewals + deploy jobs; scale-to-zero bounds cost, but ops surface grows. The consolidation fallback (both surfaces in enrollx, familyhub split at Phase 3) is in §2 if this proves heavy.
+- The `flow-runtime` shared package is the first cross-frontend code package beyond ui-tokens; it needs a clean build/consumption story (npm workspace or file: dependency) so the two frontends don't drift.
