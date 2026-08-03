@@ -30,7 +30,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   text-decoration: none;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .app-header__divider {
@@ -107,7 +107,7 @@
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
   margin-bottom: 8px;
 }
 
@@ -152,7 +152,7 @@
 }
 
 .btn--primary {
-  background: var(--accent);
+  background: var(--accent-ink);
   color: #FFFFFF;
   border: none;
 }

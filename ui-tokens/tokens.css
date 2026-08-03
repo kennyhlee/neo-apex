@@ -23,6 +23,11 @@
   /* Accent */
   --accent: #378ADD;
   --accent-hover: #2B6FB5;
+  /* The brand blue is 3.59:1 against white — fine for borders, focus rings
+     and large marks, below WCAG AA (4.5:1) for text. Anything that IS text,
+     or that sits under white text, uses this one step down (5.19:1). It is
+     the same hue family, so the brand is unchanged. */
+  --accent-ink: #2B6FB5;
   --accent-muted: rgba(55, 138, 221, 0.1);
   --accent-glow: rgba(55, 138, 221, 0.06);
 

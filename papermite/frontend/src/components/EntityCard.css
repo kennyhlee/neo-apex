@@ -218,7 +218,7 @@
 }
 
 .field-row__toggle input:checked + .field-row__toggle-track {
-  background: var(--accent);
+  background: var(--accent-ink);
 }
 
 .field-row__toggle-thumb {
@@ -376,7 +376,7 @@
 }
 
 .add-field-btn:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
   border-color: var(--accent);
 }
 
