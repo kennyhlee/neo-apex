@@ -97,7 +97,7 @@ All data tenant-scoped. Tenant ID embedded in JWT. API routes enforce tenant mat
 
 NeoApex deploys to Fly.io (Python backends) and Cloudflare Workers with Static Assets (React frontends) via a GitHub Actions release-tag-triggered pipeline.
 
-**Topology:** `datacore` is on Fly's private network only. `launchpad-api`, `papermite-api`, and `admindash-api` are public Fly.io apps fronted by Cloudflare with an IP allowlist middleware. The three frontends are Cloudflare Workers (Static Assets) at `launchpad.floatify.com`, `papermite.floatify.com`, and `admin.floatify.com`. The API endpoints are at `api.<name>.floatify.com`.
+**Topology:** `datacore` is on Fly's private network only. `launchpad-api`, `papermite-api`, and `admindash-api` are public Fly.io apps fronted by Cloudflare with an IP allowlist middleware. The three frontends are Cloudflare Workers (Static Assets) at `launchpad.floatify.com`, `papermite.floatify.com`, and `admin.floatify.com`. The API endpoints follow the **frontend** subdomain, not the module name — `api.launchpad.floatify.com`, `api.papermite.floatify.com`, and `api.admin.floatify.com` (admindash). `api.admindash.floatify.com` does not exist. The authoritative values are the `VITE_*_API_URL` env vars in `.github/workflows/deploy.yml`.
 
 **Release trigger:** publish a GitHub Release with a module-prefixed tag (`datacore-v*`, `launchpad-v*`, `papermite-v*`, `admindash-v*`). The `.github/workflows/deploy.yml` workflow parses the tag, dispatches to per-module deploy jobs, and requires manual approval via the `production` GitHub Environment before any deploy step runs.
 
@@ -107,6 +107,8 @@ NeoApex deploys to Fly.io (Python backends) and Cloudflare Workers with Static A
 - [`docs/deployment/release-runbook.md`](docs/deployment/release-runbook.md) — cutting releases, approving deploys, rolling back
 - [`docs/deployment/follow-ups.md`](docs/deployment/follow-ups.md) — deferred hardening and nice-to-haves
 - [`docs/deployment/cost-control.md`](docs/deployment/cost-control.md) — scale-to-zero config for beta idle, cold-start expectations, wake/sleep commands
+
+**Suite marker:** modules deploy from independent version lines, so no commit describes what is live. `deploy/suite-manifest.json` records the set known good together; `./scripts/suite.sh status|promote|rollback` reads it. `promote` captures the versions actually running on Fly, not what was intended. The `deployable` tag marks the commit of the last promotion — it is a plain tag, never a Release.
 
 ## Conventions
 

@@ -49,7 +49,52 @@ Approval is required before ANY deploy step runs. The reviewer should:
 - Check `flyctl status --app <app>` if the current state is unclear
 - Click Approve
 
+## The suite marker
+
+Each module deploys from its own tag and its own version line, so **no single
+git commit describes what is live**. `deploy/suite-manifest.json` does: it
+records the set of module releases known to be good together, and the
+`deployable` git tag marks the commit where that set was last promoted.
+
+```bash
+./scripts/suite.sh status     # what is live vs. the manifest
+```
+
+```
+MODULE       LIVE                   MANIFEST
+datacore     datacore-v0.5.0        datacore-v0.5.0        = in sync
+launchpad    launchpad-v0.3.1       launchpad-v0.3.1       = in sync
+papermite    papermite-v0.8.2       papermite-v0.8.2       = in sync
+admindash    admindash-v0.10.4      admindash-v0.10.4      = in sync
+```
+
+After a release has proven out, promote it:
+
+```bash
+./scripts/suite.sh promote    # reads Fly, rewrites the manifest, prints the commit/tag commands
+```
+
+`promote` reads the deployed image tag off each Fly app, so the manifest
+records what is **actually running** rather than what someone believed was
+running. It refuses to write a partial set — a rollback point that cannot be
+fully restored is worse than none.
+
+The marker is a plain git tag, never a GitHub Release: publishing a release
+triggers the deploy workflow. (The workflow now skips `suite-*` tags with a
+notice rather than failing, so an accidental publish is harmless.)
+
 ## Rolling back
+
+### Option 0: Roll the whole suite back to the last known-good set
+
+```bash
+./scripts/suite.sh rollback              # every module
+./scripts/suite.sh rollback admindash    # or just one
+```
+
+Prints the plan, asks for confirmation, then dispatches a redeploy per module
+from the manifest. Each still needs production approval — the script does not
+bypass the gate.
 
 ### Option 1: Deploy a previous image tag (fastest, ~30s)
 

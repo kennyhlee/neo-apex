@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "The set of module releases known to be good together in production.",
+    "",
+    "Each module deploys from its own tag and its own version line, so a git",
+    "commit cannot express 'what is live' — this file can. Rolling the suite",
+    "back means redeploying exactly these tags.",
+    "",
+    "Do not edit by hand: `scripts/suite.sh promote` writes it from what is",
+    "actually running on Fly, so it records reality rather than intention.",
+    "The `deployable` git tag points at the commit where it was last promoted."
+  ],
+  "promoted_at": "2026-08-03T07:57:44Z",
+  "promoted_from": "e0ea5aa",
+  "modules": {
+    "datacore": "datacore-v0.5.0",
+    "launchpad": "launchpad-v0.3.1",
+    "papermite": "papermite-v0.8.2",
+    "admindash": "admindash-v0.10.4"
+  }
+}
