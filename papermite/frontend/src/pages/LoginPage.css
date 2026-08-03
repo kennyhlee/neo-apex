@@ -59,7 +59,7 @@
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--accent);
+  color: var(--accent-ink);
   margin-bottom: 6px;
 }
 
@@ -138,7 +138,7 @@
   font-size: 15px;
   font-weight: 600;
   color: #FFFFFF;
-  background: var(--accent);
+  background: var(--accent-ink);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;

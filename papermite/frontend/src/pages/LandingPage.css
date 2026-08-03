@@ -135,7 +135,7 @@
   justify-content: center;
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
-  color: var(--accent);
+  color: var(--accent-ink);
   background: var(--tint-blue-bg);
   flex-shrink: 0;
 }
@@ -166,7 +166,7 @@
 
 .landing__action-card:hover .landing__action-arrow {
   transform: translateX(4px);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .landing__meta {

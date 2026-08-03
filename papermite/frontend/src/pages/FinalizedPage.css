@@ -19,7 +19,7 @@
   background: var(--tint-blue-bg);
   border: 1px solid rgba(55, 138, 221, 0.3);
   border-radius: 50%;
-  color: var(--accent);
+  color: var(--accent-ink);
   flex-shrink: 0;
   margin-top: 4px;
 }
@@ -110,7 +110,7 @@
   font-family: var(--font-sans);
   font-size: 15px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .finalized__meta-item code {
@@ -294,7 +294,7 @@
 .finalized__preview-more {
   font-family: var(--font-sans);
   font-size: 13px;
-  color: var(--accent);
+  color: var(--accent-ink);
   background: var(--bg-card);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);

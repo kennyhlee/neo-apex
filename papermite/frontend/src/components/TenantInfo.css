@@ -1,7 +1,7 @@
 .tenant-info__marker {
   width: 10px;
   height: 10px;
-  background: var(--accent);
+  background: var(--accent-ink);
   border-radius: 2px;
   flex-shrink: 0;
 }

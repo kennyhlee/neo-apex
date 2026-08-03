@@ -36,7 +36,7 @@
 }
 
 .file-uploader--active .file-uploader__icon {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .file-uploader__text {
@@ -45,7 +45,7 @@
 }
 
 .file-uploader__browse {
-  color: var(--accent);
+  color: var(--accent-ink);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -82,7 +82,7 @@
 .file-uploader__filename {
   font-family: var(--font-sans);
   font-size: 14px;
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -115,7 +115,7 @@
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-ink);
   cursor: pointer;
   padding: 4px 0;
   align-self: flex-start;

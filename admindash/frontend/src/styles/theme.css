@@ -2,8 +2,9 @@
    AdminDash design system — single source of truth.
 
    Layer order (see index.css):
-     1. @neoapex/ui-tokens  — shared suite tokens (NOT edited; launchpad and
-                              papermite depend on it)
+     1. @neoapex/ui-tokens  — shared suite tokens. Edit only for changes that
+                              should reach launchpad and papermite too; the
+                              accent/accent-ink pair is one such.
      2. THIS FILE           — admindash's own system, which overrides the
                               shared layer locally and defines everything the
                               codebase actually references.
@@ -54,11 +55,8 @@
   --accent-tint-strong:#CFE4F7;
   --accent-ring:       rgba(55, 138, 221, 0.30);
   --accent-glow:       rgba(55, 138, 221, 0.08);
-  /* The brand blue is only 3.59:1 against white — fine for borders and large
-     marks, below AA for text. Anything that IS text, or that sits under white
-     text, uses this one step down (5.19:1). It is the suite's own
-     --accent-hover, so the family is unchanged. */
-  --accent-ink:        #2B6FB5;
+  /* --accent-ink (the AA-safe step for text) now comes from ui-tokens, so all
+     three products share it. See the note there. */
 
   /* --- Semantic ------------------------------------------------------------
      Deliberately outside the accent hue — a status must never read as a
