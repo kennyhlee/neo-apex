@@ -113,6 +113,65 @@ def test_settle_payment_item(fake_dc):
     assert any(a["type"] == "item_change" for a in acts)
 
 
+def test_settle_payment_item_idempotent_on_provider_ref(fake_dc):
+    """Simulates a retried Stripe webhook delivery: the second call reuses
+    the SAME stale item_row snapshot (still 'not_started') the first call
+    used, the way two concurrent/retried deliveries both fetching before
+    either writes would. Fixes double-settlement on retry."""
+    app = fake_dc.dc_create("acme", "registration_application",
+                            {"application_id": "A1", "program_id": "PR1", "status": "submitted"})
+    item = fake_dc.dc_create("acme", "application_item", {
+        "item_id": "i1", "application_id": app["entity_id"], "block_id": "b4",
+        "kind": "payment", "title": "Payment", "status": "not_started", "blocking": True})
+    stale_item_row = fake_dc.get_entity("acme", "application_item", item["entity_id"])
+
+    result1 = engine.settle_payment_item(
+        "acme", app["entity_id"], stale_item_row, provider="stripe", kind="full",
+        amount=50000, provider_ref="cs_test_123", actor="webhook")
+    assert result1["already_settled"] is False
+
+    result2 = engine.settle_payment_item(
+        "acme", app["entity_id"], stale_item_row, provider="stripe", kind="full",
+        amount=50000, provider_ref="cs_test_123", actor="webhook")
+    assert result2["already_settled"] is True
+    assert result2["payment"]["entity_id"] == result1["payment"]["entity_id"]
+
+    payments = fake_dc.find("payment", application_id=app["entity_id"], provider_ref="cs_test_123")
+    assert len(payments) == 1
+
+    updated_item = fake_dc.get_entity("acme", "application_item", item["entity_id"])
+    assert updated_item["status"] == "verified"
+
+    acts = fake_dc.find("application_activity", application_id=app["entity_id"], type="item_change")
+    assert len(acts) == 1
+
+
+def test_settle_payment_item_different_provider_refs_create_two_rows(fake_dc):
+    app = fake_dc.dc_create("acme", "registration_application",
+                            {"application_id": "A1", "program_id": "PR1", "status": "submitted"})
+    item1 = fake_dc.dc_create("acme", "application_item", {
+        "item_id": "i1", "application_id": app["entity_id"], "block_id": "b4",
+        "kind": "payment", "title": "Payment A", "status": "not_started", "blocking": True})
+    item2 = fake_dc.dc_create("acme", "application_item", {
+        "item_id": "i2", "application_id": app["entity_id"], "block_id": "b4b",
+        "kind": "payment", "title": "Payment B", "status": "not_started", "blocking": True})
+
+    engine.settle_payment_item(
+        "acme", app["entity_id"],
+        fake_dc.get_entity("acme", "application_item", item1["entity_id"]),
+        provider="stripe", kind="full", amount=50000,
+        provider_ref="cs_test_A", actor="webhook")
+    engine.settle_payment_item(
+        "acme", app["entity_id"],
+        fake_dc.get_entity("acme", "application_item", item2["entity_id"]),
+        provider="stripe", kind="full", amount=25000,
+        provider_ref="cs_test_B", actor="webhook")
+
+    payments = fake_dc.find("payment", application_id=app["entity_id"])
+    assert len(payments) == 2
+    assert {p["provider_ref"] for p in payments} == {"cs_test_A", "cs_test_B"}
+
+
 def test_settle_payment_item_rejects_non_payment_and_double_pay(fake_dc):
     app = fake_dc.dc_create("acme", "registration_application",
                             {"application_id": "A1", "program_id": "PR1", "status": "submitted"})

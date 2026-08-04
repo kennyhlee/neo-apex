@@ -214,10 +214,63 @@ def settle_payment_item(tenant_id, application_entity_id, item_row, *, provider,
     not_started -> ... -> submitted -> verified transition guard
     (assert_item_transition). The write is still logged via log_activity,
     so the audit trail is intact even though the status-graph guard is not
-    consulted for this particular write.
+    consulted for this particular write. This is a permanent design
+    decision, not a placeholder: for a payment item, a recorded payment
+    genuinely is the verification evidence, and the verified/waived
+    short-circuit below already prevents re-settling a payment item that
+    reached 'verified' by some other path.
+
+    Idempotency on `provider_ref`: Stripe retries webhook deliveries by
+    design, so a caller may invoke this twice for the same real payment,
+    sometimes with a stale `item_row` snapshot (still `not_started`) taken
+    before the first delivery completed. When `provider_ref` is supplied,
+    this function looks up any existing `payment` for this application with
+    the same `provider_ref` BEFORE creating anything. If one is found, this
+    call is a no-op: no second `payment` row, no item status rewrite, no
+    second activity row. The return shape always has an `already_settled`
+    key so the caller (the webhook handler) can tell "this call settled it"
+    (`already_settled=False`) from "an earlier call already settled it"
+    (`already_settled=True`) without treating the retry as an error — both
+    branches return `payment`/`item` in the same
+    `{"entity_id", "entity_type", "base_data"}` shape.
+
+    Offline settlements (`provider_ref=None`, the staff-recorded-payment
+    path) are NOT deduplicated — there is no external idempotency key to
+    dedupe against. The caller owns not invoking this twice for the same
+    offline payment.
+
+    Residual race (NOT fixed here — DataCore offers no compare-and-set):
+    the provider_ref lookup and the payment `dc_create` are two separate
+    DataCore calls with nothing atomic between them. Two calls carrying the
+    same `provider_ref` that interleave between "lookup found nothing" and
+    "create" can both see no existing payment and both create a payment
+    row. This narrows the corruption window from "any retry, any timing"
+    to "two deliveries genuinely concurrent within the gap between those
+    two calls" — the same category of unresolved race as
+    `capacity_state`/`is_capacity_full`'s read-then-write. Closing it fully
+    would need a serialization mechanism (e.g. a unique constraint on
+    `provider_ref` enforced by DataCore, or a single-writer queue) that
+    does not exist anywhere in this codebase's registration path today.
     """
     if item_row.get("kind") != "payment":
         raise HTTPException(400, "settle_payment_item targets a payment item")
+
+    if provider_ref:
+        where = (f"application_id = {dc.sql_literal(application_entity_id)} "
+                 f"AND provider_ref = {dc.sql_literal(provider_ref)}")
+        existing = dc.list_entities(tenant_id, "payment", where, token)
+        if existing:
+            existing_payment = existing[0]
+            return {
+                "payment": {"entity_id": existing_payment["entity_id"],
+                            "entity_type": "payment",
+                            "base_data": entity_base_data(existing_payment)},
+                "item": {"entity_id": item_row["entity_id"],
+                         "entity_type": "application_item",
+                         "base_data": entity_base_data(item_row)},
+                "already_settled": True,
+            }
+
     if item_row.get("status") in {"verified", "waived"}:
         raise HTTPException(409, f"Payment item is already {item_row.get('status')}")
     payment_base = {
@@ -243,4 +296,4 @@ def settle_payment_item(tenant_id, application_entity_id, item_row, *, provider,
     log_activity(tenant_id, application_entity_id, "item_change",
                  item_row.get("status", "not_started"),
                  f"{item_row.get('title', 'Payment')}:paid:{provider}", actor, token)
-    return {"payment": payment, "item": item}
+    return {"payment": payment, "item": item, "already_settled": False}
