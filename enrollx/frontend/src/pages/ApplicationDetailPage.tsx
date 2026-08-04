@@ -159,7 +159,7 @@ export default function ApplicationDetailPage() {
         <h1 className="page-title">
           {app.application_id}
           <span className="page-subtitle">
-            {app.program_id} · {app.school_year} · {t(`apps.channel.${app.channel_started}`)}
+            {app.school_year} · {t(`apps.channel.${app.channel_started}`)}
             {app.applicant_email ? ` · ${app.applicant_email}` : ''}
           </span>
         </h1>

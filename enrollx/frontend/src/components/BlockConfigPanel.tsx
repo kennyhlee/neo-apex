@@ -4,7 +4,12 @@ import type { FlowBlock, FlowField, PaymentPlanKind, PaymentPlanOption, Required
 import { useTranslation } from '../hooks/useTranslation.ts';
 import Button from './ui/Button.tsx';
 
-const ENTITY_TYPES = ['student', 'family', 'contact'] as const;
+// The four models a `form` block may draw from (spec §4). Kept in sync with
+// enrollx's `items.FORM_ENTITY_TYPES`, which rejects anything else at publish
+// time. `registration_application` offers only the tenant's own custom
+// fields — engine-owned base fields are excluded by `hydratedFormFields` and
+// rejected outright by the engine on write.
+const ENTITY_TYPES = ['student', 'family', 'contact', 'registration_application'] as const;
 // Matches the real FlowField.type union (flow-runtime/src/types.ts) exactly,
 // including 'datetime' — a custom field authored here becomes a FlowField
 // consumed by FormBlock, so every type FormBlock can render must be offered.
@@ -70,7 +75,9 @@ export default function BlockConfigPanel({ block, onChange }: BlockConfigPanelPr
             <label htmlFor={id('et')}>{t('builder.entityType')}</label>
             <select id={id('et')} value={entityType}
               onChange={(e) => setCfg({ entity_type: e.target.value })}>
-              {ENTITY_TYPES.map((et) => <option key={et} value={et}>{et}</option>)}
+              {ENTITY_TYPES.map((et) => (
+                <option key={et} value={et}>{t(`builder.entity.${et}`)}</option>
+              ))}
             </select>
           </div>
         ) : (

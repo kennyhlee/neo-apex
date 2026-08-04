@@ -5,9 +5,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Navbar / shared chrome
     'nav.language': 'Language',
     'nav.primary': 'Primary',
-    'nav.programs': 'Programs',
+    'nav.flow': 'Registration flow',
     'nav.applications': 'Applications',
     'nav.settings': 'Settings',
+    'builder.subtitleTenant': 'School-wide',
+    'builder.starter.student': 'Student information',
+    'builder.starter.application': 'Application & agreements',
+    'builder.entity.student': 'Student',
+    'builder.entity.family': 'Family',
+    'builder.entity.contact': 'Contact',
+    'builder.entity.registration_application': 'Application (school’s own form)',
     'nav.logout': 'Log out',
 
     // Shared UI (DataTable, Toast, forms)
@@ -54,12 +61,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Program statuses. Tenant-definable, so this covers the common values
     // only — `translateOr` leaves anything else as-is rather than leaking the
     // lookup key.
-    'programStatus.active': 'Active',
-    'programStatus.inactive': 'Inactive',
-    'programStatus.draft': 'Draft',
-    'programStatus.archived': 'Archived',
-    'programStatus.full': 'Full',
-    'programStatus.closed': 'Closed',
 
     // Application statuses
     'status.draft': 'Draft',
@@ -111,11 +112,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'payments.redirecting': 'Redirecting to Stripe…',
 
     // Programs (Flow Builder entry point)
-    'programs.title': 'Programs',
-    'programs.designFlow': 'Design registration flow',
-    'programs.capacity': 'Capacity',
-    'programs.empty': 'No programs yet. Create programs in AdminDash first.',
-    'programs.loadError': 'Could not load programs.',
 
     // Flow Builder (Task 7)
     'builder.title': 'Registration flow',
@@ -169,7 +165,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.publishError': 'Could not publish the flow.',
     'builder.publishConfirmTitle': 'Publish this flow?',
     'builder.publishConfirmBody':
-      'New applications for this program will use this version. Applications already in progress keep the version they started with.',
+      'New applications will use this version. Applications already in progress keep the version they started with.',
     'builder.validationHeading': 'Before publishing',
     'builder.errNoBlocks': 'Add at least one step before publishing.',
     'builder.errTitleRequired': 'title is required',
@@ -193,7 +189,6 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // New application (Task 8)
     'newApp.title': 'New application',
-    'newApp.program': 'Program',
     'newApp.schoolYear': 'School year',
     'newApp.applicantEmail': 'Parent email (optional)',
     'newApp.create': 'Create application',
@@ -204,7 +199,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'entry.title': 'Application entry',
     'entry.viewDetail': 'View detail',
     'entry.notFound': 'Application not found.',
-    'entry.noConfig': 'No registration flow is published for this program.',
+    'entry.noConfig': 'No registration flow is published for this school.',
     'entry.saveError': 'Could not save the draft.',
     'entry.itemCompleted': 'Step saved.',
     'entry.uploaded': 'Document uploaded.',
@@ -226,12 +221,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'apps.viewToggle': 'View',
     'apps.table': 'Table',
     'apps.board': 'Board',
-    'apps.filterProgram': 'Program',
     'apps.filterYear': 'School year',
     'apps.filterStatus': 'Status',
     'apps.all': 'All',
     'apps.colId': 'Application',
-    'apps.colProgram': 'Program',
     'apps.colYear': 'School year',
     'apps.colStatus': 'Status',
     'apps.colChannel': 'Channel',
@@ -285,9 +278,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Navbar / shared chrome
     'nav.language': '语言',
     'nav.primary': '主导航',
-    'nav.programs': '项目',
+    'nav.flow': '报名流程',
     'nav.applications': '报名申请',
     'nav.settings': '设置',
+    'builder.subtitleTenant': '全校',
+    'builder.starter.student': '学生信息',
+    'builder.starter.application': '申请与协议',
+    'builder.entity.student': '学生',
+    'builder.entity.family': '家庭',
+    'builder.entity.contact': '联系人',
+    'builder.entity.registration_application': '申请表（学校自定义）',
     'nav.logout': '退出登录',
 
     // Shared UI (DataTable, Toast, forms)
@@ -333,12 +333,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'paymentStatus.refunded': '已退款',
 
     // 项目状态
-    'programStatus.active': '进行中',
-    'programStatus.inactive': '未启用',
-    'programStatus.draft': '草稿',
-    'programStatus.archived': '已归档',
-    'programStatus.full': '名额已满',
-    'programStatus.closed': '已关闭',
 
     // Application statuses
     'status.draft': '草稿',
@@ -389,11 +383,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'payments.redirecting': '正在跳转到 Stripe…',
 
     // Programs (Flow Builder entry point)
-    'programs.title': '项目',
-    'programs.designFlow': '设计报名流程',
-    'programs.capacity': '名额',
-    'programs.empty': '还没有项目。请先在 AdminDash 中创建项目。',
-    'programs.loadError': '无法加载项目。',
 
     // 报名流程构建器（任务 7）
     'builder.title': '报名流程',
@@ -446,7 +435,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.saveError': '草稿保存失败。',
     'builder.publishError': '流程发布失败。',
     'builder.publishConfirmTitle': '发布该流程？',
-    'builder.publishConfirmBody': '该项目的新申请将使用此版本。已在进行中的申请仍使用其开始时的版本。',
+    'builder.publishConfirmBody': '新的申请将使用此版本。已在进行中的申请仍使用其开始时的版本。',
     'builder.validationHeading': '发布前请解决以下问题',
     'builder.errNoBlocks': '发布前请至少添加一个步骤。',
     'builder.errTitleRequired': '标题为必填项',
@@ -467,7 +456,6 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // 新建申请（任务 8）
     'newApp.title': '新建申请',
-    'newApp.program': '项目',
     'newApp.schoolYear': '学年',
     'newApp.applicantEmail': '家长邮箱（可选）',
     'newApp.create': '创建申请',
@@ -478,7 +466,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'entry.title': '申请录入',
     'entry.viewDetail': '查看详情',
     'entry.notFound': '未找到该申请。',
-    'entry.noConfig': '该项目尚未发布报名流程。',
+    'entry.noConfig': '该学校尚未发布报名流程。',
     'entry.saveError': '草稿保存失败。',
     'entry.itemCompleted': '该步骤已保存。',
     'entry.uploaded': '文件已上传。',
@@ -500,12 +488,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'apps.viewToggle': '视图',
     'apps.table': '表格',
     'apps.board': '看板',
-    'apps.filterProgram': '项目',
     'apps.filterYear': '学年',
     'apps.filterStatus': '状态',
     'apps.all': '全部',
     'apps.colId': '申请编号',
-    'apps.colProgram': '项目',
     'apps.colYear': '学年',
     'apps.colStatus': '状态',
     'apps.colChannel': '渠道',

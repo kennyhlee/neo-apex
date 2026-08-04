@@ -3,7 +3,6 @@ import type { ApplicationStatus, ItemKind, ItemStatus } from '@neoapex/flow-runt
 export interface ApplicationRow {
   entity_id: string;
   application_id: string;
-  program_id: string;
   school_year: string;
   status: ApplicationStatus;
   channel_started: 'parent' | 'admin';
@@ -74,19 +73,8 @@ export interface DocumentRow {
 export interface ConfigRow {
   entity_id: string;
   config_id: string;
-  program_id: string;
   version: number;
   status: 'draft' | 'published' | 'archived';
   blocks: string; // JSON-serialized FlowBlock[]
-  [key: string]: unknown;
-}
-
-export interface ProgramRow {
-  entity_id: string;
-  program_id: string;
-  name: string;
-  description?: string;
-  capacity?: number;
-  status?: unknown;
   [key: string]: unknown;
 }

@@ -15,7 +15,7 @@ export default function AppNav() {
   return (
     <nav className="app-nav" aria-label={t('nav.primary')}>
       <span className="app-nav-brand">EnrollX</span>
-      <NavLink to="/programs" className="app-nav-link">{t('nav.programs')}</NavLink>
+      <NavLink to="/flow" className="app-nav-link">{t('nav.flow')}</NavLink>
       <NavLink to="/applications" className="app-nav-link">{t('nav.applications')}</NavLink>
       <NavLink to="/settings/payments" className="app-nav-link">{t('nav.settings')}</NavLink>
       <span className="app-nav-spacer" />

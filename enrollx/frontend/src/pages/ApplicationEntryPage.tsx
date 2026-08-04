@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  FlowRenderer, formatCents, paymentAmountFor, resolvePlanKind,
+  FlowRenderer, formatCents, hydratedFormFields, paymentAmountFor, resolvePlanKind,
 } from '@neoapex/flow-runtime';
 import type {
   ApplicationItem, ApplicationSummary, FlowBlock, RegistrationConfigDef, RequiredDoc,
@@ -88,12 +88,11 @@ export default function ApplicationEntryPage() {
       try {
         const a = await loadAppAndItems();
         if (!a) { setError(t('entry.notFound')); return; }
-        // SQL #3: `entity_type` + `_status` plus `program_id`, the same
-        // predicate ConfigBuilderPage already runs — `program_id` is written
-        // by both `program` and `registration_config` (and by this
-        // application row too), so it is never single-writer.
+        // SQL #3: `entity_type` + `_status` only — one config lineage per
+        // tenant now (spec §2), so there is nothing to scope by beyond the
+        // type. Both are DataCore system columns, never single-writer.
         const cr = await postQuery(tenant, 'entities',
-          `SELECT * FROM data WHERE entity_type = 'registration_config' AND _status = 'active' AND program_id = '${escapeSql(String(a.program_id))}'`);
+          "SELECT * FROM data WHERE entity_type = 'registration_config' AND _status = 'active'");
         const rows = cr.data as unknown as ConfigRow[];
         // config_version/version arrive from DataCore as strings on every
         // row (every top-level field is stringly typed) — coerce with
@@ -115,15 +114,15 @@ export default function ApplicationEntryPage() {
           if (!et) return b;
           try {
             const m = await getModel(tenant, et);
-            const fields = [...m.base_fields, ...m.custom_fields]
-              .filter((f) => f.name !== `${et}_id`);
-            return { ...b, config: { ...b.config, fields } };
+            // ONE derivation, shared with ConfigBuilderPage's preview and
+            // restated server-side by enrollx for the parent channel.
+            return { ...b, config: { ...b.config, fields: hydratedFormFields(et, m) } };
           } catch {
             return { ...b, config: { ...b.config, fields: [] } };
           }
         }));
         setConfig({
-          config_id: String(cfg.config_id), program_id: String(cfg.program_id),
+          config_id: String(cfg.config_id),
           version: Number(cfg.version), status: 'published', blocks: hydrated,
         });
         setError(null);
@@ -168,7 +167,7 @@ export default function ApplicationEntryPage() {
   })), [items]);
 
   const summary: ApplicationSummary | null = app ? {
-    application_id: app.application_id, program_id: app.program_id,
+    application_id: app.application_id,
     school_year: app.school_year, status: app.status,
     channel_started: app.channel_started,
     // config_version: another stringly-typed top-level field — coerce.

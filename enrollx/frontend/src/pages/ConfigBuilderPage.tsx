@@ -1,7 +1,6 @@
 // enrollx/frontend/src/pages/ConfigBuilderPage.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { FlowRenderer } from '@neoapex/flow-runtime';
+import { FlowRenderer, hydratedFormFields } from '@neoapex/flow-runtime';
 import type {
   BlockType, FlowBlock, PaymentPlanOption, RegistrationConfigDef, RequiredDoc,
 } from '@neoapex/flow-runtime';
@@ -10,9 +9,9 @@ import { useAuth } from '../contexts/AuthContext.tsx';
 import { useToast } from '../hooks/useToast.ts';
 import { useModel } from '../contexts/ModelContext.tsx';
 import type { ModelDefinition } from '../types/models.ts';
-import { createEntity, escapeSql, fetchNextEntityId, postQuery, updateEntity } from '../api/client.ts';
+import { createEntity, fetchNextEntityId, postQuery, updateEntity } from '../api/client.ts';
 import { publishConfig } from '../api/registration.ts';
-import type { ConfigRow, ProgramRow } from '../types/registration.ts';
+import type { ConfigRow } from '../types/registration.ts';
 import Button from '../components/ui/Button.tsx';
 import Modal from '../components/ui/Modal.tsx';
 import BlockConfigPanel from '../components/BlockConfigPanel.tsx';
@@ -51,6 +50,28 @@ function withReview(blocks: FlowBlock[], reviewTitle: string): FlowBlock[] {
     block_id: 'blk_review', type: 'review', title: reviewTitle,
     required: true, blocking: true, config: {},
   }];
+}
+
+/**
+ * Seeded when a tenant opens the builder with no config at all (spec §4).
+ *
+ * The `registration_application` block is the point: model setup extracts a
+ * tenant's real admission-packet fields (agreements, signatures, initials)
+ * into that model's `custom_fields`, and without a block drawing from it
+ * those fields would never reach a family. Seeding it means a tenant who
+ * customized their application model sees their own fields without ever
+ * opening the block panel.
+ *
+ * Nothing is written until staff click Save draft — this only populates the
+ * editor's initial state.
+ */
+function starterBlocks(t: (key: string) => string): FlowBlock[] {
+  return [
+    { ...newBlock('form', t('builder.starter.student')),
+      config: { entity_type: 'student' } },
+    { ...newBlock('form', t('builder.starter.application')),
+      config: { entity_type: 'registration_application' } },
+  ];
 }
 
 /**
@@ -190,14 +211,12 @@ function validateForPublish(blocks: FlowBlock[], t: (key: string) => string): st
 }
 
 export default function ConfigBuilderPage() {
-  const { programId = '' } = useParams();
   const { t } = useTranslation();
   const { user } = useAuth();
   const tenant = user?.tenant_id ?? '';
   const { toast } = useToast();
   const { getModel } = useModel();
 
-  const [program, setProgram] = useState<ProgramRow | null>(null);
   const [blocks, setBlocks] = useState<FlowBlock[]>([]);
   const [selected, setSelected] = useState<number>(-1);
   const [entityId, setEntityId] = useState<string | null>(null);
@@ -211,23 +230,16 @@ export default function ConfigBuilderPage() {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * SQL #1/#2 both filter on `entity_type` + `_status` (DataCore system
-   * columns, always safe) plus `program_id`. `program_id` is written by BOTH
-   * `program` (its own business id) and `registration_config` (the FK back
-   * to its owning program) — two entity types, so it is never a
-   * single-writer field and can't trigger the binder "column doesn't exist
-   * yet" error (DISPATCH-CONTEXT's SQL hazard note). `SELECT *` throughout:
+   * One config lineage per tenant (spec §2), so the query is scoped by
+   * `entity_type` + `_status` only — both DataCore system columns present on
+   * every row, never a single-writer binder hazard. `SELECT *` throughout:
    * no per-field predicate ever names a column only one entity type writes.
    */
   const load = useCallback(async () => {
     if (!tenant) return;
     try {
-      const pr = await postQuery(tenant, 'entities',
-        `SELECT * FROM data WHERE entity_type = 'program' AND _status = 'active' AND program_id = '${escapeSql(programId)}'`);
-      setProgram((pr.data[0] as unknown as ProgramRow) ?? null);
-
       const cr = await postQuery(tenant, 'entities',
-        `SELECT * FROM data WHERE entity_type = 'registration_config' AND _status = 'active' AND program_id = '${escapeSql(programId)}'`);
+        "SELECT * FROM data WHERE entity_type = 'registration_config' AND _status = 'active'");
       const rows = cr.data as unknown as ConfigRow[];
       // ConfigRow.version arrives from DataCore as a string on every row
       // (data-shape trap: every entity field is a string) — coerce before
@@ -245,13 +257,14 @@ export default function ConfigBuilderPage() {
         setConfigId(null);
         setVersion(1);
         setConfigStatus('draft');
-        setBlocks([]);
+        // Unsaved starter template — nothing is written until Save draft.
+        setBlocks(starterBlocks(t));
       }
       setError(null);
     } catch (e) {
       setError(String(e));
     }
-  }, [tenant, programId]);
+  }, [tenant, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -274,7 +287,6 @@ export default function ConfigBuilderPage() {
 
   const previewConfig: RegistrationConfigDef = useMemo(() => ({
     config_id: configId ?? 'preview',
-    program_id: programId,
     version,
     status: 'draft',
     blocks: withReview(blocks, t('builder.reviewTitle')).map((b) => {
@@ -282,14 +294,13 @@ export default function ConfigBuilderPage() {
         ? b.config.entity_type : null;
       if (!et) return b;
       const m = models[et];
-      // The entity's own id field is auto-generated and never staff/parent
-      // editable (project convention) — exclude it from the previewed form.
-      const fields = m
-        ? [...m.base_fields, ...m.custom_fields].filter((f) => f.name !== `${et}_id`)
-        : [];
+      // ONE derivation of "which model fields does this block show", shared
+      // with ApplicationEntryPage and restated server-side by enrollx's
+      // `engine.model_form_fields` for the parent channel.
+      const fields = m ? hydratedFormFields(et, m) : [];
       return { ...b, config: { ...b.config, fields } };
     }),
-  }), [blocks, models, configId, programId, version, t]);
+  }), [blocks, models, configId, version, t]);
 
   // FlowRendererProps callbacks are irrelevant in mode="preview" — every
   // block component is verified inert there (Task 4). A function with FEWER
@@ -401,7 +412,7 @@ export default function ConfigBuilderPage() {
       // assigns the real one").
       if (entityId && configStatus === 'draft') {
         await updateEntity(tenant, 'registration_config', entityId, {
-          config_id: configId, program_id: programId, version,
+          config_id: configId, version,
           status: 'draft', blocks: blocksJson,
         });
         toast({ message: t('builder.savedDraft'), tone: 'success' });
@@ -410,7 +421,7 @@ export default function ConfigBuilderPage() {
       const nextVersion = entityId ? version + 1 : 1;
       const cid = configId ?? (await fetchNextEntityId(tenant, 'registration_config')).next_id;
       const created = await createEntity(tenant, 'registration_config', {
-        config_id: cid, program_id: programId, version: nextVersion,
+        config_id: cid, version: nextVersion,
         status: 'draft', blocks: blocksJson,
       });
       setEntityId(created.entity_id);
@@ -454,7 +465,7 @@ export default function ConfigBuilderPage() {
         <h1 className="page-title">
           {t('builder.title')}
           <span className="page-subtitle">
-            {program?.name ?? programId} · {t('builder.version')} {version} ·{' '}
+            {t('builder.subtitleTenant')} · {t('builder.version')} {version} ·{' '}
             {configStatus === 'published' ? t('status.published') : t('status.draft')}
           </span>
         </h1>

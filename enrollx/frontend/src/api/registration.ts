@@ -16,7 +16,7 @@ export interface CreateApplicationResponse {
 
 export async function createApplication(
   tenantId: string,
-  body: { program_id: string; school_year: string; channel: 'admin'; applicant_email?: string },
+  body: { school_year: string; channel: 'admin'; applicant_email?: string },
 ): Promise<CreateApplicationResponse> {
   const resp = await fetch(`${API_BASE}/api/registration/${tenantId}/applications`, {
     method: 'POST',

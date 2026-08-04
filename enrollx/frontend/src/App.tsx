@@ -6,7 +6,6 @@ import AppNav from './components/AppNav.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import HomePage from './pages/HomePage.tsx';
 import PaymentsSettingsPage from './pages/PaymentsSettingsPage.tsx';
-import ProgramsPage from './pages/ProgramsPage.tsx';
 import ConfigBuilderPage from './pages/ConfigBuilderPage.tsx';
 import ApplicationsPage from './pages/ApplicationsPage.tsx';
 import NewApplicationPage from './pages/NewApplicationPage.tsx';
@@ -42,8 +41,7 @@ function AppRoutes() {
                     <Routes>
                       <Route path="/home" element={<HomePage />} />
                       <Route path="/settings/payments" element={<PaymentsSettingsPage />} />
-                      <Route path="/programs" element={<ProgramsPage />} />
-                      <Route path="/programs/:programId/flow" element={<ConfigBuilderPage />} />
+                      <Route path="/flow" element={<ConfigBuilderPage />} />
                       <Route path="/applications" element={<ApplicationsPage />} />
                       <Route path="/applications/new" element={<NewApplicationPage />} />
                       <Route path="/applications/:applicationId" element={<ApplicationDetailPage />} />

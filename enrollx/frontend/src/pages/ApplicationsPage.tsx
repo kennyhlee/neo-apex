@@ -5,7 +5,7 @@ import type { ApplicationStatus } from '@neoapex/flow-runtime';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { escapeSql, postQuery } from '../api/client.ts';
-import type { ApplicationRow, ProgramRow } from '../types/registration.ts';
+import type { ApplicationRow } from '../types/registration.ts';
 import { fmtDateTime } from '../utils/format.ts';
 import Button from '../components/ui/Button.tsx';
 import DataTable, { type Column } from '../components/DataTable.tsx';
@@ -21,14 +21,13 @@ const PAGE_SIZE = 20;
 
 /**
  * The applications pipeline: table + Kanban toggle over `registration_application`
- * rows, with program/school-year/status filters and per-status counts.
+ * rows, with school-year and status filters and per-status counts. School
+ * year is the primary filter now that applications are school-wide (spec §5);
+ * programs play no part in registration at all.
  *
- * SQL #1 (rows): `entity_type = 'registration_application' AND _status = 'active'`
+ * SQL (rows): `entity_type = 'registration_application' AND _status = 'active'`
  * — both DataCore system columns, written by every entity type, never
- * single-writer. Appended filters (SQL side, both confirmed multi-writer):
- *   - `program_id = '<id>'` — written by both `program` and
- *     `registration_application` entities (multi-writer; also explicitly
- *     called out as safe in the plan's standing context).
+ * single-writer. One appended filter, confirmed multi-writer:
  *   - `status = '<value>'` — written by `registration_application`,
  *     `application_item`, `registration_config`, and student entities alike
  *     (`actions.py`/`engine.py`, many call sites) — multi-writer, safe. This
@@ -36,15 +35,13 @@ const PAGE_SIZE = 20;
  *     verified against the backend source rather than assumed.
  * `school_year` is deliberately NOT in the SQL predicate: `base_model.json`
  * declares it on `registration_application` only, and the only live write
- * path in the whole suite is `engine.py:288` — genuinely single-writer, so a
- * tenant with zero applications would 500 the query the moment a year is
- * selected. Filtered client-side in JS instead (see `load()` below), the same
- * way counts and ordering already are.
+ * path is `engine.create_application` — genuinely single-writer, so a tenant
+ * with zero applications would 500 the query the moment a year is selected.
+ * Filtered client-side in JS instead (see `load()` below), the same way
+ * counts and ordering already are. That keeps the existing `LIMIT 1000`
+ * pagination follow-up exactly as it was — no worse.
  * `SELECT *` (not naming individual columns) so a tenant that hasn't used
  * every optional field yet never trips the single-writer binder error.
- *
- * SQL #2 (programs, for the name lookup and filter dropdown): identical to
- * `ProgramsPage`'s query — `entity_type = 'program' AND _status = 'active'`.
  *
  * Row-linking uses `row.entity_id` (never the business `application_id`) in
  * every navigate() call, per the identifier convention — `application_id` is
@@ -58,9 +55,7 @@ export default function ApplicationsPage() {
   const navigate = useNavigate();
 
   const [rows, setRows] = useState<ApplicationRow[]>([]);
-  const [programs, setPrograms] = useState<ProgramRow[]>([]);
   const [view, setView] = useState<'table' | 'board'>('table');
-  const [programFilter, setProgramFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -74,7 +69,6 @@ export default function ApplicationsPage() {
       const where = [
         "entity_type = 'registration_application'",
         "_status = 'active'",
-        programFilter ? `program_id = '${escapeSql(programFilter)}'` : null,
         statusFilter ? `status = '${escapeSql(statusFilter)}'` : null,
       ].filter(Boolean).join(' AND ');
       const res = await postQuery(tenant, 'entities',
@@ -98,25 +92,12 @@ export default function ApplicationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenant, programFilter, yearFilter, statusFilter, t]);
+  }, [tenant, yearFilter, statusFilter, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!tenant) return;
-    postQuery(tenant, 'entities',
-      "SELECT * FROM data WHERE entity_type = 'program' AND _status = 'active'")
-      .then((res) => setPrograms(res.data as unknown as ProgramRow[]))
-      .catch(() => setPrograms([]));
-  }, [tenant]);
-
-  const programName = useCallback(
-    (pid: string) => programs.find((p) => p.program_id === pid)?.name ?? pid,
-    [programs],
-  );
 
   const years = useMemo(
     () => Array.from(new Set(rows.map((r) => r.school_year))).sort().reverse(),
@@ -145,10 +126,6 @@ export default function ApplicationsPage() {
         </button>
       ),
     },
-    {
-      key: 'program_id', label: 'Program', i18nKey: 'apps.colProgram',
-      render: (r) => programName(r.program_id),
-    },
     { key: 'school_year', label: 'School year', i18nKey: 'apps.colYear' },
     {
       key: 'status', label: 'Status', i18nKey: 'apps.colStatus',
@@ -162,7 +139,7 @@ export default function ApplicationsPage() {
       key: 'submitted_at', label: 'Submitted', i18nKey: 'apps.colSubmitted', numeric: true,
       render: (r) => fmtDateTime(r.submitted_at),
     },
-  ], [goToDetail, programName, t]);
+  ], [goToDetail, t]);
 
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -204,14 +181,6 @@ export default function ApplicationsPage() {
       </header>
 
       <div className="apps-filters">
-        <label htmlFor="apps-f-program">{t('apps.filterProgram')}</label>
-        <select id="apps-f-program" value={programFilter}
-          onChange={(e) => setProgramFilter(e.target.value)}>
-          <option value="">{t('apps.all')}</option>
-          {programs.map((p) => (
-            <option key={p.program_id} value={p.program_id}>{p.name}</option>
-          ))}
-        </select>
         <label htmlFor="apps-f-year">{t('apps.filterYear')}</label>
         <select id="apps-f-year" value={yearFilter}
           onChange={(e) => setYearFilter(e.target.value)}>
@@ -276,7 +245,7 @@ export default function ApplicationsPage() {
                     onClick={() => goToDetail(r)}
                   >
                     <strong>{r.application_id}</strong>
-                    <small>{programName(r.program_id)} · {r.school_year}</small>
+                    <small>{r.school_year}</small>
                     <small>{r.applicant_email || t(`apps.channel.${r.channel_started}`)}</small>
                   </button>
                 ))}
