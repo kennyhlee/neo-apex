@@ -7,12 +7,13 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Landing
     'landing.explanation':
-      'Registration links are program-specific. If you were expecting to register a student, please use the link your school sent you.',
+      'Registration links are specific to your school. If you were expecting to register a student, please use the link your school sent you.',
 
     // Registration start
     'register.loading': 'Loading registration…',
     'register.notFound': 'This registration link is not available. Check the address with your school.',
-    'register.programFull': 'This program is currently full. You can still apply — you will be placed on the waitlist.',
+    'register.schoolFull': 'This school year is currently full. You can still apply — you will be placed on the waitlist.',
+    'register.schoolYear': 'School year',
     'register.emailLabel': 'Your email',
     'register.emailHelp': 'We will send you a private link to continue and track this application.',
     'register.start': 'Start application',
@@ -63,7 +64,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'statusBanner.pending_items': 'The school needs something more from you — see the list below.',
     'statusBanner.approved': 'Congratulations — your application is approved! Finish any remaining items below.',
     'statusBanner.enrolled': 'Enrollment complete. Welcome!',
-    'statusBanner.waitlisted': 'The program is currently full. You are on the waitlist and will be contacted if a spot opens.',
+    'statusBanner.waitlisted': 'This school year is currently full. You are on the waitlist and will be contacted if a spot opens.',
     'statusBanner.declined': 'This application was not accepted. Contact the school if you have questions.',
     'statusBanner.withdrawn': 'This application has been withdrawn.',
 
@@ -92,12 +93,13 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Landing
     'landing.explanation':
-      '注册链接与具体项目相关联。如果您希望为学生注册，请使用学校发送给您的链接。',
+      '报名链接由各学校单独提供。如果您希望为学生报名，请使用学校发送给您的链接。',
 
     // Registration start
     'register.loading': '正在加载注册信息…',
     'register.notFound': '该注册链接不可用。请与学校核对网址。',
-    'register.programFull': '该项目目前已满员。您仍可提交申请，将进入候补名单。',
+    'register.schoolFull': '本学年名额已满。您仍可提交申请，将进入候补名单。',
+    'register.schoolYear': '学年',
     'register.emailLabel': '您的邮箱',
     'register.emailHelp': '我们会向您发送一个专属链接，用于继续填写和跟踪此申请。',
     'register.start': '开始申请',
@@ -148,7 +150,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'statusBanner.pending_items': '学校需要您补充材料，请查看下方列表。',
     'statusBanner.approved': '恭喜，您的申请已通过！请完成下方剩余事项。',
     'statusBanner.enrolled': '入学手续已完成，欢迎加入！',
-    'statusBanner.waitlisted': '该项目目前已满员。您已进入候补名单，如有名额我们会与您联系。',
+    'statusBanner.waitlisted': '本学年名额已满。您已进入候补名单，如有空位我们会与您联系。',
     'statusBanner.declined': '该申请未被录取。如有疑问请联系学校。',
     'statusBanner.withdrawn': '该申请已撤回。',
 

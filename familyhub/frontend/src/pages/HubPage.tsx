@@ -82,7 +82,6 @@ function asBool(v: unknown): boolean {
 
 interface ApplicationView {
   application_id: string;
-  program_id: string;
   status: ApplicationStatus;
 }
 
@@ -95,7 +94,6 @@ function toApplicationView(row: EntityRecord): ApplicationView {
   const d = entityData(row);
   return {
     application_id: String(d.application_id ?? ''),
-    program_id: String(d.program_id ?? ''),
     status: asStatus(d.status),
   };
 }
@@ -367,7 +365,7 @@ export default function HubPage() {
       return (
         <Link
           className="hub-action link"
-          to={`/register/${decoded.tenantId}/${app.program_id}?token=${encodeURIComponent(token)}`}
+          to={`/register/${decoded.tenantId}?token=${encodeURIComponent(token)}`}
         >
           {t('hub.continueForm')}
         </Link>

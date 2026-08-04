@@ -23,7 +23,6 @@ export default function RequestLinkPage() {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const prefillTenant = searchParams.get('tenant') ?? '';
-  const prefillProgram = searchParams.get('program') ?? undefined;
 
   const [tenantId, setTenantId] = useState(prefillTenant);
   const [email, setEmail] = useState('');
@@ -35,7 +34,7 @@ export default function RequestLinkPage() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      await requestLink(tenantId.trim(), email.trim(), prefillProgram);
+      await requestLink(tenantId.trim(), email.trim());
     } catch {
       // Intentionally swallowed. Showing a different state here -- an error
       // message, a retry affordance, anything -- would tell whoever is

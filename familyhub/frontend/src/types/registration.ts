@@ -43,34 +43,38 @@ export function entityData(e: EntityRecord | undefined | null): Record<string, u
 }
 
 /**
- * The `program` row as enrollx returns it: the FULL flattened `program`
- * entity (`program_id`, `name`, `description`, `start_date`, `end_date`,
- * `capacity`, `status`, ...), not a curated summary. There is NO `is_full`
- * field on this row -- fullness lives ONLY on the sibling `capacity`
- * object (`CapacityState.full`) returned alongside it. Every field here is
- * a DataCore top-level field: string-typed on the wire, coerce before use
- * (e.g. `Number(program.capacity)`).
+ * The school this registration belongs to, as enrollx names it. A curated
+ * two-field summary built server-side (`engine.tenant_label`), NOT a
+ * flattened DataCore row -- so unlike an `EntityRecord` these need no
+ * stringly-typed coercion.
  */
-export type ProgramRecord = EntityRecord;
+export interface TenantSummary {
+  tenant_id: string;
+  name: string;
+}
 
 /**
  * Computed capacity snapshot (`enrollx/backend/app/registration/engine.py`
- * `capacity_state`). This is a freshly-built Python dict, NOT a DataCore
- * row -- FastAPI serializes its `int`/`bool` values as real JSON types, so
- * (unlike `ProgramRecord`) these fields need NO stringly-typed coercion.
+ * `capacity_state`), school-wide for one school year. There is NO `is_full`
+ * anywhere else -- fullness lives ONLY here. This is a freshly-built Python
+ * dict, NOT a DataCore row, so FastAPI serializes its `int`/`bool` values as
+ * real JSON types and these fields need NO coercion.
+ *
+ * `admitted` counts applications in approved|enrolled for the school year;
+ * enrollment rows are not counted at all (spec §2).
  */
 export interface CapacityState {
   capacity: number | null;
-  approved: number;
-  enrolled: number;
+  admitted: number;
   full: boolean;
 }
 
 export interface RegistrationBundle {
   /** Normalized: `blocks` parsed from its wire JSON-string into `FlowBlock[]`,
-   *  `version` coerced to a number. Ready to pass straight to `FlowRenderer`. */
+   *  `version` coerced to a number. Ready to pass straight to `FlowRenderer`.
+   *  Entity-sourced form blocks arrive already model-hydrated by enrollx. */
   config: RegistrationConfigDef;
-  program: ProgramRecord;
+  tenant: TenantSummary;
   capacity: CapacityState;
 }
 

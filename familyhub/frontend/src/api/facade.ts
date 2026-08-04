@@ -7,9 +7,9 @@ import {
   type DocumentSlot,
   type EntityRecord,
   type HubBundle,
-  type ProgramRecord,
   type RegistrationBundle,
   type StartResponse,
+  type TenantSummary,
 } from '../types/registration.ts';
 
 /**
@@ -76,7 +76,6 @@ function normalizeConfig(raw: EntityRecord | null | undefined): RegistrationConf
   }
   return {
     config_id: String(data.config_id ?? ''),
-    program_id: String(data.program_id ?? ''),
     version: Number(data.version ?? 1),
     status: (data.status as RegistrationConfigDef['status']) ?? 'published',
     blocks,
@@ -85,40 +84,45 @@ function normalizeConfig(raw: EntityRecord | null | undefined): RegistrationConf
 
 interface RawConfigBundle {
   config: EntityRecord;
-  program: ProgramRecord;
+  tenant: TenantSummary;
   capacity: CapacityState;
 }
 
 /**
- * GET /api/registration/{tenant_id}/{program_id} -> `{config, program, capacity}`.
+ * GET /api/registration/{tenant_id} -> `{config, tenant, capacity}`.
  *
- * Fullness comes from `capacity.full` (a freshly-computed boolean, no
- * coercion needed) -- there is no `program.is_full` field; do not invent
- * one when reading `program`.
+ * Registration is admission to the school as a whole for one school year
+ * (spec §1) -- there is no program segment. Fullness comes from
+ * `capacity.full` (a freshly-computed boolean, no coercion needed) and is
+ * school-wide for the current school year; there is no fullness field
+ * anywhere else, so do not invent one.
+ *
+ * The `config.blocks` this returns are already MODEL-HYDRATED by enrollx --
+ * familyhub holds no DataCore credential, so an entity-sourced form block
+ * would otherwise render with no fields at all. Never try to resolve model
+ * fields client-side.
  */
 export async function fetchRegistrationBundle(
   tenantId: string,
-  programId: string,
 ): Promise<RegistrationBundle> {
   const resp = await fetch(
-    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/${encodeURIComponent(programId)}`,
+    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}`,
   );
   const raw = await jsonOrThrow<RawConfigBundle>(resp);
-  return { config: normalizeConfig(raw.config), program: raw.program, capacity: raw.capacity };
+  return { config: normalizeConfig(raw.config), tenant: raw.tenant, capacity: raw.capacity };
 }
 
 /**
- * POST /api/registration/{tenant_id}/{program_id}/start -> enrollx's start
- * response (`{application, items, token, link}`) plus familyhub's own
- * `hub_url` (a relative in-app path, see `StartResponse.hub_url`).
+ * POST /api/registration/{tenant_id}/start -> enrollx's start response
+ * (`{application, items, token, link}`) plus familyhub's own `hub_url`
+ * (a relative in-app path, see `StartResponse.hub_url`).
  */
 export async function startRegistration(
   tenantId: string,
-  programId: string,
   applicantEmail: string,
 ): Promise<StartResponse> {
   const resp = await fetch(
-    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/${encodeURIComponent(programId)}/start`,
+    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/start`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -187,15 +191,11 @@ export const submitApplication = (token: string) => putAction(token, { action: '
  * thrown error (masked 502 from the facade), which is not itself a
  * distinguishing signal since it's identical for every email.
  */
-export async function requestLink(
-  tenantId: string,
-  email: string,
-  programId?: string,
-): Promise<void> {
+export async function requestLink(tenantId: string, email: string): Promise<void> {
   const resp = await fetch(`${API_BASE}/api/application/request-link`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tenant_id: tenantId, email, program_id: programId ?? null }),
+    body: JSON.stringify({ tenant_id: tenantId, email }),
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 }

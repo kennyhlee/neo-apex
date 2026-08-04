@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { FlowRenderer } from '@neoapex/flow-runtime';
+import { FlowRenderer, defaultSchoolYear } from '@neoapex/flow-runtime';
 import type { ApplicationItem, ApplicationSummary } from '@neoapex/flow-runtime';
 import {
   completeItem,
@@ -27,11 +27,11 @@ import './RegisterPage.css';
  * `email`     -- config bundle loaded, no token yet: capture the applicant's
  *                email and start a new application.
  * `running`   -- an application + token are in hand: mount FlowRenderer.
- * `notFound`  -- the tenant/program config bundle 404s (bad URL, or the
- *                program simply isn't open -- the backend does not
+ * `notFound`  -- the tenant's config bundle 404s (bad URL, or the school
+ *                simply isn't open for registration -- the backend does not
  *                distinguish the two, see bindings §"Config bundle route").
  * `invalidLink` -- a `?token=` was supplied but is unknown/expired/revoked.
- *                  Distinct from `notFound` because the *program* is fine
+ *                  Distinct from `notFound` because the *school* is fine
  *                  here -- only the parent's link is bad -- so a different,
  *                  more accurate message + "request a new link" CTA applies.
  */
@@ -56,7 +56,6 @@ function toApplicationSummary(row: EntityRecord): ApplicationSummary {
   const d = entityData(row);
   return {
     application_id: String(d.application_id ?? ''),
-    program_id: String(d.program_id ?? ''),
     school_year: String(d.school_year ?? ''),
     status: (d.status as ApplicationSummary['status']) ?? 'draft',
     channel_started: (d.channel_started as ApplicationSummary['channel_started']) ?? 'parent',
@@ -114,7 +113,7 @@ function parseDraft(applicationRow: EntityRecord): Record<string, unknown> {
 }
 
 export default function RegisterPage() {
-  const { tenantId = '', programId = '' } = useParams();
+  const { tenantId = '' } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t, locale } = useTranslation();
@@ -134,14 +133,14 @@ export default function RegisterPage() {
   // right after a successful start (see the effect's comment).
   const startedLocallyRef = useRef(false);
 
-  // Load the public config bundle (program name, capacity state, blocks).
+  // Load the public config bundle (school name, capacity state, blocks).
   // This is unauthenticated and pre-start -- it never needs a token. (Phase
   // starts at 'loading' via useState's initializer above; this effect only
   // ever moves it forward from there, so no synchronous reset is needed
   // inside the effect body itself.)
   useEffect(() => {
     let cancelled = false;
-    fetchRegistrationBundle(tenantId, programId)
+    fetchRegistrationBundle(tenantId)
       .then((b) => {
         if (cancelled) return;
         setBundle(b);
@@ -153,7 +152,7 @@ export default function RegisterPage() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId, programId]);
+  }, [tenantId]);
 
   // Resume path: `?token=` present -> load the application directly and
   // skip the email-capture phase entirely, once the config bundle is also
@@ -212,7 +211,7 @@ export default function RegisterPage() {
     setFormError(null);
     setStarting(true);
     try {
-      const started = await startRegistration(tenantId, programId, value);
+      const started = await startRegistration(tenantId, value);
       // Must be set before `setToken` -- otherwise the resume effect's
       // guard is not yet in place on the very next render.
       startedLocallyRef.current = true;
@@ -267,10 +266,16 @@ export default function RegisterPage() {
     return (
       <div className="register-page">
         <header className="register-header">
-          <h1>{String(bundle.program.name ?? '')}</h1>
+          <h1>{bundle.tenant.name}</h1>
+          {/* Read-only: the school year is derived server-side from the same
+              July-rollover rule enrollx used for the capacity snapshot below,
+              so showing an editable field here could only disagree with it. */}
+          <p className="register-school-year">
+            {t('register.schoolYear')}: {defaultSchoolYear()}
+          </p>
           {bundle.capacity.full && (
             <p className="register-full-notice" role="status">
-              {t('register.programFull')}
+              {t('register.schoolFull')}
             </p>
           )}
         </header>
@@ -304,7 +309,10 @@ export default function RegisterPage() {
   return (
     <div className="register-page">
       <header className="register-header">
-        <h1>{String(bundle.program.name ?? '')}</h1>
+        <h1>{bundle.tenant.name}</h1>
+        <p className="register-school-year">
+          {t('register.schoolYear')}: {defaultSchoolYear()}
+        </p>
         {linkSent && (
           <p className="register-link-sent" role="status">
             {t('register.linkSent')}
