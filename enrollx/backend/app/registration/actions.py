@@ -114,7 +114,8 @@ def _submit(tenant_id, application_entity_id, params, actor, token):
     app_row = engine.require_application(tenant_id, application_entity_id, token)
     items = engine.get_items(tenant_id, application_entity_id, token)
     incomplete = [i.get("title", "?") for i in items
-                  if i.get("blocking") and i.get("status") not in engine.ITEM_DONE_STATUSES]
+                  if engine.as_bool(i.get("blocking"))
+                  and i.get("status") not in engine.ITEM_DONE_STATUSES]
     if incomplete:
         raise HTTPException(409, {"error": "Blocking items incomplete", "items": incomplete})
     full = engine.is_capacity_full(tenant_id, app_row.get("program_id", ""), token)

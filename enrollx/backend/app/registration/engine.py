@@ -17,6 +17,35 @@ from app.registration.statuses import assert_transition
 SYSTEM_COLS = {"entity_id", "entity_type", "base_data", "custom_fields", "vector", "_tenant"}
 ITEM_DONE_STATUSES = {"submitted", "verified", "waived"}
 
+# Every field declared `"type": "bool"` in launchpad's base_model.json across
+# the entity types this module touches: application_item.blocking and
+# document.sensitive. Read back from DataCore these arrive as the STRINGS
+# "true"/"false" (datacore/src/datacore/query.py::_scalar_to_str), so they
+# must be coerced with `as_bool` on read and back to real bools on write —
+# see the module note below.
+BOOLEAN_FIELDS = {"blocking", "sensitive"}
+
+_TRUTHY_STRINGS = {"true", "1", "yes"}
+
+
+def as_bool(v) -> bool:
+    """Coerce a DataCore-flattened value to a real bool.
+
+    DataCore's query engine stringifies every flattened column value
+    (`_scalar_to_str`), so a field stored as bool `False` reads back as the
+    STRING "false" — which is truthy in Python. Any code branching on a
+    boolean field read out of a query row MUST go through this helper;
+    `if row.get("blocking")` is always a bug.
+
+    BINDING name — actions.py and app/api/internal.py import this rather
+    than restating the predicate.
+    """
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return False
+    return str(v).strip().lower() in _TRUTHY_STRINGS
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -32,9 +61,19 @@ def entity_base_data(row: dict) -> dict:
     base_data (not just the changed fields) — dropping the null padding
     from unrelated entity_types along the way (precedent: admindash
     leads.py `_lead_base_data`).
+
+    Boolean fields are coerced back to real bools on the way out. Without
+    this the round-trip drifts: the flattened row carries the STRING
+    "false", copying it verbatim into the next PUT would permanently
+    rewrite stored `base_data` from bool `False` to `"false"`, contradicting
+    the `"type": "bool"` declared for these fields in base_model.json.
     """
-    return {k: v for k, v in row.items()
-            if k not in SYSTEM_COLS and not k.startswith("_") and v is not None}
+    out = {k: v for k, v in row.items()
+           if k not in SYSTEM_COLS and not k.startswith("_") and v is not None}
+    for field in BOOLEAN_FIELDS:
+        if field in out:
+            out[field] = as_bool(out[field])
+    return out
 
 
 def log_activity(tenant_id, application_id, type_, from_value, to_value, actor, token=None):
@@ -138,14 +177,26 @@ def capacity_state(tenant_id, program_id, token=None) -> dict:
 
 
 def is_capacity_full(tenant_id, program_id, token=None) -> bool:
-    """Read-then-decide: see the capacity concurrency note in the task
-    report — this is not safe against two concurrent approvals racing the
-    same capacity boundary."""
+    """Read-then-decide, and consulted at exactly ONE place in the lifecycle.
+
+    Scope (as implemented, not aspiration): capacity is enforced only at the
+    `_submit` gate, which routes a submission to `waitlisted` instead of
+    `submitted` when the program is full. `_approve` and `_promote_waitlist`
+    perform NO capacity check at all — staff can approve or promote past a
+    full program, and doing so does not consult this function. Whether that
+    staff override is desirable is a product decision, deliberately left
+    open here.
+
+    Even at the one gate that does check, this is a read-then-decide with no
+    locking, so it is not safe against two concurrent submissions racing the
+    same capacity boundary — the same unresolved-race category as
+    `settle_payment_item`'s provider_ref lookup.
+    """
     return capacity_state(tenant_id, program_id, token)["full"]
 
 
 def blocking_items_complete(items) -> bool:
-    return all((not i.get("blocking")) or i.get("status") in ITEM_DONE_STATUSES
+    return all((not as_bool(i.get("blocking"))) or i.get("status") in ITEM_DONE_STATUSES
                for i in items)
 
 

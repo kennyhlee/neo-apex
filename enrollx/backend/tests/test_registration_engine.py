@@ -104,7 +104,7 @@ def test_settle_payment_item(fake_dc):
         "acme", app["entity_id"], item_row, provider="offline", kind="full",
         amount=50000, recorded_by="u1", actor="u1")
     pay = fake_dc.find("payment", application_id=app["entity_id"])[0]
-    assert pay["amount"] == 50000 and pay["provider"] == "offline"
+    assert int(pay["amount"]) == 50000 and pay["provider"] == "offline"
     assert pay["status"] == "paid" and pay["recorded_by"] == "u1"
     updated_item = fake_dc.get_entity("acme", "application_item", item["entity_id"])
     assert updated_item["status"] == "verified"

@@ -148,9 +148,10 @@ def documents_by_token(token: str):
 
     eid = app_row["entity_id"]
     own_tag = f"parent:{eid}"
-    docs = dc.list_entities(tenant_id, "document", f"application_id = '{eid}'")
+    docs = dc.list_entities(tenant_id, "document",
+                            f"application_id = {dc.sql_literal(eid)}")
     visible = [d for d in docs
-               if d.get("uploaded_by") == own_tag or not d.get("sensitive")]
+               if d.get("uploaded_by") == own_tag or not engine.as_bool(d.get("sensitive"))]
     return {"documents": [{
         "entity_id": d["entity_id"],
         "document_id": d.get("document_id", ""),

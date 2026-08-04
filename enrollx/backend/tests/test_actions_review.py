@@ -263,7 +263,7 @@ def test_record_offline_payment(client, fake_dc):
                item_id=payment_item["entity_id"], amount=10000, kind="deposit")
     assert resp.status_code == 200
     pay = fake_dc.find("payment", application_id=eid)[0]
-    assert pay["provider"] == "offline" and pay["amount"] == 10000
+    assert pay["provider"] == "offline" and int(pay["amount"]) == 10000
     assert pay["recorded_by"] == "u1" and pay["kind"] == "deposit"
     assert fake_dc.get_entity("acme", "application_item",
                               payment_item["entity_id"])["status"] == "verified"

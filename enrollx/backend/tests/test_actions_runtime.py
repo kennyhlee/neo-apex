@@ -184,3 +184,55 @@ def test_publish_config_rejects_application_id_as_not_a_config(client, fake_dc):
     created = create_application(client, fake_dc)
     eid = created["application"]["entity_id"]
     assert act(client, eid, "publish_config").status_code == 404
+
+
+# ── C1 regression: booleans read back from DataCore are STRINGS ────────────
+
+def test_non_blocking_item_does_not_block_submit(client, fake_dc):
+    """C1 regression. `blocking: False` reads back from DataCore's query path
+    as the STRING "false", which is truthy in Python. Before the `as_bool`
+    coercion, `_submit` treated EVERY item as blocking, so an application
+    carrying a post-approval item (BLOCKS' "Report Card", blocking=False,
+    due_days_after_approval=14) could never be submitted — a permanent 409
+    naming an item the parent is not meant to complete yet.
+    """
+    created = create_application(client, fake_dc)
+    eid = created["application"]["entity_id"]
+
+    report_card = next(i for i in created["items"]
+                       if i["base_data"]["title"] == "Report Card")
+    assert report_card["base_data"]["blocking"] is False
+    # It really is stored/read as the truthy string.
+    stored = fake_dc.get_entity("acme", "application_item", report_card["entity_id"])
+    assert stored["blocking"] == "false" and bool(stored["blocking"]) is True
+
+    complete_all_blocking(client, created)
+    resp = act(client, eid, "submit")
+    assert resp.status_code == 200, resp.json()
+    assert fake_dc.get_entity("acme", "registration_application",
+                              eid)["status"] == "submitted"
+    # And it is still open, deliberately — it is a post-approval item.
+    assert stored["status"] == "not_started"
+
+
+def test_item_update_keeps_blocking_a_real_bool_in_stored_base_data(client, fake_dc):
+    """C1 write-side drift regression. `entity_base_data` copies the flattened
+    row into the next PUT, so without coercion the first `_update_item` would
+    permanently rewrite `blocking` from bool False to the string "false" in
+    stored base_data, contradicting the `"type": "bool"` declared in
+    base_model.json.
+    """
+    created = create_application(client, fake_dc)
+    eid = created["application"]["entity_id"]
+    report_card = next(i for i in created["items"]
+                       if i["base_data"]["title"] == "Report Card")
+
+    resp = act(client, eid, "complete_item", item_id=report_card["entity_id"])
+    assert resp.status_code == 200
+    # The PUT envelope is what DataCore would persist as base_data.
+    assert resp.json()["item"]["base_data"]["blocking"] is False
+
+    form = next(i for i in created["items"]
+                if i["base_data"]["title"] == "Student Info")
+    resp = act(client, eid, "complete_item", item_id=form["entity_id"])
+    assert resp.json()["item"]["base_data"]["blocking"] is True

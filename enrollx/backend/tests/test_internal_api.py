@@ -81,7 +81,7 @@ def test_application_by_token_bundle(client, fake_dc):
     data = resp.json()
     assert data["application"]["status"] == "draft"
     assert len(data["items"]) == 4
-    assert data["config"]["version"] == 1
+    assert int(data["config"]["version"]) == 1
 
 
 def test_revoked_token_is_401(client, fake_dc):
@@ -171,3 +171,25 @@ def test_documents_route_filters_sensitive_foreign_uploads(client, fake_dc):
     names = sorted(d["filename"] for d in docs)
     assert names == ["own-upload.pdf", "staff-plain.pdf"]
     assert set(docs[0]) == {"entity_id", "document_id", "filename", "uploaded_by", "item_id"}
+
+
+def test_non_sensitive_staff_document_is_visible_to_parent(client, fake_dc):
+    """C1 regression. `sensitive: False` reads back as the STRING "false",
+    which is truthy, so before the `as_bool` coercion `not d.get("sensitive")`
+    was always False and EVERY document not uploaded by this parent was
+    hidden — including non-sensitive ones a school uploads for them.
+    """
+    seed_program_and_config(fake_dc)
+    started = start(client).json()
+    eid = started["application"]["entity_id"]
+    tok = started["token"]
+    created = fake_dc.dc_create("acme", "document", {
+        "application_id": eid, "item_id": "i-doc", "filename": "staff-handbook.pdf",
+        "content_type": "application/pdf", "size": 100, "storage_key": "k1",
+        "sensitive": False, "uploaded_by": "u1", "uploaded_at": "2026-08-03"})
+    stored = fake_dc.get_entity("acme", "document", created["entity_id"])
+    assert stored["sensitive"] == "false" and bool(stored["sensitive"]) is True
+
+    resp = client.get(f"/internal/application-by-token/{tok}/documents", headers=KEY)
+    assert resp.status_code == 200
+    assert [d["filename"] for d in resp.json()["documents"]] == ["staff-handbook.pdf"]

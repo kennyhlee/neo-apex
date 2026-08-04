@@ -43,16 +43,60 @@ tests today, but worth knowing before relying on the fake for something new):
    that the real service would silently paper over), so the behavior is
    kept as-is; it is documented here only so it isn't mistaken for
    real-service parity.
+
+STRINGIFIED READS (deliberate, load-bearing — do not "simplify" this away):
+Real DataCore stores base_data with its types intact (TOON), but its QUERY
+path flattens each field into a string column via
+`datacore/src/datacore/query.py::_scalar_to_str` — bools become "true"/"false",
+dict/list become JSON, everything else `str()`. So a field written as bool
+`False` reads back from a query as the STRING "false", which is TRUTHY in
+Python. `_store_row` mirrors `_scalar_to_str` exactly so this suite can see
+that class of bug (it previously could not: the fake stored native values,
+which made `if row.get("blocking")` look correct in tests while being
+inverted in production).
+
+Consequently there are two different shapes in play, matching the real
+service:
+  - `dc_create`/`dc_update` RETURN `{entity_id, entity_type, base_data}`
+    with base_data holding NATIVE values (the real service echoes what it
+    stored, before any query flattening).
+  - `list_entities`/`get_entity`/`find`/`fdc.rows` yield FLATTENED rows
+    whose every base_data-derived value is a STRING.
+Assertions on a value read through the second path must expect a string.
 """
 import json
 import re
 import uuid
 
 
+def _scalar_to_str(v):
+    """Verbatim mirror of datacore/src/datacore/query.py::_scalar_to_str.
+
+    Order matters: bool is a subclass of int, so it must be checked before
+    any numeric handling."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (dict, list)):
+        return json.dumps(v)
+    return str(v)
+
+
 class FakeDataCore:
     def __init__(self):
         self.rows: list[dict] = []
         self.seq = 0
+
+    @staticmethod
+    def _store_row(entity_id, entity_type, tenant_id, base):
+        """Build the flattened, stringified row a real query would return.
+
+        `None` values are preserved as None (real DataCore emits a null
+        column, not the string "None") — see query.py's
+        `None if v is None else _scalar_to_str(v)`."""
+        row = {"entity_id": entity_id, "entity_type": entity_type, "_tenant": tenant_id}
+        for k, v in base.items():
+            row[k] = None if v is None else _scalar_to_str(v)
+        return row
 
     # ── same signatures as app.registration.datacore ─────────────────────
     def dc_create(self, tenant_id, entity_type, base_data, token=None):
@@ -62,16 +106,15 @@ class FakeDataCore:
             self.seq += 1
             base[id_field] = f"TT-{entity_type[:2].upper()}26{self.seq:04d}"
         entity_id = uuid.uuid4().hex[:12]
-        self.rows.append({"entity_id": entity_id, "entity_type": entity_type,
-                          "_tenant": tenant_id, **base})
+        self.rows.append(self._store_row(entity_id, entity_type, tenant_id, base))
         return {"entity_id": entity_id, "entity_type": entity_type, "base_data": base}
 
     def dc_update(self, tenant_id, entity_type, entity_id, base_data, token=None):
         for i, r in enumerate(self.rows):
             if (r["entity_id"] == entity_id and r["entity_type"] == entity_type
                     and r["_tenant"] == tenant_id):
-                self.rows[i] = {"entity_id": entity_id, "entity_type": entity_type,
-                                "_tenant": tenant_id, **dict(base_data)}
+                self.rows[i] = self._store_row(entity_id, entity_type, tenant_id,
+                                               dict(base_data))
                 return {"entity_id": entity_id, "entity_type": entity_type,
                         "base_data": dict(base_data)}
         raise AssertionError(f"update of unknown entity {entity_type}/{entity_id}")

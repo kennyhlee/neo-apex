@@ -42,7 +42,9 @@ def test_publish_first_config(client, fake_dc):
     assert resp.status_code == 200
     row = fake_dc.get_entity("acme", "registration_config", cfg["entity_id"])
     assert row["status"] == "published"
-    assert row["version"] == 1
+    # Read back through the query path, so `version` is the STRING "1" — see
+    # the STRINGIFIED READS note in tests/fakes.py.
+    assert int(row["version"]) == 1
 
 
 def test_publish_archives_prior_and_bumps_version(client, fake_dc):
@@ -53,8 +55,8 @@ def test_publish_archives_prior_and_bumps_version(client, fake_dc):
     assert publish(client, new["entity_id"]).status_code == 200
     assert fake_dc.get_entity("acme", "registration_config",
                               old["entity_id"])["status"] == "archived"
-    assert fake_dc.get_entity("acme", "registration_config",
-                              new["entity_id"])["version"] == 4
+    assert int(fake_dc.get_entity("acme", "registration_config",
+                                  new["entity_id"])["version"]) == 4
 
 
 def test_publish_unknown_config_404(client, fake_dc):

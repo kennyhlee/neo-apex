@@ -116,8 +116,34 @@ def test_fake_create_assigns_id_field_and_is_queryable():
     fdc = FakeDataCore()
     created = fdc.dc_create("acme", "payment", {"amount": 100})
     assert created["base_data"]["payment_id"].startswith("TT-PA26")
+    # The create ENVELOPE keeps native types (the real service echoes what it
+    # stored); the QUERY path stringifies. Both halves asserted here.
+    assert created["base_data"]["amount"] == 100
     rows = fdc.list_entities("acme", "payment", f"entity_id = '{created['entity_id']}'")
-    assert rows and rows[0]["amount"] == 100
+    assert rows and rows[0]["amount"] == "100"
+
+
+def test_fake_stringifies_reads_like_datacore_query_flattening():
+    """Pins the fake to datacore/src/datacore/query.py::_scalar_to_str.
+
+    This is the property that lets the suite catch truthiness bugs on
+    boolean fields: `False` reads back as "false", which is TRUTHY, so
+    `if row.get("blocking")` is wrong and `engine.as_bool` is required.
+    """
+    fdc = FakeDataCore()
+    created = fdc.dc_create("acme", "application_item", {
+        "item_id": "i1", "blocking": False, "sensitive": True,
+        "size": 100, "tags": ["a", "b"], "meta": {"k": "v"}, "missing": None})
+    row = fdc.get_entity("acme", "application_item", created["entity_id"])
+    assert row["blocking"] == "false"
+    assert bool(row["blocking"]) is True  # the trap this exists to expose
+    assert row["sensitive"] == "true"
+    assert row["size"] == "100"
+    assert row["tags"] == '["a", "b"]'
+    assert row["meta"] == '{"k": "v"}'
+    assert row["missing"] is None  # nulls stay null, not the string "None"
+    # Envelope is untouched.
+    assert created["base_data"]["blocking"] is False
 
 
 def test_fake_where_parsing_and_tenant_scoping():
@@ -135,7 +161,7 @@ def test_fake_update_replaces_base_data():
     created = fdc.dc_create("acme", "program", {"program_id": "PR1", "name": "Fall"})
     fdc.dc_update("acme", "program", created["entity_id"], {"program_id": "PR1", "capacity": 5})
     row = fdc.get_entity("acme", "program", created["entity_id"])
-    assert row["capacity"] == 5
+    assert row["capacity"] == "5"  # stringified by the query path
     assert "name" not in row
 
 
