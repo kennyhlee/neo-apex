@@ -339,7 +339,7 @@ export default function RegisterPage() {
               await refreshHub();
               setRuntimeError(null);
             } catch (err) {
-              setRuntimeError(t('hub.submitError'));
+              setRuntimeError(t('hub.completeItemError'));
               throw err;
             }
           }}

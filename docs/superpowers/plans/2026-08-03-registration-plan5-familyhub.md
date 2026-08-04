@@ -3037,8 +3037,14 @@ export FORM_ITEM=AI0001   # replace with the real id
 export DOC_ITEM=AI0002    # replace with the document item's real id
 
 # Save draft + complete the form item
+# NOTE: draft_data must be nested ({"student": {...}, "family": {...}}) --
+# `_approve` (enrollx/backend/app/registration/actions.py:323-325) reads
+# draft.student.first_name / draft.student.last_name (and draft.family.* for
+# family matching), NOT flat student_first_name/student_last_name keys. A
+# flat draft_data 422s at approve time with "Cannot approve: the application
+# has no student name" -- reproduced during Task 12's e2e smoke run.
 curl -s -X PUT $FAMILYHUB/api/application/$PTOKEN -H 'Content-Type: application/json' \
-  -d '{"action":"save_draft","draft_data":{"student_first_name":"Mei","student_last_name":"Smoke"}}'
+  -d '{"action":"save_draft","draft_data":{"student":{"first_name":"Mei","last_name":"Smoke"},"family":{"family_name":"Smoke Family","primary_email":"smoke-parent@example.com"}}}'
 curl -s -X PUT $FAMILYHUB/api/application/$PTOKEN -H 'Content-Type: application/json' \
   -d "{\"action\":\"complete_item\",\"item_id\":\"$FORM_ITEM\"}"
 

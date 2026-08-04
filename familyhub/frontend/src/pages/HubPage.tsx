@@ -367,7 +367,7 @@ export default function HubPage() {
       return (
         <Link
           className="hub-action link"
-          to={`/register/${decoded.tenantId}/${app.program_id}?token=${token}`}
+          to={`/register/${decoded.tenantId}/${app.program_id}?token=${encodeURIComponent(token)}`}
         >
           {t('hub.continueForm')}
         </Link>

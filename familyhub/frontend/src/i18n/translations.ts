@@ -43,6 +43,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'hub.payError': 'Could not start payment. Please try again.',
     'hub.submit': 'Submit application',
     'hub.submitError': 'Could not submit. Complete all required steps and try again.',
+    'hub.completeItemError': 'Could not save this step. Please try again.',
     'hub.blocking': 'Required before review',
     'hub.contactSchool': 'Questions? Contact your school directly.',
 
@@ -81,7 +82,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'requestLink.tenantLabel': 'School code',
     'requestLink.send': 'Send link',
     'requestLink.sent': 'If that email matches an application, a link is on its way.',
-    'requestLink.error': 'Something went wrong. Please try again.',
 
     // Shared
     'common.retry': 'Retry',
@@ -128,6 +128,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'hub.payError': '无法发起支付，请重试。',
     'hub.submit': '提交申请',
     'hub.submitError': '无法提交。请完成所有必填步骤后重试。',
+    'hub.completeItemError': '无法保存此步骤，请重试。',
     'hub.blocking': '审核前必须完成',
     'hub.contactSchool': '如有疑问，请直接联系学校。',
 
@@ -166,7 +167,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'requestLink.tenantLabel': '学校代码',
     'requestLink.send': '发送链接',
     'requestLink.sent': '如果该邮箱与申请匹配，链接已发送。',
-    'requestLink.error': '出现问题，请重试。',
 
     // Shared
     'common.retry': '重试',
