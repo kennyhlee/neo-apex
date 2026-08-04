@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import HomePage from './pages/HomePage.tsx';
+import PaymentsSettingsPage from './pages/PaymentsSettingsPage.tsx';
 import './App.css';
 
 /**
@@ -28,6 +29,7 @@ function AppRoutes() {
               <main className="app-main" id="main-content" tabIndex={-1}>
                 <Routes>
                   <Route path="/home" element={<HomePage />} />
+                  <Route path="/settings/payments" element={<PaymentsSettingsPage />} />
                   <Route path="/" element={<Navigate to="/home" replace />} />
                   <Route path="*" element={<Navigate to="/home" replace />} />
                 </Routes>
