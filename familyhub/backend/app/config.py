@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     datacore_url: str = "http://localhost:5800"
     enrollx_url: str = "http://localhost:5910"
+    # Must equal enrollx's ENROLLX_INTERNAL_KEY. Dev default below must match
+    # enrollx's dev default:
+    enrollx_internal_key: str = "dev-internal-key-change-in-prod"  # ADJUST(bindings): enrollx dev default
     cors_allowed_origins: Union[Optional[str], List[str]] = None
     port: int = 6010
 
@@ -33,6 +36,10 @@ class Settings(BaseSettings):
             if "*" in origins:
                 raise ValueError(
                     "wildcard '*' in FAMILYHUB_CORS_ALLOWED_ORIGINS is not permitted in production"
+                )
+            if not self.enrollx_internal_key or self.enrollx_internal_key == "dev-internal-key-change-in-prod":
+                raise ValueError(
+                    "FAMILYHUB_ENROLLX_INTERNAL_KEY must be set to a real secret in production"
                 )
         elif not origins:
             origins = ["http://localhost:6000"]

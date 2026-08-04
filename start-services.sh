@@ -253,7 +253,7 @@ start_service() {
     familyhub-backend)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/familyhub"
-      uv run uvicorn app.main:app --app-dir backend --port "$port" --reload > "$log_file" 2>&1 &
+      TRUST_ALL_IPS=1 uv run uvicorn app.main:app --app-dir backend --port "$port" --reload > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
     launchpad-frontend)
