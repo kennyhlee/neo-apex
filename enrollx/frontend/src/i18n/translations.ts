@@ -72,6 +72,13 @@ export const translations: Record<Locale, Record<string, string>> = {
       'Online payments are disabled until you connect a Stripe account.',
     'payments.connectButton': 'Connect with Stripe',
     'payments.redirecting': 'Redirecting to Stripe…',
+
+    // Programs (Flow Builder entry point)
+    'programs.title': 'Programs',
+    'programs.designFlow': 'Design registration flow',
+    'programs.capacity': 'Capacity',
+    'programs.empty': 'No programs yet. Create programs in AdminDash first.',
+    'programs.loadError': 'Could not load programs.',
   },
   'zh-CN': {
     // Navbar / shared chrome
@@ -143,5 +150,12 @@ export const translations: Record<Locale, Record<string, string>> = {
     'payments.notConnectedBody': '连接 Stripe 账户后才能启用在线支付。',
     'payments.connectButton': '连接 Stripe',
     'payments.redirecting': '正在跳转到 Stripe…',
+
+    // Programs (Flow Builder entry point)
+    'programs.title': '项目',
+    'programs.designFlow': '设计报名流程',
+    'programs.capacity': '名额',
+    'programs.empty': '还没有项目。请先在 AdminDash 中创建项目。',
+    'programs.loadError': '无法加载项目。',
   },
 };
