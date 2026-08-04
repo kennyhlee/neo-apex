@@ -14,11 +14,11 @@ datacore/src/datacore/query.py). So for that route:
     tenant match against the body.
   - `assert_query_tenant_match` is the REAL tenant-match check: the body's
     tenant_id must equal the caller's own tenant.
-  - `assert_sql_uses_data_alias` is defense in depth: every table reference
-    in the SQL must be exactly the `data` alias DataCore registers, which
-    blocks DuckDB function-table escapes such as `FROM read_csv(...)` /
-    `FROM read_parquet(...)` (DataCore only disables external access when
-    called with `external=True`, which this route does not use).
+  - `assert_sql_is_safe_read` is defense in depth on the SQL's *shape*: a
+    single SELECT/WITH statement with no DuckDB filesystem/network function
+    call (`read_csv(...)`, `read_parquet(...)`, `COPY ... TO`, `ATTACH`, …).
+    DataCore's own /api/query now runs with `external=True`, which disables
+    external access at the engine; this guard is the secondary layer.
 """
 import re
 
@@ -28,27 +28,25 @@ from app.auth import require_authenticated_user
 
 STAFF_ROLES = {"admin", "staff"}
 
-# Keywords that introduce one or more table references, optionally
-# comma-separated (e.g. "FROM a, b").
-_TABLE_KEYWORDS = re.compile(r"\b(?:from|join|into|update)\b", re.IGNORECASE)
-
-# Keywords/tokens that end a table-reference list — bounds how far past a
-# FROM/JOIN/INTO/UPDATE keyword we scan for comma-separated table names.
-_CLAUSE_STOP = re.compile(
-    r"\b(?:where|on|group|order|limit|having|union|join|inner|left|right|"
-    r"full|cross|natural|using|set|values|returning|window|for)\b|;",
+# Write/DDL statement keywords, plus DuckDB file/external FUNCTION calls
+# (matched as `name(` so a column named e.g. read_receipts is not rejected).
+#
+# SOURCE OF TRUTH: datacore/src/datacore/api/readonly_query.py::_DENY. This is
+# a deliberate copy, not an import — enrollx must not take a package
+# dependency on datacore. Keep the two lists in sync.
+_DENY = re.compile(
+    r"\b(insert|update|delete|drop|alter|create|attach|detach|copy|install|load|"
+    r"pragma|export|import|call)\b"
+    r"|\b(read_csv|read_parquet|read_json|read_text|read_blob)\s*\("
+    r"|\bwrite_\w*\s*\("
+    r"|\bsystem\s*\(",
     re.IGNORECASE,
 )
 
-# A single table-reference token: a double-quoted, backtick-quoted, or
-# bracket-quoted identifier, or a bare identifier. Anything trailing (an
-# alias, a comma, more SQL, or a function-call's "(...)") is left for the
-# caller to split on.
-_TABLE_TOKEN = re.compile(
-    r'\s*(?:"(?P<dq>[^"]+)"|`(?P<bt>[^`]+)`|\[(?P<br>[^\]]+)\]|(?P<bare>[A-Za-z_]\w*))'
-)
-
-_DATA_ALIAS = "data"
+# `$$…$$` / `$tag$…$tag$` dollar-quote delimiters. `$1` (a bind parameter) does
+# not match, by design.
+_DOLLAR_TAG = re.compile(r"\$(?:[A-Za-z_]\w*)?\$")
+_IDENT_CHAR = re.compile(r"\w")
 
 
 def require_staff_tenant(tenant_id: str, user=Depends(require_authenticated_user)) -> dict:
@@ -80,31 +78,147 @@ def assert_query_tenant_match(request_tenant_id, user: dict) -> None:
         )
 
 
-def _clause_after(sql: str, start: int) -> str:
-    """Text from `start` up to the next clause-terminating keyword (or EOS)."""
-    stop = _CLAUSE_STOP.search(sql, start)
-    return sql[start:stop.start()] if stop else sql[start:]
+def _strip_literals_and_comments(sql: str) -> str:
+    """Blank out string literals and comments so the deny scan sees only SQL
+    *code*.
+
+    This is what lets a legitimate query filter on a value that happens to
+    contain a SQL keyword — `first_name ILIKE '%from%'`, the literal shape the
+    command palette builds — without tripping the guard.
+
+    Quoted identifiers keep their contents (only the quote characters become
+    spaces): DuckDB resolves `"read_csv"(...)` as the function, so the name
+    must stay visible to the scan.
+
+    Raises ValueError on an unterminated literal or comment. A scanner that
+    has desynced from the parser is exactly how a guard like this gets
+    bypassed, so refuse rather than guess.
+    """
+    out: list[str] = []
+    i, n = 0, len(sql)
+    while i < n:
+        c = sql[i]
+
+        if sql.startswith("--", i):
+            j = sql.find("\n", i)
+            i = n if j == -1 else j
+            out.append(" ")
+            continue
+
+        if sql.startswith("/*", i):
+            j = sql.find("*/", i + 2)
+            if j == -1:
+                raise ValueError("unterminated block comment")
+            i = j + 2
+            out.append(" ")
+            continue
+
+        # '…' (doubled '' escapes) and E'…' (backslash escapes)
+        if c == "'" or (
+            c in "Ee"
+            and i + 1 < n
+            and sql[i + 1] == "'"
+            and (i == 0 or not _IDENT_CHAR.match(sql[i - 1]))
+        ):
+            backslash_escapes = c != "'"
+            j = i + 2 if backslash_escapes else i + 1
+            while True:
+                if j >= n:
+                    raise ValueError("unterminated string literal")
+                ch = sql[j]
+                if backslash_escapes and ch == "\\":
+                    j += 2
+                    continue
+                if ch == "'":
+                    if j + 1 < n and sql[j + 1] == "'":
+                        j += 2
+                        continue
+                    break
+                j += 1
+            i = j + 1
+            out.append(" ")
+            continue
+
+        # "…" / `…` quoted identifiers — content is kept, quotes are not
+        if c in '"`':
+            close = c
+            j = i + 1
+            content: list[str] = []
+            while True:
+                if j >= n:
+                    raise ValueError("unterminated quoted identifier")
+                if sql[j] == close:
+                    if j + 1 < n and sql[j + 1] == close:
+                        content.append(close)
+                        j += 2
+                        continue
+                    break
+                content.append(sql[j])
+                j += 1
+            out.append(" " + "".join(content) + " ")
+            i = j + 1
+            continue
+
+        if c == "$":
+            match = _DOLLAR_TAG.match(sql, i)
+            if match:
+                tag = match.group(0)
+                j = sql.find(tag, match.end())
+                if j == -1:
+                    raise ValueError("unterminated dollar-quoted string")
+                i = j + len(tag)
+                out.append(" ")
+                continue
+
+        out.append(c)
+        i += 1
+
+    return "".join(out)
 
 
-def assert_sql_uses_data_alias(sql: str) -> None:
-    """Defense in depth for /api/query: every table reference in the SQL must
-    be exactly the `data` alias (case-insensitive, quoting stripped) that
-    DataCore registers the tenant's table under. Anything else — another
-    name, a DuckDB table function like read_csv(...), a CTE reference — is
-    rejected, since `data` is the only legitimate table shape this route
-    ever needs."""
-    for keyword in _TABLE_KEYWORDS.finditer(sql):
-        clause = _clause_after(sql, keyword.end())
-        for segment in clause.split(","):
-            match = _TABLE_TOKEN.match(segment)
-            if not match:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Query contains a table reference that could not be verified",
-                )
-            table = match.group("dq") or match.group("bt") or match.group("br") or match.group("bare")
-            if not table or table.lower() != _DATA_ALIAS:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Query references disallowed table '{table}'",
-                )
+def assert_sql_is_safe_read(sql: str) -> None:
+    """Defense in depth for /api/query: the SQL must be a single SELECT/WITH
+    statement containing no DuckDB filesystem/network function call and no
+    write/DDL keyword.
+
+    This is a denylist of *escape mechanisms*, not an allowlist of table
+    names — the shape `datacore/src/datacore/api/readonly_query.py` already
+    uses for untrusted SQL. It therefore permits CTEs, subqueries and joins
+    (which capacity roll-ups and activity aggregation need) while still
+    blocking the class this guard exists for: reaching the filesystem or
+    network from inside a query.
+
+    Tenant scope is NOT enforced here — `assert_query_tenant_match` does
+    that, against the body's tenant_id, which is the field DataCore actually
+    scopes by.
+    """
+    try:
+        scrubbed = _strip_literals_and_comments(sql)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Query could not be parsed safely: {e}",
+        )
+
+    s = scrubbed.strip()
+    while s.endswith(";"):
+        s = s[:-1].strip()
+    if not s:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Query is empty"
+        )
+    if ";" in s:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a single statement is allowed",
+        )
+    if s.split(None, 1)[0].lower() not in ("select", "with"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only SELECT/WITH read queries are allowed",
+        )
+    if _DENY.search(s):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Query contains a disallowed keyword or function",
+        )

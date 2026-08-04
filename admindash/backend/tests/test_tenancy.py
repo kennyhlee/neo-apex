@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.auth import require_authenticated_user
-from app.tenancy import assert_query_tenant_match, assert_sql_uses_data_alias
+from app.tenancy import assert_query_tenant_match, assert_sql_is_safe_read
 from fastapi import HTTPException
 
 
@@ -79,37 +79,110 @@ def test_query_tenant_match_helper_allows_match():
     assert_query_tenant_match("acme", {"tenant_id": "acme"})
 
 
-# ── /api/query: SQL must reference only the `data` alias ──────────────────
+# ── /api/query: SQL shape guard ───────────────────────────────────────────
 #
-# Defense in depth. DataCore always registers the tenant's table as `data`;
-# it only disables external access (blocking DuckDB table functions like
-# read_csv/read_parquet) when called with external=True, which this route
-# does not use — so admindash must reject anything but `data` itself.
+# Defense in depth on the SQL's *shape*, not its table names: a single
+# SELECT/WITH statement with no DuckDB filesystem/network function call. Same
+# denylist shape datacore/src/datacore/api/readonly_query.py uses for
+# untrusted SQL, so CTEs, subqueries and keyword-bearing string literals all
+# pass while the escape class stays blocked.
 
 
 def test_sql_guard_allows_data_alias():
     """The real shape every admindash query uses (see DashboardContext.tsx:37)."""
-    assert_sql_uses_data_alias(
+    assert_sql_is_safe_read(
         "SELECT * FROM data WHERE entity_type = 'student' AND _status = 'active'"
     )
 
 
 def test_sql_guard_rejects_function_table_escape():
     with pytest.raises(HTTPException) as exc:
-        assert_sql_uses_data_alias("SELECT * FROM read_csv('/etc/passwd')")
+        assert_sql_is_safe_read("SELECT * FROM read_csv('/etc/passwd')")
     assert exc.value.status_code == 403
 
 
-def test_sql_guard_rejects_comma_joined_other_table():
-    """Implicit joins (comma-separated FROM list) must check every table, not just the first."""
+@pytest.mark.parametrize("sql", [
+    "SELECT * FROM read_parquet('s3://evil/x.parquet')",
+    "SELECT * FROM read_json('/etc/passwd')",
+    "SELECT read_text('/etc/passwd')",
+    "SELECT read_blob('/etc/passwd')",
+    "SELECT * FROM write_csv('/tmp/exfil.csv')",
+    "SELECT system('ls')",
+    "ATTACH '/tmp/evil.db' AS evil",
+    "COPY (SELECT * FROM data) TO '/tmp/exfil.csv'",
+    "INSTALL httpfs",
+])
+def test_sql_guard_rejects_every_readonly_query_deny_pattern(sql):
+    """Every escape `readonly_query.py::_DENY` blocks must also be blocked here."""
     with pytest.raises(HTTPException) as exc:
-        assert_sql_uses_data_alias("SELECT * FROM data, othertable")
+        assert_sql_is_safe_read(sql)
+    assert exc.value.status_code == 403
+
+
+def test_sql_guard_rejects_quoted_function_table_escape():
+    """DuckDB resolves `"read_csv"(...)` as the function, so quoting must not hide it."""
+    with pytest.raises(HTTPException) as exc:
+        assert_sql_is_safe_read("SELECT * FROM \"read_csv\"('/etc/passwd')")
+    assert exc.value.status_code == 403
+
+
+def test_sql_guard_rejects_stacked_statement():
+    with pytest.raises(HTTPException) as exc:
+        assert_sql_is_safe_read("SELECT * FROM data; ATTACH '/tmp/evil.db' AS evil")
+    assert exc.value.status_code == 403
+
+
+def test_sql_guard_rejects_escape_hidden_behind_a_comment():
+    with pytest.raises(HTTPException) as exc:
+        assert_sql_is_safe_read(
+            "SELECT * FROM data -- ok\nUNION SELECT * FROM read_csv('/etc/passwd')"
+        )
+    assert exc.value.status_code == 403
+
+
+def test_sql_guard_rejects_unterminated_string_literal():
+    """A scanner desynced from the parser is how a guard like this gets
+    bypassed — refuse rather than guess."""
+    with pytest.raises(HTTPException) as exc:
+        assert_sql_is_safe_read("SELECT * FROM data WHERE a = 'oops")
     assert exc.value.status_code == 403
 
 
 def test_sql_guard_allows_double_quoted_data_alias():
-    assert_sql_uses_data_alias('SELECT * FROM "data"')
+    assert_sql_is_safe_read('SELECT * FROM "data"')
 
 
 def test_sql_guard_allows_bracketed_data_alias():
-    assert_sql_uses_data_alias("SELECT * FROM [data]")
+    assert_sql_is_safe_read("SELECT * FROM [data]")
+
+
+# The four shapes the previous allowlist guard wrongly rejected.
+
+
+@pytest.mark.parametrize("term", ["from", "into", "join", "update"])
+def test_sql_guard_allows_string_literal_containing_a_sql_keyword(term):
+    """The literal SQL CommandPalette.tsx:133 builds. Typing "from" into ⌘K
+    must return results, not 403."""
+    assert_sql_is_safe_read(
+        "SELECT * FROM data WHERE entity_type = 'student' AND _status = 'active' "
+        f"AND (first_name ILIKE '%{term}%' OR last_name ILIKE '%{term}%' "
+        f"OR student_id ILIKE '%{term}%') LIMIT 5"
+    )
+
+
+def test_sql_guard_allows_cte():
+    """Plans 2–4 need CTEs for capacity roll-ups."""
+    assert_sql_is_safe_read("WITH x AS (SELECT * FROM data) SELECT * FROM x")
+
+
+def test_sql_guard_allows_subquery():
+    assert_sql_is_safe_read("SELECT * FROM (SELECT * FROM data) t")
+
+
+def test_sql_guard_allows_plain_from_data():
+    assert_sql_is_safe_read("SELECT * FROM data")
+
+
+def test_sql_guard_allows_doubled_quote_escaped_literal():
+    """escapeSql() in client.ts doubles quotes; the scan must not desync on it."""
+    assert_sql_is_safe_read("SELECT * FROM data WHERE last_name ILIKE '%O''Brien%'")
