@@ -7,7 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.registration import datacore as dc
-from tests.fakes import FakeDataCore
+from tests.fakes import FakeDataCore, install_fake_datacore
 
 
 class DummyResponse:
@@ -73,6 +73,43 @@ def test_next_id_returns_value(capture):
     assert capture["url"].endswith("/api/entities/acme/registration_application/next-id")
 
 
+# ── Injection hygiene ──────────────────────────────────────────────────────
+
+def test_sql_literal_escapes_quotes():
+    assert dc.sql_literal("O'Brien") == "'O''Brien'"
+
+
+def test_get_entity_rejects_malicious_entity_id_without_querying(capture):
+    """A quote-bearing entity_id must be rejected before any request is sent —
+    it must not be able to widen the result set or escape the entity_type scope.
+    """
+    with pytest.raises(HTTPException) as exc:
+        dc.get_entity("acme", "program", "x' OR '1'='1")
+    assert exc.value.status_code == 400
+    assert capture == {}  # fake_request was never called
+
+
+def test_list_entities_rejects_malicious_entity_type_without_querying(capture):
+    with pytest.raises(HTTPException) as exc:
+        dc.list_entities("acme", "program'; DROP TABLE data; --")
+    assert exc.value.status_code == 400
+    assert capture == {}
+
+
+def test_dc_create_rejects_malicious_tenant_id_without_querying(capture):
+    with pytest.raises(HTTPException) as exc:
+        dc.dc_create("acme'; --", "program", {"program_id": "PR1"})
+    assert exc.value.status_code == 400
+    assert capture == {}
+
+
+def test_dc_update_rejects_malicious_entity_id_without_querying(capture):
+    with pytest.raises(HTTPException) as exc:
+        dc.dc_update("acme", "program", "x' OR '1'='1", {"program_id": "PR1"})
+    assert exc.value.status_code == 400
+    assert capture == {}
+
+
 # ── FakeDataCore self-tests ───────────────────────────────────────────────
 
 def test_fake_create_assigns_id_field_and_is_queryable():
@@ -100,3 +137,13 @@ def test_fake_update_replaces_base_data():
     row = fdc.get_entity("acme", "program", created["entity_id"])
     assert row["capacity"] == 5
     assert "name" not in row
+
+
+def test_install_fake_datacore_blocks_raw_dc_query(monkeypatch):
+    """Proves the guard fires through the real installation path used by every
+    later test file — not just against a bare FakeDataCore() instance.
+    """
+    fdc = FakeDataCore()
+    install_fake_datacore(monkeypatch, fdc)
+    with pytest.raises(AssertionError):
+        dc.dc_query("acme", "SELECT * FROM data")

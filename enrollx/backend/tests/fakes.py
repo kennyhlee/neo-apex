@@ -12,6 +12,37 @@ Usage in every test file that touches DataCore (repeat this fixture verbatim):
 
 Rows are stored flattened (entity_id, entity_type + base_data fields), which
 matches how DataCore's query endpoint returns entities.
+
+Known divergences from the real DataCore service (harmless for this plan's
+tests today, but worth knowing before relying on the fake for something new):
+
+1. ID-prefix format. `dc_create`/`next_id` mint ids like `TT-{XX}26####`
+   (`TT` = fake placeholder, `XX` = first two letters of entity_type,
+   `26` = stand-in year, `####` = a monotonic sequence). The real DataCore
+   `next-id` endpoint derives a tenant-specific abbreviation instead of the
+   fixed `TT` prefix. A test asserting on a specific tenant-derived prefix
+   (as opposed to just checking format/shape) would not port unmodified.
+2. Internal `_tenant` column. Rows in `fdc.rows` carry a `_tenant` key used
+   purely for in-memory tenant scoping. Real DataCore query rows do not
+   have this column — tenant scope there comes from the request body, not
+   a per-row field. Only visible if you read `fdc.rows` directly instead of
+   going through `list_entities`/`get_entity`/`find`.
+3. Unrestricted auto-id assignment. `dc_create`/`next_id` here auto-assign
+   an id for ANY entity_type. The real DataCore only does this for types
+   registered in its `DEFAULT_ABBREVS` table and returns 400 for anything
+   else. The fake never rejects an unknown entity_type this way.
+4. No system columns. The fake omits real DataCore system columns
+   (`_status`, `_version`, `_created_at`, …) entirely — rows only have
+   `entity_id`/`entity_type`/`_tenant` plus flattened base_data. This is
+   harmless only because this plan never exercises archive/restore or
+   version-history behavior against the fake.
+5. Update-time existence check. `dc_update` here raises `AssertionError` on
+   an unknown `entity_id`. The real DataCore PUT is an upsert with no
+   existence check — it would create the row. This is the safe direction
+   (the fake catches a bug — updating something that was never created —
+   that the real service would silently paper over), so the behavior is
+   kept as-is; it is documented here only so it isn't mistaken for
+   real-service parity.
 """
 import json
 import re
