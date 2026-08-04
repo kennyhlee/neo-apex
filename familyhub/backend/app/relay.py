@@ -30,9 +30,19 @@ _GENERIC_UPSTREAM_ERROR = {
 def relay(resp) -> Response:
     """Pass an upstream response back to the parent, masking 5xx bodies."""
     if resp.status_code >= 500:
-        return JSONResponse(_GENERIC_UPSTREAM_ERROR, status_code=502)
+        return upstream_unavailable()
     return Response(
         content=resp.content,
         status_code=resp.status_code,
         media_type=resp.headers.get("content-type", "application/json"),
     )
+
+
+def upstream_unavailable() -> Response:
+    """The same masked 502 `relay` produces, for failures that carry no
+    upstream status of their own: an unparseable body, or a response whose
+    shape contradicts itself (e.g. a token bundle naming a different
+    application than the token did). Exported so callers reuse the one
+    error path rather than re-typing the message or reaching for the
+    module-private constant."""
+    return JSONResponse(_GENERIC_UPSTREAM_ERROR, status_code=502)
