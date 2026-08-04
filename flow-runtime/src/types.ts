@@ -54,6 +54,9 @@ export interface ApplicationItem {
   due_at?: string;
   completed_by?: string;
   payload_ref?: string;
+  /** Set by the backend when the owning block carries due_days_after_approval
+   *  (items.py `_item()`); base_model.json:152. */
+  due_days_after_approval?: number;
 }
 
 /** One field inside a form block (same shape as an entity-model field). */

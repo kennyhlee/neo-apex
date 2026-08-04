@@ -1,5 +1,9 @@
 // flow-runtime/src/i18n.ts
-const STRINGS: Record<'en-US' | 'zh-CN', Record<string, string>> = {
+import { createContext, useContext } from 'react';
+
+export type Locale = 'en-US' | 'zh-CN';
+
+const STRINGS: Record<Locale, Record<string, string>> = {
   'en-US': {
     required: 'required',
     errRequired: 'Required',
@@ -72,7 +76,7 @@ const STRINGS: Record<'en-US' | 'zh-CN', Record<string, string>> = {
   },
 };
 
-export function flowLocale(): 'en-US' | 'zh-CN' {
+export function flowLocale(): Locale {
   try {
     return localStorage.getItem('preferredLanguage') === 'zh-CN' ? 'zh-CN' : 'en-US';
   } catch {
@@ -80,7 +84,39 @@ export function flowLocale(): 'en-US' | 'zh-CN' {
   }
 }
 
-/** Translate a flow-runtime string. Falls back en-US, then the key itself. */
+function translate(locale: Locale, key: string): string {
+  return STRINGS[locale][key] ?? STRINGS['en-US'][key] ?? key;
+}
+
+/**
+ * Translate a flow-runtime string, reading the locale fresh from
+ * localStorage on every call. Non-reactive: use this only from non-component
+ * call sites (e.g. deriving a plain string outside render). Block components
+ * must use `useFlowT()` instead, or a locale toggle stops reaching them the
+ * moment they're wrapped in `React.memo` (no prop changes on toggle).
+ */
 export function flowT(key: string): string {
-  return STRINGS[flowLocale()][key] ?? STRINGS['en-US'][key] ?? key;
+  return translate(flowLocale(), key);
+}
+
+/**
+ * Locale a host has injected via `<FlowRenderer locale=.../>`. `null` means
+ * no `FlowRenderer` ancestor supplied one — `useFlowT` falls back to
+ * `flowLocale()` in that case, so nothing regresses for callers who render
+ * flow-runtime components outside a `FlowRenderer` (e.g. a host's own
+ * storybook/test harness). Internal wiring between `i18n.ts` and
+ * `FlowRenderer.tsx` — hosts consume this via `useFlowT()`, not directly.
+ */
+export const FlowLocaleContext = createContext<Locale | null>(null);
+
+/**
+ * Component-scoped translate function, reactive to the locale `FlowRenderer`
+ * supplies via context. Block components (Tasks 2-4) must call this instead
+ * of `flowT` directly, so a language toggle keeps reaching them even once
+ * they're wrapped in `React.memo` for the builder's live preview.
+ */
+export function useFlowT(): (key: string) => string {
+  const ctx = useContext(FlowLocaleContext);
+  const locale = ctx ?? flowLocale();
+  return (key: string) => translate(locale, key);
 }
