@@ -167,7 +167,7 @@ export default function DataTable<T extends Record<string, any>>({
           {caption ? <caption className="sr-only">{caption}</caption> : null}
           <thead>
             <tr>
-              {expandable && <th className="data-table-expand"><span className="sr-only">Expand</span></th>}
+              {expandable && <th className="data-table-expand"><span className="sr-only">{t('table.expandColumn')}</span></th>}
               {selectable && (
                 <th className="data-table-checkbox">
                   <input
@@ -175,7 +175,7 @@ export default function DataTable<T extends Record<string, any>>({
                     type="checkbox"
                     checked={allOnPageSelected}
                     onChange={toggleAll}
-                    aria-label={allOnPageSelected ? 'Deselect all rows on this page' : 'Select all rows on this page'}
+                    aria-label={allOnPageSelected ? t('table.deselectAllOnPage') : t('table.selectAllOnPage')}
                   />
                 </th>
               )}
@@ -207,7 +207,7 @@ export default function DataTable<T extends Record<string, any>>({
               })}
               {rowActions && (
                 <th className="data-table-actions-head">
-                  <span className="sr-only">Row actions</span>
+                  <span className="sr-only">{t('table.rowActions')}</span>
                 </th>
               )}
             </tr>
@@ -272,7 +272,7 @@ export default function DataTable<T extends Record<string, any>>({
                             type="button"
                             className="data-table-expand-btn"
                             aria-expanded={isExpanded}
-                            aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
+                            aria-label={isExpanded ? t('table.collapseRow') : t('table.expandRow')}
                             onClick={() => onToggleExpand?.(id)}
                           >
                             <span aria-hidden="true">{isExpanded ? '▼' : '▶'}</span>
@@ -285,7 +285,9 @@ export default function DataTable<T extends Record<string, any>>({
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleRow(id)}
-                            aria-label={rowLabel ? `Select ${rowLabel(row)}` : `Select row ${id}`}
+                            aria-label={rowLabel
+                              ? `${t('table.select')} ${rowLabel(row)}`
+                              : `${t('table.selectRow')} ${id}`}
                           />
                         </td>
                       )}
@@ -344,7 +346,7 @@ export default function DataTable<T extends Record<string, any>>({
             </span>
           )}
         </div>
-        <nav className="data-table-pagination-controls" aria-label="Pagination">
+        <nav className="data-table-pagination-controls" aria-label={t('table.pagination')}>
           <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
             {t('common.previous')}
           </button>
@@ -354,7 +356,7 @@ export default function DataTable<T extends Record<string, any>>({
               key={p}
               className={p === page ? 'active' : ''}
               aria-current={p === page ? 'page' : undefined}
-              aria-label={`Page ${p}`}
+              aria-label={`${t('table.page')} ${p}`}
               onClick={() => onPageChange(p)}
             >
               {p}

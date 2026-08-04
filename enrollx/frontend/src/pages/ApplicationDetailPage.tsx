@@ -10,7 +10,8 @@ import { getDocumentUrl, postApplicationAction } from '../api/registration.ts';
 import type {
   ActivityRow, ApplicationRow, DocumentRow, ItemRow, PaymentRow,
 } from '../types/registration.ts';
-import { fmtDateTime, toBoolish } from '../utils/format.ts';
+import { fmtDateTime, toBoolish, translateOr } from '../utils/format.ts';
+import { toLabel, toToneKey } from '../utils/listValue.ts';
 import Button from '../components/ui/Button.tsx';
 import Modal from '../components/ui/Modal.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -138,12 +139,8 @@ export default function ApplicationDetailPage() {
   if (!app) return <div className="detail-page"><div className="programs-error" role="alert">{t('entry.notFound')}</div></div>;
 
   const status = app.status;
-  const activityLabel = (type: unknown) => {
-    const raw = String(type ?? '');
-    const key = `detail.activity.${raw}`;
-    const label = t(key);
-    return label === key ? raw : label;
-  };
+  const activityLabel = (type: unknown) =>
+    translateOr(t, `detail.activity.${String(type ?? '')}`, String(type ?? ''));
   const itemActionsFor = (i: ItemRow) => {
     const acts: { key: 'verify_item' | 'reject_item' | 'waive_item'; label: string }[] = [];
     if (i.status === 'submitted') {
@@ -269,7 +266,13 @@ export default function ApplicationDetailPage() {
                   {formatCents(Number(p.amount))} · {p.kind} · {p.provider}
                 </span>
                 <small>{p.paid_at ? fmtDateTime(p.paid_at) : '—'}{p.recorded_by ? ` · ${p.recorded_by}` : ''}</small>
-                <StatusBadge status={p.status} />
+                {/* Without an explicit `label`, StatusBadge falls through to
+                    `toLabel`, which does no case or language transform — so
+                    this rendered the raw DataCore value ("paid", "refunded"):
+                    untranslated in zh-CN and not even correct English. */}
+                <StatusBadge status={p.status}
+                  label={translateOr(t, `paymentStatus.${toToneKey(p.status)}`,
+                    toLabel(p.status, ''))} />
               </li>
             ))}
             {payments.length === 0 && <li className="programs-muted">{t('common.noResults')}</li>}

@@ -4,6 +4,8 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { postQuery } from '../api/client.ts';
 import type { ProgramRow } from '../types/registration.ts';
+import { translateOr } from '../utils/format.ts';
+import { toLabel, toToneKey } from '../utils/listValue.ts';
 import Button from '../components/ui/Button.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import './ProgramsPage.css';
@@ -82,7 +84,14 @@ export default function ProgramsPage() {
               <strong>{p.name}</strong>
               {p.description && <p>{p.description}</p>}
               <div className="program-card-meta">
-                <StatusBadge status={p.status} />
+                {/* Same untranslated-raw-value problem as the payment badge.
+                    A program's status is model-definition-driven and so
+                    tenant-defined — no fixed key set can cover it — hence
+                    `translateOr`, which translates the values enrollx knows
+                    and leaves anything else exactly as it renders today. */}
+                <StatusBadge status={p.status}
+                  label={translateOr(t, `programStatus.${toToneKey(p.status)}`,
+                    toLabel(p.status, ''))} />
                 {p.capacity != null && String(p.capacity) !== '' && (
                   <span>{t('programs.capacity')}: {String(p.capacity)}</span>
                 )}

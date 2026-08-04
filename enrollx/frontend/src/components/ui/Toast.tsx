@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ToastContext, type ToastOptions, type ToastRecord } from '../../contexts/toastStore.ts';
+import { useTranslation } from '../../hooks/useTranslation.ts';
 import './Toast.css';
 
 const DEFAULT_MS = 5000;
@@ -14,6 +15,16 @@ const UNDO_MS = 10000;
  * reversal instead of a blocking confirm dialog.
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
+  // Every user-facing string below is translated. The i18n parity check
+  // counts KEYS, not hardcoded literals, so this whole class of string was
+  // invisible to it — a zh-CN screen-reader user got English for the toast
+  // region, the dismiss control, the undo control and the undo-failure copy.
+  // `useTranslation` propagates through a module-level listener rather than
+  // React context, so it is safe to call here, above every provider.
+  // Bound as `tr`, not `t`: this file's own toast-record loops already bind
+  // `t` to a ToastRecord, and shadowing the translator inside them would be a
+  // silent runtime error rather than a type error.
+  const { t: tr } = useTranslation();
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
   const nextId = useRef(1);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
@@ -64,8 +75,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   ...t,
                   undoing: false,
                   tone: 'danger',
-                  message: "That couldn't be undone.",
-                  detail: 'The change is still in place. Try again from the record.',
+                  message: tr('toast.undoFailed'),
+                  detail: tr('toast.undoFailedDetail'),
                   onUndo: undefined,
                 }
               : t,
@@ -77,7 +88,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         );
       }
     },
-    [dismiss],
+    [dismiss, tr],
   );
 
   const api = useMemo(() => ({ toast, dismiss }), [toast, dismiss]);
@@ -85,7 +96,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="toast-viewport" role="region" aria-label="Notifications">
+      <div className="toast-viewport" role="region" aria-label={tr('toast.region')}>
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.tone}`} role="status" aria-live="polite">
             <div className="toast-text">
@@ -100,7 +111,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 onClick={() => void handleUndo(t)}
                 disabled={t.undoing}
               >
-                {t.undoing ? 'Undoing…' : 'Undo'}
+                {t.undoing ? tr('toast.undoing') : tr('toast.undo')}
               </button>
             ) : null}
 
@@ -108,7 +119,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               type="button"
               className="toast-close"
               onClick={() => dismiss(t.id)}
-              aria-label="Dismiss notification"
+              aria-label={tr('toast.dismiss')}
             >
               &times;
             </button>

@@ -24,6 +24,43 @@ export const translations: Record<Locale, Record<string, string>> = {
     'common.noResults': 'No results',
     'students.pageSize': 'Rows per page', // key name kept so the copied DataTable works unmodified
 
+    // DataTable — mostly screen-reader-only labels, which is exactly why they
+    // survived: the i18n parity check counts keys, not hardcoded literals.
+    'table.expandColumn': 'Expand',
+    'table.expandRow': 'Expand row',
+    'table.collapseRow': 'Collapse row',
+    'table.selectAllOnPage': 'Select all rows on this page',
+    'table.deselectAllOnPage': 'Deselect all rows on this page',
+    'table.select': 'Select',
+    'table.selectRow': 'Select row',
+    'table.rowActions': 'Row actions',
+    'table.pagination': 'Pagination',
+    'table.page': 'Page',
+
+    // Toast
+    'toast.region': 'Notifications',
+    'toast.dismiss': 'Dismiss notification',
+    'toast.undo': 'Undo',
+    'toast.undoing': 'Undoing…',
+    'toast.undoFailed': "That couldn't be undone.",
+    'toast.undoFailedDetail': 'The change is still in place. Try again from the record.',
+
+    // Payment statuses (payment entity; types/registration.ts PaymentRow)
+    'paymentStatus.pending': 'Pending',
+    'paymentStatus.paid': 'Paid',
+    'paymentStatus.failed': 'Failed',
+    'paymentStatus.refunded': 'Refunded',
+
+    // Program statuses. Tenant-definable, so this covers the common values
+    // only — `translateOr` leaves anything else as-is rather than leaking the
+    // lookup key.
+    'programStatus.active': 'Active',
+    'programStatus.inactive': 'Inactive',
+    'programStatus.draft': 'Draft',
+    'programStatus.archived': 'Archived',
+    'programStatus.full': 'Full',
+    'programStatus.closed': 'Closed',
+
     // Application statuses
     'status.draft': 'Draft',
     'status.submitted': 'Submitted',
@@ -265,6 +302,42 @@ export const translations: Record<Locale, Record<string, string>> = {
     'common.to': '至',
     'common.noResults': '没有结果',
     'students.pageSize': '每页行数',
+
+    // 表格（DataTable）
+    'table.expandColumn': '展开',
+    'table.expandRow': '展开该行',
+    'table.collapseRow': '收起该行',
+    'table.selectAllOnPage': '选择本页所有行',
+    'table.deselectAllOnPage': '取消选择本页所有行',
+    'table.select': '选择',
+    'table.selectRow': '选择行',
+    'table.rowActions': '行操作',
+    'table.pagination': '分页',
+    // Concatenated as `${t('table.page')} ${n}` — no interpolation in `t` —
+    // so this must read naturally with a number appended: "页码 3".
+    'table.page': '页码',
+
+    // 通知提示（Toast）
+    'toast.region': '通知',
+    'toast.dismiss': '关闭通知',
+    'toast.undo': '撤销',
+    'toast.undoing': '正在撤销…',
+    'toast.undoFailed': '无法撤销该操作。',
+    'toast.undoFailedDetail': '更改仍然有效。请从该记录中重试。',
+
+    // 付款状态
+    'paymentStatus.pending': '待付款',
+    'paymentStatus.paid': '已付款',
+    'paymentStatus.failed': '付款失败',
+    'paymentStatus.refunded': '已退款',
+
+    // 项目状态
+    'programStatus.active': '进行中',
+    'programStatus.inactive': '未启用',
+    'programStatus.draft': '草稿',
+    'programStatus.archived': '已归档',
+    'programStatus.full': '名额已满',
+    'programStatus.closed': '已关闭',
 
     // Application statuses
     'status.draft': '草稿',
