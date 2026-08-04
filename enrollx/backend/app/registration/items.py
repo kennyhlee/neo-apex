@@ -22,6 +22,13 @@ assert NOT_STARTED == "not_started"
 ALLOWED_BLOCK_TYPES = {"form", "documents", "payment_plan", "payment", "message", "review"}
 PLAN_TYPES = {"pay_in_full", "deposit"}
 
+# The entity models a `form` block may draw from (spec §4).
+# `registration_application` is the tenant's own application model; its
+# answers are written onto the application entity rather than staged in
+# draft_data (actions._apply_application_fields). Mirrored in the builder's
+# BlockConfigPanel ENTITY_TYPES.
+FORM_ENTITY_TYPES = {"student", "family", "contact", "registration_application"}
+
 
 def _item(block, kind, title, blocking, due_days):
     fields = {
@@ -111,6 +118,12 @@ def validate_blocks(blocks) -> list[str]:
         if "config" not in b or not isinstance(cfg, dict):
             errors.append(f"{where}: 'config' must be an object")
         cfg = cfg if isinstance(cfg, dict) else {}
+        if btype == "form":
+            et = cfg.get("entity_type")
+            if et is not None and et not in FORM_ENTITY_TYPES:
+                errors.append(
+                    f"{where}: config.entity_type must be one of "
+                    f"{sorted(FORM_ENTITY_TYPES)}")
         if btype == "documents":
             docs = cfg.get("docs")
             if not isinstance(docs, list) or not docs:

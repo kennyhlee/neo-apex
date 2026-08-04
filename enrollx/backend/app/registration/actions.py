@@ -29,6 +29,10 @@ ALL_ACTIONS = {
 
 COMPLETE_ITEM_APP_STATUSES = {"draft", "submitted", "in_review", "pending_items", "approved"}
 
+# The `form` block entity_type naming the application itself. Restated in
+# TypeScript as flow-runtime's APPLICATION_ENTITY_TYPE.
+APPLICATION_ENTITY_TYPE = "registration_application"
+
 
 def perform_action(tenant_id, application_entity_id, action, params, actor, token=None):
     if action not in ALL_ACTIONS:
@@ -69,6 +73,68 @@ def _maybe_enroll(tenant_id, application_entity_id, actor, token):
     if all(i.get("status") in {"verified", "waived"} for i in items):
         return engine.set_application_status(tenant_id, app_row, "enrolled", actor, token)
     return None
+
+
+def _application_form_blocks(tenant_id, app_row, token):
+    """Form blocks of this application's pinned config that draw from the
+    tenant's `registration_application` model."""
+    cfg = engine.get_config_for_application(tenant_id, app_row, token)
+    try:
+        blocks = json.loads((cfg or {}).get("blocks") or "[]")
+    except json.JSONDecodeError:
+        return []
+    return [b for b in blocks
+            if isinstance(b, dict) and b.get("type") == "form"
+            and (b.get("config") or {}).get("entity_type") == APPLICATION_ENTITY_TYPE]
+
+
+def _apply_application_fields(tenant_id, app_row, block_ids, token):
+    """Copy an application-model form block's answers onto the application's
+    own base_data (spec §4 rule 2). Returns the update envelope, or None when
+    there was nothing to write.
+
+    Why base_data and not draft_data: these are application-level FACTS —
+    signatures, initials, who signed the agreement — not staging for a
+    student or family row that approval will later materialize. They belong
+    on the application entity, and they must outlive `draft_data`.
+
+    `block_ids` is a set to restrict to (complete_item's single block) or
+    None for every application-model block (submit).
+
+    CALLER ORDERING (load-bearing): `engine.update_application` and
+    `engine.set_application_status` both rebuild the whole base_data from the
+    FLATTENED row they are handed, so calling this with a row fetched before
+    some other write in the same handler silently discards that write. Pass a
+    freshly re-fetched row, and never interleave this with a status write on
+    the same stale row.
+    """
+    blocks = [b for b in _application_form_blocks(tenant_id, app_row, token)
+              if block_ids is None or b.get("block_id") in block_ids]
+    if not blocks:
+        return None
+    try:
+        draft = json.loads(app_row.get("draft_data") or "{}")
+    except json.JSONDecodeError:
+        return None
+    answers = {}
+    for b in blocks:
+        section = draft.get(b.get("block_id"))
+        if isinstance(section, dict):
+            answers.update(section)
+    if not answers:
+        return None
+    illegal = sorted(k for k in answers if k in engine.ENGINE_OWNED_APPLICATION_FIELDS)
+    if illegal:
+        # 400 BEFORE any write: a form must never be able to move an
+        # application's status, repoint its config_version, or rewrite the
+        # email its magic link was delivered to. The builder and both hosts
+        # already exclude these fields from an application-model block, so
+        # reaching here means a hand-authored config or a crafted draft.
+        raise HTTPException(400, {
+            "error": "Form answers may not write engine-owned application fields",
+            "fields": illegal,
+        })
+    return engine.update_application(tenant_id, app_row, answers, token)
 
 
 def _school_label(tenant_id, app_row, token=None) -> str:
@@ -119,6 +185,13 @@ def _complete_item(tenant_id, application_entity_id, params, actor, token):
         if not any(i.get("status") == "rejected" for i in items):
             result["application"] = engine.set_application_status(
                 tenant_id, app_row, "in_review", actor, token)
+    # LAST, and from a re-fetched row: the status write above (when it ran)
+    # rebuilt base_data from `app_row`, so applying the fields from that same
+    # stale row would drop the status change.
+    fresh = engine.require_application(tenant_id, application_entity_id, token)
+    applied = _apply_application_fields(tenant_id, fresh, {item.get("block_id")}, token)
+    if applied:
+        result["application"] = applied
     return result
 
 
@@ -130,6 +203,10 @@ def _submit(tenant_id, application_entity_id, params, actor, token):
                   and i.get("status") not in engine.ITEM_DONE_STATUSES]
     if incomplete:
         raise HTTPException(409, {"error": "Blocking items incomplete", "items": incomplete})
+    # BEFORE the status write, then re-fetch: `set_application_status` rebuilds
+    # base_data from the row it is handed, so a stale row would drop these.
+    if _apply_application_fields(tenant_id, app_row, None, token):
+        app_row = engine.require_application(tenant_id, application_entity_id, token)
     full = engine.is_capacity_full(tenant_id, app_row.get("school_year", ""), token)
     target = "waitlisted" if full else "submitted"
     updated = engine.set_application_status(
