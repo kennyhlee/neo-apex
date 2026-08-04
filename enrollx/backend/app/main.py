@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, entities, health, query
+from app.api import auth, entities, health, internal, query, registration
 from app.config import settings
 
 app = FastAPI(
@@ -24,3 +24,5 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(query.router, prefix="/api", tags=["query"])
 app.include_router(entities.router, prefix="/api", tags=["entities"])
+app.include_router(registration.router, prefix="/api", tags=["registration"])
+app.include_router(internal.router, tags=["internal"])
