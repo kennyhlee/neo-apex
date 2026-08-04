@@ -11,7 +11,8 @@
       {"name": "capacity", "type": "number", "required": false},
       {"name": "accreditation", "type": "str", "required": false},
       {"name": "insurance_provider", "type": "str", "required": false},
-      {"name": "note", "type": "str", "required": false}
+      {"name": "note", "type": "str", "required": false},
+      {"name": "stripe_account_id", "type": "str", "required": false}
     ],
     "custom_fields": []
   },
