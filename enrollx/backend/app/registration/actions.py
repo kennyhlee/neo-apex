@@ -75,17 +75,62 @@ def _maybe_enroll(tenant_id, application_entity_id, actor, token):
     return None
 
 
-def _application_form_blocks(tenant_id, app_row, token):
-    """Form blocks of this application's pinned config that draw from the
-    tenant's `registration_application` model."""
+def _config_blocks(tenant_id, app_row, token):
+    """The parsed blocks of this application's pinned config."""
     cfg = engine.get_config_for_application(tenant_id, app_row, token)
     try:
         blocks = json.loads((cfg or {}).get("blocks") or "[]")
     except json.JSONDecodeError:
         return []
-    return [b for b in blocks
-            if isinstance(b, dict) and b.get("type") == "form"
-            and (b.get("config") or {}).get("entity_type") == APPLICATION_ENTITY_TYPE]
+    return [b for b in blocks if isinstance(b, dict)]
+
+
+def _form_blocks_for(tenant_id, app_row, entity_type, token):
+    """Form blocks of the pinned config that draw from `entity_type`."""
+    return [b for b in _config_blocks(tenant_id, app_row, token)
+            if b.get("type") == "form"
+            and (b.get("config") or {}).get("entity_type") == entity_type]
+
+
+def _application_form_blocks(tenant_id, app_row, token):
+    """Form blocks that draw from the tenant's `registration_application`
+    model."""
+    return _form_blocks_for(tenant_id, app_row, APPLICATION_ENTITY_TYPE, token)
+
+
+def _staged_entity_fields(tenant_id, app_row, entity_type, token) -> dict:
+    """Draft answers staged for one entity type.
+
+    THE RENDERER KEYS BY BLOCK_ID, NOT BY ENTITY TYPE. `FlowRenderer` writes
+    a form block's answers to `draft_data[block_id]`, so reading
+    `draft["student"]` directly — as this module did — found nothing for any
+    flow authored in the builder and filled through either UI. Every
+    browser-driven approval failed with 422 "the application has no student
+    name", while this suite passed throughout because its tests post
+    `{"student": {...}}` straight to `save_draft`. The first end-to-end
+    browser run is what surfaced it.
+
+    So the block -> entity_type mapping is resolved from the application's
+    PINNED config rather than assumed from a key shape. Multiple blocks
+    drawing from the same entity type are merged in config order.
+
+    A top-level `draft[entity_type]` key still wins over block answers: it is
+    the documented `save_draft` shape, callers write it directly, and letting
+    a block silently override it would be the mirror of the bug above.
+    """
+    try:
+        draft = json.loads(app_row.get("draft_data") or "{}")
+    except json.JSONDecodeError:
+        return {}
+    fields: dict = {}
+    for block in _form_blocks_for(tenant_id, app_row, entity_type, token):
+        section = draft.get(block.get("block_id"))
+        if isinstance(section, dict):
+            fields.update(section)
+    explicit = draft.get(entity_type)
+    if isinstance(explicit, dict):
+        fields.update(explicit)
+    return fields
 
 
 def _apply_application_fields(tenant_id, app_row, block_ids, token):
@@ -357,7 +402,6 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
     if status not in {"submitted", "in_review"}:
         raise HTTPException(409, {"error": f"approve not allowed in status '{status}'",
                                   "allowed": ["submitted", "in_review"]})
-    draft = json.loads(app_row.get("draft_data") or "{}")
 
     # 1. Family: match-or-create from draft family fields.
     # Called serially, exactly once for this approval — see the module-level
@@ -372,7 +416,7 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
     # parent could type another family's email and have their student silently
     # attached to that existing family. The draft value is now only a fallback
     # for staff-created applications that have no applicant_email at all.
-    family_fields = dict(draft.get("family") or {})
+    family_fields = _staged_entity_fields(tenant_id, app_row, "family", token)
     if app_row.get("applicant_email"):
         family_fields["primary_email"] = app_row["applicant_email"]
 
@@ -406,7 +450,7 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
             "hint": "At least one of these is required to name or match a family.",
         })
 
-    student_fields = dict(draft.get("student") or {})
+    student_fields = _staged_entity_fields(tenant_id, app_row, "student", token)
     first_name = str(student_fields.pop("first_name", "") or "").strip()
     last_name = str(student_fields.pop("last_name", "") or "").strip()
     if not first_name and not last_name:

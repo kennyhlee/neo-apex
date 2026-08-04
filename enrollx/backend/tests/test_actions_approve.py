@@ -290,3 +290,59 @@ def test_solo_family_rule_is_reachable_through_approve(client, fake_dc):
             "student": {"first_name": f"Kid{i}", "last_name": "Okonkwo"}})
         assert act(client, eid, "approve").status_code == 200
     assert len(fake_dc.find("family", family_name="Okonkwo")) == 2
+
+
+# ── draft staging shape: block_id vs entity_type ──────────────────────────
+
+def test_approve_reads_student_family_from_entity_sourced_form_blocks(client, fake_dc):
+    """The renderer stages a form block's answers under its BLOCK_ID
+    (`draft_data[block_id]`), not under the entity type. `_approve` used to
+    read `draft["student"]` / `draft["family"]` directly, so every flow
+    authored in the builder and filled through the UI approved with
+    422 "the application has no student name" -- while this suite passed,
+    because these tests post `{"student": {...}}` straight to save_draft.
+
+    Found by the browser click-through, which is the first end-to-end run of
+    the renderer against the engine.
+    """
+    seed_config(fake_dc)
+    created = client.post("/api/registration/acme/applications", json={
+        "school_year": "2026-2027", "channel": "admin",
+        "applicant_email": "parent@example.com"}).json()
+    eid = created["application"]["entity_id"]
+    # BLOCKS' form block is b1 with config.entity_type == "student".
+    act(client, eid, "save_draft", draft_data={
+        "b1": {"first_name": "Mia", "last_name": "Chen",
+               "grade_level": "3rd", "primary_address": "12 Oak St"}})
+    for item in created["items"]:
+        act(client, eid, "complete_item", item_id=item["entity_id"])
+    act(client, eid, "submit")
+
+    resp = act(client, eid, "approve")
+    assert resp.status_code == 200, resp.text
+    student = fake_dc.get_entity("acme", "student", resp.json()["student_id"])
+    assert student["first_name"] == "Mia" and student["last_name"] == "Chen"
+    assert student["grade_level"] == "3rd"
+
+
+def test_top_level_draft_keys_still_win_over_block_answers(client, fake_dc):
+    """`save_draft {"student": {...}}` is the documented API shape and some
+    callers write it directly -- it must keep working, and must override a
+    block's answers rather than be silently ignored."""
+    seed_config(fake_dc)
+    created = client.post("/api/registration/acme/applications", json={
+        "school_year": "2026-2027", "channel": "admin",
+        "applicant_email": "parent@example.com"}).json()
+    eid = created["application"]["entity_id"]
+    act(client, eid, "save_draft", draft_data={
+        "b1": {"first_name": "Mia", "last_name": "Chen"},
+        "student": {"first_name": "Sofia"}})
+    for item in created["items"]:
+        act(client, eid, "complete_item", item_id=item["entity_id"])
+    act(client, eid, "submit")
+
+    resp = act(client, eid, "approve")
+    assert resp.status_code == 200, resp.text
+    student = fake_dc.get_entity("acme", "student", resp.json()["student_id"])
+    assert student["first_name"] == "Sofia"
+    assert student["last_name"] == "Chen"  # block answer still fills the gap
