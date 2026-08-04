@@ -67,7 +67,6 @@ async def put_application(token: str, request: Request) -> Response:
 class RequestLinkBody(BaseModel):
     tenant_id: str
     email: str
-    program_id: Optional[str] = None
 
 
 @router.post("/application/request-link", dependencies=[Depends(limit_request_link)])
@@ -87,7 +86,7 @@ def request_link(body: RequestLinkBody) -> dict:
         call_upstream(
             "POST",
             enrollx(f"/internal/registration/{body.tenant_id}/request-link"),
-            json_body={"email": body.email, "program_id": body.program_id},
+            json_body={"email": body.email},
             headers=internal_headers(),
         )
     except HTTPException:

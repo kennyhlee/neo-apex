@@ -145,6 +145,18 @@ def test_request_link_match_and_no_match_are_indistinguishable(client, fake_http
     assert matched.json() == unmatched.json() == {"status": "ok"}
 
 
+def test_request_link_forwards_only_the_email(client, fake_http):
+    """`program_id` is gone from the contract (spec §3) — the facade must not
+    keep sending a key enrollx no longer accepts."""
+    fake_http.add("POST", "/internal/registration/acme/request-link",
+                  FakeResponse(200, {}))
+    resp = client.post("/api/application/request-link",
+                       json={"tenant_id": "acme", "email": "p@example.com"})
+    assert resp.status_code == 200 and resp.json() == {"status": "ok"}
+    sent = next(c for c in fake_http.calls if c["method"] == "POST")["json"]
+    assert sent == {"email": "p@example.com"}
+
+
 def test_request_link_upstream_error_is_still_200(client, fake_http):
     fake_http.add("POST", "/internal/registration/acme/request-link",
                   FakeResponse(500, {"detail": "boom"}))
