@@ -77,12 +77,14 @@ def get_payment_plan_block(tenant_id: str, application: dict, token: str | None)
     fallback would silently charge a different amount than the one this
     application was quoted. Nothing matching is a strict 409.
     """
-    program_id = str(application.get("program_id") or "")
+    # Scoped by version alone: there is ONE config lineage per tenant now
+    # (spec §2), and applications no longer carry a program_id at all — the
+    # old `program_id=...` filter would have matched nothing on every new
+    # application, 409-ing every checkout.
     version = int(application.get("config_version") or 0)
     rows = [
         r
-        for r in rows_matching(tenant_id, "registration_config", token,
-                               program_id=program_id)
+        for r in rows_matching(tenant_id, "registration_config", token)
         if _as_int(r.get("version")) == version
     ]
     if not rows:

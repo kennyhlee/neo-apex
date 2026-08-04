@@ -73,8 +73,7 @@ def application_row(selection="pay_in_full", status="submitted"):
     return {
         "entity_id": "RA260001",
         "entity_type": "registration_application",
-        "program_id": "PR26001",
-        "config_version": "3",
+            "config_version": "3",
         "status": status,
         "applicant_email": "parent@example.com",
         "token_version": "1",
@@ -84,7 +83,15 @@ def application_row(selection="pay_in_full", status="submitted"):
 
 
 CONFIG_ROW = {
-    "entity_id": "RC26001", "program_id": "PR26001", "version": "3", "blocks": BLOCKS,
+    "entity_id": "RC26001", "version": "3", "blocks": BLOCKS,
+    # `program_id: None` is NOT noise. Registration entities no longer carry a
+    # program_id, but the tenant's entities table is flattened across every
+    # entity type — `program`/`enrollment` still write the column, so a real
+    # query returns it as a NULL on this row rather than omitting it. That
+    # distinction is what makes the old `rows_matching(..., program_id="")`
+    # lookup fail in production (`str(None) != ""`) while the fake, which
+    # omits absent keys, matched it. Keep this key so the shape stays honest.
+    "program_id": None,
 }
 ITEM_ROW = {
     "entity_id": "AI260007",
@@ -287,8 +294,7 @@ def config_row(entity_id, amount_full, version="3", status="active"):
     blocks[0]["config"]["amount_full"] = amount_full
     return {
         "entity_id": entity_id,
-        "program_id": "PR26001",
-        "version": version,
+            "version": version,
         "_status": status,
         "blocks": json.dumps(blocks),
     }
@@ -297,7 +303,7 @@ def config_row(entity_id, amount_full, version="3", status="active"):
 def test_archived_config_revision_is_not_charged(wire, fake_stripe):
     """Superseded revisions live in the same table with _status='archived',
     and rollback (actions.py:427-437) re-publishes an archived config KEEPING
-    its original version number — so two rows can share program_id/version
+    its original version number — so two rows can share a version
     and carry different amount_full. The archived one is listed first here,
     so a query without the active filter would take it as rows[0] and charge
     the wrong amount."""

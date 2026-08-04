@@ -28,7 +28,6 @@ TENANT_ROW = {
 
 APPLICATION_ROW = {
     "entity_id": "RA260001",
-    "program_id": "PR26001",
     "config_version": 3,
     "status": "submitted",
     "applicant_email": "parent@example.com",
