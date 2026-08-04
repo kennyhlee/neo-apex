@@ -119,6 +119,7 @@ def test_action_masks_upstream_500(client, fake_http):
     "approve", "decline", "request_changes", "verify_item", "reject_item",
     "waive_item", "record_offline_payment", "promote_waitlist",
     "publish_config", "resend_link", "delete_everything", "", None,
+    ["save_draft"], {"action": "save_draft"},
 ])
 def test_staff_or_unknown_actions_are_403_before_any_proxying(client, fake_http, action):
     resp = client.put(f"/api/application/{TOKEN}", json={"action": action})
@@ -147,6 +148,23 @@ def test_request_link_match_and_no_match_are_indistinguishable(client, fake_http
 def test_request_link_upstream_error_is_still_200(client, fake_http):
     fake_http.add("POST", "/internal/registration/acme/request-link",
                   FakeResponse(500, {"detail": "boom"}))
+    resp = client.post("/api/application/request-link",
+                       json={"tenant_id": "acme", "email": "parent@example.com"})
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
+
+def test_request_link_still_200_on_upstream_outage(client, monkeypatch):
+    # A genuine network-level failure (not a bad HTTP status -- an actual
+    # httpx.RequestError, e.g. connection refused) must not break the
+    # constant-200 invariant either. call_upstream turns this into an
+    # HTTPException(502); request_link must swallow that too.
+    import httpx
+
+    def raise_request_error(method, url, **kwargs):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr("app.upstream.httpx.request", raise_request_error)
     resp = client.post("/api/application/request-link",
                        json={"tenant_id": "acme", "email": "parent@example.com"})
     assert resp.status_code == 200

@@ -26,24 +26,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 
 from app.ratelimit import limit_start
+from app.relay import relay as _relay
 from app.upstream import call_upstream, enrollx, internal_headers
 
 router = APIRouter()
-
-_GENERIC_UPSTREAM_ERROR = {
-    "detail": "Registration is temporarily unavailable. Please try again shortly."
-}
-
-
-def _relay(resp) -> Response:
-    """Pass an upstream response back to the parent, masking 5xx bodies."""
-    if resp.status_code >= 500:
-        return JSONResponse(_GENERIC_UPSTREAM_ERROR, status_code=502)
-    return Response(
-        content=resp.content,
-        status_code=resp.status_code,
-        media_type=resp.headers.get("content-type", "application/json"),
-    )
 
 
 @router.get("/registration/{tenant_id}/{program_id}")
