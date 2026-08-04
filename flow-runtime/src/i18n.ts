@@ -102,6 +102,20 @@ export function flowT(key: string): string {
 }
 
 /**
+ * `flowT` with an explicit locale, falling back to `flowLocale()` when the
+ * caller has none.
+ *
+ * Exists for PURE functions — `validateFlowField` and anything like it —
+ * which cannot use `useFlowT()` because they are not components, but must
+ * still be able to honour a locale their caller already knows. Passing a
+ * `Locale` rather than a `t` function keeps those functions pure and keeps
+ * callers from having to know flow-runtime's key names.
+ */
+export function flowTWith(locale: Locale | undefined, key: string): string {
+  return translate(locale ?? flowLocale(), key);
+}
+
+/**
  * Locale a host has injected via `<FlowRenderer locale=.../>`. `null` means
  * no `FlowRenderer` ancestor supplied one — `useFlowT` falls back to
  * `flowLocale()` in that case, so nothing regresses for callers who render
@@ -118,7 +132,14 @@ export const FlowLocaleContext = createContext<Locale | null>(null);
  * they're wrapped in `React.memo` for the builder's live preview.
  */
 export function useFlowT(): (key: string) => string {
-  const ctx = useContext(FlowLocaleContext);
-  const locale = ctx ?? flowLocale();
+  const locale = useFlowLocale();
   return (key: string) => translate(locale, key);
+}
+
+/**
+ * The resolved locale itself, for components that must hand it to a pure
+ * function rather than translate with it directly (see `flowTWith`).
+ */
+export function useFlowLocale(): Locale {
+  return useContext(FlowLocaleContext) ?? flowLocale();
 }

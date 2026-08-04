@@ -19,12 +19,16 @@ client-supplied value could reach DataCore. Plan 5's parent-download access
 control (`uploaded_by == "parent:{application_id}"`) is only an access
 control as long as this holds.
 """
+import logging
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.config import settings
 from app.tenancy import require_staff_tenant
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -68,7 +72,14 @@ def create_document(tenant_id: str, body: CreateDocumentRequest,
         "uploaded_by": user.get("user_id", "staff"),
     })
     if resp.status_code not in (200, 201):
-        raise HTTPException(resp.status_code, f"DataCore document create failed: {resp.text}")
+        # The status code is forwarded (the client needs to distinguish a 404
+        # from a 502), but NOT the body: DataCore's error text is an internal
+        # detail — it can name storage keys, upstream hosts and model fields —
+        # and this is the boundary where that stops. Logged for operators,
+        # replaced with a stable message for the caller.
+        logger.warning("DataCore document create failed (%s): %s",
+                       resp.status_code, resp.text)
+        raise HTTPException(resp.status_code, "Document create failed")
     return resp.json()
 
 
@@ -78,5 +89,8 @@ def get_document_url(tenant_id: str, document_id: str,
     resp = _dc_request(
         "GET", f"/api/documents/{tenant_id}/{document_id}/url", user.get("_token"))
     if resp.status_code != 200:
-        raise HTTPException(resp.status_code, f"DataCore document url failed: {resp.text}")
+        # Same boundary rule as create_document above.
+        logger.warning("DataCore document url failed (%s): %s",
+                       resp.status_code, resp.text)
+        raise HTTPException(resp.status_code, "Document URL request failed")
     return resp.json()

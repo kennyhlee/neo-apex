@@ -58,7 +58,7 @@ def test_create_document_parent_role_403(as_user):
 
 @respx.mock
 def test_create_document_happy_path(as_user):
-    route = respx.post("http://localhost:5800/api/documents/acme").mock(
+    route = respx.post(f"{settings.datacore_url}/api/documents/acme").mock(
         return_value=httpx.Response(201, json={
             "document_id": "DOC260001",
             "upload_url": "https://r2.example.com/put/DOC260001",
@@ -86,7 +86,7 @@ def test_create_document_ignores_client_supplied_uploaded_by(as_user):
     """A client that sends `uploaded_by` in the body must not have it
     forwarded — the proxy always derives it from the authenticated caller.
     This is the property Plan 5's parent-download access control depends on."""
-    route = respx.post("http://localhost:5800/api/documents/acme").mock(
+    route = respx.post(f"{settings.datacore_url}/api/documents/acme").mock(
         return_value=httpx.Response(201, json={
             "document_id": "DOC260002",
             "upload_url": "https://r2.example.com/put/DOC260002",
@@ -102,6 +102,34 @@ def test_create_document_ignores_client_supplied_uploaded_by(as_user):
     sent_body = _json.loads(route.calls[0].request.content)
     assert sent_body["uploaded_by"] == "staff-42"
     assert sent_body["uploaded_by"] != "parent:RA999999"
+
+
+@respx.mock
+def test_create_document_propagates_datacore_4xx(as_user):
+    """The POST side must forward DataCore's status code, mirroring
+    test_get_document_url_not_found_propagates_404 on the GET side. The status
+    is what lets a caller tell a bad request apart from an outage."""
+    respx.post(f"{settings.datacore_url}/api/documents/acme").mock(
+        return_value=httpx.Response(422, json={"detail": "size must be positive"})
+    )
+    resp = as_user(tenant="acme").post("/api/documents/acme", json=VALID_BODY)
+    assert resp.status_code == 422
+
+
+@respx.mock
+def test_create_document_does_not_leak_datacore_error_body(as_user):
+    """The status code crosses the boundary; the body does not. DataCore's
+    error text is an internal detail (storage keys, upstream hosts, model
+    field names) and this proxy is where it stops — it is logged, and the
+    client gets a stable message."""
+    respx.post(f"{settings.datacore_url}/api/documents/acme").mock(
+        return_value=httpx.Response(
+            500, text="Traceback: r2 bucket acme-private/secret-key unreachable")
+    )
+    resp = as_user(tenant="acme").post("/api/documents/acme", json=VALID_BODY)
+    assert resp.status_code == 500
+    assert "secret-key" not in resp.text
+    assert "Traceback" not in resp.text
 
 
 # ── GET /api/documents/{tenant_id}/{document_id}/url ───────────────────────
@@ -123,7 +151,7 @@ def test_get_document_url_parent_role_403(as_user):
 
 @respx.mock
 def test_get_document_url_happy_path(as_user):
-    respx.get("http://localhost:5800/api/documents/acme/DOC260001/url").mock(
+    respx.get(f"{settings.datacore_url}/api/documents/acme/DOC260001/url").mock(
         return_value=httpx.Response(200, json={
             "download_url": "https://r2.example.com/get/DOC260001",
         })
@@ -135,8 +163,10 @@ def test_get_document_url_happy_path(as_user):
 
 @respx.mock
 def test_get_document_url_not_found_propagates_404(as_user):
-    respx.get("http://localhost:5800/api/documents/acme/DOC-missing/url").mock(
+    respx.get(f"{settings.datacore_url}/api/documents/acme/DOC-missing/url").mock(
         return_value=httpx.Response(404, json={"detail": "Document not found"})
     )
     resp = as_user(tenant="acme").get("/api/documents/acme/DOC-missing/url")
     assert resp.status_code == 404
+    # Status forwarded, body not — same boundary rule as the POST side.
+    assert "Document not found" not in resp.text

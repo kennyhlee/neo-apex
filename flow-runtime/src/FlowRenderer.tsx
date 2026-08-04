@@ -6,7 +6,7 @@ import type {
 import { DONE_ITEM_STATUSES } from './types';
 import { formFields } from './blockConfig';
 import { validateFlowField } from './validateField';
-import { FlowLocaleContext, flowLocale, useFlowT, type Locale } from './i18n';
+import { FlowLocaleContext, flowLocale, useFlowLocale, useFlowT, type Locale } from './i18n';
 import { FormBlock } from './blocks/FormBlock';
 import { DocumentsBlock } from './blocks/DocumentsBlock';
 import { PaymentPlanBlock } from './blocks/PaymentPlanBlock';
@@ -75,6 +75,10 @@ function FlowRendererInner({
   onRecordOfflinePayment,
 }: Omit<FlowRendererProps, 'locale'>) {
   const t = useFlowT();
+  // Handed to `validateFlowField`, which is pure and so cannot use a hook —
+  // without it, validation messages alone would not re-translate on a
+  // language toggle, though every block component now does.
+  const locale = useFlowLocale();
   const blocks = config.blocks;
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Record<string, unknown>>(values);
@@ -173,7 +177,9 @@ function FlowRendererInner({
   const formErrors = (block: FlowBlock): Record<string, string | null> => {
     const vals = blockValues(block);
     const out: Record<string, string | null> = {};
-    for (const f of formFields(block)) out[f.name] = validateFlowField(f, vals[f.name]);
+    for (const f of formFields(block)) {
+      out[f.name] = validateFlowField(f, vals[f.name], locale);
+    }
     return out;
   };
 
