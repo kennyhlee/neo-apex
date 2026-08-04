@@ -62,9 +62,23 @@ keeps being deferred.
   who had just started got "Could not save this step" on their very first Save
   & continue. New `entityId()` helper reads either shape.
 
-**Neither has automated coverage on the frontend side** — familyhub-frontend
-has no test runner. A component test around `toApplicationItems` for both wire
-shapes would be the cheapest guard.
+- **`checkout_service` resolved the config by `program_id`** (`0b36b71`) —
+  found by a final `grep` sweep, not by the click-through (no payment block was
+  in the seeded flow, so checkout was never exercised). Applications no longer
+  carry a `program_id`, so the lookup matched nothing and would have 409'd
+  every payment. Its test passed regardless, because `FakeDataCore` omits
+  absent keys while a real flattened row returns the column as `None` —
+  `CONFIG_ROW` now carries `program_id: None` so the shape is honest, and
+  reverting the fix fails 5 tests.
+
+**The first two have no automated coverage on the frontend side** —
+familyhub-frontend has no test runner. A component test around
+`toApplicationItems` for both wire shapes would be the cheapest guard.
+
+**The pattern worth noting:** all three were invisible to a green suite because
+the test doubles were kinder than the real services (renderer-shaped drafts
+never posted, envelope rows never mapped, absent columns instead of NULL ones).
+Each of the three fixes tightened the fixture as well as the code.
 
 ## 3. Environment problems (not caused by this revision)
 
