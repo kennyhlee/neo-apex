@@ -33,6 +33,25 @@ logger = logging.getLogger("enrollx.stripe_webhook")
 router = APIRouter()
 
 
+def _as_plain_dict(obj):
+    """Normalize a real Stripe object to a plain (recursively-converted)
+    dict.
+
+    stripe.Webhook.construct_event returns a stripe.StripeObject in
+    production. Unlike very old SDK versions, StripeObject in stripe>=15 is
+    NOT a dict subclass and does not implement `.get()` — only `__getitem__`
+    / `__getattr__` — so `event.get("account")` raises AttributeError at
+    runtime even though `event["account"]` and `event.account` both work.
+    `.to_dict()` (recursive by default) converts the whole tree, including
+    nested objects like `data.object` and `metadata`, into plain dicts so
+    every `.get(...)` call below behaves as expected. Test fakes that stub
+    `construct_event` to return a plain dict already (no `.to_dict`
+    attribute) pass through unchanged.
+    """
+    to_dict = getattr(obj, "to_dict", None)
+    return to_dict() if callable(to_dict) else obj
+
+
 def _already_processed(tenant_id: str, application_id: str, session_id: str) -> bool:
     """Dedupe on provider_ref, filtered in PYTHON — mirrors the fix inside
     settle_payment_item (app/registration/engine.py, the `if provider_ref:`
@@ -60,6 +79,7 @@ async def stripe_webhook(request: Request):
         )
     except (ValueError, stripe.SignatureVerificationError):
         raise HTTPException(400, "Invalid Stripe webhook signature")
+    event = _as_plain_dict(event)
 
     if event["type"] != "checkout.session.completed":
         return {"received": True, "handled": False}
@@ -71,12 +91,27 @@ async def stripe_webhook(request: Request):
     item_id = meta.get("item_id")
     kind = meta.get("kind") or "full"
     if not tenant_id or not application_id or not item_id:
+        logger.warning(
+            "stripe webhook rejected: missing metadata (tenant_id=%r application_id=%r "
+            "item_id=%r)", tenant_id, application_id, item_id,
+        )
         raise HTTPException(400, "Session metadata missing tenant/application/item")
 
     # Step 3 of the trust chain: connected account must map to exactly this
-    # tenant before any write.
+    # tenant before any write. Both operands must be truthy before comparing
+    # — a tenant that hasn't finished Connect onboarding has no stored
+    # stripe_account_id, and a platform-level (non-Connect) event has no
+    # `account` at all, so two ABSENT values are not an equality of Stripe
+    # account ids and must not fall through.
     tenant_row = get_tenant_entity(tenant_id, None)
-    if tenant_row is None or tenant_row.get("stripe_account_id") != event.get("account"):
+    account = event.get("account")
+    stored_account = (tenant_row or {}).get("stripe_account_id")
+    if not stored_account or not account or str(stored_account) != str(account):
+        logger.warning(
+            "stripe webhook rejected: connected account mismatch (tenant_id=%r "
+            "stored_account=%r event_account=%r application_id=%r session_id=%r)",
+            tenant_id, stored_account, account, application_id, session.get("id"),
+        )
         raise HTTPException(400, "Connected account does not match tenant")
 
     session_id = str(session["id"])
@@ -86,6 +121,11 @@ async def stripe_webhook(request: Request):
     items = get_items(tenant_id, application_id, None)
     item_row = next((i for i in items if str(i.get("entity_id")) == str(item_id)), None)
     if item_row is None:
+        logger.warning(
+            "stripe webhook rejected: unknown application item (tenant_id=%r "
+            "application_id=%r item_id=%r session_id=%r)",
+            tenant_id, application_id, item_id, session_id,
+        )
         raise HTTPException(400, "Session metadata names an unknown application item")
 
     amount = int(session.get("amount_total") or 0)
@@ -103,20 +143,34 @@ async def stripe_webhook(request: Request):
         token=None,
     )
 
-    tenant_name = str(tenant_row.get("name") or tenant_id)
-    application = get_application(tenant_id, application_id, None)
-    email = (application or {}).get("applicant_email")
-    if email:
+    # Everything below is best-effort. settle_payment_item already committed
+    # the payment + item write above, so a transient failure here (a
+    # DataCore read for the applicant email, an email-provider hiccup) must
+    # never surface as a 500 — that would make Stripe retry a webhook whose
+    # settlement already succeeded, and the retry would short-circuit at
+    # _already_processed before ever reaching this block again, so the
+    # applicant would silently never get a receipt.
+    #
+    # already_settled=True means an EARLIER delivery (not this call) did the
+    # settling and, if it got this far, already sent the receipt — see
+    # settle_payment_item's docstring on the two separate read-then-write
+    # dedupe windows. Sending again here would double-email the applicant
+    # for one payment.
+    if not result.get("already_settled"):
+        tenant_name = str(tenant_row.get("name") or tenant_id)
         try:
-            send_application_email(
-                tenant_id,
-                application_id,
-                "payment_receipt",
-                email,
-                f"Payment received — {tenant_name}",
-                payment_receipt_html(tenant_name, kind, amount, currency, application_id),
-                None,
-            )
+            application = get_application(tenant_id, application_id, None)
+            email = (application or {}).get("applicant_email")
+            if email:
+                send_application_email(
+                    tenant_id,
+                    application_id,
+                    "payment_receipt",
+                    email,
+                    f"Payment received — {tenant_name}",
+                    payment_receipt_html(tenant_name, kind, amount, currency, application_id),
+                    None,
+                )
         except Exception:
             logger.exception("payment receipt email failed (application %s)", application_id)
 

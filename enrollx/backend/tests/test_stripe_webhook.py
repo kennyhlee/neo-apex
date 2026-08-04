@@ -5,7 +5,10 @@ wrong arities for settle_payment_item and send_application_email, and its
 _already_processed re-introduces the sparse-column binder bug Plan 2 already
 fixed. See task-6-corrections.md for the authoritative arities.
 """
+import hashlib
+import hmac
 import json
+import time
 
 import pytest
 import stripe
@@ -90,10 +93,19 @@ def webhook_env(monkeypatch):
     # provider_ref in PYTHON — not a `dc_query` SQL predicate on provider_ref
     # (that column doesn't exist in a tenant with no prior Stripe payment and
     # DuckDB binder-errors on it).
-    monkeypatch.setattr(
-        "app.api.stripe_webhook.list_entities",
-        lambda t, et, where, tok: list(rec["dedupe_rows"]) if et == "payment" else [],
-    )
+    #
+    # F6: assert the `where` clause itself, not just that the fake returns
+    # something. Without this a regression to
+    # f"application_id = '{sql_literal(application_id)}'" — the exact
+    # ''RA260001'' double-quoting hazard C5 warns about, since sql_literal
+    # already returns the surrounding quotes — would keep the suite green.
+    def fake_list_entities(t, et, where, tok):
+        if et == "payment":
+            assert where == "application_id = 'RA260001'"
+            return list(rec["dedupe_rows"])
+        return []
+
+    monkeypatch.setattr("app.api.stripe_webhook.list_entities", fake_list_entities)
 
     # C1/C2: settle_payment_item takes the item ROW (third positional) and
     # returns {"payment": ..., "item": ..., "already_settled": bool}.
@@ -136,6 +148,48 @@ def post(client, body=None):
         content=json.dumps(body or {}),
         headers={"stripe-signature": "t=1,v1=sig", "content-type": "application/json"},
     )
+
+
+def real_signature_header(payload: bytes, secret: str, timestamp: int | None = None) -> str:
+    """Compute a genuine Stripe webhook signature header (t=<ts>,v1=<hex>)
+    over the exact payload bytes — pure local HMAC-SHA256, no network. Used
+    by F5's tests, which leave stripe.Webhook.construct_event UNSTUBBED so
+    the real signature-verification code path (secret, raw bytes, header
+    format) is actually exercised, not just asserted-away by a monkeypatch."""
+    ts = timestamp if timestamp is not None else int(time.time())
+    signed_payload = f"{ts}.".encode() + payload
+    sig = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
+    return f"t={ts},v1={sig}"
+
+
+def real_stripe_event_payload(kind="full", account="acct_test_789",
+                              session_id="cs_test_abc123", item_id="AI260007") -> bytes:
+    """A realistic Stripe event body — including the `object` discriminator
+    fields (`"object": "event"` / `"object": "checkout.session"`) that
+    stripe.Webhook.construct_event's real implementation requires to build a
+    stripe.Event, unlike the plain dicts the other tests hand it via
+    stub_event."""
+    return json.dumps({
+        "id": "evt_test_real_1",
+        "object": "event",
+        "type": "checkout.session.completed",
+        "account": account,
+        "data": {
+            "object": {
+                "id": session_id,
+                "object": "checkout.session",
+                "amount_total": 50000,
+                "currency": "usd",
+                "payment_status": "paid",
+                "metadata": {
+                    "tenant_id": "acme",
+                    "application_id": "RA260001",
+                    "item_id": item_id,
+                    "kind": kind,
+                },
+            }
+        },
+    }).encode()
 
 
 def test_bad_signature_400(client, webhook_env, monkeypatch):
@@ -229,5 +283,74 @@ def test_unknown_item_id_400(client, webhook_env, monkeypatch):
     must not settle (C1's mandated new test)."""
     stub_event(monkeypatch, completed_event(item_id="AI999999"))
     resp = post(client)
+    assert resp.status_code == 400
+    assert webhook_env["settled"] == []
+
+
+def test_account_and_stored_both_absent_400(client, webhook_env, monkeypatch):
+    """F1: a tenant that hasn't finished Connect onboarding has no stored
+    stripe_account_id, and a platform-level (non-Connect) event has no
+    `account` at all. Two ABSENT values are not an equality of Stripe
+    account ids and must not fall through the guard."""
+    monkeypatch.setattr(
+        "app.api.stripe_webhook.get_tenant_entity",
+        lambda t, tok: {**TENANT_ROW, "stripe_account_id": None},
+    )
+    stub_event(monkeypatch, completed_event(account=None))
+    resp = post(client)
+    assert resp.status_code == 400
+    assert webhook_env["settled"] == []
+
+
+def test_already_settled_replay_sends_no_second_email(client, webhook_env, monkeypatch):
+    """F2: settle_payment_item's own provider_ref dedupe (a residual race
+    window distinct from _already_processed) can return already_settled=True
+    on THIS call — meaning an earlier delivery already settled and already
+    emailed. The webhook must not send a second receipt for one payment."""
+    def fake_settle_already_settled(tenant_id, application_id, item_row, **kwargs):
+        webhook_env["settled"].append({"tenant_id": tenant_id, "application_id": application_id,
+                                       "item_row": item_row, **kwargs})
+        return {"payment": {"entity_id": "PY260001"}, "item": dict(item_row),
+                "already_settled": True}
+
+    monkeypatch.setattr("app.api.stripe_webhook.settle_payment_item", fake_settle_already_settled)
+    stub_event(monkeypatch, completed_event())
+    resp = post(client)
+    assert resp.status_code == 200
+    assert resp.json()["handled"] is True
+    assert resp.json()["payment_id"] == "PY260001"
+    assert webhook_env["emails"] == []
+
+
+def test_real_signature_reaches_settlement(client, webhook_env, monkeypatch):
+    """F5: leaves stripe.Webhook.construct_event UNSTUBBED, computing a
+    genuine signature over the exact payload bytes with
+    settings.stripe_webhook_secret. Pure local HMAC-SHA256 — no network — so
+    this exercises the real secret/payload/header-format contract that every
+    other test bypasses via stub_event."""
+    payload = real_stripe_event_payload()
+    header = real_signature_header(payload, settings.stripe_webhook_secret)
+    resp = client.post(
+        "/api/webhooks/stripe",
+        content=payload,
+        headers={"stripe-signature": header, "content-type": "application/json"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["handled"] is True
+    assert len(webhook_env["settled"]) == 1
+    assert webhook_env["settled"][0]["provider_ref"] == "cs_test_abc123"
+
+
+def test_real_signature_tampered_payload_400(client, webhook_env, monkeypatch):
+    """F5: sign one payload, send a DIFFERENT (tampered) one — the real
+    construct_event must reject it, unstubbed."""
+    signed_payload = real_stripe_event_payload()
+    header = real_signature_header(signed_payload, settings.stripe_webhook_secret)
+    tampered_payload = real_stripe_event_payload(session_id="cs_attacker_swapped")
+    resp = client.post(
+        "/api/webhooks/stripe",
+        content=tampered_payload,
+        headers={"stripe-signature": header, "content-type": "application/json"},
+    )
     assert resp.status_code == 400
     assert webhook_env["settled"] == []
