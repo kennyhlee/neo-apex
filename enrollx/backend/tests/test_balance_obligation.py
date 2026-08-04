@@ -100,6 +100,12 @@ def webhook_env(monkeypatch):
         "created_items": [],
         "balance_items": [],
         "dedupe_rows": [],
+        # F1: parameterized rather than hardcoded, so a test can flip it to
+        # True and exercise the already_settled=True + kind="deposit" replay
+        # path that correction C8 exists to guard (the deposit branch must
+        # sit inside the already_settled gate; a regression that moved it
+        # back outside would NameError on `application` here).
+        "already_settled": False,
     }
 
     monkeypatch.setattr(
@@ -143,7 +149,7 @@ def webhook_env(monkeypatch):
         return {
             "payment": {"entity_id": "PY260002"},
             "item": dict(item_row),
-            "already_settled": False,
+            "already_settled": rec["already_settled"],
         }
 
     monkeypatch.setattr("app.api.stripe_webhook.settle_payment_item", fake_settle)
@@ -232,3 +238,55 @@ def test_full_payment_creates_no_balance_item(client, webhook_env, monkeypatch):
     )
     assert resp.status_code == 200
     assert webhook_env["created_items"] == []
+
+
+def test_replayed_deposit_already_settled_skips_balance_obligation(client, webhook_env, monkeypatch):
+    """F1: settle_payment_item returning already_settled=True for a
+    kind="deposit" event is exactly the replay scenario C8 exists to guard
+    -- the brief's original one-line deposit branch at the marker would
+    NameError here, since `application` was bound inside the same `try` the
+    receipt email lives in and that whole gate is skipped when already
+    settled. The shipped code nests the deposit branch inside
+    `if not result.get("already_settled")`, so on a replay neither the
+    balance item nor the reminder email nor any reference to `application`
+    is reached -- this test would fail (raise, or wrongly create the item /
+    send the email) if a future edit moved the deposit branch back outside
+    that gate."""
+    webhook_env["already_settled"] = True
+    resp = post_deposit(client, monkeypatch)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["handled"] is True
+    assert body["payment_id"] == "PY260002"
+    assert webhook_env["created_items"] == []
+    assert webhook_env["emails"] == []
+
+
+def test_currency_lowercased_before_reminder_html(client, webhook_env, monkeypatch):
+    """F2: the plan block's config carries an UPPERCASE currency code, which
+    C6 requires be lowercased before it's handed to balance_reminder_html.
+    PLAN_BLOCK's own "usd" is already lowercase, so a regression that
+    dropped `.lower()` in _ensure_balance_obligation would pass every other
+    test in this file -- this test intercepts the exact argument passed to
+    balance_reminder_html instead of inspecting the rendered HTML (whose
+    display formatting re-uppercases the code regardless via
+    payment_emails._fmt, so asserting on the HTML text can't distinguish
+    the two code paths)."""
+    plan_block_upper = json.loads(json.dumps(PLAN_BLOCK))
+    plan_block_upper["config"]["currency"] = "USD"
+    monkeypatch.setattr(
+        "app.api.stripe_webhook.get_payment_plan_block",
+        lambda t, application, tok: plan_block_upper,
+    )
+    captured = {}
+
+    def fake_balance_reminder_html(tenant_name, balance_cents, currency, due_date, hub_url):
+        captured["currency"] = currency
+        return "<p>reminder</p>"
+
+    monkeypatch.setattr(
+        "app.api.stripe_webhook.balance_reminder_html", fake_balance_reminder_html
+    )
+    resp = post_deposit(client, monkeypatch)
+    assert resp.status_code == 200
+    assert captured["currency"] == "usd"
