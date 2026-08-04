@@ -15,6 +15,7 @@ Unauthenticated by design (Stripe, not a NeoApex caller, hits this route) —
 it trusts only the Stripe signature.
 """
 import logging
+from datetime import datetime, timedelta, timezone
 
 import stripe
 from fastapi import APIRouter, HTTPException, Request
@@ -22,7 +23,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app.checkout_service import get_application, get_payment_plan_block
 from app.config import settings
 from app.payment_emails import balance_reminder_html, payment_receipt_html
-from app.registration.datacore import list_entities, sql_literal
+from app.registration.datacore import dc_query, list_entities, sql_literal
 from app.registration.emails import send_application_email
 from app.registration.engine import create_application_item, get_items, settle_payment_item
 from app.registration.tokens import make_link_token
@@ -31,6 +32,13 @@ from app.tenant_lookup import get_tenant_entity
 logger = logging.getLogger("enrollx.stripe_webhook")
 
 router = APIRouter()
+
+# Title of the non-blocking balance-due item created after a deposit
+# settles. Also doubles as the idempotency key for _ensure_balance_obligation
+# (see its docstring) — application_id + title are both written by every
+# application_item row, so the lookup is safe to leave in SQL (task-7-
+# corrections.md C5), unlike the sparse provider_ref column below.
+BALANCE_ITEM_TITLE = "Balance payment"
 
 
 def _as_plain_dict(obj):
@@ -66,6 +74,79 @@ def _already_processed(tenant_id: str, application_id: str, session_id: str) -> 
     return any(str(r.get("provider_ref") or "") == str(session_id) for r in rows)
 
 
+def _ensure_balance_obligation(
+    tenant_id: str, tenant_name: str, application: dict
+) -> None:
+    """After a deposit settles: create the non-blocking balance item once,
+    and email the parent a balance-reminder with their hub link.
+
+    Idempotent via a title lookup: application_id and title are both written
+    by every application_item row, and this application's items already
+    exist by the time a deposit settles, so the flattened columns are
+    materialized — safe to filter in SQL (task-7-corrections.md C5), unlike
+    the sparse provider_ref column _already_processed must avoid. This lookup
+    is the backstop for the caller's already_settled gate, not a replacement
+    for it — see the call site's comment.
+
+    Deliberately has no internal try/except: the caller wraps this whole
+    call best-effort, with more context (session_id) than this function has,
+    so exceptions are left to propagate up to that handler.
+    """
+    application_id = str(application["entity_id"])
+    existing = dc_query(
+        tenant_id,
+        "SELECT entity_id FROM data WHERE entity_type = 'application_item' "
+        f"AND application_id = {sql_literal(application_id)} "
+        f"AND title = {sql_literal(BALANCE_ITEM_TITLE)} AND _status = 'active'",
+        None,
+    )
+    if existing:
+        return
+
+    block = get_payment_plan_block(tenant_id, application, None)
+    cfg = block.get("config") or {}
+    amount_full = int(cfg.get("amount_full") or 0)
+    plans = {str(p.get("type")): p for p in (cfg.get("plans") or []) if p.get("type")}
+    deposit_amount = int((plans.get("deposit") or {}).get("deposit_amount") or 0)
+    balance = amount_full - deposit_amount
+    if balance <= 0:
+        return
+
+    due_dt = datetime.now(timezone.utc) + timedelta(days=settings.balance_due_days)
+    create_application_item(
+        tenant_id,
+        application_id,
+        {
+            "block_id": str(block.get("block_id") or "payment_plan"),
+            "kind": "payment",
+            "title": BALANCE_ITEM_TITLE,
+            "blocking": False,
+            "due_at": due_dt.isoformat(),
+        },
+        None,
+    )
+
+    email = application.get("applicant_email")
+    if not email:
+        return
+    link_token = make_link_token(
+        tenant_id, application_id, int(application.get("token_version") or 1)
+    )
+    hub_url = f"{settings.familyhub_public_url}/application/{link_token}"
+    currency = str(cfg.get("currency") or "usd").lower()
+    send_application_email(
+        tenant_id,
+        application_id,
+        "balance_reminder",
+        email,
+        f"Balance due — {tenant_name}",
+        balance_reminder_html(
+            tenant_name, balance, currency, due_dt.date().isoformat(), hub_url
+        ),
+        None,
+    )
+
+
 @router.post("/webhooks/stripe")
 async def stripe_webhook(request: Request):
     if not settings.stripe_webhook_secret:
@@ -93,7 +174,7 @@ async def stripe_webhook(request: Request):
     if not tenant_id or not application_id or not item_id:
         logger.warning(
             "stripe webhook rejected: missing metadata (tenant_id=%r application_id=%r "
-            "item_id=%r)", tenant_id, application_id, item_id,
+            "item_id=%r session_id=%r)", tenant_id, application_id, item_id, session.get("id"),
         )
         raise HTTPException(400, "Session metadata missing tenant/application/item")
 
@@ -158,6 +239,7 @@ async def stripe_webhook(request: Request):
     # for one payment.
     if not result.get("already_settled"):
         tenant_name = str(tenant_row.get("name") or tenant_id)
+        application = None
         try:
             application = get_application(tenant_id, application_id, None)
             email = (application or {}).get("applicant_email")
@@ -174,7 +256,22 @@ async def stripe_webhook(request: Request):
         except Exception:
             logger.exception("payment receipt email failed (application %s)", application_id)
 
-    # Task 7 inserts the deposit branch here
+        # Best-effort, same reasoning as the receipt email above: settle_
+        # payment_item already committed the payment + item write, so a
+        # failure here (a DataCore read, an email-provider hiccup) must
+        # never surface as a 500 — that would make Stripe retry a webhook
+        # whose settlement already succeeded, and the retry would
+        # short-circuit at _already_processed before ever reaching this
+        # block again, permanently losing the balance item and the
+        # reminder for a payment that in fact succeeded.
+        if kind == "deposit" and application is not None:
+            try:
+                _ensure_balance_obligation(tenant_id, tenant_name, application)
+            except Exception:
+                logger.exception(
+                    "balance obligation failed (application %s session %s)",
+                    application_id, session_id,
+                )
 
     return {
         "received": True,
