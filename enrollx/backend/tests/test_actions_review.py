@@ -218,6 +218,32 @@ def test_resend_link_returns_link_and_logs(client, fake_dc):
                for a in acts)
 
 
+def test_resend_link_email_subject_keeps_the_program_name(client, fake_dc):
+    """M1 regression. _resend_link rebound app_row to
+    engine.update_application's return value, which is a
+    {entity_id, entity_type, base_data} ENVELOPE rather than a flattened row.
+    _program_label(envelope) then returned "", silently dropping the program
+    name from the resend email subject.
+    """
+    sent = []
+    monkey = __import__("app.registration.emails", fromlist=["emails"])
+    original = monkey.send_email
+    monkey.send_email = lambda to, subject, body_html: (
+        sent.append((to, subject, body_html)) or original(to, subject, body_html))
+    try:
+        created = submitted_application(client, fake_dc)
+        eid = created["application"]["entity_id"]
+        sent.clear()
+        assert act(client, eid, "resend_link").status_code == 200
+    finally:
+        monkey.send_email = original
+
+    assert sent, "no email was sent"
+    to, subject, body_html = sent[-1]
+    assert subject == "Your registration link \u2014 PR1"
+    assert "PR1" in body_html
+
+
 def test_resend_link_400_without_email(client, fake_dc):
     seed_program_and_config(fake_dc)
     resp = client.post("/api/registration/acme/applications", json={

@@ -66,9 +66,9 @@ def _send_magic_link(tenant_id, app_row):
     link_token = tokens.make_link_token(tenant_id, app_row["entity_id"],
                                         int(app_row.get("token_version") or 1))
     link = tokens.magic_link_url(link_token)
-    subject, html = emails.magic_link_email(str(app_row.get("program_id", "")), link)
+    subject, body_html = emails.magic_link_email(str(app_row.get("program_id", "")), link)
     emails.send_application_email(tenant_id, app_row["entity_id"], "magic_link",
-                                  app_row.get("applicant_email", ""), subject, html)
+                                  app_row.get("applicant_email", ""), subject, body_html)
     return link_token, link
 
 

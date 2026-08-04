@@ -130,14 +130,14 @@ def _submit(tenant_id, application_entity_id, params, actor, token):
     email = app_row.get("applicant_email")
     if email:
         if target == "submitted":
-            subject, html = emails.submission_receipt_email(
+            subject, body_html = emails.submission_receipt_email(
                 _program_label(app_row), app_row.get("application_id", ""))
             kind = "submission_receipt"
         else:
-            subject, html = emails.status_change_email(_program_label(app_row), "waitlisted")
+            subject, body_html = emails.status_change_email(_program_label(app_row), "waitlisted")
             kind = "status_change"
         emails.send_application_email(tenant_id, application_entity_id, kind,
-                                      email, subject, html, token)
+                                      email, subject, body_html, token)
     return {"application": updated}
 
 
@@ -169,11 +169,11 @@ def _reject_item(tenant_id, application_entity_id, params, actor, token):
             tenant_id, app_row, "pending_items", actor, token)
     email = app_row.get("applicant_email")
     if email:
-        subject, html = emails.action_needed_email(
+        subject, body_html = emails.action_needed_email(
             _program_label(app_row), item.get("title", "item"),
             str(params.get("reason", "")))
         emails.send_application_email(tenant_id, application_entity_id, "action_needed",
-                                      email, subject, html, token)
+                                      email, subject, body_html, token)
     return result
 
 
@@ -197,10 +197,10 @@ def _request_changes(tenant_id, application_entity_id, params, actor, token):
         engine.log_activity(tenant_id, application_entity_id, "note", "", note, actor, token)
     email = app_row.get("applicant_email")
     if email:
-        subject, html = emails.action_needed_email(
+        subject, body_html = emails.action_needed_email(
             _program_label(app_row), "Application changes requested", note)
         emails.send_application_email(tenant_id, application_entity_id, "action_needed",
-                                      email, subject, html, token)
+                                      email, subject, body_html, token)
     return {"application": updated}
 
 
@@ -211,9 +211,9 @@ def _decline(tenant_id, application_entity_id, params, actor, token):
         extra_changes={"decided_at": engine.now_iso()})
     email = app_row.get("applicant_email")
     if email:
-        subject, html = emails.status_change_email(_program_label(app_row), "declined")
+        subject, body_html = emails.status_change_email(_program_label(app_row), "declined")
         emails.send_application_email(tenant_id, application_entity_id, "status_change",
-                                      email, subject, html, token)
+                                      email, subject, body_html, token)
     return {"application": updated}
 
 
@@ -234,13 +234,17 @@ def _resend_link(tenant_id, application_entity_id, params, actor, token):
     # from the current (un-bumped) version, as a naive resend would, leaves the
     # old link valid forever — that defeats the point of a resend.
     new_version = int(app_row.get("token_version") or 1) + 1
-    app_row = engine.update_application(
+    # Do NOT rebind app_row here: update_application returns a
+    # {entity_id, entity_type, base_data} envelope, not a flattened row, so
+    # _program_label(envelope) returns "" and the email subject silently loses
+    # the program name.
+    engine.update_application(
         tenant_id, app_row, {"token_version": new_version}, token)
     link_token = tokens.make_link_token(tenant_id, application_entity_id, new_version)
     link = tokens.magic_link_url(link_token)
-    subject, html = emails.magic_link_email(_program_label(app_row), link)
+    subject, body_html = emails.magic_link_email(_program_label(app_row), link)
     emails.send_application_email(tenant_id, application_entity_id, "magic_link",
-                                  email, subject, html, token)
+                                  email, subject, body_html, token)
     return {"link": link}
 
 
@@ -354,9 +358,9 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
     # 6. Notify
     email = app_row.get("applicant_email")
     if email:
-        subject, html = emails.status_change_email(_program_label(app_row), "approved")
+        subject, body_html = emails.status_change_email(_program_label(app_row), "approved")
         emails.send_application_email(tenant_id, application_entity_id, "status_change",
-                                      email, subject, html, token)
+                                      email, subject, body_html, token)
 
     # 7. Straight to enrolled if nothing remains open
     enrolled = _maybe_enroll(tenant_id, application_entity_id, actor, token)

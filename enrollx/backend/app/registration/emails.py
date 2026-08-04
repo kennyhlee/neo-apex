@@ -18,7 +18,7 @@ logger = logging.getLogger("enrollx.emails")
 RESEND_URL = "https://api.resend.com/emails"
 
 
-def send_email(to: str, subject: str, html: str) -> str:
+def send_email(to: str, subject: str, body_html: str) -> str:
     """Returns 'sent', 'logged' (no API key configured), or 'failed'."""
     if not settings.resend_api_key:
         logger.info("EMAIL (logged, ENROLLX_RESEND_API_KEY unset): to=%s subject=%r",
@@ -29,7 +29,7 @@ def send_email(to: str, subject: str, html: str) -> str:
             RESEND_URL,
             headers={"Authorization": f"Bearer {settings.resend_api_key}"},
             json={"from": settings.email_from, "to": [to],
-                  "subject": subject, "html": html},
+                  "subject": subject, "html": body_html},
             timeout=15.0,
         )
     except httpx.RequestError:
@@ -42,10 +42,15 @@ def send_email(to: str, subject: str, html: str) -> str:
     return "sent"
 
 
-def send_application_email(tenant_id, application_entity_id, kind, to, subject, html,
-                           token=None) -> str:
-    """BINDING name (Plans 3/5). Send + log as application_activity email_sent."""
-    outcome = send_email(to, subject, html)
+def send_application_email(tenant_id, application_entity_id, kind, to, subject,
+                           body_html, token=None) -> str:
+    """BINDING name (Plans 3/5). Send + log as application_activity email_sent.
+
+    The parameter is `body_html`, not `html`: this module imports the stdlib
+    `html` module for escaping, and a parameter of that name shadows it inside
+    the function body.
+    """
+    outcome = send_email(to, subject, body_html)
     log_activity(tenant_id, application_entity_id, "email_sent", "",
                  f"{kind}:{to}:{outcome}", "system", token)
     return outcome
