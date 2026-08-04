@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     auth,
     checkout,
+    documents,
     entities,
     health,
     internal,
@@ -35,6 +36,7 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(query.router, prefix="/api", tags=["query"])
 app.include_router(entities.router, prefix="/api", tags=["entities"])
 app.include_router(registration.router, prefix="/api", tags=["registration"])
+app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(internal.router, tags=["internal"])
 app.include_router(stripe_connect.router, prefix="/api", tags=["stripe"])
 app.include_router(checkout.router, prefix="/api", tags=["checkout"])
