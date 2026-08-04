@@ -20,6 +20,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'register.invalidEmail': 'Please enter a valid email address.',
     'register.linkSent': 'A private link has been sent to your email. Save it — it is how you return to this application from any device.',
     'register.openHub': 'View application status',
+    'register.starting': 'Starting…',
+    'register.saveError': 'Could not save your progress. Check your connection and try again.',
 
     // Parent hub
     'hub.title': 'Your application',
@@ -100,6 +102,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'register.invalidEmail': '请输入有效的邮箱地址。',
     'register.linkSent': '专属链接已发送到您的邮箱。请妥善保存，您可在任何设备上通过它返回此申请。',
     'register.openHub': '查看申请状态',
+    'register.starting': '正在提交…',
+    'register.saveError': '无法保存您的进度。请检查网络连接后重试。',
 
     // Parent hub
     'hub.title': '您的申请',
