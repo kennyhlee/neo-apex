@@ -64,6 +64,35 @@ def test_publish_unknown_config_404(client, fake_dc):
     assert publish(client, "missing").status_code == 404
 
 
+def test_publish_with_business_config_id_404s(client, fake_dc):
+    """CONTRACT PIN (final review A1). The {application_id} path segment for
+    publish_config carries the registration_config's DataCore **entity_id**,
+    never its business `config_id` field. The two are independently generated
+    and never match: DataCore mints entity_id server-side
+    (`uuid.uuid4().hex[:12]`), while `config_id` comes from the next-id
+    sequence. `_publish_config` resolves via `dc.get_entity(...)`, which
+    filters on entity_id — so a caller handing over the business config_id
+    gets a 404 and NO config ever reaches status='published'.
+
+    The enrollx Flow Builder shipped exactly that bug; this test exists so
+    the contract fails loudly here rather than silently in a second host.
+    """
+    cfg = fake_dc.dc_create("acme", "registration_config", {
+        "config_id": "ACME-RC260001", "program_id": "PR1", "version": 1,
+        "status": "draft", "blocks": json.dumps(BLOCKS)})
+    assert cfg["entity_id"] != cfg["base_data"]["config_id"]
+
+    # The business id resolves nothing.
+    assert publish(client, "ACME-RC260001").status_code == 404
+    assert fake_dc.get_entity(
+        "acme", "registration_config", cfg["entity_id"])["status"] == "draft"
+
+    # The entity_id is the value that works.
+    assert publish(client, cfg["entity_id"]).status_code == 200
+    assert fake_dc.get_entity(
+        "acme", "registration_config", cfg["entity_id"])["status"] == "published"
+
+
 def test_publish_already_published_409(client, fake_dc):
     cfg = fake_dc.dc_create("acme", "registration_config", {
         "config_id": "c", "program_id": "PR1", "version": 1,

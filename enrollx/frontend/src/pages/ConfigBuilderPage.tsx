@@ -280,6 +280,21 @@ export default function ConfigBuilderPage() {
     setSelected(j);
   };
 
+  /**
+   * Persists the draft and returns the config row's DataCore **entity_id**
+   * (null on failure) — NOT the business `config_id`.
+   *
+   * Identifier convention (DISPATCH-CONTEXT): rows carry two independent
+   * ids that never match. DataCore mints `entity_id` server-side
+   * (`uuid.uuid4().hex[:12]`, `datacore/src/datacore/api/routes.py:314`);
+   * the business `config_id` (`{ABBREV}-RC260001`) comes from
+   * `fetchNextEntityId` and is stored as an ordinary field. `publish_config`
+   * resolves its path segment with `dc.get_entity(...)`
+   * (`actions.py:397`), which filters `WHERE entity_id = ...`, so handing it
+   * the business `config_id` 404s every time and no config can ever reach
+   * `status='published'`. The `config_id` value below is written only into
+   * `base_data.config_id`; it is never an argument to an action.
+   */
   const saveDraft = async (): Promise<string | null> => {
     setSaving(true);
     try {
@@ -298,7 +313,7 @@ export default function ConfigBuilderPage() {
           status: 'draft', blocks: blocksJson,
         });
         toast({ message: t('builder.savedDraft'), tone: 'success' });
-        return configId;
+        return entityId;
       }
       const nextVersion = entityId ? version + 1 : 1;
       const cid = configId ?? (await fetchNextEntityId(tenant, 'registration_config')).next_id;
@@ -311,7 +326,7 @@ export default function ConfigBuilderPage() {
       setVersion(nextVersion);
       setConfigStatus('draft');
       toast({ message: t('builder.savedDraft'), tone: 'success' });
-      return cid;
+      return created.entity_id;
     } catch (e) {
       toast({ message: t('builder.saveError'), detail: String(e), tone: 'danger' });
       return null;
@@ -326,10 +341,13 @@ export default function ConfigBuilderPage() {
       toast({ message: t('builder.publishBlocked'), tone: 'danger' });
       return;
     }
-    const cid = await saveDraft();
-    if (!cid) return;
+    // The config row's DataCore entity_id — `publishConfig`'s parameter is
+    // named `configEntityId` for exactly this reason. Passing the business
+    // `config_id` here 404s (see `saveDraft`'s note).
+    const configEntityId = await saveDraft();
+    if (!configEntityId) return;
     try {
-      await publishConfig(tenant, cid);
+      await publishConfig(tenant, configEntityId);
       setConfigStatus('published');
       toast({ message: t('builder.published'), tone: 'success' });
       void load();
