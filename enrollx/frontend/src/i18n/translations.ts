@@ -4,6 +4,44 @@ export const translations: Record<Locale, Record<string, string>> = {
   'en-US': {
     // Navbar / shared chrome
     'nav.language': 'Language',
+    'nav.primary': 'Primary',
+    'nav.programs': 'Programs',
+    'nav.applications': 'Applications',
+    'nav.settings': 'Settings',
+    'nav.logout': 'Log out',
+
+    // Shared UI (DataTable, Toast, forms)
+    'common.cancel': 'Cancel',
+    'common.save': 'Save',
+    'common.loading': 'Loading…',
+    'common.retry': 'Retry',
+    'common.records': 'records',
+    'common.next': 'Next',
+    'common.previous': 'Previous',
+    'common.of': 'of',
+    'common.showing': 'Showing',
+    'common.to': 'to',
+    'common.noResults': 'No results',
+    'students.pageSize': 'Rows per page', // key name kept so the copied DataTable works unmodified
+
+    // Application statuses
+    'status.draft': 'Draft',
+    'status.submitted': 'Submitted',
+    'status.in_review': 'In review',
+    'status.pending_items': 'Pending items',
+    'status.approved': 'Approved',
+    'status.enrolled': 'Enrolled',
+    'status.waitlisted': 'Waitlisted',
+    'status.declined': 'Declined',
+    'status.withdrawn': 'Withdrawn',
+
+    // Item statuses
+    'itemStatus.not_started': 'Not started',
+    'itemStatus.in_progress': 'In progress',
+    'itemStatus.submitted': 'Submitted',
+    'itemStatus.verified': 'Verified',
+    'itemStatus.rejected': 'Rejected',
+    'itemStatus.waived': 'Waived',
 
     // Login
     'login.title': 'Welcome Back',
@@ -38,6 +76,44 @@ export const translations: Record<Locale, Record<string, string>> = {
   'zh-CN': {
     // Navbar / shared chrome
     'nav.language': '语言',
+    'nav.primary': '主导航',
+    'nav.programs': '项目',
+    'nav.applications': '报名申请',
+    'nav.settings': '设置',
+    'nav.logout': '退出登录',
+
+    // Shared UI (DataTable, Toast, forms)
+    'common.cancel': '取消',
+    'common.save': '保存',
+    'common.loading': '加载中…',
+    'common.retry': '重试',
+    'common.records': '条记录',
+    'common.next': '下一页',
+    'common.previous': '上一页',
+    'common.of': '共',
+    'common.showing': '显示',
+    'common.to': '至',
+    'common.noResults': '没有结果',
+    'students.pageSize': '每页行数',
+
+    // Application statuses
+    'status.draft': '草稿',
+    'status.submitted': '已提交',
+    'status.in_review': '审核中',
+    'status.pending_items': '待补材料',
+    'status.approved': '已录取',
+    'status.enrolled': '已入学',
+    'status.waitlisted': '候补中',
+    'status.declined': '未录取',
+    'status.withdrawn': '已退出',
+
+    // Item statuses
+    'itemStatus.not_started': '未开始',
+    'itemStatus.in_progress': '进行中',
+    'itemStatus.submitted': '已提交',
+    'itemStatus.verified': '已核验',
+    'itemStatus.rejected': '已退回',
+    'itemStatus.waived': '已豁免',
 
     // Login
     'login.title': '欢迎回来',
