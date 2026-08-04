@@ -1,5 +1,6 @@
 # familyhub/backend/tests/test_registration_routes.py
 """Public registration facade: config bundle + start (rate limited)."""
+import datetime
 import json
 
 import pytest
@@ -102,6 +103,7 @@ def test_config_bundle_masks_upstream_500(client, fake_http):
 
 
 def test_start_returns_token_and_hub_url(client, fake_http):
+    fake_http.add("GET", "/internal/registration/acme/PR0001/config", FakeResponse(200, BUNDLE))
     fake_http.add("POST", "/internal/registration/acme/PR0001/start",
                   FakeResponse(201, {"application": {"base_data": {"application_id": "RA260001"}},
                                      "token": "tok123"}))
@@ -114,7 +116,8 @@ def test_start_returns_token_and_hub_url(client, fake_http):
     # facade supplies school_year itself -- brief's parent-facing contract
     # carries only applicant_email, but enrollx's internal start route
     # requires school_year with no default.
-    sent = fake_http.calls[0]["json"]
+    start_call = next(c for c in fake_http.calls if c["method"] == "POST")
+    sent = start_call["json"]
     assert sent["applicant_email"] == "parent@example.com"
     assert "school_year" in sent and sent["school_year"]
 
@@ -126,6 +129,7 @@ def test_start_rejects_junk_email(client, fake_http):
 
 
 def test_start_passes_through_upstream_errors(client, fake_http):
+    fake_http.add("GET", "/internal/registration/acme/PR0001/config", FakeResponse(200, BUNDLE))
     fake_http.add("POST", "/internal/registration/acme/PR0001/start",
                   FakeResponse(404, {"detail": "No such program"}))
     resp = client.post("/api/registration/acme/PR0001/start",
@@ -134,6 +138,7 @@ def test_start_passes_through_upstream_errors(client, fake_http):
 
 
 def test_start_masks_upstream_500(client, fake_http):
+    fake_http.add("GET", "/internal/registration/acme/PR0001/config", FakeResponse(200, BUNDLE))
     fake_http.add("POST", "/internal/registration/acme/PR0001/start",
                   FakeResponse(500, {"detail": "DataCore write failed: connection reset by peer"}))
     resp = client.post("/api/registration/acme/PR0001/start",
@@ -142,7 +147,22 @@ def test_start_masks_upstream_500(client, fake_http):
     assert "DataCore" not in resp.text
 
 
+def test_start_config_fetch_masks_upstream_500(client, fake_http):
+    # The extra upstream call this task's F1 fix introduces (fetching the
+    # config bundle to read program.start_date) must follow the exact same
+    # masking policy as every other route -- a 5xx here must not leak either.
+    fake_http.add("GET", "/internal/registration/acme/PR0001/config",
+                  FakeResponse(500, {"detail": "Traceback (most recent call last): ..."}))
+    resp = client.post("/api/registration/acme/PR0001/start",
+                       json={"applicant_email": "parent@example.com"})
+    assert resp.status_code == 502
+    assert "Traceback" not in resp.text
+    # never reached the start call
+    assert all(c["method"] != "POST" for c in fake_http.calls)
+
+
 def test_start_is_rate_limited_per_ip(client, fake_http):
+    fake_http.add("GET", "/internal/registration/acme/PR0001/config", FakeResponse(200, BUNDLE))
     fake_http.add("POST", "/internal/registration/acme/PR0001/start",
                   FakeResponse(201, {"token": "tok123"}))
     for _ in range(10):
@@ -152,3 +172,41 @@ def test_start_is_rate_limited_per_ip(client, fake_http):
     throttled = client.post("/api/registration/acme/PR0001/start",
                             json={"applicant_email": "parent@example.com"})
     assert throttled.status_code == 429
+
+
+def test_start_derives_school_year_from_program_start_date_not_from_today(client, fake_http, monkeypatch):
+    # "Today" is March 2026 -- under wall-clock-only logic this would derive
+    # "2025-2026" (rollover only at July). The program itself starts in
+    # August 2026, i.e. it spans "2026-2027". A parent registering in March
+    # 2026 -- a completely normal enrollment window, not an edge case -- must
+    # get the program's real year, not the year before it (F1).
+    monkeypatch.setattr("app.api.registration._today", lambda: datetime.date(2026, 3, 1))
+    bundle = {**BUNDLE, "program": {**BUNDLE["program"], "start_date": "2026-08-15"}}
+    fake_http.add("GET", "/internal/registration/acme/PR0001/config", FakeResponse(200, bundle))
+    fake_http.add("POST", "/internal/registration/acme/PR0001/start",
+                  FakeResponse(201, {"token": "tok123"}))
+    resp = client.post("/api/registration/acme/PR0001/start",
+                       json={"applicant_email": "parent@example.com"})
+    assert resp.status_code == 201
+    start_call = next(c for c in fake_http.calls if c["method"] == "POST")
+    assert start_call["json"]["school_year"] == "2026-2027"
+
+
+@pytest.mark.parametrize("bad_start_date", [None, "", "not-a-date"])
+def test_start_falls_back_cleanly_when_start_date_unusable(client, fake_http, monkeypatch, bad_start_date):
+    monkeypatch.setattr("app.api.registration._today", lambda: datetime.date(2026, 3, 1))
+    program = {**BUNDLE["program"]}
+    if bad_start_date is None:
+        program.pop("start_date", None)
+    else:
+        program["start_date"] = bad_start_date
+    bundle = {**BUNDLE, "program": program}
+    fake_http.add("GET", "/internal/registration/acme/PR0001/config", FakeResponse(200, bundle))
+    fake_http.add("POST", "/internal/registration/acme/PR0001/start",
+                  FakeResponse(201, {"token": "tok123"}))
+    resp = client.post("/api/registration/acme/PR0001/start",
+                       json={"applicant_email": "parent@example.com"})
+    assert resp.status_code == 201  # never a hard failure on a malformed date
+    start_call = next(c for c in fake_http.calls if c["method"] == "POST")
+    # falls back to _default_school_year() for the pinned "today" (March 2026)
+    assert start_call["json"]["school_year"] == "2025-2026"
