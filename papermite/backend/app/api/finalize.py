@@ -1,4 +1,6 @@
 """Finalize endpoint — commit model definition via DataCore API."""
+import json
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -226,6 +228,98 @@ def _build_model_definition(entities: list[EntityResult]) -> dict:
     return model_def
 
 
+def _fetch_existing_model_definition(tenant_id: str) -> dict:
+    """The tenant's active model definition, one row per entity type.
+
+    DataCore stores models one row per entity_type; `/api/query` on the
+    `models` table returns `model_definition` as either a dict or a JSON
+    string depending on the path, so both are handled. Keys starting with `_`
+    inside a stored definition are DataCore's own provenance metadata
+    (`_source_filename`, `_created_by`) and are ignored — the same thing
+    `put_tenant_models` does before comparing.
+
+    Returns {} when the tenant has no model yet.
+    """
+    try:
+        resp = httpx.post(
+            f"{settings.datacore_api_url}/query",
+            json={
+                "tenant_id": tenant_id,
+                "table": "models",
+                "sql": "SELECT * FROM data WHERE _status = 'active'",
+            },
+            timeout=30.0,
+        )
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Failed to read the existing model")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to read the existing model")
+
+    out: dict = {}
+    for row in resp.json().get("data", []):
+        entity_type = row.get("entity_type")
+        raw = row.get("model_definition")
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+        if not entity_type or not isinstance(raw, dict):
+            continue
+        out[entity_type] = {
+            "base_fields": [f for f in raw.get("base_fields") or [] if isinstance(f, dict)],
+            "custom_fields": [f for f in raw.get("custom_fields") or [] if isinstance(f, dict)],
+        }
+    return out
+
+
+def _merge_model_definition(existing: dict, incoming: dict) -> dict:
+    """Merge an extracted model definition onto the tenant's existing one.
+
+    Why merging and not replacing (spec §4 rule 1): base fields are SEEDED by
+    LaunchPad from `base_model.json` and are load-bearing for running code —
+    the registration engine writes `status`, `config_version`, `token_version`
+    and the rest onto every application. A replace turned acme-afterschool's
+    `registration_application` model into the extraction's shape and dropped
+    them, which is what this rule exists to prevent. It applies to ALL entity
+    types, not just that one.
+
+    Per entity type already present in `existing`:
+      - `base_fields` are preserved verbatim — never removed, never
+        reordered, never overwritten by an extracted field of the same name;
+      - every incoming field (base OR custom) whose name matches an existing
+        base field is dropped: the seeded declaration wins;
+      - every remaining incoming field is appended to `custom_fields`, unless
+        one of that name is already there. First write wins, which is what
+        makes re-committing the same document a no-op.
+
+    Entity types absent from `existing` are taken from `incoming` unchanged;
+    entity types absent from `incoming` are carried through untouched, so a
+    single-entity extraction can never delete the rest of the tenant's model.
+
+    Pure function — no I/O, and neither input is mutated.
+    """
+    merged = {
+        et: {"base_fields": list(d.get("base_fields") or []),
+             "custom_fields": list(d.get("custom_fields") or [])}
+        for et, d in existing.items()
+    }
+    for et, d in incoming.items():
+        if et not in merged:
+            merged[et] = {"base_fields": list(d.get("base_fields") or []),
+                          "custom_fields": list(d.get("custom_fields") or [])}
+            continue
+        base_names = {f.get("name") for f in merged[et]["base_fields"]}
+        custom_names = {f.get("name") for f in merged[et]["custom_fields"]}
+        for field in list(d.get("base_fields") or []) + list(d.get("custom_fields") or []):
+            name = field.get("name")
+            if not name or name in base_names or name in custom_names:
+                continue
+            merged[et]["custom_fields"].append(field)
+            custom_names.add(name)
+    return merged
+
+
 @router.post("/tenants/{tenant_id}/finalize/commit")
 async def finalize_commit(
     tenant_id: str,
@@ -240,7 +334,13 @@ async def finalize_commit(
     if extraction.tenant_id != tenant_id:
         raise HTTPException(status_code=400, detail="Extraction tenant_id mismatch")
 
-    model_definition = _build_model_definition(extraction.entities)
+    # MERGE, never replace (spec §4 rule 1): the tenant's seeded base fields
+    # are load-bearing for the registration engine and must survive model
+    # setup. Extraction-only fields land in custom_fields instead.
+    model_definition = _merge_model_definition(
+        _fetch_existing_model_definition(tenant_id),
+        _build_model_definition(extraction.entities),
+    )
 
     resp = httpx.put(
         f"{settings.datacore_api_url}/models/{tenant_id}",

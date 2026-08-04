@@ -13,6 +13,30 @@ from app.models.registry import UserRecord
 
 client = TestClient(app)
 
+
+def _empty_query_response():
+    """A 200 /api/query response with no rows."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": [], "total": 0}
+    return mock_resp
+
+
+def _models_query_calls(mock_post):
+    """The subset of /api/query calls that read the `models` table.
+
+    Finalize now issues TWO kinds of query: the models read that backs the
+    merge rule (spec §4 rule 1), and the pre-existing tenant-row read. Tests
+    that care about one must not accidentally count the other.
+    """
+    return [c for c in mock_post.call_args_list
+            if (c.kwargs.get("json") or {}).get("table") == "models"]
+
+
+def _tenant_query_calls(mock_post):
+    return [c for c in mock_post.call_args_list
+            if (c.kwargs.get("json") or {}).get("table") == "tenants"]
+
 FAKE_USER = UserRecord(
     user_id="u1",
     name="Test Admin",
@@ -218,8 +242,9 @@ def test_finalize_persists_extracted_tenant_when_row_empty():
         "custom_fields": {},
     }
 
-    # And we read existing first
-    assert mock_post.call_count == 1
+    # Two reads: the models read backing the merge rule, then the tenant row.
+    assert len(_models_query_calls(mock_post)) == 1
+    assert len(_tenant_query_calls(mock_post)) == 1
 
 
 def test_finalize_merges_with_existing_tenant_row():
@@ -313,15 +338,18 @@ def test_finalize_skips_tenant_write_when_no_tenant_entity():
     payload = _payload_with_renamed_custom_field()
 
     with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
-         patch("app.api.finalize.httpx.post") as mock_post:
+         patch("app.api.finalize.httpx.post",
+               side_effect=lambda *a, **k: _empty_query_response()) as mock_post:
         resp = client.post("/api/tenants/t1/finalize/commit", json=payload)
 
     assert resp.status_code == 200, resp.text
     # Only the models PUT happened.
     assert len(put_calls) == 1
     assert "/models/t1" in put_calls[0]["url"]
-    # No /api/query call.
-    assert mock_post.call_count == 0
+    # The models read for the merge rule runs unconditionally; the TENANT
+    # row read does not, because there is no TENANT entity to persist.
+    assert len(_models_query_calls(mock_post)) == 1
+    assert _tenant_query_calls(mock_post) == []
 
 
 def test_finalize_skips_tenant_write_when_all_tenant_mappings_are_empty():
@@ -344,16 +372,18 @@ def test_finalize_skips_tenant_write_when_all_tenant_mappings_are_empty():
     )
 
     with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
-         patch("app.api.finalize.httpx.post") as mock_post:
+         patch("app.api.finalize.httpx.post",
+               side_effect=lambda *a, **k: _empty_query_response()) as mock_post:
         resp = client.post("/api/tenants/t1/finalize/commit", json=payload)
 
     assert resp.status_code == 200, resp.text
     # Only the models PUT happened.
     assert len(put_calls) == 1
     assert "/models/t1" in put_calls[0]["url"]
-    # No /api/query call — the splitter returned empty buckets so the
-    # whole block was skipped before any I/O.
-    assert mock_post.call_count == 0
+    # No TENANT row read — the splitter returned empty buckets so that whole
+    # block was skipped before any I/O. The models read still runs.
+    assert len(_models_query_calls(mock_post)) == 1
+    assert _tenant_query_calls(mock_post) == []
 
 
 def test_finalize_raises_502_when_tenants_put_fails():
@@ -393,8 +423,48 @@ def test_finalize_raises_502_when_tenants_put_fails():
     assert any("/models/t1" in c["url"] for c in put_calls)
 
 
-def test_finalize_raises_502_when_query_fails():
-    """The /api/query call returns 500 → 502 surfaced. Model PUT already succeeded."""
+def test_finalize_raises_502_when_tenant_query_fails():
+    """The TENANT-row /api/query returns 500 → 502 surfaced. Model PUT already
+    succeeded. The models read (which runs first) still succeeds here, so this
+    keeps testing the tenant-read failure it was written for."""
+    put_calls: list[dict] = []
+
+    def fake_put(url, *, json, timeout):  # noqa: ARG001
+        put_calls.append({"url": url})
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = _datacore_response_payload(
+            json.get("model_definition") or {}
+        )
+        return mock_resp
+
+    def fake_post(url, *, json, timeout):  # noqa: ARG001
+        if json.get("table") == "models":
+            return _empty_query_response()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.json.return_value = {"detail": "query failed"}
+        return mock_resp
+
+    with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
+         patch("app.api.finalize.httpx.post", side_effect=fake_post):
+        resp = client.post(
+            "/api/tenants/t1/finalize/commit",
+            json=_payload_with_tenant_entity(tenant_base={"name": "Acme"}),
+        )
+
+    assert resp.status_code == 502, resp.text
+    assert resp.json()["detail"] == "Failed to persist tenant from extraction"
+    # Model PUT was first; tenants PUT was never attempted (query failed).
+    assert any("/models/t1" in c["url"] for c in put_calls)
+    assert not any("/tenants/t1" in c["url"] for c in put_calls)
+
+
+def test_finalize_raises_502_when_the_models_read_fails():
+    """The merge rule needs the tenant's current model. If that read fails we
+    must NOT fall back to writing the extraction alone — that is exactly the
+    replace-instead-of-merge behavior spec §4 rule 1 forbids, and it would
+    delete the tenant's seeded base fields."""
     put_calls: list[dict] = []
 
     def fake_put(url, *, json, timeout):  # noqa: ARG001
@@ -420,10 +490,9 @@ def test_finalize_raises_502_when_query_fails():
         )
 
     assert resp.status_code == 502, resp.text
-    assert resp.json()["detail"] == "Failed to persist tenant from extraction"
-    # Model PUT was first; tenants PUT was never attempted (query failed).
-    assert any("/models/t1" in c["url"] for c in put_calls)
-    assert not any("/tenants/t1" in c["url"] for c in put_calls)
+    assert resp.json()["detail"] == "Failed to read the existing model"
+    # Nothing was written at all.
+    assert put_calls == []
 
 
 def test_finalize_does_not_attempt_tenant_work_when_model_put_fails():
@@ -438,7 +507,8 @@ def test_finalize_does_not_attempt_tenant_work_when_model_put_fails():
         return mock_resp
 
     with patch("app.api.finalize.httpx.put", side_effect=fake_put), \
-         patch("app.api.finalize.httpx.post") as mock_post:
+         patch("app.api.finalize.httpx.post",
+               side_effect=lambda *a, **k: _empty_query_response()) as mock_post:
         resp = client.post(
             "/api/tenants/t1/finalize/commit",
             json=_payload_with_tenant_entity(tenant_base={"name": "Acme"}),
@@ -449,10 +519,13 @@ def test_finalize_does_not_attempt_tenant_work_when_model_put_fails():
     assert resp.status_code == 500, resp.text
     assert resp.json()["detail"] != "Failed to persist tenant from extraction"
 
-    # Only the models PUT was attempted; no tenants PUT and no /api/query.
+    # Only the models PUT was attempted, and no tenants PUT. The models READ
+    # happened first (the merge rule needs it before the PUT can be built);
+    # the tenant row was never read.
     assert len(put_calls) == 1
     assert "/models/t1" in put_calls[0]["url"]
-    assert mock_post.call_count == 0
+    assert len(_models_query_calls(mock_post)) == 1
+    assert _tenant_query_calls(mock_post) == []
 
 
 def test_finalize_commit_sends_default_in_datacore_put():
