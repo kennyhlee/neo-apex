@@ -177,6 +177,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.errDocNameRequired': 'has a document with no name',
     'builder.errPlansEmpty': 'must offer at least one payment plan',
     'builder.errAmountInvalid': 'full amount must be zero or greater',
+    'builder.errAmountZero': 'full amount must be greater than zero',
     'builder.errDepositInvalid': 'deposit amount must be zero or greater',
     'builder.errDepositRange':
       'deposit amount must be greater than zero and less than the full amount',
@@ -453,6 +454,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.errDocNameRequired': '存在未命名的文件',
     'builder.errPlansEmpty': '必须提供至少一种付款方式',
     'builder.errAmountInvalid': '全额金额必须大于或等于零',
+    'builder.errAmountZero': '全额金额必须大于零',
     'builder.errDepositInvalid': '定金金额必须大于或等于零',
     'builder.errDepositRange': '定金金额必须大于零且小于全额金额',
     'builder.errDueDaysInvalid': '录取后期限（天）必须是零或正整数',

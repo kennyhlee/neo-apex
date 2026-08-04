@@ -1,9 +1,11 @@
 // enrollx/frontend/src/pages/ApplicationEntryPage.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FlowRenderer, formatCents, planAmounts, plansOf } from '@neoapex/flow-runtime';
+import {
+  FlowRenderer, formatCents, paymentAmountFor, resolvePlanKind,
+} from '@neoapex/flow-runtime';
 import type {
-  ApplicationSummary, FlowBlock, PaymentPlanKind, RegistrationConfigDef, RequiredDoc,
+  ApplicationItem, ApplicationSummary, FlowBlock, RegistrationConfigDef, RequiredDoc,
 } from '@neoapex/flow-runtime';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
@@ -49,6 +51,8 @@ export default function ApplicationEntryPage() {
   const [offlineItemId, setOfflineItemId] = useState<string | null>(null);
   const [offlineAmount, setOfflineAmount] = useState('');
   const [offlineBusy, setOfflineBusy] = useState(false);
+  /** The most recent draft FlowRenderer handed us — see `handleSaveDraft`. */
+  const [liveDraft, setLiveDraft] = useState<Record<string, unknown> | null>(null);
 
   /**
    * SQL #1: `entity_type` + `_status` (DataCore system columns, always safe)
@@ -173,9 +177,7 @@ export default function ApplicationEntryPage() {
   } : null;
 
   /**
-   * Offline-payment amount derivation — the same computation `PaymentBlock`
-   * already performs one component away, repeated here because the host owns
-   * the offline modal.
+   * Offline-payment amount derivation.
    *
    * `settle_payment_item` marks the item **verified regardless of amount** —
    * there is no server-side check at all. So an empty free-text field with no
@@ -184,33 +186,38 @@ export default function ApplicationEntryPage() {
    * what is due) is the only thing standing between a typo and a
    * half-collected fee.
    *
-   * Classification mirrors `PaymentBlock.amountFor`: an item whose `block_id`
-   * is not the `payment` block's own id is the later "Balance payment" item
-   * (`stripe_webhook.py` stamps it with the payment_plan block's id), so it
-   * is due the remainder rather than the chosen plan's amount.
+   * The arithmetic itself is NOT re-implemented here: it comes from
+   * flow-runtime's `paymentAmountFor`, the same single copy `PaymentBlock`
+   * uses, so this modal can never state an amount that disagrees with the
+   * block rendered directly behind it.
+   *
+   * The selection it is derived from must be the LIVE one. `values` is parsed
+   * from `app.draft_data` and is only refreshed by `loadAppAndItems()`, which
+   * `handleSaveDraft` deliberately never calls — so mid-session it is stale by
+   * exactly the edits staff just made. Reading it here produced two real
+   * failures: with two plans offered and no prior selection it left the plan
+   * unresolved, so the prefill, the "amount due" line AND the deposit warning
+   * were all silently suppressed; and with a prior `pay_in_full` switched to
+   * `deposit` this session it displayed the FULL amount beside a PaymentBlock
+   * showing the deposit. `liveDraft` holds the draft FlowRenderer last handed
+   * us — the same object PaymentBlock is rendering from — and wins over
+   * `values` whenever present.
    */
-  const planBlock = config?.blocks.find((b) => b.type === 'payment_plan') ?? null;
   const paymentBlockId =
     config?.blocks.find((b) => b.type === 'payment')?.block_id ?? null;
-  const planAmountsOrNull = planBlock ? planAmounts(planBlock) : null;
-  const planKinds: PaymentPlanKind[] = planBlock ? plansOf(planBlock).map((p) => p.type) : [];
-  // `values` comes from a parsed JSON blob, so its members are real JS types
-  // — no string coercion (DISPATCH-CONTEXT's data-shape rule).
-  const rawSelection = typeof values.payment_plan_selection === 'string'
-    ? values.payment_plan_selection : '';
-  const chosenPlan: PaymentPlanKind | null =
-    planKinds.includes(rawSelection as PaymentPlanKind) ? (rawSelection as PaymentPlanKind)
-      : planKinds.length === 1 ? planKinds[0] : null;
+  // Both are parsed-JSON blobs, so members are real JS types — no string
+  // coercion (DISPATCH-CONTEXT's data-shape rule).
+  const liveValues = liveDraft ?? values;
+  const livePlanChoice = typeof liveValues.payment_plan_selection === 'string'
+    ? liveValues.payment_plan_selection : '';
+  const chosenPlan = config ? resolvePlanKind(config, livePlanChoice) : null;
 
   const dueCentsFor = (item: ItemRow | null): number | null => {
-    if (!item || !planAmountsOrNull) return null;
-    if (paymentBlockId != null && item.block_id !== paymentBlockId) {
-      const balance = planAmountsOrNull.amount_full - planAmountsOrNull.deposit_amount;
-      return balance > 0 ? balance : null;
-    }
-    if (!chosenPlan) return null;
-    return chosenPlan === 'deposit'
-      ? planAmountsOrNull.deposit_amount : planAmountsOrNull.amount_full;
+    if (!config || !item) return null;
+    // ItemRow carries the same block_id/status fields paymentAmountFor reads;
+    // only `block_id` is actually consulted for the classification.
+    return paymentAmountFor(
+      config, livePlanChoice, item as unknown as ApplicationItem, paymentBlockId);
   };
 
   const offlineItem = offlineItemId
@@ -237,6 +244,13 @@ export default function ApplicationEntryPage() {
   // ---- FlowRenderer callbacks — every mutation reports via useToast -------
 
   const handleSaveDraft = async (v: Record<string, unknown>) => {
+    // Retain the live draft BEFORE awaiting: `v` is FlowRenderer's complete
+    // current draft, including `payment_plan_selection`, and it is the only
+    // place the host can see staff's in-session edits — `app.draft_data` is
+    // not re-read after a save (see `dueCentsFor`'s note). Kept even if the
+    // save then fails, so the modal keeps agreeing with what PaymentBlock is
+    // rendering; the failure itself is reported by the toast below.
+    setLiveDraft(v);
     try {
       await postApplicationAction(tenant, applicationId, 'save_draft', { draft_data: v });
     } catch (e) {

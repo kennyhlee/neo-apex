@@ -157,6 +157,14 @@ function validateForPublish(blocks: FlowBlock[], t: (key: string) => string): st
       }
       if (!isValidCents(b.config.amount_full)) {
         issues.push(`${label}: ${t('builder.errAmountInvalid')}`);
+      } else if ((b.config.amount_full as number) <= 0) {
+        // Same trap as the deposit range check below, one branch over, and it
+        // fires on the far more common pay-in-full flow: `newBlock` seeds
+        // `amount_full: 0` and `isValidCents` accepts 0, so a payment_plan
+        // block left at its defaults was publishable — and
+        // `checkout_service.py:161-163` rejects `amount_full <= 0` with a 409
+        // for the first family to reach checkout.
+        issues.push(`${label}: ${t('builder.errAmountZero')}`);
       }
       const deposit = plans.find((p) => p.type === 'deposit');
       if (deposit && !isValidCents(deposit.deposit_amount)) {
