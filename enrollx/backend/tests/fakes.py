@@ -208,11 +208,20 @@ BLOCKS = [
 # Note payment_plan amounts are INTEGER CENTS (binding contract with Plan 3).
 
 
-def seed_program_and_config(fdc: FakeDataCore, tenant="acme", program_id="PR1", capacity=None):
-    prog = {"program_id": program_id, "name": "Fall 2026 Afterschool"}
+def seed_config(fdc: FakeDataCore, tenant="acme", capacity=None):
+    """Seed the tenant's ONE published registration config.
+
+    `capacity` is written on the TENANT entity (whose entity_id IS the
+    tenant_id) — capacity is school-wide now, not per program. The tenant row
+    is created whenever a capacity is supplied; tests needing a named tenant
+    row without a capacity seed one themselves (see
+    test_registration_engine.seed_tenant).
+    """
     if capacity is not None:
-        prog["capacity"] = capacity
-    fdc.dc_create(tenant, "program", prog)
+        fdc.rows.append(FakeDataCore._store_row(
+            tenant, "tenant", tenant,
+            {"name": "Acme Afterschool", "display_name": "Acme Afterschool",
+             "capacity": capacity}))
     fdc.dc_create(tenant, "registration_config", {
-        "config_id": "cfg1", "program_id": program_id, "version": 1,
+        "config_id": "cfg1", "version": 1,
         "status": "published", "blocks": json.dumps(BLOCKS)})

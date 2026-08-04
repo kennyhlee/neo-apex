@@ -6,7 +6,7 @@ get_entity for reads — never raw dc_query).
 """
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import HTTPException
 
@@ -16,6 +16,23 @@ from app.registration.statuses import assert_transition
 
 SYSTEM_COLS = {"entity_id", "entity_type", "base_data", "custom_fields", "vector", "_tenant"}
 ITEM_DONE_STATUSES = {"submitted", "verified", "waived"}
+
+# Application statuses that consume a seat against the tenant's capacity.
+# Enrollment rows are deliberately NOT counted: approval no longer creates
+# one (spec §2), so at admission time applications are the only evidence.
+ADMITTED_STATUSES = {"approved", "enrolled"}
+
+# Base fields of registration_application owned by this engine. Restated in
+# TypeScript as flow-runtime's ENGINE_OWNED_APPLICATION_FIELDS — the two
+# lists MUST stay identical. A form-block answer naming one of these is
+# rejected with a 400 (actions._apply_application_fields); the hosts also
+# exclude them when hydrating an application-model form block.
+ENGINE_OWNED_APPLICATION_FIELDS = frozenset({
+    "application_id", "registration_application_id", "school_year", "status",
+    "family_id", "student_id", "config_version", "channel_started",
+    "applicant_email", "token_version", "draft_data", "submitted_at",
+    "decided_at",
+})
 
 # Fields declared `"type": "bool"` in launchpad's base_model.json, keyed by
 # the entity type that declares them. Read back from DataCore these arrive as
@@ -147,27 +164,16 @@ def get_items(tenant_id, application_entity_id, token=None) -> list[dict]:
     return dc.list_entities(tenant_id, "application_item", where, token)
 
 
-def get_program(tenant_id, program_id, token=None):
-    """Match by the human `program_id` field first, then fall back to
-    entity_id — callers may hold either depending on where the id came
-    from.
+def get_published_config(tenant_id, token=None):
+    """The tenant's single published registration config, or None.
 
-    Filtered in Python: on a tenant with zero programs the `program_id`
-    column does not exist, and the old SQL predicate turned a should-be-404
-    into a 500. Programs per tenant are few.
+    One lineage per tenant (spec §2): "at most one published config per
+    tenant" — `_publish_config` archives any prior published version, so at
+    most one row can match. Filtered in Python because on a tenant with no
+    registration_config rows yet `status` may not exist as a column at all;
+    configs per tenant are a handful.
     """
-    rows = rows_matching(tenant_id, "program", token, program_id=program_id)
-    if not rows:
-        rows = rows_matching(tenant_id, "program", token, entity_id=program_id)
-    return rows[0] if rows else None
-
-
-def get_published_config(tenant_id, program_id, token=None):
-    """Filtered in Python — same reason as get_program: on a tenant with no
-    registration_config rows yet, `status`/`program_id` may not exist as
-    columns. Configs per program are a handful."""
-    rows = rows_matching(tenant_id, "registration_config", token,
-                         program_id=program_id, status="published")
+    rows = rows_matching(tenant_id, "registration_config", token, status="published")
     return rows[0] if rows else None
 
 
@@ -177,14 +183,12 @@ def get_config_for_application(tenant_id, app_row, token=None):
     field says 'archived') — they stay queryable so an in-flight
     application keeps working against the version it was created under
     even after a newer version is published."""
-    program_id = app_row.get("program_id", "")
-    rows = rows_matching(tenant_id, "registration_config", token,
-                         program_id=program_id)
+    rows = dc.list_entities(tenant_id, "registration_config", "", token)
     want = int(app_row.get("config_version") or 0)
     for r in rows:
         if int(r.get("version") or 0) == want:
             return r
-    return get_published_config(tenant_id, program_id, token)
+    return get_published_config(tenant_id, token)
 
 
 def update_application(tenant_id, app_row, changes, token=None):
@@ -208,45 +212,90 @@ def set_application_status(tenant_id, app_row, new_status, actor, token=None, ex
     return result
 
 
-def capacity_state(tenant_id, program_id, token=None) -> dict:
-    """Filtered in Python for the same sparse-column reason as get_program.
+def _positive_int(value):
+    """Coerce a stringly-typed capacity to a positive int, else None.
 
-    This one is reached on a parent's very FIRST visit to a new tenant's
-    program (public_config), when zero registration_application and zero
-    enrollment rows exist and neither `program_id` nor `status` is a column
-    on those types yet — the SQL predicate 500'd there. The tradeoff is that
-    counting now pulls the tenant's applications and enrollments rather than
-    counting server-side; acceptable at current scale, and the place to
-    revisit first if capacity checks get slow.
+    Absent, empty, zero, negative and unparseable all mean "unlimited"
+    (spec §2: "Absent/zero means unlimited"). Returning None rather than 0
+    keeps the caller's `capacity is not None` test meaningful.
     """
-    program = get_program(tenant_id, program_id, token)
-    capacity = (program or {}).get("capacity")
-    approved = rows_matching(tenant_id, "registration_application", token,
-                             program_id=program_id, status="approved")
-    enrollments = rows_matching(tenant_id, "enrollment", token,
-                                program_id=program_id, status="active")
-    full = capacity is not None and len(approved) + len(enrollments) >= int(capacity)
-    return {"capacity": int(capacity) if capacity is not None else None,
-            "approved": len(approved), "enrolled": len(enrollments), "full": full}
+    if value in (None, ""):
+        return None
+    try:
+        n = int(float(str(value)))
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
 
 
-def is_capacity_full(tenant_id, program_id, token=None) -> bool:
+def get_tenant_row(tenant_id, token=None):
+    """The tenant entity row. Its entity_id IS the tenant_id (platform
+    invariant, see app/tenant_lookup.py). Reached through `dc.get_entity` as
+    a module-attribute call, so the test fake's monkeypatch applies."""
+    return dc.get_entity(tenant_id, "tenant", tenant_id, token)
+
+
+def tenant_label(tenant_id, token=None) -> str:
+    """Display name for emails and parent-facing headers. Falls back through
+    display_name -> name -> the raw tenant_id so a template never renders an
+    empty school name."""
+    row = get_tenant_row(tenant_id, token) or {}
+    return str(row.get("display_name") or row.get("name") or tenant_id)
+
+
+def default_school_year(ref: date | None = None) -> str:
+    """The academic year straddling `ref`, rolling over each July.
+
+    Restates flow-runtime's `defaultSchoolYear()` and familyhub's
+    `_school_year_for_date` so all three channels agree. Used server-side for
+    the capacity snapshot in the public config bundle, which has no
+    school_year of its own to key on.
+    """
+    d = ref or datetime.now(timezone.utc).date()
+    start = d.year if d.month >= 7 else d.year - 1
+    return f"{start}-{start + 1}"
+
+
+def capacity_state(tenant_id, school_year, token=None) -> dict:
+    """School-wide admitted count for one school year (spec §2).
+
+    Capacity lives on the TENANT entity; per-program capacity stays on
+    `program` for the future activity-assignment workflow and is ignored
+    here. Enrollment rows are not counted at all — approval no longer creates
+    one, so applications are the only evidence of admission.
+
+    Both reads are filtered in Python for the sparse-column reason: this is
+    reached on a parent's very FIRST visit to a new tenant, when neither
+    `school_year` nor `status` is a column on registration_application yet
+    and a SQL predicate would binder-error into a 500. The tradeoff is that
+    counting pulls the tenant's applications rather than counting
+    server-side; acceptable at current scale, and the place to revisit first
+    if capacity checks get slow.
+
+    Read-then-decide with no locking, so it is not safe against two
+    concurrent submissions racing the boundary — the same unresolved-race
+    category as `settle_payment_item`'s provider_ref lookup.
+    """
+    capacity = _positive_int((get_tenant_row(tenant_id, token) or {}).get("capacity"))
+    apps = rows_matching(tenant_id, "registration_application", token,
+                         school_year=school_year)
+    admitted = len([a for a in apps if a.get("status") in ADMITTED_STATUSES])
+    full = capacity is not None and admitted >= capacity
+    return {"capacity": capacity, "admitted": admitted, "full": full}
+
+
+def is_capacity_full(tenant_id, school_year, token=None) -> bool:
     """Read-then-decide, and consulted at exactly ONE place in the lifecycle.
 
     Scope (as implemented, not aspiration): capacity is enforced only at the
     `_submit` gate, which routes a submission to `waitlisted` instead of
-    `submitted` when the program is full. `_approve` and `_promote_waitlist`
-    perform NO capacity check at all — staff can approve or promote past a
-    full program, and doing so does not consult this function. Whether that
-    staff override is desirable is a product decision, deliberately left
+    `submitted` when the school year is full. `_approve` and
+    `_promote_waitlist` perform NO capacity check at all — staff can admit
+    past a full year, and doing so does not consult this function. Whether
+    that staff override is desirable is a product decision, deliberately left
     open here.
-
-    Even at the one gate that does check, this is a read-then-decide with no
-    locking, so it is not safe against two concurrent submissions racing the
-    same capacity boundary — the same unresolved-race category as
-    `settle_payment_item`'s provider_ref lookup.
     """
-    return capacity_state(tenant_id, program_id, token)["full"]
+    return capacity_state(tenant_id, school_year, token)["full"]
 
 
 def blocking_items_complete(items) -> bool:
@@ -269,14 +318,18 @@ def create_application_item(tenant_id, application_entity_id, item_fields, token
     return dc.dc_create(tenant_id, "application_item", base, token)
 
 
-def create_application(tenant_id, program_id, school_year, channel, applicant_email,
+def create_application(tenant_id, school_year, channel, applicant_email,
                        actor, token=None) -> dict:
-    """Create a draft application pinned to the currently published config,
-    derive its application_item rows from that config's blocks, and log the
-    initial draft status. 404s if the program has no published config."""
-    config = get_published_config(tenant_id, program_id, token)
+    """Create a draft application pinned to the tenant's currently published
+    config, derive its application_item rows from that config's blocks, and
+    log the initial draft status. 404s if the tenant has no published config.
+
+    An application is admission to the school as a whole for one school year
+    (spec §1) — there is no program to scope to.
+    """
+    config = get_published_config(tenant_id, token)
     if config is None:
-        raise HTTPException(404, f"No published registration config for program '{program_id}'")
+        raise HTTPException(404, "No published registration config for this tenant")
     app_id = dc.next_id(tenant_id, "registration_application", token)
     base = {
         "application_id": app_id,
@@ -284,7 +337,6 @@ def create_application(tenant_id, program_id, school_year, channel, applicant_em
         # different id for the same row (DataCore auto-assigns
         # "{entity_type}_id" only when the field is absent).
         "registration_application_id": app_id,
-        "program_id": program_id,
         "school_year": school_year,
         "status": "draft",
         "config_version": int(config.get("version") or 1),

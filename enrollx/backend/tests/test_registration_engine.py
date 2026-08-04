@@ -1,10 +1,13 @@
-"""Engine core: creation with item derivation, capacity boundary, status
-writes with activity logging, payment settlement."""
+"""Engine core: creation with item derivation, single per-tenant config
+lineage, school-wide capacity per school_year, status writes with activity
+logging, payment settlement."""
+import json
+
 import pytest
 from fastapi import HTTPException
 
 from app.registration import engine
-from tests.fakes import FakeDataCore, install_fake_datacore, seed_program_and_config
+from tests.fakes import BLOCKS, FakeDataCore, install_fake_datacore, seed_config
 
 
 @pytest.fixture
@@ -14,9 +17,17 @@ def fake_dc(monkeypatch):
     return fdc
 
 
+def seed_tenant(fdc, tenant="acme", capacity=None, name="Acme Afterschool"):
+    """The tenant entity's entity_id IS the tenant_id (platform invariant)."""
+    base = {"name": name, "display_name": name}
+    if capacity is not None:
+        base["capacity"] = capacity
+    fdc.rows.append(FakeDataCore._store_row(tenant, "tenant", tenant, base))
+
+
 def test_create_application_derives_items_and_logs(fake_dc):
-    seed_program_and_config(fake_dc)
-    result = engine.create_application("acme", "PR1", "2026-2027", "admin",
+    seed_config(fake_dc)
+    result = engine.create_application("acme", "2026-2027", "admin",
                                        "parent@example.com", actor="u1")
     app_bd = result["application"]["base_data"]
     assert app_bd["status"] == "draft"
@@ -25,6 +36,7 @@ def test_create_application_derives_items_and_logs(fake_dc):
     assert app_bd["channel_started"] == "admin"
     assert app_bd["applicant_email"] == "parent@example.com"
     assert app_bd["application_id"] == app_bd["registration_application_id"]
+    assert "program_id" not in app_bd
     assert len(result["items"]) == 4
     eid = result["application"]["entity_id"]
     items = fake_dc.find("application_item", application_id=eid)
@@ -37,31 +49,94 @@ def test_create_application_derives_items_and_logs(fake_dc):
 
 def test_create_application_404_without_published_config(fake_dc):
     with pytest.raises(HTTPException) as exc:
-        engine.create_application("acme", "PRX", "2026-2027", "admin", None, actor="u1")
+        engine.create_application("acme", "2026-2027", "admin", None, actor="u1")
     assert exc.value.status_code == 404
+    assert exc.value.detail == "No published registration config for this tenant"
 
 
-def test_capacity_boundary(fake_dc):
-    seed_program_and_config(fake_dc, capacity=2)
-    fake_dc.dc_create("acme", "registration_application",
-                      {"application_id": "A1", "program_id": "PR1", "status": "approved"})
-    fake_dc.dc_create("acme", "enrollment",
-                      {"program_id": "PR1", "student_id": "s1", "status": "active"})
-    state = engine.capacity_state("acme", "PR1")
-    assert state == {"capacity": 2, "approved": 1, "enrolled": 1, "full": True}
-    assert engine.is_capacity_full("acme", "PR1") is True
+# ── config lookup: one lineage per tenant ─────────────────────────────────
+
+def test_published_config_is_found_without_a_program(fake_dc):
+    seed_config(fake_dc)
+    cfg = engine.get_published_config("acme")
+    assert cfg is not None and cfg["config_id"] == "cfg1"
 
 
-def test_capacity_open_below_limit_and_without_capacity(fake_dc):
-    seed_program_and_config(fake_dc, capacity=5)
-    assert engine.is_capacity_full("acme", "PR1") is False
-    seed_program_and_config(fake_dc, program_id="PR2")  # no capacity field
-    assert engine.is_capacity_full("acme", "PR2") is False
+def test_config_for_application_resolves_the_pinned_version(fake_dc):
+    seed_config(fake_dc)
+    fake_dc.dc_create("acme", "registration_config", {
+        "config_id": "cfg0", "version": 1, "status": "archived",
+        "blocks": json.dumps(BLOCKS)})
+    # cfg1 (seeded) becomes version 2 published; cfg0 is version 1 archived.
+    fake_dc.dc_update("acme", "registration_config",
+                      fake_dc.find("registration_config", config_id="cfg1")[0]["entity_id"],
+                      {"config_id": "cfg1", "version": 2, "status": "published",
+                       "blocks": json.dumps(BLOCKS)})
+    pinned = engine.get_config_for_application("acme", {"config_version": 1})
+    assert pinned["config_id"] == "cfg0"
+
+
+def test_get_program_is_gone(fake_dc):
+    """Programs play no role in registration any more (spec §1 decision table)."""
+    assert not hasattr(engine, "get_program")
+
+
+# ── capacity: school-wide, per school_year, applications only ─────────────
+
+def test_capacity_state_counts_applications_for_that_school_year_only(fake_dc):
+    seed_tenant(fake_dc, capacity=2)
+    fake_dc.dc_create("acme", "registration_application", {
+        "application_id": "A1", "school_year": "2026-2027", "status": "approved"})
+    fake_dc.dc_create("acme", "registration_application", {
+        "application_id": "A2", "school_year": "2026-2027", "status": "enrolled"})
+    fake_dc.dc_create("acme", "registration_application", {
+        "application_id": "A3", "school_year": "2027-2028", "status": "approved"})
+    assert engine.capacity_state("acme", "2026-2027") == {
+        "capacity": 2, "admitted": 2, "full": True}
+    assert engine.is_capacity_full("acme", "2026-2027") is True
+    assert engine.capacity_state("acme", "2027-2028") == {
+        "capacity": 2, "admitted": 1, "full": False}
+
+
+def test_capacity_ignores_enrollment_rows(fake_dc):
+    """Registration no longer creates enrollment rows, and an enrollment left
+    over from the activity-assignment workflow must not consume a seat."""
+    seed_tenant(fake_dc, capacity=1)
+    fake_dc.dc_create("acme", "enrollment", {
+        "student_id": "s1", "program_id": "PR1", "status": "active"})
+    assert engine.capacity_state("acme", "2026-2027")["full"] is False
+
+
+def test_absent_or_zero_tenant_capacity_means_unlimited(fake_dc):
+    seed_tenant(fake_dc)  # no capacity at all
+    fake_dc.dc_create("acme", "registration_application", {
+        "application_id": "A1", "school_year": "2026-2027", "status": "approved"})
+    assert engine.capacity_state("acme", "2026-2027") == {
+        "capacity": None, "admitted": 1, "full": False}
+
+    fake_dc.rows.clear()
+    seed_tenant(fake_dc, capacity=0)
+    assert engine.capacity_state("acme", "2026-2027")["capacity"] is None
+    assert engine.is_capacity_full("acme", "2026-2027") is False
+
+
+# ── tenant label + default school year ────────────────────────────────────
+
+def test_tenant_label_prefers_display_name_then_name_then_id(fake_dc):
+    seed_tenant(fake_dc, name="Acme Afterschool")
+    assert engine.tenant_label("acme") == "Acme Afterschool"
+    assert engine.tenant_label("nosuchtenant") == "nosuchtenant"
+
+
+@pytest.mark.parametrize("month,expected", [(7, "2026-2027"), (6, "2025-2026")])
+def test_default_school_year_rolls_over_in_july(month, expected):
+    import datetime
+    assert engine.default_school_year(datetime.date(2026, month, 1)) == expected
 
 
 def test_set_application_status_guards_and_logs(fake_dc):
     created = fake_dc.dc_create("acme", "registration_application",
-                                {"application_id": "A1", "program_id": "PR1",
+                                {"application_id": "A1",
                                  "status": "draft", "school_year": "2026-2027"})
     row = fake_dc.get_entity("acme", "registration_application", created["entity_id"])
     with pytest.raises(HTTPException) as exc:
@@ -95,7 +170,7 @@ def test_blocking_items_complete_table():
 
 def test_settle_payment_item(fake_dc):
     app = fake_dc.dc_create("acme", "registration_application",
-                            {"application_id": "A1", "program_id": "PR1", "status": "submitted"})
+                            {"application_id": "A1", "status": "submitted"})
     item = fake_dc.dc_create("acme", "application_item", {
         "item_id": "i1", "application_id": app["entity_id"], "block_id": "b4",
         "kind": "payment", "title": "Payment", "status": "not_started", "blocking": True})
@@ -119,7 +194,7 @@ def test_settle_payment_item_idempotent_on_provider_ref(fake_dc):
     used, the way two concurrent/retried deliveries both fetching before
     either writes would. Fixes double-settlement on retry."""
     app = fake_dc.dc_create("acme", "registration_application",
-                            {"application_id": "A1", "program_id": "PR1", "status": "submitted"})
+                            {"application_id": "A1", "status": "submitted"})
     item = fake_dc.dc_create("acme", "application_item", {
         "item_id": "i1", "application_id": app["entity_id"], "block_id": "b4",
         "kind": "payment", "title": "Payment", "status": "not_started", "blocking": True})
@@ -148,7 +223,7 @@ def test_settle_payment_item_idempotent_on_provider_ref(fake_dc):
 
 def test_settle_payment_item_different_provider_refs_create_two_rows(fake_dc):
     app = fake_dc.dc_create("acme", "registration_application",
-                            {"application_id": "A1", "program_id": "PR1", "status": "submitted"})
+                            {"application_id": "A1", "status": "submitted"})
     item1 = fake_dc.dc_create("acme", "application_item", {
         "item_id": "i1", "application_id": app["entity_id"], "block_id": "b4",
         "kind": "payment", "title": "Payment A", "status": "not_started", "blocking": True})
@@ -174,7 +249,7 @@ def test_settle_payment_item_different_provider_refs_create_two_rows(fake_dc):
 
 def test_settle_payment_item_rejects_non_payment_and_double_pay(fake_dc):
     app = fake_dc.dc_create("acme", "registration_application",
-                            {"application_id": "A1", "program_id": "PR1", "status": "submitted"})
+                            {"application_id": "A1", "status": "submitted"})
     form = fake_dc.dc_create("acme", "application_item", {
         "item_id": "i1", "application_id": app["entity_id"], "block_id": "b1",
         "kind": "form", "title": "Form", "status": "submitted", "blocking": True})
@@ -203,8 +278,7 @@ def test_first_stripe_payment_in_a_tenant_settles(fake_dc):
     payment in every tenant could never settle. Blocks Plan 3's webhook.
     """
     app = fake_dc.dc_create("acme", "registration_application",
-                            {"application_id": "A1", "program_id": "PR1",
-                             "status": "submitted"})
+                            {"application_id": "A1", "status": "submitted"})
     item = fake_dc.dc_create("acme", "application_item", {
         "item_id": "i1", "application_id": app["entity_id"], "block_id": "b4",
         "kind": "payment", "title": "Payment", "status": "not_started",
@@ -221,31 +295,26 @@ def test_first_stripe_payment_in_a_tenant_settles(fake_dc):
     assert len(fake_dc.find("payment")) == 1
 
 
-def test_get_program_on_tenant_with_no_programs_returns_none(fake_dc):
-    """I6, same shape: `program_id` is not a column until something writes
-    one, so the SQL predicate turned a should-be-404 into a 500."""
-    assert engine.get_program("emptytenant", "PR1") is None
-
-
-def test_capacity_state_on_a_brand_new_tenant(fake_dc):
-    """I6, DEFENSIVE — not a proven-reachable 500 today.
-
-    capacity_state filters registration_application/enrollment on
-    program_id+status with zero of either row present. Today every caller
-    reaches it only after a program AND a config exist, and those rows supply
-    both columns, so the SQL form did not actually fail here. It is the same
-    shape as the two real bugs above and one new caller away from being one,
-    so it is filtered in Python too and pinned here.
-    """
-    seed_program_and_config(fake_dc, capacity=10)
+def test_capacity_state_on_a_tenant_with_no_rows_at_all(fake_dc):
+    """I6, and now genuinely reachable: this is a parent's very FIRST visit to
+    a brand-new tenant's `/register/{tenant_id}`, where neither `school_year`
+    nor `status` exists as a column on registration_application and the tenant
+    row itself may be absent. A SQL predicate here binder-errors into a 500 on
+    the one request that must not fail."""
     assert fake_dc.find("registration_application") == []
-    assert fake_dc.find("enrollment") == []
-    assert engine.capacity_state("acme", "PR1") == {
-        "capacity": 10, "approved": 0, "enrolled": 0, "full": False}
+    assert engine.capacity_state("brandnew", "2026-2027") == {
+        "capacity": None, "admitted": 0, "full": False}
+
+
+def test_capacity_state_with_a_tenant_row_but_no_applications(fake_dc):
+    seed_config(fake_dc, capacity=10)
+    assert fake_dc.find("registration_application") == []
+    assert engine.capacity_state("acme", "2026-2027") == {
+        "capacity": 10, "admitted": 0, "full": False}
 
 
 def test_published_config_lookup_on_empty_tenant(fake_dc):
-    assert engine.get_published_config("emptytenant", "PR1") is None
+    assert engine.get_published_config("emptytenant") is None
 
 
 # ── entity_base_data boolean coercion is scoped BY ENTITY TYPE ─────────────
@@ -288,7 +357,7 @@ def test_custom_field_named_sensitive_survives_a_status_write(fake_dc):
     that does not declare it as bool must round-trip through a status write
     untouched."""
     created = fake_dc.dc_create("acme", "registration_application", {
-        "application_id": "A1", "program_id": "PR1", "status": "draft",
+        "application_id": "A1", "status": "draft",
         "school_year": "2026-2027", "sensitive": "confidential"})
     row = fake_dc.get_entity("acme", "registration_application",
                              created["entity_id"])
