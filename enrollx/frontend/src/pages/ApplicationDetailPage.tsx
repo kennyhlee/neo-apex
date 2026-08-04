@@ -75,6 +75,14 @@ export default function ApplicationDetailPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Distinguishes "not loaded yet" from "loaded, and there is no such row."
+   * Without it, `app === null` meant both, so a stale bookmark or an id
+   * belonging to another tenant sat on "Loading…" forever — on the page staff
+   * bookmark most. `ApplicationEntryPage` already handles the identical case
+   * with `entry.notFound`; this is the same branch.
+   */
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -99,6 +107,8 @@ export default function ApplicationDetailPage() {
       setError(null);
     } catch (e) {
       setError(String(e));
+    } finally {
+      setLoaded(true);
     }
   }, [tenant, applicationId]);
 
@@ -124,9 +134,16 @@ export default function ApplicationDetailPage() {
   };
 
   if (error) return <div className="detail-page"><div className="programs-error" role="alert">{error}</div></div>;
-  if (!app) return <div className="detail-page"><p className="programs-muted">{t('common.loading')}</p></div>;
+  if (!loaded) return <div className="detail-page"><p className="programs-muted">{t('common.loading')}</p></div>;
+  if (!app) return <div className="detail-page"><div className="programs-error" role="alert">{t('entry.notFound')}</div></div>;
 
   const status = app.status;
+  const activityLabel = (type: unknown) => {
+    const raw = String(type ?? '');
+    const key = `detail.activity.${raw}`;
+    const label = t(key);
+    return label === key ? raw : label;
+  };
   const itemActionsFor = (i: ItemRow) => {
     const acts: { key: 'verify_item' | 'reject_item' | 'waive_item'; label: string }[] = [];
     if (i.status === 'submitted') {
@@ -265,7 +282,13 @@ export default function ApplicationDetailPage() {
             {activities.map((a) => (
               <li key={a.entity_id}>
                 <span className="detail-row-main">
-                  {t(`detail.activity.${a.type}`)}
+                  {/* `t` falls back to the raw KEY when a translation is
+                      missing (useTranslation.ts), so an activity type this
+                      page doesn't know about rendered the literal string
+                      "detail.activity.whatever". Fall back to the raw type
+                      instead — ugly, but it's information rather than a leaked
+                      lookup key. */}
+                  {activityLabel(a.type)}
                   {a.from_value || a.to_value ? `: ${a.from_value ?? '—'} → ${a.to_value ?? '—'}` : ''}
                 </span>
                 <small>{fmtDateTime(a.at)} · {a.actor}</small>
