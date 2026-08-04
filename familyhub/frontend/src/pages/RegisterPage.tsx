@@ -14,6 +14,7 @@ import {
 } from '../api/facade.ts';
 import {
   entityData,
+  entityId,
   type EntityRecord,
   type HubBundle,
   type RegistrationBundle,
@@ -78,7 +79,9 @@ function toApplicationItems(rows: EntityRecord[]): ApplicationItem[] {
   return rows.map((row) => {
     const d = entityData(row);
     return {
-      item_id: String(d.entity_id ?? ''),
+      // MUST go through entityId(): `d` is base_data for the envelope
+      // shape, which has no entity_id in it (see entityId's note).
+      item_id: entityId(row),
       application_id: String(d.application_id ?? ''),
       block_id: String(d.block_id ?? ''),
       kind: (d.kind as ApplicationItem['kind']) ?? 'form',

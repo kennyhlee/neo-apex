@@ -43,6 +43,31 @@ export function entityData(e: EntityRecord | undefined | null): Record<string, u
 }
 
 /**
+ * A row's DataCore `entity_id`, from EITHER wire shape.
+ *
+ * `entityData()` cannot supply this, and the comment above overpromises for
+ * id reads: in the `{entity_id, entity_type, base_data}` ENVELOPE shape
+ * `entity_id` sits at the TOP LEVEL, not inside `base_data`, so
+ * `entityData(row).entity_id` is `undefined` there.
+ *
+ * Both shapes genuinely occur on the register page: `fetchApplication`
+ * relays FLATTENED rows, while `startRegistration` hands back enrollx's
+ * `dc_create` ENVELOPES and `RegisterPage` mounts those directly to save a
+ * round trip. Reading the id through `entityData` therefore worked on the
+ * resume path and yielded `''` on the start path — so a parent who had just
+ * started an application got "Could not save this step" on their very first
+ * Save & continue (the engine 400s on an empty `item_id`), and only a page
+ * reload unstuck them. Every id read MUST go through this helper.
+ */
+export function entityId(e: EntityRecord | undefined | null): string {
+  if (!e || typeof e !== 'object') return '';
+  const top = (e as Record<string, unknown>).entity_id;
+  if (typeof top === 'string' && top) return top;
+  const inner = entityData(e).entity_id;
+  return typeof inner === 'string' ? inner : '';
+}
+
+/**
  * The school this registration belongs to, as enrollx names it. A curated
  * two-field summary built server-side (`engine.tenant_label`), NOT a
  * flattened DataCore row -- so unlike an `EntityRecord` these need no
