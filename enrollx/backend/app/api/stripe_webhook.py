@@ -144,6 +144,14 @@ def _ensure_balance_obligation(
     deposit_amount = int((plans.get("deposit") or {}).get("deposit_amount") or 0)
     balance = amount_full - deposit_amount
     if balance <= 0:
+        # Misconfigured plan (deposit >= amount_full): silently skipping both
+        # the balance item AND the reminder leaves the school believing the
+        # parent still owes nothing, so this must be visible.
+        logger.warning(
+            "balance obligation skipped: non-positive balance (tenant_id=%r "
+            "application_id=%r amount_full=%r deposit_amount=%r)",
+            tenant_id, application_id, amount_full, deposit_amount,
+        )
         return
 
     due_dt = datetime.now(timezone.utc) + timedelta(days=settings.balance_due_days)
@@ -296,6 +304,17 @@ async def stripe_webhook(request: Request):
     # _already_processed before ever reaching this block again, so the
     # applicant would silently never get a receipt.
     #
+    payment_id = (result.get("payment") or {}).get("entity_id")
+    # The single most important event this system produces. Logged before the
+    # best-effort follow-ups below so it is recorded even if one of them
+    # misbehaves.
+    logger.info(
+        "payment settled (tenant_id=%r application_id=%r item_id=%r session_id=%r "
+        "kind=%r amount=%r currency=%r payment_id=%r already_settled=%r)",
+        tenant_id, application_id, item_id, session_id, kind, amount, currency,
+        payment_id, bool(result.get("already_settled")),
+    )
+
     # already_settled=True means an EARLIER delivery (not this call) did the
     # settling and, if it got this far, already sent the receipt — see
     # settle_payment_item's docstring on the two separate read-then-write
@@ -337,8 +356,4 @@ async def stripe_webhook(request: Request):
                     application_id, session_id,
                 )
 
-    return {
-        "received": True,
-        "handled": True,
-        "payment_id": (result.get("payment") or {}).get("entity_id"),
-    }
+    return {"received": True, "handled": True, "payment_id": payment_id}

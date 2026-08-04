@@ -282,6 +282,19 @@ def test_completed_session_settles_and_sends_receipt(client, webhook_env, monkey
     assert "50" in receipt["html"] or "500.00" in receipt["html"]
 
 
+def test_successful_settlement_is_logged(client, webhook_env, monkeypatch, caplog):
+    """The money path's single most important event. It used to produce no
+    log line at all — the webhook logged only its rejections."""
+    stub_event(monkeypatch, completed_event(kind="full"))
+    with caplog.at_level("INFO", logger="enrollx.stripe_webhook"):
+        assert post(client).status_code == 200
+    record = next(r for r in caplog.records if "payment settled" in r.getMessage())
+    message = record.getMessage()
+    for fragment in ("'acme'", "'RA260001'", "'AI260007'", "'cs_test_abc123'",
+                     "'full'", "50000", "'usd'", "'PY260001'"):
+        assert fragment in message
+
+
 def test_missing_metadata_200_not_handled(client, webhook_env, monkeypatch):
     """Permanent condition -> 200 handled:false (see the status-code policy
     in the module docstring), and — unchanged — no writes."""

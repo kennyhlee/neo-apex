@@ -262,6 +262,26 @@ def test_replayed_deposit_already_settled_skips_balance_obligation(client, webho
     assert webhook_env["emails"] == []
 
 
+def test_non_positive_balance_skips_and_warns(client, webhook_env, monkeypatch, caplog):
+    """A misconfigured plan (deposit >= amount_full) short-circuits before
+    the balance item and the reminder. Skipping both in total silence leaves
+    the school believing the parent owes nothing, so it has to be visible."""
+    bad_block = json.loads(json.dumps(PLAN_BLOCK))
+    bad_block["config"]["plans"][1]["deposit_amount"] = 50000
+    monkeypatch.setattr(
+        "app.api.stripe_webhook.get_payment_plan_block",
+        lambda t, application, tok: bad_block,
+    )
+    with caplog.at_level("WARNING", logger="enrollx.stripe_webhook"):
+        resp = post_deposit(client, monkeypatch)
+    assert resp.status_code == 200
+    assert webhook_env["created_items"] == []
+    assert len(webhook_env["emails"]) == 1  # receipt only, no balance reminder
+    assert any(
+        "balance obligation skipped" in r.getMessage() for r in caplog.records
+    )
+
+
 def test_currency_lowercased_before_reminder_html(client, webhook_env, monkeypatch):
     """F2: the plan block's config carries an UPPERCASE currency code, which
     C6 requires be lowercased before it's handed to balance_reminder_html.
