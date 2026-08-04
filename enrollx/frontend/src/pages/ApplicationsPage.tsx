@@ -25,19 +25,21 @@ const PAGE_SIZE = 20;
  *
  * SQL #1 (rows): `entity_type = 'registration_application' AND _status = 'active'`
  * — both DataCore system columns, written by every entity type, never
- * single-writer. Appended filters:
+ * single-writer. Appended filters (SQL side, both confirmed multi-writer):
  *   - `program_id = '<id>'` — written by both `program` and
  *     `registration_application` entities (multi-writer; also explicitly
  *     called out as safe in the plan's standing context).
- *   - `school_year = '<year>'` — written by `registration_application`
- *     (`engine.py:288`) *and* by student/enrollment entities on the
- *     papermite/admindash side (`papermite/models.py`,
- *     `papermite/backend/app/models/domain.py`) — multi-writer, safe.
  *   - `status = '<value>'` — written by `registration_application`,
  *     `application_item`, `registration_config`, and student entities alike
  *     (`actions.py`/`engine.py`, many call sites) — multi-writer, safe. This
  *     is the field the standing context calls out to double-check, so it's
  *     verified against the backend source rather than assumed.
+ * `school_year` is deliberately NOT in the SQL predicate: `base_model.json`
+ * declares it on `registration_application` only, and the only live write
+ * path in the whole suite is `engine.py:288` — genuinely single-writer, so a
+ * tenant with zero applications would 500 the query the moment a year is
+ * selected. Filtered client-side in JS instead (see `load()` below), the same
+ * way counts and ordering already are.
  * `SELECT *` (not naming individual columns) so a tenant that hasn't used
  * every optional field yet never trips the single-writer binder error.
  *
@@ -73,12 +75,14 @@ export default function ApplicationsPage() {
         "entity_type = 'registration_application'",
         "_status = 'active'",
         programFilter ? `program_id = '${escapeSql(programFilter)}'` : null,
-        yearFilter ? `school_year = '${escapeSql(yearFilter)}'` : null,
         statusFilter ? `status = '${escapeSql(statusFilter)}'` : null,
       ].filter(Boolean).join(' AND ');
       const res = await postQuery(tenant, 'entities',
         `SELECT * FROM data WHERE ${where} LIMIT 1000`);
-      const data = res.data as unknown as ApplicationRow[];
+      let data = res.data as unknown as ApplicationRow[];
+      // `school_year` is single-writer (see the file-level note above) — kept
+      // out of the SQL predicate entirely and applied here in JS instead.
+      if (yearFilter) data = data.filter((r) => r.school_year === yearFilter);
       // Newest submissions first; drafts (no submitted_at yet) sort to the
       // top since they're the ones most likely to need staff attention.
       // `submitted_at` is a top-level DataCore field, so it arrives as a
