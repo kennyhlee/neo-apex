@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from app.registration import datacore as dc
 from app.registration import emails, engine, tokens
 from app.registration.family import match_or_create_family
+from app.registration.items import validate_blocks
 from app.registration.statuses import assert_item_transition
 
 PARENT_ACTIONS = {"save_draft", "complete_item", "submit"}
@@ -324,10 +325,49 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
             "enrollment_id": enrollment["entity_id"]}
 
 
-def _not_implemented(name):
-    def handler(tenant_id, application_entity_id, params, actor, token):
-        raise NotImplementedError(f"action '{name}' arrives in a later task")
-    return handler
+def _publish_config(tenant_id, config_entity_id, params, actor, token):
+    """Path quirk (BINDING, contract note 1): for this action only, the
+    {application_id} path segment carries the registration_config entity_id
+    — not an application entity_id. Every other handler in this module keeps
+    treating that segment as an application id; this is the sole exception,
+    scoped entirely to this function.
+
+    No application activity row is written here: configs are not
+    applications, so there is nothing for engine.log_activity to log against.
+    """
+    cfg = dc.get_entity(tenant_id, "registration_config", config_entity_id, token)
+    if not cfg:
+        raise HTTPException(404, "registration_config not found")
+    if cfg.get("status") == "published":
+        raise HTTPException(409, "Config is already published")
+    try:
+        blocks = json.loads(cfg.get("blocks") or "[]")
+    except json.JSONDecodeError:
+        raise HTTPException(422, {"error": "blocks is not valid JSON", "details": ["blocks"]})
+    errors = validate_blocks(blocks)
+    if errors:
+        raise HTTPException(422, {"error": "Invalid blocks", "details": errors})
+
+    # Archive any currently published config for the same program — item
+    # derivation assumes exactly one published config per program, so two
+    # configs left `published` at once would make it ambiguous which one a
+    # new application derives its items from.
+    program_id = cfg.get("program_id", "")
+    where = (f"program_id = {dc.sql_literal(program_id)} "
+             f"AND status = {dc.sql_literal('published')}")
+    prior = dc.list_entities(tenant_id, "registration_config", where, token)
+    max_version = 0
+    for p in prior:
+        max_version = max(max_version, int(p.get("version") or 0))
+        p_base = engine.entity_base_data(p)
+        p_base["status"] = "archived"
+        dc.dc_update(tenant_id, "registration_config", p["entity_id"], p_base, token)
+
+    base = engine.entity_base_data(cfg)
+    base["status"] = "published"
+    base["version"] = max_version + 1
+    updated = dc.dc_update(tenant_id, "registration_config", cfg["entity_id"], base, token)
+    return {"config": updated}
 
 
 _HANDLERS = {
@@ -343,6 +383,5 @@ _HANDLERS = {
     "resend_link": _resend_link,
     "record_offline_payment": _record_offline_payment,
     "approve": _approve,
-    # Replaced in Task 13:
-    "publish_config": _not_implemented("publish_config"),
+    "publish_config": _publish_config,
 }

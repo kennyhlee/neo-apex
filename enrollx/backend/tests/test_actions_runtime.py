@@ -177,8 +177,10 @@ def test_action_parent_role_403(fake_dc):
 
 # ── dispatcher rejection semantics ─────────────────────────────────────────
 
-def test_not_yet_implemented_action_raises(client, fake_dc):
+def test_publish_config_rejects_application_id_as_not_a_config(client, fake_dc):
+    # publish_config's {application_id} path segment carries a
+    # registration_config entity_id (contract note 1) — an application
+    # entity_id passed there is simply not a known config, hence 404.
     created = create_application(client, fake_dc)
     eid = created["application"]["entity_id"]
-    with pytest.raises(NotImplementedError):
-        act(client, eid, "publish_config")
+    assert act(client, eid, "publish_config").status_code == 404
