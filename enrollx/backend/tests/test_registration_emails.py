@@ -71,6 +71,36 @@ def test_send_application_email_logs_activity(fake_dc, monkeypatch):
     assert acts[0]["to_value"] == "magic_link:p@x.com:logged"
 
 
+def test_send_application_email_logs_activity_sent(fake_dc, monkeypatch):
+    monkeypatch.setattr(settings, "resend_api_key", "re_key")
+
+    class R:
+        status_code = 200
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: R())
+    outcome = emails.send_application_email("acme", "app-eid-2", "status_change",
+                                            "p@x.com", "Subject", "<p>x</p>")
+    assert outcome == "sent"
+    acts = fake_dc.find("application_activity", application_id="app-eid-2")
+    assert len(acts) == 1
+    assert acts[0]["to_value"] == "status_change:p@x.com:sent"
+
+
+def test_send_application_email_logs_activity_failed(fake_dc, monkeypatch):
+    monkeypatch.setattr(settings, "resend_api_key", "re_key")
+
+    def boom(*a, **k):
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(httpx, "post", boom)
+    outcome = emails.send_application_email("acme", "app-eid-3", "action_needed",
+                                            "p@x.com", "Subject", "<p>x</p>")
+    assert outcome == "failed"
+    acts = fake_dc.find("application_activity", application_id="app-eid-3")
+    assert len(acts) == 1
+    assert acts[0]["to_value"] == "action_needed:p@x.com:failed"
+
+
 def test_templates_return_subject_and_html():
     for subject, html in (
         emails.magic_link_email("Fall 2026", "https://x/application/tok"),
@@ -84,3 +114,37 @@ def test_templates_return_subject_and_html():
     assert "https://x/application/tok" in html
     _, html = emails.action_needed_email("Fall 2026", "Immunization Record", "blurry scan")
     assert "Immunization Record" in html and "blurry scan" in html
+
+
+def test_action_needed_email_escapes_item_title_and_reason():
+    _, html_body = emails.action_needed_email(
+        "Fall 2026", "<script>alert(1)</script>", "R&D <bad>"
+    )
+    assert "<script>alert(1)</script>" not in html_body
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html_body
+    assert "R&amp;D &lt;bad&gt;" in html_body
+
+
+def test_magic_link_email_escapes_label_but_not_href():
+    link = "https://x/application/tok?a=1&b=2"
+    _, html_body = emails.magic_link_email("Fall <2026> & Co", link)
+    # program_label is escaped as HTML content.
+    assert "Fall &lt;2026&gt; &amp; Co" in html_body
+    # The href attribute value is the raw, unescaped URL — escaping it would
+    # corrupt the URL (e.g. turn `&` into `&amp;`).
+    assert f'href="{link}"' in html_body
+    # The same link rendered as visible anchor text IS escaped, since that
+    # occurrence is HTML content rather than a URL.
+    assert "https://x/application/tok?a=1&amp;b=2" in html_body
+
+
+def test_submission_receipt_email_escapes_display_id():
+    _, html_body = emails.submission_receipt_email("Fall 2026", "<b>AC-1</b>")
+    assert "<b>AC-1</b>" not in html_body
+    assert "&lt;b&gt;AC-1&lt;/b&gt;" in html_body
+
+
+def test_status_change_email_escapes_new_status():
+    _, html_body = emails.status_change_email("Fall 2026", "needs<review> & wait")
+    assert "needs<review> & wait" not in html_body
+    assert "needs&lt;review&gt; &amp; wait" in html_body
