@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     cors_allowed_origins: Union[Optional[str], List[str]] = None
     port: int = 5910
 
+    # Registration lifecycle (Plan 2)
+    link_secret: str = "dev-link-secret-change-in-prod"
+    internal_key: str = "dev-internal-key-change-in-prod"
+    resend_api_key: str = ""
+    email_from: str = "NeoApex Registration <registration@floatify.com>"
+    familyhub_url: str = "http://localhost:6000"
+
     @model_validator(mode="after")
     def parse_and_validate_cors(self):
         raw = self.cors_allowed_origins
