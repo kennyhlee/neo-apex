@@ -147,7 +147,8 @@
       {"name": "blocking", "type": "bool", "required": true},
       {"name": "due_at", "type": "datetime", "required": false},
       {"name": "completed_by", "type": "str", "required": false},
-      {"name": "payload_ref", "type": "str", "required": false}
+      {"name": "payload_ref", "type": "str", "required": false},
+      {"name": "due_days_after_approval", "type": "number", "required": false}
     ],
     "custom_fields": []
   },
