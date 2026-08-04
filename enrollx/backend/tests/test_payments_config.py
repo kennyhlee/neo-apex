@@ -14,6 +14,7 @@ def test_payment_settings_defaults(monkeypatch):
         "ENROLLX_FAMILYHUB_PUBLIC_URL",
         "ENROLLX_FRONTEND_PUBLIC_URL",
         "ENROLLX_BALANCE_DUE_DAYS",
+        "ENROLLX_FAMILYHUB_URL",  # would otherwise feed the public_url fallback
     ):
         monkeypatch.delenv(var, raising=False)
     s = Settings()
@@ -38,6 +39,62 @@ def test_payment_settings_env_override(monkeypatch):
 
 def test_stripe_importable():
     import stripe  # noqa: F401  — dependency added by this plan
+
+
+# ── familyhub_public_url falls back to familyhub_url (Important 1) ────────
+# familyhub_public_url and familyhub_url address the same public familyhub
+# Worker with the same localhost default; an operator who only sets
+# ENROLLX_FAMILYHUB_URL (for Plan 2 magic links) must not silently ship
+# payment links pointed at localhost.
+
+def _clean_familyhub_vars(monkeypatch):
+    for var in ("ENROLLX_FAMILYHUB_URL", "ENROLLX_FAMILYHUB_PUBLIC_URL"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_familyhub_public_url_falls_back_to_familyhub_url_when_unset(monkeypatch):
+    _clean_familyhub_vars(monkeypatch)
+    monkeypatch.setenv("ENROLLX_FAMILYHUB_URL", "https://familyhub.floatify.com")
+    s = Settings()
+    assert s.familyhub_public_url == "https://familyhub.floatify.com"
+    assert s.familyhub_url == "https://familyhub.floatify.com"
+
+
+def test_familyhub_public_url_fallback_satisfies_production_guard(monkeypatch):
+    """The fallback must resolve before validate_production_secrets reads
+    familyhub_public_url, so a deployment that only set
+    ENROLLX_FAMILYHUB_URL still boots with Stripe configured."""
+    _clean_familyhub_vars(monkeypatch)
+    monkeypatch.setenv("ENROLLX_ENVIRONMENT", "production")
+    monkeypatch.setenv("ENROLLX_CORS_ALLOWED_ORIGINS", "https://familyhub.floatify.com")
+    monkeypatch.setenv("ENROLLX_LINK_SECRET", "x" * 32)
+    monkeypatch.setenv("ENROLLX_INTERNAL_KEY", "y" * 32)
+    monkeypatch.setenv("ENROLLX_STRIPE_SECRET_KEY", "sk_live_" + "x" * 40)
+    monkeypatch.setenv("ENROLLX_STRIPE_WEBHOOK_SECRET", "whsec_" + "x" * 40)
+    monkeypatch.setenv(
+        "ENROLLX_STRIPE_REDIRECT_URL", "https://api.enrollx.floatify.com/api/stripe/connect/callback"
+    )
+    monkeypatch.setenv("ENROLLX_FRONTEND_PUBLIC_URL", "https://enrollx.floatify.com")
+    monkeypatch.setenv("ENROLLX_FAMILYHUB_URL", "https://familyhub.floatify.com")
+    s = Settings()
+    assert s.familyhub_public_url == "https://familyhub.floatify.com"
+
+
+def test_familyhub_public_url_independent_when_both_set(monkeypatch):
+    """Someone who genuinely needs the two to differ keeps that ability."""
+    _clean_familyhub_vars(monkeypatch)
+    monkeypatch.setenv("ENROLLX_FAMILYHUB_URL", "https://links.floatify.com")
+    monkeypatch.setenv("ENROLLX_FAMILYHUB_PUBLIC_URL", "https://pay.floatify.com")
+    s = Settings()
+    assert s.familyhub_url == "https://links.floatify.com"
+    assert s.familyhub_public_url == "https://pay.floatify.com"
+
+
+def test_familyhub_public_url_default_when_neither_set(monkeypatch):
+    _clean_familyhub_vars(monkeypatch)
+    s = Settings()
+    assert s.familyhub_url == "http://localhost:6000"
+    assert s.familyhub_public_url == "http://localhost:6000"
 
 
 # ── C3: production guard on the Stripe secrets + public URLs ──────────────

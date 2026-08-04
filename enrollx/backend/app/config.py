@@ -12,6 +12,13 @@ DEV_INTERNAL_KEY = "dev-internal-key-change-in-prod"
 # should never reach production. 32 chars is the floor, not a recommendation.
 MIN_SECRET_LENGTH = 32
 
+# Stripe (Plan 3) localhost dev defaults. Referenced by BOTH the field
+# default below and validate_production_secrets, same as DEV_LINK_SECRET /
+# DEV_INTERNAL_KEY above — one constant per value so the two can't drift.
+DEV_STRIPE_REDIRECT_URL = "http://localhost:5910/api/stripe/connect/callback"
+DEV_FAMILYHUB_PUBLIC_URL = "http://localhost:6000"
+DEV_FRONTEND_PUBLIC_URL = "http://localhost:5900"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ENROLLX_", case_sensitive=False)
@@ -39,10 +46,45 @@ class Settings(BaseSettings):
     stripe_client_id: str = ""       # ENROLLX_STRIPE_CLIENT_ID (ca_...)
     stripe_secret_key: str = ""      # ENROLLX_STRIPE_SECRET_KEY (sk_...)
     stripe_webhook_secret: str = ""  # ENROLLX_STRIPE_WEBHOOK_SECRET (whsec_...)
-    stripe_redirect_url: str = "http://localhost:5910/api/stripe/connect/callback"
-    familyhub_public_url: str = "http://localhost:6000"
-    frontend_public_url: str = "http://localhost:5900"
+    stripe_redirect_url: str = DEV_STRIPE_REDIRECT_URL
+    # Same public familyhub Worker as `familyhub_url` above (Plan 2's magic
+    # links) — there's no internal-vs-public split, just two names for one
+    # address. If ENROLLX_FAMILYHUB_PUBLIC_URL isn't set explicitly, it
+    # falls back to ENROLLX_FAMILYHUB_URL in resolve_familyhub_public_url_
+    # fallback below. Do NOT remove that fallback as unused/redundant.
+    familyhub_public_url: str = DEV_FAMILYHUB_PUBLIC_URL
+    frontend_public_url: str = DEV_FRONTEND_PUBLIC_URL
     balance_due_days: int = 30
+
+    @model_validator(mode="after")
+    def resolve_familyhub_public_url_fallback(self):
+        """`familyhub_public_url` (Plan 3: checkout/reminder links) and
+        `familyhub_url` (Plan 2: magic links) address the same public
+        familyhub Worker and share the same localhost dev default — there
+        is no internal-vs-public split to justify two independently
+        configured addresses. Without this fallback, an operator who sets
+        ENROLLX_FAMILYHUB_URL for magic links has no reason to suspect a
+        second, differently-named variable governs payment links: magic
+        links work, payment links silently point at localhost, and the
+        production URL guard below won't catch it until
+        stripe_secret_key is also set.
+
+        Rule: if ENROLLX_FAMILYHUB_PUBLIC_URL was explicitly set, use it
+        verbatim (someone who genuinely needs the two to differ keeps that
+        ability). Otherwise, if ENROLLX_FAMILYHUB_URL was explicitly set,
+        familyhub_public_url takes that value. Otherwise, keep the
+        localhost default.
+
+        Must run before validate_production_secrets, which reads the
+        resolved familyhub_public_url — model_validator(mode="after")
+        methods run in class-definition order, so this is declared first.
+        """
+        if (
+            "familyhub_public_url" not in self.model_fields_set
+            and "familyhub_url" in self.model_fields_set
+        ):
+            object.__setattr__(self, "familyhub_public_url", self.familyhub_url)
+        return self
 
     @model_validator(mode="after")
     def parse_and_validate_cors(self):
@@ -162,13 +204,9 @@ class Settings(BaseSettings):
                 )
 
             for name, value, dev_default in (
-                (
-                    "ENROLLX_STRIPE_REDIRECT_URL",
-                    self.stripe_redirect_url,
-                    "http://localhost:5910/api/stripe/connect/callback",
-                ),
-                ("ENROLLX_FAMILYHUB_PUBLIC_URL", self.familyhub_public_url, "http://localhost:6000"),
-                ("ENROLLX_FRONTEND_PUBLIC_URL", self.frontend_public_url, "http://localhost:5900"),
+                ("ENROLLX_STRIPE_REDIRECT_URL", self.stripe_redirect_url, DEV_STRIPE_REDIRECT_URL),
+                ("ENROLLX_FAMILYHUB_PUBLIC_URL", self.familyhub_public_url, DEV_FAMILYHUB_PUBLIC_URL),
+                ("ENROLLX_FRONTEND_PUBLIC_URL", self.frontend_public_url, DEV_FRONTEND_PUBLIC_URL),
             ):
                 if value == dev_default:
                     raise ValueError(
