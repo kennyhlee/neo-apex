@@ -17,13 +17,21 @@ from app.registration.statuses import assert_transition
 SYSTEM_COLS = {"entity_id", "entity_type", "base_data", "custom_fields", "vector", "_tenant"}
 ITEM_DONE_STATUSES = {"submitted", "verified", "waived"}
 
-# Every field declared `"type": "bool"` in launchpad's base_model.json across
-# the entity types this module touches: application_item.blocking and
-# document.sensitive. Read back from DataCore these arrive as the STRINGS
-# "true"/"false" (datacore/src/datacore/query.py::_scalar_to_str), so they
-# must be coerced with `as_bool` on read and back to real bools on write —
-# see the module note below.
-BOOLEAN_FIELDS = {"blocking", "sensitive"}
+# Fields declared `"type": "bool"` in launchpad's base_model.json, keyed by
+# the entity type that declares them. Read back from DataCore these arrive as
+# the STRINGS "true"/"false" (datacore/src/datacore/query.py::_scalar_to_str),
+# so they must be coerced with `as_bool` on read and back to real bools on
+# write — see the module note below.
+#
+# Keyed BY ENTITY TYPE, not a flat name set, and that matters: a flattened
+# row also carries the tenant's CUSTOM field columns, so coercing on field
+# name alone would rewrite a tenant custom field named `sensitive` holding
+# "confidential" into bool False on the next write — silent tenant-data loss.
+# Only the types that actually declare these as bool are coerced.
+BOOLEAN_FIELDS_BY_TYPE = {
+    "application_item": {"blocking"},
+    "document": {"sensitive"},
+}
 
 _TRUTHY_STRINGS = {"true", "1", "yes"}
 
@@ -67,10 +75,16 @@ def entity_base_data(row: dict) -> dict:
     "false", copying it verbatim into the next PUT would permanently
     rewrite stored `base_data` from bool `False` to `"false"`, contradicting
     the `"type": "bool"` declared for these fields in base_model.json.
+
+    Which fields get coerced depends on the row's OWN `entity_type` (read
+    from the row rather than taken as an argument, so no caller has to
+    change). When the row carries no `entity_type`, nothing is coerced —
+    guessing would risk clobbering a same-named tenant custom field, and
+    leaving a string alone is the recoverable direction.
     """
     out = {k: v for k, v in row.items()
            if k not in SYSTEM_COLS and not k.startswith("_") and v is not None}
-    for field in BOOLEAN_FIELDS:
+    for field in BOOLEAN_FIELDS_BY_TYPE.get(row.get("entity_type"), ()):
         if field in out:
             out[field] = as_bool(out[field])
     return out

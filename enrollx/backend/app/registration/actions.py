@@ -290,20 +290,34 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
     if app_row.get("applicant_email"):
         family_fields["primary_email"] = app_row["applicant_email"]
 
-    # I8: refuse to mint a junk family. Nothing upstream guarantees any
+    # I8: refuse to mint a JUNK family. Nothing upstream guarantees any
     # family-identifying data exists — applicant_email is optional,
     # complete_item never inspects draft_data, and _submit only checks item
     # statuses. Without this guard a staff-created application with no email
     # and empty items approves into a brand-new family literally named
-    # "Family", one per approval, corrupting the core family registry.
-    if not signature_key(normalize_signature(family_fields)):
+    # "Family" (family.py's last-resort name), one per approval, corrupting
+    # the core family registry.
+    #
+    # Deliberately NOT gated on signature_key alone. A match signature
+    # (email / phone / name+address) is what lets a family be DEDUPED; it is
+    # not what makes it identifiable. A family_name with no address yields no
+    # signature but is perfectly good identifying data, and family.py's
+    # documented solo rule — always create, never dedupe — is the correct
+    # handling for it (see test_no_signature_creates_solo_family). Gating on
+    # signature_key made that documented path unreachable through _approve.
+    #
+    # The real rule: reject only when there is nothing to MATCH on and
+    # nothing to NAME by. Note that an empty signature_key already implies
+    # both primary_email and primary_phone are empty, so family_name is the
+    # only remaining namer family.py could use.
+    family_sig = normalize_signature(family_fields)
+    if not signature_key(family_sig) and not family_sig["name"]:
         raise HTTPException(422, {
             "error": "Cannot approve: no family-identifying data on the application",
-            "missing": ["family.primary_email (or applicant_email)",
-                        "family.primary_phone",
-                        "family.family_name + family.primary_address"],
-            "hint": "At least one of these signatures is required to match or "
-                    "create a family.",
+            "missing": ["family.family_name",
+                        "family.primary_email (or applicant_email)",
+                        "family.primary_phone"],
+            "hint": "At least one of these is required to name or match a family.",
         })
 
     student_fields = dict(draft.get("student") or {})

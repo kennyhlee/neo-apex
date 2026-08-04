@@ -246,3 +246,55 @@ def test_capacity_state_on_a_brand_new_tenant(fake_dc):
 
 def test_published_config_lookup_on_empty_tenant(fake_dc):
     assert engine.get_published_config("emptytenant", "PR1") is None
+
+
+# ── entity_base_data boolean coercion is scoped BY ENTITY TYPE ─────────────
+
+def test_boolean_coercion_only_applies_to_types_declaring_the_field():
+    """A flattened row carries the tenant's CUSTOM field columns too, so
+    coercing on field NAME alone rewrote a tenant custom field named
+    `sensitive` holding "confidential" into bool False on the next write —
+    silent tenant-data loss. Only application_item.blocking and
+    document.sensitive are declared bool in base_model.json.
+    """
+    # Types that do NOT declare these fields: values pass through untouched.
+    assert engine.entity_base_data({
+        "entity_type": "student", "sensitive": "confidential",
+        "blocking": "maybe", "size": "100"}) == {
+        "sensitive": "confidential", "blocking": "maybe", "size": "100"}
+
+    # The declaring types DO get coerced.
+    assert engine.entity_base_data({
+        "entity_type": "document", "sensitive": "false",
+        "filename": "x.pdf"}) == {"sensitive": False, "filename": "x.pdf"}
+    assert engine.entity_base_data({
+        "entity_type": "application_item", "blocking": "true"}) == {"blocking": True}
+
+    # application_item declares `blocking` but NOT `sensitive` — a custom
+    # field of that name on an item survives.
+    assert engine.entity_base_data({
+        "entity_type": "application_item", "blocking": "false",
+        "sensitive": "confidential"}) == {"blocking": False,
+                                          "sensitive": "confidential"}
+
+    # No entity_type: coerce nothing rather than guess.
+    assert engine.entity_base_data({
+        "sensitive": "confidential", "blocking": "false"}) == {
+        "sensitive": "confidential", "blocking": "false"}
+
+
+def test_custom_field_named_sensitive_survives_a_status_write(fake_dc):
+    """End-to-end: a tenant custom field named `sensitive` on an entity type
+    that does not declare it as bool must round-trip through a status write
+    untouched."""
+    created = fake_dc.dc_create("acme", "registration_application", {
+        "application_id": "A1", "program_id": "PR1", "status": "draft",
+        "school_year": "2026-2027", "sensitive": "confidential"})
+    row = fake_dc.get_entity("acme", "registration_application",
+                             created["entity_id"])
+    engine.set_application_status("acme", row, "submitted", actor="u1")
+
+    after = fake_dc.get_entity("acme", "registration_application",
+                               created["entity_id"])
+    assert after["status"] == "submitted"
+    assert after["sensitive"] == "confidential"  # not rewritten to False

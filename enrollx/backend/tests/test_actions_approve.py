@@ -252,3 +252,40 @@ def test_approve_succeeds_with_only_a_phone_signature(client, fake_dc):
     resp = act(client, eid, "approve")
     assert resp.status_code == 200
     assert fake_dc.find("student", first_name="Ana")
+
+
+def test_approve_succeeds_with_only_a_family_name(client, fake_dc):
+    """The I8 guard must reject only the genuinely-empty case.
+
+    A family_name yields NO match signature (signature_key needs email, phone,
+    or name+address), but it is perfectly good identifying data — family.py's
+    documented solo rule handles it by always creating, never deduping. An
+    earlier, broader guard keyed on signature_key alone made that documented
+    path unreachable through _approve while
+    test_no_signature_creates_solo_family still asserted it.
+    """
+    eid = _submitted_with_draft(client, fake_dc, {
+        "family": {"family_name": "Okonkwo"},
+        "student": {"first_name": "Chidi", "last_name": "Okonkwo"}})
+    resp = act(client, eid, "approve")
+    assert resp.status_code == 200, resp.json()
+
+    fam = fake_dc.find("family", family_name="Okonkwo")
+    assert len(fam) == 1
+    assert fam[0]["entity_id"] == resp.json()["family_id"]
+    # Named from the draft, NOT the "Family" last-resort fallback.
+    assert fam[0]["family_name"] == "Okonkwo"
+    assert fake_dc.find("student", first_name="Chidi")
+
+
+def test_solo_family_rule_is_reachable_through_approve(client, fake_dc):
+    """Companion to test_no_signature_creates_solo_family: two name-only
+    approvals produce two families, because a name alone is not a dedupe
+    signature. This pins that _approve does not forbid the path that unit
+    test asserts."""
+    for i in range(2):
+        eid = _submitted_with_draft(client, fake_dc, {
+            "family": {"family_name": "Okonkwo"},
+            "student": {"first_name": f"Kid{i}", "last_name": "Okonkwo"}})
+        assert act(client, eid, "approve").status_code == 200
+    assert len(fake_dc.find("family", family_name="Okonkwo")) == 2
