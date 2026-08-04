@@ -198,6 +198,34 @@ def test_pay_in_full_charges_amount_full(wire, fake_stripe):
     assert sent["cancel_url"] == "https://x/cancel"
 
 
+def test_session_restricted_to_card(wire, fake_stripe):
+    """Without an explicit method list the connected account's dashboard
+    settings decide, and a delayed-notification method (ACH/SEPA/Bacs/boleto)
+    completes the session with payment_status "unpaid" — the webhook would
+    then verify the item, write a paid payment row, email a receipt and, for
+    a deposit, invite the parent to pay the remainder, for money that has not
+    arrived."""
+    wire(application_row("pay_in_full"))
+    create()
+    assert fake_stripe["session_create"][0]["payment_method_types"] == ["card"]
+
+
+def test_stripe_error_becomes_502_not_bare_500(wire, monkeypatch):
+    """Every Stripe-side failure — account not enabled for charges,
+    capability revoked, deauthorized, invalid key, rate limit, outage — used
+    to propagate as a bare 500 to a family trying to pay a school."""
+    wire(application_row("pay_in_full"))
+
+    def boom(**kwargs):
+        raise stripe.StripeError("account cannot currently make charges")
+
+    monkeypatch.setattr(stripe.checkout.Session, "create", boom)
+    with pytest.raises(HTTPException) as exc:
+        create()
+    assert exc.value.status_code == 502
+    assert "Stripe" in exc.value.detail
+
+
 def test_deposit_plan_first_payment_is_deposit(wire, fake_stripe):
     wire(application_row("deposit"))
     out = create()

@@ -11,6 +11,7 @@ Amount derivation (binding contract for Plans 4-5):
 - deposit chosen, deposit already paid     -> charge the remainder      (kind "balance")
 """
 import json
+import logging
 from dataclasses import dataclass
 
 import stripe
@@ -20,6 +21,8 @@ from app.config import settings
 from app.registration.datacore import dc_query, sql_literal
 from app.registration.engine import rows_matching
 from app.tenant_lookup import get_tenant_entity
+
+logger = logging.getLogger("enrollx.checkout")
 
 
 @dataclass
@@ -194,28 +197,64 @@ def create_checkout_session(
 
     ctx = build_checkout_context(tenant_id, application_id, item_id, token)
     label = {"full": "Program fee", "deposit": "Deposit", "balance": "Balance"}[ctx.kind]
-    session = stripe.checkout.Session.create(
-        mode="payment",
-        line_items=[
-            {
-                "price_data": {
-                    "currency": ctx.currency,
-                    "unit_amount": ctx.amount,
-                    "product_data": {"name": f"{label} — application {application_id}"},
-                },
-                "quantity": 1,
-            }
-        ],
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "tenant_id": tenant_id,
-            "application_id": application_id,
-            "item_id": str(ctx.item["entity_id"]),
-            "kind": ctx.kind,
-        },
-        api_key=settings.stripe_secret_key,
-        stripe_account=str(account_id),
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            # Card only, deliberately. Without this the connected account's
+            # own dashboard settings decide, and a school that enables
+            # ACH/SEPA/Bacs/boleto gets checkout.session.completed with
+            # payment_status "unpaid" — the webhook would then mark the item
+            # verified, write a paid payment row, email a receipt and (for a
+            # deposit) invite the parent to pay the remainder, for money that
+            # has not arrived and may never. Restricting the method makes
+            # "verified means paid" true by construction. Supporting delayed-
+            # notification methods needs a payment_status gate and an
+            # async_payment_succeeded handler; that is deferred follow-up.
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": ctx.currency,
+                        "unit_amount": ctx.amount,
+                        "product_data": {"name": f"{label} — application {application_id}"},
+                    },
+                    "quantity": 1,
+                }
+            ],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "tenant_id": tenant_id,
+                "application_id": application_id,
+                "item_id": str(ctx.item["entity_id"]),
+                "kind": ctx.kind,
+            },
+            api_key=settings.stripe_secret_key,
+            stripe_account=str(account_id),
+        )
+    except stripe.StripeError as exc:
+        # Connected account not enabled for charges, capability revoked,
+        # account deauthorized, invalid key, rate limit, Stripe outage. Bare
+        # this propagates as a 500 — on the parent channel that is a family
+        # staring at "Internal Server Error" while trying to pay a school,
+        # with nothing in the logs.
+        logger.exception(
+            "stripe checkout session creation failed (tenant_id=%r application_id=%r "
+            "item_id=%r account=%r kind=%r amount=%r currency=%r)",
+            tenant_id, application_id, str(ctx.item["entity_id"]), account_id,
+            ctx.kind, ctx.amount, ctx.currency,
+        )
+        raise HTTPException(
+            502,
+            "Stripe could not start this payment. The school's Stripe account may "
+            f"not be able to accept charges yet ({exc.__class__.__name__}).",
+        )
+
+    logger.info(
+        "stripe checkout session created (tenant_id=%r application_id=%r item_id=%r "
+        "account=%r kind=%r amount=%r currency=%r session_id=%r)",
+        tenant_id, application_id, str(ctx.item["entity_id"]), account_id,
+        ctx.kind, ctx.amount, ctx.currency, session.id,
     )
     return {
         "checkout_url": session.url,
