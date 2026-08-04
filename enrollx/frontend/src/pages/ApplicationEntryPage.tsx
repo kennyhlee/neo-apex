@@ -246,16 +246,13 @@ export default function ApplicationEntryPage() {
   };
 
   /**
-   * FlowRenderer's `advance()` calls this only for 'form' blocks, passing the
-   * block's own field values as `payload` — but `complete_item`'s only
-   * optional param is `payload_ref` (a document reference STRING; verified
-   * `actions.py:102-106`), not an arbitrary values object. That form data is
-   * already persisted moments earlier by the `await onSaveDraft(...)` this
-   * same `advance()` call makes, so there is nothing useful to forward here
-   * — sending the values object as `payload_ref` would just get
-   * `str()`-coerced into a meaningless string server-side. Accepting one
-   * fewer parameter than the declared callback type is fine in TS (same
-   * pattern ConfigBuilderPage's preview no-ops use).
+   * FlowRenderer's `advance()` calls this only for 'form' blocks.
+   * `complete_item`'s only optional param is `payload_ref` (a document
+   * reference STRING; verified `actions.py:102-106`), not an arbitrary values
+   * object — the block's form data is already persisted moments earlier by
+   * the `await onSaveDraft(...)` the same `advance()` makes. The callback used
+   * to declare a `payload?: Record<string, unknown>` no host could use; that
+   * parameter is now gone from the flow-runtime type (A10).
    */
   const handleCompleteItem = async (itemId: string) => {
     try {
@@ -268,12 +265,21 @@ export default function ApplicationEntryPage() {
     }
   };
 
-  const handleUploadDocument = async (blockId: string, doc: RequiredDoc, file: File) => {
-    const item = items.find((i) => i.block_id === blockId && i.title === doc.name);
-    if (!item) { toast({ message: t('entry.uploadError'), tone: 'danger' }); return; }
+  /**
+   * `itemId` comes from `DocumentsBlock`, which has already resolved the item
+   * for this doc. It is the entity_id, not the business `item_id` field —
+   * `rendererItems` maps it that way (see its comment). This replaced a
+   * host-side `items.find(i => i.block_id === blockId && i.title === doc.name)`:
+   * a title-string match against staff-authored free text, duplicating a match
+   * the block had already performed. `_blockId` is now unused and kept only to
+   * hold the callback's positional shape.
+   */
+  const handleUploadDocument = async (
+    _blockId: string, doc: RequiredDoc, file: File, itemId?: string,
+  ) => {
+    if (!itemId) { toast({ message: t('entry.uploadError'), tone: 'danger' }); return; }
     try {
-      // entity_id, not the business item_id field — see rendererItems' comment.
-      await uploadDocumentForItem(tenant, applicationId, item.entity_id, doc, file);
+      await uploadDocumentForItem(tenant, applicationId, itemId, doc, file);
       await loadAppAndItems();
       toast({ message: t('entry.uploaded'), tone: 'success' });
     } catch (e) {

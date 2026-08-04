@@ -32,10 +32,33 @@ export interface FlowRendererProps {
   values: Record<string, unknown>;
   /** Persist draft values (action save_draft). Debounced autosave + step advance. */
   onSaveDraft: (values: Record<string, unknown>) => Promise<void>;
-  /** Mark one item complete (action complete_item) with an optional payload. */
-  onCompleteItem: (itemId: string, payload?: Record<string, unknown>) => Promise<void>;
-  /** Upload one file for one named doc; host presigns, PUTs, completes the item. */
-  onUploadDocument: (blockId: string, doc: RequiredDoc, file: File) => Promise<void>;
+  /**
+   * Mark one item complete (action complete_item).
+   *
+   * No payload parameter: `complete_item` accepts only `item_id` and an
+   * optional `payload_ref: string` (a document reference), so the
+   * `Record<string, unknown>` this used to declare advertised a capability no
+   * host could ever use — and both hosts ignored it. The form values it
+   * carried are already persisted by the `onSaveDraft` that `advance()` awaits
+   * immediately beforehand.
+   */
+  onCompleteItem: (itemId: string) => Promise<void>;
+  /**
+   * Upload one file for one named doc; host presigns, PUTs, completes the item.
+   *
+   * `itemId` is the application_item's DataCore **entity_id** (the value
+   * `ApplicationItem.item_id` carries — see that type). It is supplied because
+   * `DocumentsBlock` has already resolved the item and withholding it forced
+   * every host into re-deriving it with `items.find(i => i.block_id ===
+   * blockId && i.title === doc.name)` — a title-string match on
+   * staff-authored free text, exactly the fragility `PaymentBlock` was
+   * deliberately rewritten away from. Optional so the change stays additive;
+   * a host should treat `undefined` as "no such item" rather than falling back
+   * to matching by title.
+   */
+  onUploadDocument: (
+    blockId: string, doc: RequiredDoc, file: File, itemId?: string,
+  ) => Promise<void>;
   /** Start Stripe Checkout for the payment item. */
   onCheckout: (itemId: string) => Promise<void>;
   /** Submit the application (action submit; review block only). */
@@ -192,7 +215,7 @@ function FlowRendererInner({
         await onSaveDraft(draftRef.current);
         if (block.type === 'form') {
           const item = itemsFor(block)[0];
-          if (item && !isDone(item)) await onCompleteItem(item.item_id, blockValues(block));
+          if (item && !isDone(item)) await onCompleteItem(item.item_id);
         }
       } finally {
         setBusy(false);

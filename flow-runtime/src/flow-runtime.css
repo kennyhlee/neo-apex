@@ -37,7 +37,12 @@
 .fr-fieldset { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 12px; margin: 0; }
 .fr-choice-group { display: flex; flex-direction: column; gap: 6px; }
 .fr-choice-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-primary); }
-input[type='radio'], input[type='checkbox'] { accent-color: var(--accent); }
+/* Scoped to `.flow-renderer`: this is a PACKAGE stylesheet, so an unscoped
+   `input[type=...]` selector restyled every checkbox and radio in the host
+   app — all of enrollx, and all of familyhub once Plan 5 adds the second
+   host — whether or not it sat inside a flow. */
+.flow-renderer input[type='radio'],
+.flow-renderer input[type='checkbox'] { accent-color: var(--accent); }
 .fr-required { color: var(--danger); margin-left: 2px; }
 .fr-field-error { color: var(--danger); font-size: 12px; }
 .fr-empty { color: var(--text-tertiary); font-size: 14px; }

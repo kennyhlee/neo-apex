@@ -87,8 +87,12 @@ export function PaymentBlock({
               </p>
             ) : (
               <div className="fr-footer">
+                {/* `cents == null` renders "Amount is determined at checkout",
+                    which is not a real state: it means no plan is resolved, so
+                    checkout would 409 on `_plan_selection`. Disable rather
+                    than offer a button guaranteed to fail. */}
                 <button type="button" className="fr-btn fr-btn--primary"
-                  disabled={mode === 'preview' || item == null}
+                  disabled={mode === 'preview' || item == null || cents == null}
                   onClick={() => { if (item) void onCheckout(item.item_id); }}>
                   {t('pay')}
                 </button>

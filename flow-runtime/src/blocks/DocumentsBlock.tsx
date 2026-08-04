@@ -8,7 +8,11 @@ export interface DocumentsBlockProps {
   block: FlowBlock;
   items: ApplicationItem[];
   mode: FlowMode;
-  onUpload: (blockId: string, doc: RequiredDoc, file: File) => Promise<void>;
+  /** `itemId` is the matched application_item's entity_id — see
+   *  `FlowRendererProps.onUploadDocument`. */
+  onUpload: (
+    blockId: string, doc: RequiredDoc, file: File, itemId?: string,
+  ) => Promise<void>;
 }
 
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.heic,.docx';
@@ -26,7 +30,9 @@ export function DocumentsBlock({ block, items, mode, onUpload }: DocumentsBlockP
     if (!file || mode === 'preview') return;
     setUploadingDoc(doc.name);
     try {
-      await onUpload(block.block_id, doc, file);
+      // Pass the item we already resolved, so the host doesn't have to redo
+      // the same match against `doc.name` on its own copy of `items`.
+      await onUpload(block.block_id, doc, file, itemFor(doc)?.item_id);
     } finally {
       setUploadingDoc(null);
     }
