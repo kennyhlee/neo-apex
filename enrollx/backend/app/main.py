@@ -3,7 +3,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, entities, health, internal, query, registration
+from app.api import (
+    auth,
+    checkout,
+    entities,
+    health,
+    internal,
+    query,
+    registration,
+    stripe_connect,
+    stripe_webhook,
+)
 from app.config import settings
 
 app = FastAPI(
@@ -26,3 +36,7 @@ app.include_router(query.router, prefix="/api", tags=["query"])
 app.include_router(entities.router, prefix="/api", tags=["entities"])
 app.include_router(registration.router, prefix="/api", tags=["registration"])
 app.include_router(internal.router, tags=["internal"])
+app.include_router(stripe_connect.router, prefix="/api", tags=["stripe"])
+app.include_router(checkout.router, prefix="/api", tags=["checkout"])
+app.include_router(checkout.internal_router, prefix="/internal", tags=["internal"])
+app.include_router(stripe_webhook.router, prefix="/api", tags=["webhooks"])

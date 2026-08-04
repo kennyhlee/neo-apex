@@ -81,12 +81,20 @@ def dc_create(tenant_id: str, entity_type: str, base_data: dict, token: str | No
 
 
 def dc_update(tenant_id: str, entity_type: str, entity_id: str, base_data: dict,
-              token: str | None = None) -> dict:
+              token: str | None = None, custom_fields: dict | None = None) -> dict:
+    """Full-replace PUT of one entity.
+
+    `custom_fields` defaults to `{}` because the registration engine's own
+    entities have none — but this route REPLACES the stored custom_fields,
+    so any caller round-tripping an entity that may carry them (the tenant
+    entity; see app/tenant_lookup.py) must pass them back explicitly or they
+    are erased.
+    """
     _validate_id(tenant_id, "tenant_id")
     _validate_id(entity_type, "entity_type")
     _validate_id(entity_id, "entity_id")
     resp = _request("PUT", f"/api/entities/{tenant_id}/{entity_type}/{entity_id}", token,
-                    {"base_data": base_data, "custom_fields": {}})
+                    {"base_data": base_data, "custom_fields": custom_fields or {}})
     if resp.status_code not in (200, 201):
         raise HTTPException(resp.status_code, f"DataCore update failed: {resp.text}")
     return resp.json()

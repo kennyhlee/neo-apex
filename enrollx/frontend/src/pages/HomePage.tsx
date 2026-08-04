@@ -1,4 +1,6 @@
 import type { RegistrationConfigDef } from '@neoapex/flow-runtime';
+import { Link } from 'react-router-dom';
+import { useTranslation } from '../hooks/useTranslation.ts';
 
 /**
  * Type-only smoke import — locks the @neoapex/flow-runtime dependency in CI
@@ -10,5 +12,17 @@ import type { RegistrationConfigDef } from '@neoapex/flow-runtime';
 export type FlowRuntimeSmokeTest = RegistrationConfigDef;
 
 export default function HomePage() {
-  return <h1>EnrollX</h1>;
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <h1>EnrollX</h1>
+      {/* Plan 4 replaces this with a real Navbar; until then this is the
+          only authenticated nav surface. Do not rename/remove — Plan 4 is
+          expected to preserve this link when it lands. */}
+      <nav>
+        <Link to="/settings/payments">{t('nav.payments')}</Link>
+      </nav>
+    </>
+  );
 }

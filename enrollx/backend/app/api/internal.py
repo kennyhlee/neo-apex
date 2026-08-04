@@ -47,7 +47,7 @@ class RequestLinkRequest(BaseModel):
     program_id: str | None = None
 
 
-def _resolve_token(token: str) -> tuple[str, dict]:
+def resolve_token(token: str) -> tuple[str, dict]:
     try:
         tenant_id, app_entity_id, _sig = tokens.parse_link_token(token)
     except tokens.TokenError:
@@ -122,7 +122,7 @@ def request_link(tenant_id: str, body: RequestLinkRequest, background_tasks: Bac
 
 @router.get("/internal/application-by-token/{token}")
 def application_by_token(token: str):
-    tenant_id, app_row = _resolve_token(token)
+    tenant_id, app_row = resolve_token(token)
     return {
         "application": app_row,
         "items": engine.get_items(tenant_id, app_row["entity_id"]),
@@ -132,7 +132,7 @@ def application_by_token(token: str):
 
 @router.post("/internal/application-by-token/{token}/actions")
 def action_by_token(token: str, body: InternalActionRequest):
-    tenant_id, app_row = _resolve_token(token)
+    tenant_id, app_row = resolve_token(token)
     if body.action not in PARENT_ACTIONS:
         raise HTTPException(
             403, f"Action '{body.action}' is not permitted on the parent channel")
@@ -143,7 +143,7 @@ def action_by_token(token: str, body: InternalActionRequest):
 
 @router.get("/internal/application-by-token/{token}/documents")
 def documents_by_token(token: str):
-    tenant_id, app_row = _resolve_token(token)
+    tenant_id, app_row = resolve_token(token)
     from app.registration import datacore as dc
 
     eid = app_row["entity_id"]
