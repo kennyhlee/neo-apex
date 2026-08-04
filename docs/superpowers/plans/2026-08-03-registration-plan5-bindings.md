@@ -66,7 +66,7 @@ branch).
 | submit params | none required (body `{}` is valid) | `enrollx/backend/app/registration/actions.py:117-141` |
 | record_offline_payment params | `item_id` (required), `amount` (required int, cents — rejects bool and non-int), `kind` (optional str, default `"offline"`), `currency` (optional str, default `"USD"`) — **no `note` field** | `enrollx/backend/app/registration/actions.py:251-265` |
 | PARENT_ACTIONS allowlist | `{"save_draft", "complete_item", "submit"}` exactly | `enrollx/backend/app/registration/actions.py:22` |
-| Internal checkout route | `POST /internal/application-by-token/{token}/checkout`, body `{item_id?: str}`, response is whatever `create_checkout_session` returns (Stripe Checkout URL key — see `checkout_service.py`, not re-verified in this task since Plan 3 already binds it and Plan 5 only calls it) | `enrollx/backend/app/api/checkout.py:16,41-53` |
+| Internal checkout route | `POST /internal/application-by-token/{token}/checkout`, body `{item_id?: str}`, response `{checkout_url, session_id, kind, amount, currency}` — **`checkout_url` is the key holding the Stripe Checkout URL** | `enrollx/backend/app/api/checkout.py:16,41-53`; response shape at `enrollx/backend/app/checkout_service.py:259-265` (`return {"checkout_url": session.url, "session_id": session.id, "kind": ctx.kind, "amount": ctx.amount, "currency": ctx.currency}`) |
 | Request-link internal route | `POST /internal/registration/{tenant_id}/request-link`, body `{email: str, program_id?: str}`, **always `200 {}`** regardless of match (email send happens via `BackgroundTasks`, deferred until after the response is written) | `enrollx/backend/app/api/internal.py:45-47,94-120` |
 | Helper to read entities without a user JWT | `app.registration.datacore.list_entities(tenant_id, entity_type, where="", token=None)` and `.get_entity(tenant_id, entity_type, entity_id, token=None)` — `token=None` is the parent/internal-channel calling convention throughout `engine.py`/`actions.py` | `enrollx/backend/app/registration/datacore.py:130-167`; module docstring line 1-9 explicitly documents unauthenticated-by-design DataCore calls |
 | Loader for published registration_config | `engine.get_published_config(tenant_id, program_id, token=None)` — filters `registration_config` rows in Python for `program_id` + `status="published"` | `enrollx/backend/app/registration/engine.py:165-171` |
@@ -87,7 +87,7 @@ branch).
 
 ## 3. Routes
 
-### enrollx `/internal/*` (guard: `require_internal_key`, `X-Internal-Key` header, constant-time compare against `settings.internal_key`; every route below sits behind it — confirmed by `test_all_internal_routes_require_key`, `enrollx/backend/tests/test_internal_api.py:32-45`)
+### enrollx `/internal/*` (guard: `require_internal_key`, `X-Internal-Key` header, constant-time compare against `settings.internal_key`; every route below sits behind it — the `internal.py`-mounted routes (start/config/request-link/application-by-token bundle/actions/documents) are confirmed by `test_all_internal_routes_require_key`, `enrollx/backend/tests/test_internal_api.py:32-45`; the separately-mounted checkout route's guard is confirmed by a different test, `test_internal_checkout_requires_internal_key`, `enrollx/backend/tests/test_checkout_routes.py:93`)
 
 | Method + path | Body | Response | File:line |
 |---|---|---|---|
@@ -97,7 +97,7 @@ branch).
 | `GET /internal/application-by-token/{token}` | — | 200 `{application, items, config}`; 401 on bad/revoked token | `internal.py:123-130` |
 | `POST /internal/application-by-token/{token}/actions` | `{action, ...params}` | passthrough of `perform_action`'s result; 403 if `action` outside `PARENT_ACTIONS` | `internal.py:133-141` |
 | `GET /internal/application-by-token/{token}/documents` | — | 200 `{documents: [{entity_id, document_id, filename, uploaded_by, item_id}]}` — filtered: own uploads (`uploaded_by == "parent:{eid}"`) always visible, others only if `not sensitive` | `internal.py:144-161` |
-| `POST /internal/application-by-token/{token}/checkout` | `{item_id?}` | `create_checkout_session(...)` result (Stripe URL — see Plan 3) | `checkout.py:41-53`, mounted with `prefix="/internal"` at `enrollx/backend/app/main.py:43` |
+| `POST /internal/application-by-token/{token}/checkout` | `{item_id?}` | `{checkout_url, session_id, kind, amount, currency}` — Stripe Checkout URL is `checkout_url` | `checkout.py:41-53`, mounted with `prefix="/internal"` at `enrollx/backend/app/main.py:43`; response shape `checkout_service.py:259-265` |
 
 ### enrollx documents proxy (STAFF-ONLY — familyhub does NOT call these; it calls DataCore's blob API directly per the plan's architecture decision)
 
@@ -118,6 +118,12 @@ Confirmed staff `uploaded_by` derivation: `user.get("user_id", "staff")` at `doc
 `document.entity_id == document.document_id` confirmed: `_store.put_entity(..., entity_id=document_id, ...)` at `datacore/src/datacore/api/document_routes.py:131-137` — the business id IS the entity_id for this one entity type, exactly the stated exception.
 
 ## 4. flow-runtime barrel surface (verbatim, `flow-runtime/src/index.ts`)
+
+**enrollx-frontend file that mounts `FlowRenderer` for staff-assisted entry:**
+`enrollx/frontend/src/pages/ApplicationEntryPage.tsx` (`FlowRenderer` call at
+lines 372-391) — one of only two `FlowRenderer` importers in
+`enrollx/frontend/src` (the other, `ConfigBuilderPage.tsx`, is the builder's
+preview mode, not the staff-assisted entry flow).
 
 ```ts
 export * from './types';
@@ -151,7 +157,7 @@ business id an entity carries in its own `base_data` (`application_id` on
   `dc.next_id(...)` and stores it at `base_data.application_id` /
   `base_data.registration_application_id`; DataCore assigns a *separate*
   `entity_id` to the same row on create. Same pattern for items:
-  `engine.create_application_item` (`engine.py:264-269`) mints
+  `engine.create_application_item` (`engine.py:265-269`) mints
   `item_fields`/`item_id` (a uuid hex) into `base_data.item_id`, distinct from
   the row's `entity_id`.
 - **The backend keys on `entity_id` everywhere it resolves an application or
