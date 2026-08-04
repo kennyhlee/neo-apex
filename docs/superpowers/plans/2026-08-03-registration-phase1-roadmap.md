@@ -68,7 +68,7 @@ export type FlowMode = 'parent' | 'staff' | 'preview';
 ```
 
 **DataCore blob API** (Plan 1 builds; Plans 4–5 proxy):
-- `POST /api/documents/{tenant_id}` body `{application_id, item_id?, filename, content_type, size, sensitive}` → `201 {document_id, upload_url}` (presigned R2 PUT; key `{tenant_id}/{application_id}/{document_id}/{filename}`) and writes a `document` entity.
+- `POST /api/documents/{tenant_id}` body `{application_id, item_id?, filename, content_type, size, sensitive, uploaded_by}` → `201 {document_id, upload_url}` (presigned R2 PUT; key `{tenant_id}/{application_id}/{document_id}/{filename}`) and writes a `document` entity.
 - `GET /api/documents/{tenant_id}/{document_id}/url` → `200 {download_url}` (presigned GET).
 
 **familyhub facade routes** (Plan 5): `GET /api/registration/{tenant_id}/{program_id}` · `POST /api/registration/{tenant_id}/{program_id}/start` · `GET /api/application/{token}` · `PUT /api/application/{token}` · `POST /api/application/request-link`.

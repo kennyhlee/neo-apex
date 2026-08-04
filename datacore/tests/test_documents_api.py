@@ -72,6 +72,7 @@ def _post_document(client, **overrides):
         "content_type": "application/pdf",
         "size": 1024,
         "sensitive": True,
+        "uploaded_by": "parent:RA260001",
     }
     body.update(overrides)
     return client.post("/api/documents/acme", json=body)
@@ -101,6 +102,49 @@ def test_create_document_writes_entity_through_shared_store_path(doc_client):
     assert entity["base_data"]["size"] == 1024
     assert entity["base_data"]["sensitive"] is True
     assert entity["base_data"]["storage_key"] == resp.json()["storage_key"]
+
+
+def test_create_document_persists_uploaded_by(doc_client):
+    """`document.uploaded_by` is declared required in launchpad's
+    base_model.json, and Plan 5 filters sensitive documents to those uploaded
+    by the requesting parent. `store.put_entity` does not validate against the
+    model definition, so nothing but this test catches the field going
+    missing."""
+    client, store = doc_client
+    resp = _post_document(client, uploaded_by="parent:RA260007")
+    entity = store.get_active_entity("acme", "document", resp.json()["document_id"])
+    assert entity["base_data"]["uploaded_by"] == "parent:RA260007"
+
+
+def test_create_document_persists_staff_uploaded_by(doc_client):
+    """Staff uploads carry the staff user_id rather than a parent: prefix."""
+    client, store = doc_client
+    resp = _post_document(client, uploaded_by="u-staff-42")
+    entity = store.get_active_entity("acme", "document", resp.json()["document_id"])
+    assert entity["base_data"]["uploaded_by"] == "u-staff-42"
+
+
+def test_create_document_persists_uploaded_at(doc_client):
+    """`uploaded_at` is required by the model too; the route sets it itself."""
+    client, store = doc_client
+    resp = _post_document(client)
+    entity = store.get_active_entity("acme", "document", resp.json()["document_id"])
+    assert entity["base_data"]["uploaded_at"]
+
+
+def test_create_document_requires_uploaded_by(doc_client):
+    """Omitting it is a validation error, not a silently incomplete record."""
+    client, _ = doc_client
+    body = {
+        "application_id": "RA260001",
+        "filename": "immunization.pdf",
+        "content_type": "application/pdf",
+        "size": 1024,
+        "sensitive": True,
+    }
+    resp = client.post("/api/documents/acme", json=body)
+    assert resp.status_code == 422
+    assert any(e["loc"][-1] == "uploaded_by" for e in resp.json()["detail"])
 
 
 def test_document_ids_are_sequential(doc_client):

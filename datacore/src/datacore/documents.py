@@ -27,6 +27,22 @@ def build_storage_key(tenant_id: str, application_id: str, document_id: str, fil
 
 
 def presign_upload(storage_key: str, content_type: str) -> str:
+    """Presign an R2 PUT for `storage_key`.
+
+    SIZE IS NOT ENFORCED. `Content-Type` is bound into the signature, but
+    S3v4 PUT presigning cannot express a length range — the returned URL
+    accepts a body of any size for the whole TTL (see `_ttl()`, 900s by
+    default). The `MAX_SIZE_BYTES` check in `document_routes.create_document`
+    is therefore ADVISORY: it rejects a caller that honestly declares an
+    oversized file, and nothing more.
+
+    The real limit must be an R2/Cloudflare bucket-level object-size cap.
+    Tracked in docs/deployment/follow-ups.md so it is owned at deploy time.
+
+    Not switched to `generate_presigned_post` (which can express a length
+    range via its policy) because that changes the upload contract later
+    plans build against.
+    """
     return _client().generate_presigned_url(
         "put_object",
         Params={

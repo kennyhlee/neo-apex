@@ -49,6 +49,14 @@ class CreateDocumentRequest(BaseModel):
     content_type: str
     size: int
     sensitive: bool = False
+    # Required: `document.uploaded_by` is declared required in
+    # launchpad/backend/app/data/base_model.json, and later routes filter
+    # sensitive documents to those uploaded by the requesting parent. Parent
+    # uploads pass "parent:{application entity_id}"; staff uploads pass the
+    # staff user_id. `store.put_entity` does not validate against the model
+    # definition, so this field being optional would silently write records
+    # missing a declared-required field.
+    uploaded_by: str
 
 
 def _validate_filename(filename: str) -> None:
@@ -94,6 +102,12 @@ def create_document(tenant_id: str, body: CreateDocumentRequest):
     """Register a document and return a presigned upload URL for its bytes."""
     if body.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported content type: {body.content_type}")
+    # ADVISORY ONLY. This checks the size the caller *declares*; the
+    # presigned PUT it hands back cannot enforce it (S3v4 PUT presigning has
+    # no length-range field — see presign_upload's docstring). A caller that
+    # declares 1 KB and uploads 5 GB is not stopped here. The real limit must
+    # be an R2/Cloudflare bucket-level object-size cap; tracked in
+    # docs/deployment/follow-ups.md.
     if body.size > MAX_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="File exceeds the 20 MB limit")
     _validate_filename(body.filename)
@@ -110,6 +124,7 @@ def create_document(tenant_id: str, body: CreateDocumentRequest):
         "size": body.size,
         "storage_key": storage_key,
         "sensitive": body.sensitive,
+        "uploaded_by": body.uploaded_by,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
 
