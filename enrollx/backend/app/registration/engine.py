@@ -357,6 +357,82 @@ def create_application(tenant_id, school_year, channel, applicant_email,
     return {"application": created, "items": items}
 
 
+def model_form_fields(tenant_id, entity_type, token=None) -> list[dict]:
+    """The fields a form block sourced from `entity_type` should render.
+
+    Python twin of flow-runtime's `hydratedFormFields` — the two must agree,
+    because the same config is rendered by the staff host (which hydrates in
+    TypeScript) and by the parent host (which receives what this produces).
+
+    Rules: the entity's own `{entity_type}_id` is auto-generated and never
+    editable, so it is always dropped; for `registration_application` the
+    engine owns every base field, so only the tenant's custom fields are
+    offered. The engine-owned exclusion is deliberately NOT applied to other
+    entity types — `status` is a legitimate student field and dropping it
+    there would silently delete a field staff rely on.
+
+    Never raises: a tenant with no models table, no model for this type, or a
+    malformed definition all degrade to `[]`. A missing model must not 500 a
+    parent's registration page.
+    """
+    try:
+        model = dc.get_model_definition(tenant_id, entity_type, token) or {}
+    except HTTPException:
+        return []
+    base = [f for f in (model.get("base_fields") or []) if isinstance(f, dict)]
+    custom = [f for f in (model.get("custom_fields") or []) if isinstance(f, dict)]
+    if entity_type == "registration_application":
+        fields = custom
+        excluded = {f"{entity_type}_id"} | set(ENGINE_OWNED_APPLICATION_FIELDS)
+    else:
+        fields = base + custom
+        excluded = {f"{entity_type}_id"}
+    return [f for f in fields if f.get("name") not in excluded]
+
+
+def hydrate_config_blocks(tenant_id, config_row, token=None):
+    """Return `config_row` with every entity-sourced form block carrying a
+    resolved `config.fields` list.
+
+    flow-runtime never fetches anything: the HOST supplies `config.fields`.
+    The enrollx frontend does that itself, but familyhub holds no DataCore
+    credential at all, so without this an entity-sourced form block renders
+    ZERO fields on the parent channel — the channel that matters most, and
+    the one spec §4 is about ("tenants who customized their application model
+    during model setup see their fields without touching the builder").
+
+    Builder-authored blocks (`config.custom_fields`, no `entity_type`) are
+    left untouched; `formFields()` already prefers a hydrated list when one
+    is present, so this is purely additive to the stored config — nothing is
+    written back to DataCore.
+    """
+    if not config_row:
+        return config_row
+    try:
+        blocks = json.loads(config_row.get("blocks") or "[]")
+    except json.JSONDecodeError:
+        return config_row
+    cache: dict[str, list[dict]] = {}
+    changed = False
+    for b in blocks:
+        if not isinstance(b, dict) or b.get("type") != "form":
+            continue
+        cfg = dict(b.get("config") or {})
+        entity_type = cfg.get("entity_type")
+        if not isinstance(entity_type, str) or not entity_type:
+            continue
+        if entity_type not in cache:
+            cache[entity_type] = model_form_fields(tenant_id, entity_type, token)
+        cfg["fields"] = cache[entity_type]
+        b["config"] = cfg
+        changed = True
+    if not changed:
+        return config_row
+    out = dict(config_row)
+    out["blocks"] = json.dumps(blocks)
+    return out
+
+
 def settle_payment_item(tenant_id, application_entity_id, item_row, *, provider, kind,
                         amount, currency="USD", provider_ref=None, recorded_by=None,
                         actor="system", token=None) -> dict:

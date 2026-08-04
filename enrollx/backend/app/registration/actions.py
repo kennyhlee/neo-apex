@@ -71,8 +71,16 @@ def _maybe_enroll(tenant_id, application_entity_id, actor, token):
     return None
 
 
-def _program_label(app_row):
-    return str(app_row.get("program_id", ""))
+def _school_label(tenant_id, app_row, token=None) -> str:
+    """The label every v1 email uses: the school's display name plus the
+    school year (spec §5).
+
+    Replaces the former program name — registration is admission to the
+    school as a whole now, so there is no program to name. BINDING name:
+    app/api/internal.py imports this for the magic-link email.
+    """
+    year = str(app_row.get("school_year", "")).strip()
+    return f"{engine.tenant_label(tenant_id, token)} {year}".strip()
 
 
 # ── runtime handlers ──────────────────────────────────────────────────────
@@ -122,7 +130,7 @@ def _submit(tenant_id, application_entity_id, params, actor, token):
                   and i.get("status") not in engine.ITEM_DONE_STATUSES]
     if incomplete:
         raise HTTPException(409, {"error": "Blocking items incomplete", "items": incomplete})
-    full = engine.is_capacity_full(tenant_id, app_row.get("program_id", ""), token)
+    full = engine.is_capacity_full(tenant_id, app_row.get("school_year", ""), token)
     target = "waitlisted" if full else "submitted"
     updated = engine.set_application_status(
         tenant_id, app_row, target, actor, token,
@@ -131,10 +139,11 @@ def _submit(tenant_id, application_entity_id, params, actor, token):
     if email:
         if target == "submitted":
             subject, body_html = emails.submission_receipt_email(
-                _program_label(app_row), app_row.get("application_id", ""))
+                _school_label(tenant_id, app_row, token), app_row.get("application_id", ""))
             kind = "submission_receipt"
         else:
-            subject, body_html = emails.status_change_email(_program_label(app_row), "waitlisted")
+            subject, body_html = emails.status_change_email(
+                _school_label(tenant_id, app_row, token), "waitlisted")
             kind = "status_change"
         emails.send_application_email(tenant_id, application_entity_id, kind,
                                       email, subject, body_html, token)
@@ -170,7 +179,7 @@ def _reject_item(tenant_id, application_entity_id, params, actor, token):
     email = app_row.get("applicant_email")
     if email:
         subject, body_html = emails.action_needed_email(
-            _program_label(app_row), item.get("title", "item"),
+            _school_label(tenant_id, app_row, token), item.get("title", "item"),
             str(params.get("reason", "")))
         emails.send_application_email(tenant_id, application_entity_id, "action_needed",
                                       email, subject, body_html, token)
@@ -198,7 +207,7 @@ def _request_changes(tenant_id, application_entity_id, params, actor, token):
     email = app_row.get("applicant_email")
     if email:
         subject, body_html = emails.action_needed_email(
-            _program_label(app_row), "Application changes requested", note)
+            _school_label(tenant_id, app_row, token), "Application changes requested", note)
         emails.send_application_email(tenant_id, application_entity_id, "action_needed",
                                       email, subject, body_html, token)
     return {"application": updated}
@@ -211,7 +220,7 @@ def _decline(tenant_id, application_entity_id, params, actor, token):
         extra_changes={"decided_at": engine.now_iso()})
     email = app_row.get("applicant_email")
     if email:
-        subject, body_html = emails.status_change_email(_program_label(app_row), "declined")
+        subject, body_html = emails.status_change_email(_school_label(tenant_id, app_row, token), "declined")
         emails.send_application_email(tenant_id, application_entity_id, "status_change",
                                       email, subject, body_html, token)
     return {"application": updated}
@@ -237,12 +246,12 @@ def _resend_link(tenant_id, application_entity_id, params, actor, token):
     # Do NOT rebind app_row here: update_application returns a
     # {entity_id, entity_type, base_data} envelope, not a flattened row, so
     # _program_label(envelope) returns "" and the email subject silently loses
-    # the program name.
+    # the school label.
     engine.update_application(
         tenant_id, app_row, {"token_version": new_version}, token)
     link_token = tokens.make_link_token(tenant_id, application_entity_id, new_version)
     link = tokens.magic_link_url(link_token)
-    subject, body_html = emails.magic_link_email(_program_label(app_row), link)
+    subject, body_html = emails.magic_link_email(_school_label(tenant_id, app_row, token), link)
     emails.send_application_email(tenant_id, application_entity_id, "magic_link",
                                   email, subject, body_html, token)
     return {"link": link}
@@ -335,6 +344,13 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
         f"family_{family_outcome}:{family_id}", actor, token)
 
     # 2. Student
+    #
+    # NOTE (spec §2): approval's side effects are exactly match-or-create
+    # family, create the student, and start the post-approval due-date
+    # clocks. It deliberately does NOT create an `enrollment` row —
+    # enrollment means "assigned to an activity", which is a separate staff
+    # workflow in AdminDash. The application's own approved/enrolled status
+    # is the record of admission, and it is what capacity counts.
     student_base = {
         "first_name": first_name,
         "last_name": last_name,
@@ -346,15 +362,7 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
             student_base.setdefault(k, v)
     student = dc.dc_create(tenant_id, "student", student_base, token)
 
-    # 3. Enrollment
-    enrollment = dc.dc_create(tenant_id, "enrollment", {
-        "student_id": student["entity_id"],
-        "program_id": app_row.get("program_id", ""),
-        "enrollment_date": engine.now_iso()[:10],
-        "status": "active",
-    }, token)
-
-    # 4. Start due-date clocks on unfinished post-approval items
+    # 3. Start due-date clocks on unfinished post-approval items
     now = datetime.now(timezone.utc)
     for item in engine.get_items(tenant_id, application_entity_id, token):
         days = item.get("due_days_after_approval")
@@ -363,25 +371,24 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
             base["due_at"] = (now + timedelta(days=int(days))).isoformat()
             dc.dc_update(tenant_id, "application_item", item["entity_id"], base, token)
 
-    # 5. Status write with decision fields
+    # 4. Status write with decision fields
     updated = engine.set_application_status(
         tenant_id, app_row, "approved", actor, token,
         extra_changes={"family_id": family_id, "student_id": student["entity_id"],
                        "decided_at": engine.now_iso()})
 
-    # 6. Notify
+    # 5. Notify
     email = app_row.get("applicant_email")
     if email:
-        subject, body_html = emails.status_change_email(_program_label(app_row), "approved")
+        subject, body_html = emails.status_change_email(_school_label(tenant_id, app_row, token), "approved")
         emails.send_application_email(tenant_id, application_entity_id, "status_change",
                                       email, subject, body_html, token)
 
-    # 7. Straight to enrolled if nothing remains open
+    # 6. Straight to enrolled if nothing remains open
     enrolled = _maybe_enroll(tenant_id, application_entity_id, actor, token)
     return {"application": enrolled or updated,
             "family_id": family_id,
-            "student_id": student["entity_id"],
-            "enrollment_id": enrollment["entity_id"]}
+            "student_id": student["entity_id"]}
 
 
 def _publish_config(tenant_id, config_entity_id, params, actor, token):
@@ -408,15 +415,14 @@ def _publish_config(tenant_id, config_entity_id, params, actor, token):
     if errors:
         raise HTTPException(422, {"error": "Invalid blocks", "details": errors})
 
-    program_id = cfg.get("program_id", "")
-    siblings = dc.list_entities(
-        tenant_id, "registration_config",
-        f"program_id = {dc.sql_literal(program_id)}", token)
+    # One lineage per tenant (spec §2): every registration_config row in the
+    # tenant is a sibling.
+    siblings = dc.list_entities(tenant_id, "registration_config", "", token)
 
-    # Archive any currently published config for the same program — item
-    # derivation assumes exactly one published config per program, so two
-    # configs left `published` at once would make it ambiguous which one a
-    # new application derives its items from.
+    # Archive any currently published config — item derivation assumes
+    # exactly one published config per tenant, so two configs left
+    # `published` at once would make it ambiguous which one a new
+    # application derives its items from.
     for p in siblings:
         if p["entity_id"] == cfg["entity_id"] or p.get("status") != "published":
             continue
@@ -439,7 +445,7 @@ def _publish_config(tenant_id, config_entity_id, params, actor, token):
         # rather than something callers must fake by cloning a draft.
         base["version"] = int(cfg.get("version") or 0)
     else:
-        # Scan ALL configs for the program, not just published ones. Scanning
+        # Scan ALL configs for the tenant, not just published ones. Scanning
         # published-only returned 0 whenever none was currently published (e.g.
         # every config archived), handing the new config version 1 and
         # colliding with the archived original.

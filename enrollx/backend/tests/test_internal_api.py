@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.main import app
 from app.registration import tokens
-from tests.fakes import FakeDataCore, install_fake_datacore, seed_program_and_config
+from tests.fakes import FakeDataCore, install_fake_datacore, seed_config
 
 KEY = {"X-Internal-Key": "dev-internal-key-change-in-prod"}
 
@@ -25,15 +25,15 @@ def client(fake_dc):
 
 
 def start(client, email="parent@example.com"):
-    return client.post("/internal/registration/acme/PR1/start", headers=KEY,
+    return client.post("/internal/registration/acme/start", headers=KEY,
                        json={"school_year": "2026-2027", "applicant_email": email})
 
 
 def test_all_internal_routes_require_key(client, fake_dc):
-    seed_program_and_config(fake_dc)
-    assert client.post("/internal/registration/acme/PR1/start",
+    seed_config(fake_dc)
+    assert client.post("/internal/registration/acme/start",
                        json={"school_year": "x", "applicant_email": "a@b.c"}).status_code == 401
-    assert client.get("/internal/registration/acme/PR1/config").status_code == 401
+    assert client.get("/internal/registration/acme/config").status_code == 401
     assert client.post("/internal/registration/acme/request-link",
                        json={"email": "a@b.c"}).status_code == 401
     assert client.get("/internal/application-by-token/abc").status_code == 401
@@ -41,12 +41,12 @@ def test_all_internal_routes_require_key(client, fake_dc):
                        json={"action": "submit"}).status_code == 401
     assert client.get("/internal/application-by-token/abc/documents").status_code == 401
     bad = {"X-Internal-Key": "wrong"}
-    assert client.get("/internal/registration/acme/PR1/config",
+    assert client.get("/internal/registration/acme/config",
                       headers=bad).status_code == 401
 
 
 def test_start_creates_parent_application_with_token(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = start(client)
     assert resp.status_code == 201
     data = resp.json()
@@ -61,20 +61,24 @@ def test_start_creates_parent_application_with_token(client, fake_dc):
                for a in acts)
 
 
-def test_config_bundle_includes_capacity_state(client, fake_dc):
-    seed_program_and_config(fake_dc, capacity=10)
-    resp = client.get("/internal/registration/acme/PR1/config", headers=KEY)
+def test_config_bundle_shape(client, fake_dc):
+    seed_config(fake_dc, capacity=10)
+    resp = client.get("/internal/registration/acme/config", headers=KEY)
     assert resp.status_code == 200
     data = resp.json()
+    assert set(data) == {"config", "tenant", "capacity"}
     assert data["config"]["config_id"] == "cfg1"
-    assert data["program"]["program_id"] == "PR1"
-    assert data["capacity"] == {"capacity": 10, "approved": 0, "enrolled": 0, "full": False}
-    assert client.get("/internal/registration/acme/NOPE/config",
+    assert data["tenant"] == {"tenant_id": "acme", "name": "Acme Afterschool"}
+    assert data["capacity"] == {"capacity": 10, "admitted": 0, "full": False}
+
+
+def test_config_bundle_404s_without_a_published_config(client, fake_dc):
+    assert client.get("/internal/registration/emptytenant/config",
                       headers=KEY).status_code == 404
 
 
 def test_application_by_token_bundle(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     tok = start(client).json()["token"]
     resp = client.get(f"/internal/application-by-token/{tok}", headers=KEY)
     assert resp.status_code == 200
@@ -85,7 +89,7 @@ def test_application_by_token_bundle(client, fake_dc):
 
 
 def test_revoked_token_is_401(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     data = start(client).json()
     eid = data["application"]["entity_id"]
     row = fake_dc.get_entity("acme", "registration_application", eid)
@@ -98,7 +102,7 @@ def test_revoked_token_is_401(client, fake_dc):
 
 
 def test_parent_action_subset_enforced(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     tok = start(client).json()["token"]
     for forbidden in ("approve", "decline", "verify_item", "record_offline_payment",
                       "publish_config", "promote_waitlist"):
@@ -108,7 +112,7 @@ def test_parent_action_subset_enforced(client, fake_dc):
 
 
 def test_parent_can_complete_and_submit(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     data = start(client).json()
     tok = data["token"]
     eid = data["application"]["entity_id"]
@@ -130,7 +134,7 @@ def test_parent_can_complete_and_submit(client, fake_dc):
 
 
 def test_request_link_always_200_and_sends_only_on_match(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     eid = start(client).json()["application"]["entity_id"]
     before = len([a for a in fake_dc.find("application_activity", application_id=eid)
                   if a["type"] == "email_sent"])
@@ -141,7 +145,7 @@ def test_request_link_always_200_and_sends_only_on_match(client, fake_dc):
                       if a["type"] == "email_sent"])
     assert after_miss == before
     resp = client.post("/internal/registration/acme/request-link", headers=KEY,
-                       json={"email": "  PARENT@example.com ", "program_id": "PR1"})
+                       json={"email": "  PARENT@example.com "})
     assert resp.status_code == 200 and resp.json() == {}
     after_hit = len([a for a in fake_dc.find("application_activity", application_id=eid)
                      if a["type"] == "email_sent"])
@@ -149,7 +153,7 @@ def test_request_link_always_200_and_sends_only_on_match(client, fake_dc):
 
 
 def test_documents_route_filters_sensitive_foreign_uploads(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     started = start(client).json()
     eid = started["application"]["entity_id"]
     tok = started["token"]
@@ -179,7 +183,7 @@ def test_non_sensitive_staff_document_is_visible_to_parent(client, fake_dc):
     was always False and EVERY document not uploaded by this parent was
     hidden — including non-sensitive ones a school uploads for them.
     """
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     started = start(client).json()
     eid = started["application"]["entity_id"]
     tok = started["token"]

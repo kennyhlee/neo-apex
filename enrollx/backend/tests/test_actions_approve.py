@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import require_authenticated_user
 from app.main import app
-from tests.fakes import FakeDataCore, install_fake_datacore, seed_program_and_config
+from tests.fakes import FakeDataCore, install_fake_datacore, seed_config
 
 
 @pytest.fixture
@@ -36,9 +36,9 @@ DRAFT = {
 
 
 def submitted_application(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = client.post("/api/registration/acme/applications", json={
-        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin",
+        "school_year": "2026-2027", "channel": "admin",
         "applicant_email": "parent@example.com"})
     created = resp.json()
     eid = created["application"]["entity_id"]
@@ -51,14 +51,14 @@ def submitted_application(client, fake_dc):
 
 
 def test_approve_only_from_submitted_or_in_review(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = client.post("/api/registration/acme/applications", json={
-        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin"})
+        "school_year": "2026-2027", "channel": "admin"})
     eid = resp.json()["application"]["entity_id"]
     assert act(client, eid, "approve").status_code == 409  # still draft
 
 
-def test_approve_creates_family_student_enrollment(client, fake_dc):
+def test_approve_creates_family_and_student_but_no_enrollment(client, fake_dc):
     created = submitted_application(client, fake_dc)
     eid = created["application"]["entity_id"]
     resp = act(client, eid, "approve")
@@ -71,9 +71,10 @@ def test_approve_creates_family_student_enrollment(client, fake_dc):
     assert student["family_id"] == data["family_id"]
     assert student["status"] == "Enrolled"
     assert student["grade_level"] == "3"
-    enrollment = fake_dc.find("enrollment", student_id=data["student_id"])[0]
-    assert enrollment["program_id"] == "PR1" and enrollment["status"] == "active"
-    assert enrollment["entity_id"] == data["enrollment_id"]
+    # Registration must not create enrollment rows any more (spec §2): those
+    # come from the separate activity-assignment workflow in AdminDash.
+    assert fake_dc.find("enrollment") == []
+    assert "enrollment_id" not in data
     row = fake_dc.get_entity("acme", "registration_application", eid)
     assert row["status"] == "approved"
     assert row["family_id"] == data["family_id"]
@@ -133,9 +134,9 @@ def test_draft_email_cannot_override_present_applicant_email(client, fake_dc):
     victim = fake_dc.dc_create("acme", "family", {
         "family_name": "Other Family", "primary_email": "victim@example.com"})
 
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = client.post("/api/registration/acme/applications", json={
-        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin",
+        "school_year": "2026-2027", "channel": "admin",
         "applicant_email": "parent@example.com"})
     created = resp.json()
     eid = created["application"]["entity_id"]
@@ -160,9 +161,9 @@ def test_draft_email_is_used_when_no_applicant_email(client, fake_dc):
     applicant_email still match on it."""
     existing = fake_dc.dc_create("acme", "family", {
         "family_name": "Lee", "primary_email": "draft-only@example.com"})
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     created = client.post("/api/registration/acme/applications", json={
-        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin"}).json()
+        "school_year": "2026-2027", "channel": "admin"}).json()
     eid = created["application"]["entity_id"]
     act(client, eid, "save_draft", draft_data={
         **DRAFT, "family": {**DRAFT["family"],
@@ -197,8 +198,8 @@ def test_approve_logs_which_family_it_matched_or_created(client, fake_dc):
 # ── I8: approvals with no identifying data must not mint junk ─────────────
 
 def _submitted_with_draft(client, fake_dc, draft, applicant_email=None):
-    seed_program_and_config(fake_dc)
-    body = {"program_id": "PR1", "school_year": "2026-2027", "channel": "admin"}
+    seed_config(fake_dc)
+    body = {"school_year": "2026-2027", "channel": "admin"}
     if applicant_email:
         body["applicant_email"] = applicant_email
     created = client.post("/api/registration/acme/applications", json=body).json()

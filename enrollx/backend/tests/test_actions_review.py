@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.auth import require_authenticated_user
 from app.main import app
 from app.registration import tokens
-from tests.fakes import FakeDataCore, install_fake_datacore, seed_program_and_config
+from tests.fakes import FakeDataCore, install_fake_datacore, seed_config
 
 
 @pytest.fixture
@@ -29,9 +29,9 @@ def act(client, app_eid, action, **params):
 
 
 def submitted_application(client, fake_dc, capacity=None):
-    seed_program_and_config(fake_dc, capacity=capacity)
+    seed_config(fake_dc, capacity=capacity)
     resp = client.post("/api/registration/acme/applications", json={
-        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin",
+        "school_year": "2026-2027", "channel": "admin",
         "applicant_email": "parent@example.com"})
     created = resp.json()
     eid = created["application"]["entity_id"]
@@ -178,9 +178,9 @@ def test_decline_stamps_decided_at_and_emails(client, fake_dc):
 
 
 def test_decline_illegal_transition_409(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = client.post("/api/registration/acme/applications", json={
-        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin",
+        "school_year": "2026-2027", "channel": "admin",
         "applicant_email": "parent@example.com"})
     eid = resp.json()["application"]["entity_id"]
     # Still in draft: draft -> declined is not an allowed transition.
@@ -190,7 +190,12 @@ def test_decline_illegal_transition_409(client, fake_dc):
 # ── promote_waitlist ────────────────────────────────────────────────────
 
 def test_promote_waitlist(client, fake_dc):
-    created = submitted_application(client, fake_dc, capacity=0)  # forces waitlisted
+    # capacity=1 with one seat already taken for THIS school year forces the
+    # waitlist. (capacity=0 no longer works for this: spec §2 defines an
+    # absent or zero tenant capacity as unlimited, not as "full".)
+    fake_dc.dc_create("acme", "registration_application", {
+        "application_id": "A0", "school_year": "2026-2027", "status": "approved"})
+    created = submitted_application(client, fake_dc, capacity=1)
     eid = created["application"]["entity_id"]
     assert fake_dc.get_entity("acme", "registration_application", eid)["status"] == "waitlisted"
     assert act(client, eid, "promote_waitlist").status_code == 200
@@ -218,12 +223,12 @@ def test_resend_link_returns_link_and_logs(client, fake_dc):
                for a in acts)
 
 
-def test_resend_link_email_subject_keeps_the_program_name(client, fake_dc):
+def test_resend_link_email_subject_keeps_the_school_label(client, fake_dc):
     """M1 regression. _resend_link rebound app_row to
     engine.update_application's return value, which is a
     {entity_id, entity_type, base_data} ENVELOPE rather than a flattened row.
-    _program_label(envelope) then returned "", silently dropping the program
-    name from the resend email subject.
+    _school_label(envelope) then lost the school_year, silently dropping half
+    the label from the resend email subject.
     """
     sent = []
     monkey = __import__("app.registration.emails", fromlist=["emails"])
@@ -240,14 +245,14 @@ def test_resend_link_email_subject_keeps_the_program_name(client, fake_dc):
 
     assert sent, "no email was sent"
     to, subject, body_html = sent[-1]
-    assert subject == "Your registration link \u2014 PR1"
-    assert "PR1" in body_html
+    assert subject == "Your registration link \u2014 Acme Afterschool 2026-2027"
+    assert "Acme Afterschool 2026-2027" in body_html
 
 
 def test_resend_link_400_without_email(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = client.post("/api/registration/acme/applications", json={
-        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin"})
+        "school_year": "2026-2027", "channel": "admin"})
     eid = resp.json()["application"]["entity_id"]
     assert act(client, eid, "resend_link").status_code == 400
 

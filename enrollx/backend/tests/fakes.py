@@ -86,6 +86,9 @@ def _scalar_to_str(v):
 class FakeDataCore:
     def __init__(self):
         self.rows: list[dict] = []
+        # Tenant model definitions, keyed (tenant_id, entity_type). Backs the
+        # `models` table read that config hydration performs.
+        self.models: dict[tuple[str, str], dict] = {}
         self.seq = 0
 
     @staticmethod
@@ -169,6 +172,14 @@ class FakeDataCore:
             pairs.append((m.group(1), m.group(2)))
         return pairs
 
+    # ── models table (used by config hydration) ───────────────────────────
+    def set_model(self, tenant_id, entity_type, definition):
+        """Seed one entity type's model definition for this tenant."""
+        self.models[(tenant_id, entity_type)] = definition
+
+    def get_model_definition(self, tenant_id, entity_type, token=None):
+        return self.models.get((tenant_id, entity_type))
+
     # ── test conveniences ─────────────────────────────────────────────────
     def find(self, entity_type, **fields):
         return [r for r in self.rows if r["entity_type"] == entity_type
@@ -178,7 +189,8 @@ class FakeDataCore:
 def install_fake_datacore(monkeypatch, fdc: FakeDataCore):
     from app.registration import datacore as dc
 
-    for name in ("dc_create", "dc_update", "next_id", "list_entities", "get_entity"):
+    for name in ("dc_create", "dc_update", "next_id", "list_entities", "get_entity",
+                 "get_model_definition"):
         monkeypatch.setattr(dc, name, getattr(fdc, name))
     monkeypatch.setattr(dc, "dc_query", fdc._no_raw_query)
 
@@ -209,19 +221,20 @@ BLOCKS = [
 
 
 def seed_config(fdc: FakeDataCore, tenant="acme", capacity=None):
-    """Seed the tenant's ONE published registration config.
+    """Seed a named tenant row plus the tenant's ONE published registration
+    config.
 
-    `capacity` is written on the TENANT entity (whose entity_id IS the
-    tenant_id) — capacity is school-wide now, not per program. The tenant row
-    is created whenever a capacity is supplied; tests needing a named tenant
-    row without a capacity seed one themselves (see
-    test_registration_engine.seed_tenant).
+    The tenant row is ALWAYS created: `engine.tenant_label` reads it for every
+    outgoing email subject, so without it every email in the suite would be
+    labelled with the raw tenant_id and the label assertions would be
+    testing a fallback rather than the real path. `capacity`, when given, is
+    written on that same row — capacity is school-wide now, not per program.
+    Its entity_id IS the tenant_id (platform invariant).
     """
+    base = {"name": "Acme Afterschool", "display_name": "Acme Afterschool"}
     if capacity is not None:
-        fdc.rows.append(FakeDataCore._store_row(
-            tenant, "tenant", tenant,
-            {"name": "Acme Afterschool", "display_name": "Acme Afterschool",
-             "capacity": capacity}))
+        base["capacity"] = capacity
+    fdc.rows.append(FakeDataCore._store_row(tenant, "tenant", tenant, base))
     fdc.dc_create(tenant, "registration_config", {
         "config_id": "cfg1", "version": 1,
         "status": "published", "blocks": json.dumps(BLOCKS)})

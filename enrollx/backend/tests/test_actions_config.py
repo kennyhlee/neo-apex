@@ -31,9 +31,9 @@ def publish(client, config_eid):
                        json={"action": "publish_config"})
 
 
-def draft_config(fake_dc, blocks=BLOCKS, program_id="PR1", version=1):
+def draft_config(fake_dc, blocks=BLOCKS, version=1):
     return fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "cfg-d", "program_id": program_id, "version": version,
+        "config_id": "cfg-d", "version": version,
         "status": "draft", "blocks": json.dumps(blocks)})
 
 
@@ -50,7 +50,7 @@ def test_publish_first_config(client, fake_dc):
 
 def test_publish_archives_prior_and_bumps_version(client, fake_dc):
     old = fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "cfg-old", "program_id": "PR1", "version": 3,
+        "config_id": "cfg-old", "version": 3,
         "status": "published", "blocks": json.dumps(BLOCKS)})
     new = draft_config(fake_dc)
     assert publish(client, new["entity_id"]).status_code == 200
@@ -78,7 +78,7 @@ def test_publish_with_business_config_id_404s(client, fake_dc):
     the contract fails loudly here rather than silently in a second host.
     """
     cfg = fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "ACME-RC260001", "program_id": "PR1", "version": 1,
+        "config_id": "ACME-RC260001", "version": 1,
         "status": "draft", "blocks": json.dumps(BLOCKS)})
     assert cfg["entity_id"] != cfg["base_data"]["config_id"]
 
@@ -95,7 +95,7 @@ def test_publish_with_business_config_id_404s(client, fake_dc):
 
 def test_publish_already_published_409(client, fake_dc):
     cfg = fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "c", "program_id": "PR1", "version": 1,
+        "config_id": "c", "version": 1,
         "status": "published", "blocks": json.dumps(BLOCKS)})
     assert publish(client, cfg["entity_id"]).status_code == 409
 
@@ -109,7 +109,7 @@ def test_publish_invalid_blocks_422(client, fake_dc):
 
 def test_publish_unparseable_blocks_422(client, fake_dc):
     cfg = fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "c", "program_id": "PR1", "version": 1,
+        "config_id": "c", "version": 1,
         "status": "draft", "blocks": "not-json"})
     assert publish(client, cfg["entity_id"]).status_code == 422
 
@@ -123,7 +123,7 @@ def test_new_config_does_not_collide_when_nothing_is_published(client, fake_dc):
     get_config_for_application still resolves pins against.
     """
     archived = fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "cfg-old", "program_id": "PR1", "version": 1,
+        "config_id": "cfg-old", "version": 1,
         "status": "archived", "blocks": json.dumps(BLOCKS)})
     new = draft_config(fake_dc)
     assert publish(client, new["entity_id"]).status_code == 200
@@ -143,10 +143,10 @@ def test_republishing_archived_config_preserves_its_version(client, fake_dc):
     different config. Re-publish is a rollback: the version is preserved.
     """
     v1 = fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "cfg-v1", "program_id": "PR1", "version": 1,
+        "config_id": "cfg-v1", "version": 1,
         "status": "archived", "blocks": json.dumps(BLOCKS)})
     v2 = fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "cfg-v2", "program_id": "PR1", "version": 2,
+        "config_id": "cfg-v2", "version": 2,
         "status": "published", "blocks": json.dumps(BLOCKS)})
 
     assert publish(client, v1["entity_id"]).status_code == 200
@@ -155,13 +155,13 @@ def test_republishing_archived_config_preserves_its_version(client, fake_dc):
     v2_row = fake_dc.get_entity("acme", "registration_config", v2["entity_id"])
     assert v1_row["status"] == "published" and int(v1_row["version"]) == 1
     # The previously-published config was archived, keeping exactly one
-    # published config per program.
+    # published config per tenant.
     assert v2_row["status"] == "archived" and int(v2_row["version"]) == 2
 
     # An application pinned to version 2 still resolves to the SAME config it
     # was created under, not the newly re-published one.
     resolved = engine.get_config_for_application(
-        "acme", {"program_id": "PR1", "config_version": 2})
+        "acme", {"config_version": 2})
     assert resolved["entity_id"] == v2["entity_id"]
 
 
@@ -169,10 +169,10 @@ def test_republish_then_new_draft_gets_a_fresh_version(client, fake_dc):
     """Preserving a version on rollback must not make the next real publish
     reuse a number."""
     fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "cfg-v1", "program_id": "PR1", "version": 1,
+        "config_id": "cfg-v1", "version": 1,
         "status": "archived", "blocks": json.dumps(BLOCKS)})
     fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "cfg-v2", "program_id": "PR1", "version": 2,
+        "config_id": "cfg-v2", "version": 2,
         "status": "archived", "blocks": json.dumps(BLOCKS)})
     fresh = draft_config(fake_dc)
     assert publish(client, fresh["entity_id"]).status_code == 200
@@ -180,11 +180,19 @@ def test_republish_then_new_draft_gets_a_fresh_version(client, fake_dc):
                                   fresh["entity_id"])["version"]) == 3
 
 
-def test_version_scan_is_scoped_per_program(client, fake_dc):
-    fake_dc.dc_create("acme", "registration_config", {
-        "config_id": "other", "program_id": "PR2", "version": 9,
+def test_publish_leaves_exactly_one_published_config_for_the_tenant(client, fake_dc):
+    """One lineage per tenant (spec §2): whatever else the tenant has, after a
+    publish there is exactly one published config and the version continues
+    the tenant's own lineage."""
+    other = fake_dc.dc_create("acme", "registration_config", {
+        "config_id": "other", "version": 9,
         "status": "published", "blocks": json.dumps(BLOCKS)})
-    cfg = draft_config(fake_dc, program_id="PR1")
+    cfg = draft_config(fake_dc)
     assert publish(client, cfg["entity_id"]).status_code == 200
-    assert int(fake_dc.get_entity("acme", "registration_config",
-                                  cfg["entity_id"])["version"]) == 1
+    published = [r for r in fake_dc.find("registration_config")
+                 if r["status"] == "published"]
+    assert len(published) == 1
+    assert published[0]["entity_id"] == cfg["entity_id"]
+    assert int(published[0]["version"]) == 10
+    assert fake_dc.get_entity("acme", "registration_config",
+                              other["entity_id"])["status"] == "archived"

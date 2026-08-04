@@ -13,7 +13,15 @@ router = APIRouter()
 
 
 class ApplicationCreate(BaseModel):
-    program_id: str
+    """Whole-school application creation (spec §3).
+
+    `extra="forbid"` is load-bearing, not tidiness: this is a shim-free
+    cutover, so a caller still sending `program_id` must get a loud 422
+    rather than have it silently dropped and a subtly wrong application
+    created.
+    """
+    model_config = ConfigDict(extra="forbid")
+
     school_year: str
     channel: Literal["parent", "admin"]
     applicant_email: str | None = None
@@ -23,9 +31,8 @@ class ApplicationCreate(BaseModel):
 def create_application(tenant_id: str, body: ApplicationCreate,
                        user=Depends(require_staff_tenant)):
     return engine.create_application(
-        tenant_id, body.program_id, body.school_year, body.channel,
-        body.applicant_email, actor=user.get("user_id", "staff"),
-        token=user.get("_token"))
+        tenant_id, body.school_year, body.channel, body.applicant_email,
+        actor=user.get("user_id", "staff"), token=user.get("_token"))
 
 
 class ActionRequest(BaseModel):

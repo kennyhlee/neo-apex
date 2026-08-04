@@ -103,22 +103,22 @@ def test_send_application_email_logs_activity_failed(fake_dc, monkeypatch):
 
 def test_templates_return_subject_and_html():
     for subject, html in (
-        emails.magic_link_email("Fall 2026", "https://x/application/tok"),
-        emails.submission_receipt_email("Fall 2026", "AC-RA260001"),
-        emails.status_change_email("Fall 2026", "approved"),
-        emails.action_needed_email("Fall 2026", "Immunization Record", "blurry scan"),
+        emails.magic_link_email("Acme Afterschool 2026-2027", "https://x/application/tok"),
+        emails.submission_receipt_email("Acme Afterschool 2026-2027", "AC-RA260001"),
+        emails.status_change_email("Acme Afterschool 2026-2027", "approved"),
+        emails.action_needed_email("Acme Afterschool 2026-2027", "Immunization Record", "blurry scan"),
     ):
         assert isinstance(subject, str) and subject
         assert isinstance(html, str) and html.startswith("<")
-    _, html = emails.magic_link_email("Fall 2026", "https://x/application/tok")
+    _, html = emails.magic_link_email("Acme Afterschool 2026-2027", "https://x/application/tok")
     assert "https://x/application/tok" in html
-    _, html = emails.action_needed_email("Fall 2026", "Immunization Record", "blurry scan")
+    _, html = emails.action_needed_email("Acme Afterschool 2026-2027", "Immunization Record", "blurry scan")
     assert "Immunization Record" in html and "blurry scan" in html
 
 
 def test_action_needed_email_escapes_item_title_and_reason():
     _, html_body = emails.action_needed_email(
-        "Fall 2026", "<script>alert(1)</script>", "R&D <bad>"
+        "Acme Afterschool 2026-2027", "<script>alert(1)</script>", "R&D <bad>"
     )
     assert "<script>alert(1)</script>" not in html_body
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html_body
@@ -128,7 +128,7 @@ def test_action_needed_email_escapes_item_title_and_reason():
 def test_magic_link_email_escapes_label_but_not_href():
     link = "https://x/application/tok?a=1&b=2"
     _, html_body = emails.magic_link_email("Fall <2026> & Co", link)
-    # program_label is escaped as HTML content.
+    # school_label is escaped as HTML content.
     assert "Fall &lt;2026&gt; &amp; Co" in html_body
     # The href attribute value is the raw, unescaped URL — escaping it would
     # corrupt the URL (e.g. turn `&` into `&amp;`).
@@ -139,12 +139,12 @@ def test_magic_link_email_escapes_label_but_not_href():
 
 
 def test_submission_receipt_email_escapes_display_id():
-    _, html_body = emails.submission_receipt_email("Fall 2026", "<b>AC-1</b>")
+    _, html_body = emails.submission_receipt_email("Acme Afterschool 2026-2027", "<b>AC-1</b>")
     assert "<b>AC-1</b>" not in html_body
     assert "&lt;b&gt;AC-1&lt;/b&gt;" in html_body
 
 
 def test_status_change_email_escapes_new_status():
-    _, html_body = emails.status_change_email("Fall 2026", "needs<review> & wait")
+    _, html_body = emails.status_change_email("Acme Afterschool 2026-2027", "needs<review> & wait")
     assert "needs<review> & wait" not in html_body
     assert "needs&lt;review&gt; &amp; wait" in html_body

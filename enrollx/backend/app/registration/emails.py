@@ -57,17 +57,21 @@ def send_application_email(tenant_id, application_entity_id, kind, to, subject,
 
 
 # ── v1 templates ──────────────────────────────────────────────────────────
+#
+# `school_label` is the tenant's display name plus the school year (spec §5:
+# "program name replaced by tenant display name + school year"). It is built
+# by `actions._school_label`; it is never a program name.
 
-def magic_link_email(program_label: str, link: str) -> tuple[str, str]:
+def magic_link_email(school_label: str, link: str) -> tuple[str, str]:
     # `link` is a system-constructed URL (see tokens.py), not user free text, so
     # it is used as-is in the href attribute — html.escape()-ing a URL corrupts
     # it (e.g. turns a literal `&` query separator into `&amp;`). Where the same
     # value is rendered as visible anchor *text* it is still escaped like any
     # other text value, since that occurrence is HTML content, not a URL.
-    safe_label = html.escape(program_label)
+    safe_label = html.escape(school_label)
     safe_link_text = html.escape(link)
     return (
-        f"Your registration link — {program_label}",
+        f"Your registration link — {school_label}",
         f"<p>Use this link to continue your registration for {safe_label} "
         f"and to check its status any time:</p>"
         f'<p><a href="{link}">{safe_link_text}</a></p>'
@@ -75,33 +79,33 @@ def magic_link_email(program_label: str, link: str) -> tuple[str, str]:
     )
 
 
-def submission_receipt_email(program_label: str, application_display_id: str) -> tuple[str, str]:
-    safe_label = html.escape(program_label)
+def submission_receipt_email(school_label: str, application_display_id: str) -> tuple[str, str]:
+    safe_label = html.escape(school_label)
     safe_id = html.escape(application_display_id)
     return (
-        f"Application received — {program_label}",
+        f"Application received — {school_label}",
         f"<p>We received your application ({safe_id}) for "
         f"{safe_label}. We will email you when its status changes.</p>",
     )
 
 
-def status_change_email(program_label: str, new_status: str) -> tuple[str, str]:
+def status_change_email(school_label: str, new_status: str) -> tuple[str, str]:
     label = new_status.replace("_", " ")
-    safe_program_label = html.escape(program_label)
+    safe_school_label = html.escape(school_label)
     safe_label = html.escape(label)
     return (
-        f"Application update — {program_label}",
-        f"<p>Your application for {safe_program_label} is now: <strong>{safe_label}</strong>.</p>"
+        f"Application update — {school_label}",
+        f"<p>Your application for {safe_school_label} is now: <strong>{safe_label}</strong>.</p>"
         f"<p>Open your registration link for details and any remaining steps.</p>",
     )
 
 
-def action_needed_email(program_label: str, item_title: str, reason: str) -> tuple[str, str]:
-    safe_label = html.escape(program_label)
+def action_needed_email(school_label: str, item_title: str, reason: str) -> tuple[str, str]:
+    safe_label = html.escape(school_label)
     safe_title = html.escape(item_title)
     why = f" Reason: {html.escape(reason)}" if reason else ""
     return (
-        f"Action needed — {program_label}",
+        f"Action needed — {school_label}",
         f"<p>An item on your application needs attention: "
         f"<strong>{safe_title}</strong>.{why}</p>"
         f"<p>Open your registration link to fix it.</p>",

@@ -20,6 +20,7 @@ defense in depth. The free-form `where` parameter accepted by
 `list_entities`/`get_entity` is NOT validated or escaped by this module —
 see the trust-boundary note on those functions.
 """
+import json
 import re
 
 import httpx
@@ -165,3 +166,34 @@ def get_entity(tenant_id: str, entity_type: str, entity_id: str,
     _validate_id(entity_id, "entity_id")
     rows = list_entities(tenant_id, entity_type, f"entity_id = {sql_literal(entity_id)}", token)
     return rows[0] if rows else None
+
+
+def get_model_definition(tenant_id: str, entity_type: str,
+                         token: str | None = None) -> dict | None:
+    """One entity type's model definition from the tenant's `models` table.
+
+    Separate from the entity helpers above because it targets a different
+    table and a different row shape. `model_definition` arrives as either a
+    dict or a JSON string depending on the storage path, so both are handled.
+
+    Returns None when the tenant has no model for this type, or when the
+    stored definition is unusable — callers must degrade to "no fields"
+    rather than failing a parent's registration over a model that was never
+    set up.
+    """
+    _validate_id(tenant_id, "tenant_id")
+    _validate_id(entity_type, "entity_type")
+    rows = dc_query(
+        tenant_id,
+        f"SELECT * FROM data WHERE entity_type = {sql_literal(entity_type)} "
+        f"AND _status = 'active'",
+        token, table="models")
+    if not rows:
+        return None
+    raw = rows[0].get("model_definition")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    return raw if isinstance(raw, dict) else None

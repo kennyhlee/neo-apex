@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import require_authenticated_user
 from app.main import app
-from tests.fakes import FakeDataCore, install_fake_datacore, seed_program_and_config
+from tests.fakes import FakeDataCore, install_fake_datacore, seed_config
 
 
 @pytest.fixture
@@ -22,12 +22,12 @@ def client(fake_dc):
     app.dependency_overrides.clear()
 
 
-BODY = {"program_id": "PR1", "school_year": "2026-2027",
+BODY = {"school_year": "2026-2027",
         "channel": "admin", "applicant_email": "parent@example.com"}
 
 
 def test_create_application_201_with_items(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = client.post("/api/registration/acme/applications", json=BODY)
     assert resp.status_code == 201
     data = resp.json()
@@ -45,13 +45,29 @@ def test_create_application_201_with_items(client, fake_dc):
 
 
 def test_create_application_404_without_config(client, fake_dc):
-    resp = client.post("/api/registration/acme/applications",
-                       json={**BODY, "program_id": "PRX"})
+    resp = client.post("/api/registration/acme/applications", json=BODY)
     assert resp.status_code == 404
+    assert resp.json()["detail"] == "No published registration config for this tenant"
+
+
+def test_create_application_rejects_program_id_422(client, fake_dc):
+    """Shim-free cutover (spec §8): a caller still sending program_id must
+    fail loudly rather than have it silently ignored."""
+    seed_config(fake_dc)
+    resp = client.post("/api/registration/acme/applications",
+                       json={**BODY, "program_id": "PR1"})
+    assert resp.status_code == 422
+
+
+def test_create_application_requires_school_year_422(client, fake_dc):
+    seed_config(fake_dc)
+    resp = client.post("/api/registration/acme/applications",
+                       json={"channel": "admin"})
+    assert resp.status_code == 422
 
 
 def test_create_application_validates_channel(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = client.post("/api/registration/acme/applications",
                        json={**BODY, "channel": "carrier-pigeon"})
     assert resp.status_code == 422

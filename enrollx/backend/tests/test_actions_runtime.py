@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import require_authenticated_user
 from app.main import app
-from tests.fakes import FakeDataCore, install_fake_datacore, seed_program_and_config
+from tests.fakes import FakeDataCore, install_fake_datacore, seed_config
 
 
 @pytest.fixture
@@ -25,9 +25,9 @@ def client(fake_dc):
 
 
 def create_application(client, fake_dc, capacity=None):
-    seed_program_and_config(fake_dc, capacity=capacity)
+    seed_config(fake_dc, capacity=capacity)
     resp = client.post("/api/registration/acme/applications", json={
-        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin",
+        "school_year": "2026-2027", "channel": "admin",
         "applicant_email": "parent@example.com"})
     assert resp.status_code == 201
     return resp.json()
@@ -54,7 +54,7 @@ def test_unknown_action_is_400(client, fake_dc):
 
 
 def test_unknown_application_is_404(client, fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = act(client, "nope", "save_draft", draft_data={})
     assert resp.status_code == 404
 
@@ -122,10 +122,10 @@ def test_submit_happy_path_emails_and_logs(client, fake_dc):
                for a in acts)
 
 
-def test_submit_waitlists_when_program_full(client, fake_dc):
+def test_submit_waitlists_when_the_school_year_is_full(client, fake_dc):
     created = create_application(client, fake_dc, capacity=1)
     fake_dc.dc_create("acme", "registration_application", {
-        "application_id": "A9", "program_id": "PR1", "status": "approved"})
+        "application_id": "A9", "school_year": "2026-2027", "status": "approved"})
     complete_all_blocking(client, created)
     eid = created["application"]["entity_id"]
     assert act(client, eid, "submit").status_code == 200
@@ -134,6 +134,19 @@ def test_submit_waitlists_when_program_full(client, fake_dc):
     acts = fake_dc.find("application_activity", application_id=eid)
     assert any(a["type"] == "email_sent" and a["to_value"].startswith("status_change:")
                for a in acts)
+
+
+def test_submit_is_not_waitlisted_by_a_different_school_year(client, fake_dc):
+    """Capacity is counted per (tenant, school_year) — a full prior year must
+    not push this year's applicants onto the waitlist."""
+    created = create_application(client, fake_dc, capacity=1)
+    fake_dc.dc_create("acme", "registration_application", {
+        "application_id": "A9", "school_year": "2025-2026", "status": "approved"})
+    complete_all_blocking(client, created)
+    eid = created["application"]["entity_id"]
+    assert act(client, eid, "submit").status_code == 200
+    assert fake_dc.get_entity(
+        "acme", "registration_application", eid)["status"] == "submitted"
 
 
 def test_double_submit_409(client, fake_dc):
@@ -147,7 +160,7 @@ def test_double_submit_409(client, fake_dc):
 # ── auth boundary ────────────────────────────────────────────────────────
 
 def test_action_requires_auth(fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     resp = TestClient(app).post(
         "/api/registration/acme/applications/anything/actions",
         json={"action": "save_draft", "draft_data": {}})
@@ -163,7 +176,7 @@ def test_action_cross_tenant_403(client, fake_dc):
 
 
 def test_action_parent_role_403(fake_dc):
-    seed_program_and_config(fake_dc)
+    seed_config(fake_dc)
     app.dependency_overrides[require_authenticated_user] = lambda: {
         "user_id": "p1", "tenant_id": "acme", "role": "parent", "_token": "Bearer x"}
     try:
