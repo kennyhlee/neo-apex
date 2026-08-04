@@ -54,3 +54,51 @@ def test_validate_blocks_review_must_be_last():
 
 def test_validate_blocks_rejects_empty():
     assert validate_blocks([]) == ["blocks must be a non-empty array"]
+
+
+def test_validate_blocks_rejects_missing_required_flag():
+    errs = validate_blocks([
+        {"block_id": "b1", "type": "form", "title": "Form",
+         "blocking": True, "config": {}},
+    ])
+    assert any("'required' must be a bool" in e for e in errs)
+
+
+def test_validate_blocks_rejects_non_bool_blocking():
+    errs = validate_blocks([
+        {"block_id": "b1", "type": "form", "title": "Form", "required": True,
+         "blocking": "yes", "config": {}},
+    ])
+    assert any("'blocking' must be a bool" in e for e in errs)
+
+
+def test_validate_blocks_rejects_missing_config():
+    errs = validate_blocks([
+        {"block_id": "b1", "type": "message", "title": "Msg",
+         "required": False, "blocking": False},
+    ])
+    assert any("'config' must be an object" in e for e in errs)
+
+
+def test_validate_blocks_rejects_non_integer_due_days():
+    float_errs = validate_blocks([
+        {"block_id": "b1", "type": "form", "title": "Form", "required": True,
+         "blocking": True, "config": {}, "due_days_after_approval": 3.5},
+    ])
+    assert any("due_days_after_approval must be an integer" in e for e in float_errs)
+
+    str_errs = validate_blocks([
+        {"block_id": "b1", "type": "form", "title": "Form", "required": True,
+         "blocking": True, "config": {}, "due_days_after_approval": "14"},
+    ])
+    assert any("due_days_after_approval must be an integer" in e for e in str_errs)
+
+
+def test_validate_blocks_rejects_duplicate_block_id():
+    errs = validate_blocks([
+        {"block_id": "dup", "type": "message", "title": "One", "required": False,
+         "blocking": False, "config": {}},
+        {"block_id": "dup", "type": "message", "title": "Two", "required": False,
+         "blocking": False, "config": {}},
+    ])
+    assert any("duplicate block_id" in e and "dup" in e for e in errs)

@@ -66,7 +66,15 @@ def derive_items(blocks: list[dict]) -> list[dict]:
 
 
 def validate_blocks(blocks) -> list[str]:
-    """Validate a parsed block list at publish time. Empty list = valid."""
+    """Validate a parsed block list against the full `FlowBlock` shape contract
+    (`flow-runtime/src/types.ts`) at publish time. Empty list = valid.
+
+    Enforces SHAPE only: block_id/type/title/required/blocking/config presence
+    and type, plus the type-specific config checks already carried over from
+    the original implementation (documents/payment_plan/review-last). Does not
+    validate config payloads beyond that — deeper per-block-type config rules
+    are a later task's concern.
+    """
     if not isinstance(blocks, list) or not blocks:
         return ["blocks must be a non-empty array"]
     errors: list[str] = []
@@ -77,6 +85,8 @@ def validate_blocks(blocks) -> list[str]:
             errors.append(f"{where}: must be an object")
             continue
         bid = b.get("block_id")
+        if isinstance(bid, str) and bid:
+            where = f"blocks[{i}] (block_id={bid!r})"
         if not bid or not isinstance(bid, str):
             errors.append(f"{where}: block_id is required")
         elif bid in seen:
@@ -86,11 +96,20 @@ def validate_blocks(blocks) -> list[str]:
         btype = b.get("type")
         if btype not in ALLOWED_BLOCK_TYPES:
             errors.append(f"{where}: type must be one of {sorted(ALLOWED_BLOCK_TYPES)}")
-        if not b.get("title"):
+        title = b.get("title")
+        if not isinstance(title, str) or not title:
             errors.append(f"{where}: title is required")
+        if "required" not in b or not isinstance(b.get("required"), bool):
+            errors.append(f"{where}: 'required' must be a bool")
+        if "blocking" not in b or not isinstance(b.get("blocking"), bool):
+            errors.append(f"{where}: 'blocking' must be a bool")
+        if "due_days_after_approval" in b:
+            ddaa = b.get("due_days_after_approval")
+            if not isinstance(ddaa, int) or isinstance(ddaa, bool):
+                errors.append(f"{where}: due_days_after_approval must be an integer")
         cfg = b.get("config")
-        if cfg is not None and not isinstance(cfg, dict):
-            errors.append(f"{where}: config must be an object")
+        if "config" not in b or not isinstance(cfg, dict):
+            errors.append(f"{where}: 'config' must be an object")
         cfg = cfg if isinstance(cfg, dict) else {}
         if btype == "documents":
             docs = cfg.get("docs")
