@@ -44,6 +44,15 @@ class RateLimiter:
 
 start_limiter = RateLimiter(max_requests=10, window_seconds=60.0)
 request_link_limiter = RateLimiter(max_requests=10, window_seconds=60.0)
+# The presign route is the only token-scoped surface that WRITES: every call
+# creates a `document` row in DataCore and hands back an R2 PUT URL. DataCore's
+# size check is advisory only -- a presigned PUT carries no length-range field
+# (document_routes.py:105-110) -- so an unthrottled valid token buys unbounded
+# rows AND unbounded bytes into the bucket, with each successive call costing
+# more than the last (`_next_document_id`'s `_max_entity_seq` scan). Limit is
+# higher than the other two because a legitimate family uploads several
+# documents in one sitting and may retry a failed upload.
+document_presign_limiter = RateLimiter(max_requests=20, window_seconds=60.0)
 
 
 def _client_ip(request: Request) -> str:
@@ -56,3 +65,7 @@ def limit_start(request: Request) -> None:
 
 def limit_request_link(request: Request) -> None:
     request_link_limiter.check(_client_ip(request))
+
+
+def limit_document_presign(request: Request) -> None:
+    document_presign_limiter.check(_client_ip(request))

@@ -14,7 +14,12 @@ module re-checks either property.
 Authorization order, identical on both routes -- no upstream write or
 presign call is made until every check has passed:
 
-1. Cheap local validation (content type / size) -- never touches the network.
+0. Per-IP rate limit on the presign route (`app/ratelimit.py`) -- it is the
+   platform's only token-scoped route that WRITES, and DataCore's size check
+   is advisory, so an unthrottled valid token buys unbounded rows and bytes.
+1. Cheap local validation (token shape, content type, size) -- never touches
+   the network. `parse_token` runs first so a garbage token costs no upstream
+   call.
 2. enrollx validates the magic-link token via
    `GET /internal/application-by-token/{token}`. That is the ONLY signature
    check: enrollx's `resolve_token` verifies against the row's STORED
@@ -27,7 +32,9 @@ presign call is made until every check has passed:
    attributing an upload to the wrong family.
 4. Facade authorization: item kind/ownership on upload, `uploaded_by`
    ownership on download.
-5. Only then is DataCore's blob API called.
+5. Only then is DataCore's blob API called -- and its response is relayed by
+   `_relay_datacore` (status forwarded, body never), NOT by `app.relay.relay`,
+   which stays the policy for the enrollx hops alone.
 
 THE `uploaded_by` PROPERTY
 --------------------------
@@ -50,16 +57,21 @@ rule is exact equality against this token's own tag, never a prefix test
 and never "anything unprefixed is safe".
 """
 import json as jsonlib
+import logging
 import re
 from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict
 
+from app.ratelimit import limit_document_presign
 from app.relay import relay as _relay
 from app.relay import upstream_unavailable
 from app.tokenutil import parse_token
 from app.upstream import call_upstream, datacore, enrollx, internal_headers
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -89,6 +101,42 @@ def _id_safe(value: str) -> bool:
     return bool(value) and bool(_ID_RE.fullmatch(value))
 
 
+def _relay_datacore(resp, failure_detail: str) -> Response:
+    """Relay a DataCore blob response: success bodies verbatim, error bodies
+    NEVER.
+
+    `app.relay.relay` passes 4xx bodies through verbatim, and that policy was
+    justified by auditing ENROLLX's strings, which are parent-facing by
+    design. DataCore's were never audited and are not parent-facing: reachable
+    ones today include "Tenant not set up" (leaks provisioning state) and
+    `str(ValueError)` out of `put_entity`, which names internal field keys and
+    is unbounded going forward (document_routes.py:85,138-139). So the status
+    is forwarded -- the caller still needs to tell a 404 from a 413 -- and the
+    body is replaced with a fixed message, exactly the boundary enrollx's
+    sibling staff proxy already draws for these same two endpoints
+    (enrollx/backend/app/api/documents.py:74-82). `relay` itself is left
+    untouched: Tasks 4 and 5 depend on its current behaviour, and it stays the
+    policy for the enrollx hops, whose 4xx bodies ARE the real answer for a
+    parent.
+    """
+    if resp.status_code in (200, 201):
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            media_type=resp.headers.get("content-type", "application/json"),
+        )
+    # Logged for operators; never returned. `.text` on a real httpx.Response,
+    # falling back to raw bytes for any response object that lacks it.
+    logger.warning("DataCore blob call failed (%s): %s", resp.status_code,
+                   getattr(resp, "text", None) or resp.content)
+    if resp.status_code >= 500 or resp.status_code < 400:
+        # >=500 is masked exactly as `relay` masks it (same fixed body); an
+        # unexpected non-2xx/non-4xx is treated the same way rather than
+        # forwarded as a status the parent's client would misread.
+        return upstream_unavailable()
+    raise HTTPException(resp.status_code, detail=failure_detail)
+
+
 def _data(entity) -> dict:
     """Read an entity's fields.
 
@@ -115,7 +163,11 @@ def _fetch_bundle(token: str):
         # ADJUST(bindings) checked: bindings §3 confirms this exact path and
         # its `{application, items, config}` response -- internal.py:123-130.
         # Roadmap-contract default was already correct; no change made.
-        enrollx(f"/internal/application-by-token/{token}"),
+        # `quote(..., safe="")` so no character in a token can restructure
+        # the upstream URL. Tokens are urlsafe-b64 today, so this changes
+        # nothing reachable -- it is hardening at the interpolation site
+        # rather than a property inherited from the token alphabet.
+        enrollx(f"/internal/application-by-token/{quote(token, safe='')}"),
         headers=internal_headers(),
     )
     if resp.status_code >= 400:
@@ -129,25 +181,29 @@ def _fetch_bundle(token: str):
     return bundle, None
 
 
-def _scope(token: str, bundle: dict):
-    """(tenant_id, application_entity_id, None) or (None, None, error).
+def _verify_scope(tenant_id: str, token_application_id: str, bundle: dict):
+    """(application_entity_id, None) or (None, error).
 
     The application entity_id comes from enrollx's own resolution of the
     token -- the authoritative answer -- and must agree with the token's
     middle segment (which enrollx signed over: tokens.py:31-37,54-57). A
     disagreement can only mean a contract change or a bug, and silently
     preferring either value would mis-attribute an upload, so fail closed.
+
+    `parse_token` runs BEFORE the enrollx round-trip in both routes (it is
+    a pure decode with no network cost), so a garbage token is answered 400
+    without spending an upstream call -- which matters most on the presign
+    route, the one route that writes.
     """
-    tenant_id, token_application_id = parse_token(token)
     app_raw = bundle.get("application")
     app_raw = app_raw if isinstance(app_raw, dict) else {}
     app_row = _data(app_raw)
     entity_id = str(app_row.get("entity_id") or app_raw.get("entity_id") or "")
     if not entity_id or entity_id != token_application_id:
-        return None, None, upstream_unavailable()
+        return None, upstream_unavailable()
     if not _id_safe(tenant_id) or not _id_safe(entity_id):
-        return None, None, upstream_unavailable()
-    return tenant_id, entity_id, None
+        return None, upstream_unavailable()
+    return entity_id, None
 
 
 def _find_item(bundle: dict, item_id: str):
@@ -174,7 +230,11 @@ def _find_item(bundle: dict, item_id: str):
         data = _data(raw)
         if data.get("item_id") == item_id:
             entity_id = raw.get("entity_id") if isinstance(raw, dict) else None
-            return data, str(entity_id or "")
+            entity_id = str(entity_id or data.get("entity_id") or "")
+            # No entity_id to canonicalize to: treat as unresolvable rather
+            # than forwarding an empty `item_id`, which would silently strip
+            # the document's linkage to the item it satisfies.
+            return (data, entity_id) if entity_id else None
     return None
 
 
@@ -230,9 +290,14 @@ class CreateDocumentBody(BaseModel):
     size: int
 
 
-@router.post("/application/{token}/documents")
+@router.post("/application/{token}/documents",
+             dependencies=[Depends(limit_document_presign)])
 def create_document(token: str, body: CreateDocumentBody) -> Response:
-    """Presign an upload slot for this token's application."""
+    """Presign an upload slot for this token's application.
+
+    Rate limited per IP: this is the platform's only token-scoped route that
+    WRITES, and DataCore's size check is advisory (see ratelimit.py).
+    """
     if body.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -246,10 +311,13 @@ def create_document(token: str, body: CreateDocumentBody) -> Response:
             detail="File must be 20 MB or smaller",
         )
 
+    # Shape-check the token before spending an upstream call on it.
+    tenant_id, token_application_id = parse_token(token)
+
     bundle, error = _fetch_bundle(token)
     if error is not None:
         return error
-    tenant_id, application_entity_id, error = _scope(token, bundle)
+    application_entity_id, error = _verify_scope(tenant_id, token_application_id, bundle)
     if error is not None:
         return error
 
@@ -295,7 +363,8 @@ def create_document(token: str, body: CreateDocumentBody) -> Response:
             "uploaded_by": f"parent:{application_entity_id}",
         },
     )
-    return _relay(resp)
+    # DataCore hop: status forwarded, body never (see _relay_datacore).
+    return _relay_datacore(resp, "Could not start the upload. Please try again.")
 
 
 @router.get("/application/{token}/documents/{document_id}/url")
@@ -320,10 +389,12 @@ def get_document_url(token: str, document_id: str) -> Response:
     URL, and the tenant comes from the signed token, so no crafted path
     segment can reach DataCore even if both checks were somehow satisfied.
     """
+    tenant_id, token_application_id = parse_token(token)
+
     bundle, error = _fetch_bundle(token)
     if error is not None:
         return error
-    tenant_id, application_entity_id, error = _scope(token, bundle)
+    application_entity_id, error = _verify_scope(tenant_id, token_application_id, bundle)
     if error is not None:
         return error
 
@@ -333,7 +404,8 @@ def get_document_url(token: str, document_id: str) -> Response:
         # and its `{documents: [{entity_id, document_id, filename,
         # uploaded_by, item_id}]}` response (internal.py:144-161).
         # Roadmap-contract default was already correct; no change made.
-        enrollx(f"/internal/application-by-token/{token}/documents"),
+        # `quote(..., safe="")` for the same reason as in _fetch_bundle.
+        enrollx(f"/internal/application-by-token/{quote(token, safe='')}/documents"),
         headers=internal_headers(),
     )
     if resp.status_code >= 400:
@@ -381,4 +453,5 @@ def get_document_url(token: str, document_id: str) -> Response:
         # was already correct; no change made.
         datacore(f"/api/documents/{tenant_id}/{resolved_id}/url"),
     )
-    return _relay(dresp)
+    # DataCore hop: status forwarded, body never (see _relay_datacore).
+    return _relay_datacore(dresp, "That document is not available right now.")

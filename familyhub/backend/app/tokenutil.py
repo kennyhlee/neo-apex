@@ -18,10 +18,16 @@ from fastapi import HTTPException, status
 
 
 def parse_token(token: str) -> tuple[str, str]:
+    # Unbounded split + exact-3 unpack, mirroring enrollx's parse_link_token
+    # (registration/tokens.py:81) EXACTLY. Its comment forbids the bounded
+    # form (`split(".", 2)` / `rsplit`) because absorbing extra dots into a
+    # field reopens a scope-confusion class. familyhub's parser must never be
+    # more lenient than the parser that signs: a token this accepted but
+    # enrollx rejected could only ever produce a scope enrollx never issued.
     try:
         padded = token + "=" * (-len(token) % 4)
         raw = base64.urlsafe_b64decode(padded.encode()).decode()
-        tenant_id, application_id, _signature = raw.split(".", 2)
+        tenant_id, application_id, _signature = raw.split(".")
     except Exception:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Malformed token")
     if not tenant_id or not application_id:

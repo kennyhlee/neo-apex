@@ -34,7 +34,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.ratelimit import request_link_limiter, start_limiter
+from app.ratelimit import document_presign_limiter, request_link_limiter, start_limiter
 
 
 class FakeResponse:
@@ -85,6 +85,7 @@ def internal_key(monkeypatch):
 def reset_rate_limits():
     start_limiter._hits.clear()
     request_link_limiter._hits.clear()
+    document_presign_limiter._hits.clear()
     yield
 
 
@@ -355,6 +356,55 @@ def test_upload_fails_closed_when_bundle_application_disagrees_with_token(client
     assert _datacore_calls(fake_http) == []
 
 
+def test_upload_is_rate_limited(client, fake_http):
+    """The only token-scoped route that WRITES. Unthrottled, one valid token
+    buys unbounded DataCore rows and -- since the presigned PUT cannot
+    enforce the declared size (document_routes.py:105-110) -- unbounded bytes
+    into the bucket."""
+    _arm_token(fake_http)
+    fake_http.add("POST", f"/api/documents/{TENANT}",
+                  FakeResponse(201, {"document_id": "DC0009", "upload_url": "u",
+                                     "storage_key": "k"}))
+    payload = {"filename": "x.pdf", "content_type": "application/pdf", "size": 10}
+    for _ in range(20):
+        assert client.post(f"/api/application/{TOKEN}/documents",
+                           json=payload).status_code == 201
+    before = len(fake_http.calls)
+    throttled = client.post(f"/api/application/{TOKEN}/documents", json=payload)
+    assert throttled.status_code == 429
+    # Refused by the dependency, so it cost no upstream call at all.
+    assert len(fake_http.calls) == before
+
+
+def test_upload_datacore_error_body_is_never_relayed_to_a_parent(client, fake_http):
+    """DataCore's 4xx text is not parent-facing -- it can name provisioning
+    state, storage keys and internal model fields (document_routes.py:85,
+    138-139). The status is forwarded; the body is not. Same boundary
+    enrollx's staff proxy draws (enrollx documents.py:74-82)."""
+    _arm_token(fake_http)
+    fake_http.add("POST", f"/api/documents/{TENANT}",
+                  FakeResponse(400, {"detail": "Tenant not set up"}))
+    resp = client.post(f"/api/application/{TOKEN}/documents",
+                       json={"filename": "x.pdf", "content_type": "application/pdf",
+                             "size": 10})
+    assert resp.status_code == 400
+    assert "Tenant not set up" not in resp.text
+
+
+def test_malformed_token_upload_costs_no_upstream_call(client, fake_http):
+    resp = client.post("/api/application/not-a-real-token/documents",
+                       json={"filename": "x.pdf", "content_type": "application/pdf",
+                             "size": 10})
+    assert resp.status_code == 400
+    assert fake_http.calls == []
+
+
+def test_malformed_token_download_costs_no_upstream_call(client, fake_http):
+    resp = client.get("/api/application/not-a-real-token/documents/DC0001/url")
+    assert resp.status_code == 400
+    assert fake_http.calls == []
+
+
 @pytest.mark.parametrize("bundle", [
     {"application": "not-a-dict", "items": [], "config": {}},
     {"items": [], "config": {}},                       # no application at all
@@ -491,12 +541,17 @@ def test_download_masks_datacore_500(client, fake_http):
     assert "neoapex-prod" not in resp.text
 
 
-def test_download_datacore_404_is_passed_through(client, fake_http):
+def test_download_datacore_status_forwarded_but_body_replaced(client, fake_http):
+    """The parent's client still needs to tell a 404 from a 413, so the
+    status is forwarded -- but DataCore's body never is."""
     _arm_token(fake_http)
     fake_http.add("GET", f"/api/documents/{TENANT}/DC0001/url",
-                  FakeResponse(404, {"detail": "Document not found"}))
+                  FakeResponse(404, {"detail": "Document not found: storage_key "
+                                               "acme/app-eid-1/DC0001/shots.pdf"}))
     resp = client.get(f"/api/application/{TOKEN}/documents/DC0001/url")
     assert resp.status_code == 404
+    assert "storage_key" not in resp.text
+    assert "shots.pdf" not in resp.text
 
 
 def test_download_sends_internal_key_to_enrollx_only(client, fake_http):
