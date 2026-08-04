@@ -181,4 +181,4 @@ def test_not_yet_implemented_action_raises(client, fake_dc):
     created = create_application(client, fake_dc)
     eid = created["application"]["entity_id"]
     with pytest.raises(NotImplementedError):
-        act(client, eid, "approve")
+        act(client, eid, "publish_config")

@@ -5,11 +5,13 @@ PARENT_ACTIONS and perform_action are BINDING names — Plan 5's familyhub
 facade calls them via the /internal token routes.
 """
 import json
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
 from app.registration import datacore as dc
 from app.registration import emails, engine, tokens
+from app.registration.family import match_or_create_family
 from app.registration.statuses import assert_item_transition
 
 PARENT_ACTIONS = {"save_draft", "complete_item", "submit"}
@@ -253,6 +255,75 @@ def _record_offline_payment(tenant_id, application_entity_id, params, actor, tok
     return result
 
 
+def _approve(tenant_id, application_entity_id, params, actor, token):
+    app_row = engine.require_application(tenant_id, application_entity_id, token)
+    status = app_row.get("status", "draft")
+    if status not in {"submitted", "in_review"}:
+        raise HTTPException(409, {"error": f"approve not allowed in status '{status}'",
+                                  "allowed": ["submitted", "in_review"]})
+    draft = json.loads(app_row.get("draft_data") or "{}")
+
+    # 1. Family: match-or-create from draft family fields (+ applicant email fallback).
+    # Called serially, exactly once for this approval — see the module-level
+    # concurrency note in family.py: match_or_create_family is a read-then-write
+    # with no locking, so this must never be fanned out across siblings or
+    # wrapped in a concurrent construct.
+    family_fields = dict(draft.get("family") or {})
+    if app_row.get("applicant_email") and not family_fields.get("primary_email"):
+        family_fields["primary_email"] = app_row["applicant_email"]
+    family_id = match_or_create_family(tenant_id, family_fields, token)
+
+    # 2. Student
+    student_fields = dict(draft.get("student") or {})
+    student_base = {
+        "first_name": student_fields.pop("first_name", ""),
+        "last_name": student_fields.pop("last_name", ""),
+        "family_id": family_id,
+        "status": "Enrolled",
+    }
+    for k, v in student_fields.items():
+        if v not in (None, ""):
+            student_base.setdefault(k, v)
+    student = dc.dc_create(tenant_id, "student", student_base, token)
+
+    # 3. Enrollment
+    enrollment = dc.dc_create(tenant_id, "enrollment", {
+        "student_id": student["entity_id"],
+        "program_id": app_row.get("program_id", ""),
+        "enrollment_date": engine.now_iso()[:10],
+        "status": "active",
+    }, token)
+
+    # 4. Start due-date clocks on unfinished post-approval items
+    now = datetime.now(timezone.utc)
+    for item in engine.get_items(tenant_id, application_entity_id, token):
+        days = item.get("due_days_after_approval")
+        if days and not item.get("due_at") and item.get("status") not in {"verified", "waived"}:
+            base = engine.entity_base_data(item)
+            base["due_at"] = (now + timedelta(days=int(days))).isoformat()
+            dc.dc_update(tenant_id, "application_item", item["entity_id"], base, token)
+
+    # 5. Status write with decision fields
+    updated = engine.set_application_status(
+        tenant_id, app_row, "approved", actor, token,
+        extra_changes={"family_id": family_id, "student_id": student["entity_id"],
+                       "decided_at": engine.now_iso()})
+
+    # 6. Notify
+    email = app_row.get("applicant_email")
+    if email:
+        subject, html = emails.status_change_email(_program_label(app_row), "approved")
+        emails.send_application_email(tenant_id, application_entity_id, "status_change",
+                                      email, subject, html, token)
+
+    # 7. Straight to enrolled if nothing remains open
+    enrolled = _maybe_enroll(tenant_id, application_entity_id, actor, token)
+    return {"application": enrolled or updated,
+            "family_id": family_id,
+            "student_id": student["entity_id"],
+            "enrollment_id": enrollment["entity_id"]}
+
+
 def _not_implemented(name):
     def handler(tenant_id, application_entity_id, params, actor, token):
         raise NotImplementedError(f"action '{name}' arrives in a later task")
@@ -271,7 +342,7 @@ _HANDLERS = {
     "promote_waitlist": _promote_waitlist,
     "resend_link": _resend_link,
     "record_offline_payment": _record_offline_payment,
-    # Replaced in Tasks 12-13:
-    "approve": _not_implemented("approve"),
+    "approve": _approve,
+    # Replaced in Task 13:
     "publish_config": _not_implemented("publish_config"),
 }
