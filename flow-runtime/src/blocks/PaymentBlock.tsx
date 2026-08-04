@@ -5,15 +5,6 @@ import { formatCents } from '../money';
 import { useFlowT } from '../i18n';
 import { DONE_ITEM_STATUSES } from '../types';
 
-/**
- * Mirrors `BALANCE_ITEM_TITLE` in `enrollx/backend/app/api/stripe_webhook.py:63`.
- * `ApplicationItem` (types.ts) carries no amount and no structural flag
- * distinguishing this item from the original payment item — title is the
- * only signal the backend gives us without a backend change. See the
- * `amountFor` comment below for why this can't be avoided.
- */
-const BALANCE_ITEM_TITLE = 'Balance payment';
-
 export interface PaymentBlockProps {
   config: RegistrationConfigDef;
   /** draft_data.payment_plan_selection ('' when unset). */
@@ -26,13 +17,18 @@ export interface PaymentBlockProps {
    * deposit settles. Both render here, each with its own derived amount.
    */
   items: ApplicationItem[];
+  /**
+   * The `payment` block's OWN `block_id` (not the `payment_plan` block's).
+   * Used to classify which item is the balance item — see `amountFor`.
+   */
+  paymentBlockId: string;
   mode: FlowMode;
   onCheckout: (itemId: string) => Promise<void>;
   onRecordOfflinePayment?: (itemId: string) => void;
 }
 
 export function PaymentBlock({
-  config, planChoice, items, mode, onCheckout, onRecordOfflinePayment,
+  config, planChoice, items, paymentBlockId, mode, onCheckout, onRecordOfflinePayment,
 }: PaymentBlockProps) {
   const t = useFlowT();
   const planBlock = config.blocks.find((b) => b.type === 'payment_plan') ?? null;
@@ -44,17 +40,23 @@ export function PaymentBlock({
     : kinds.length === 1 ? kinds[0] : null;
 
   /**
-   * The balance item's due amount is `amount_full - deposit_amount` — it is
-   * NEVER the plan-chosen amount, because by definition it only exists once
-   * the deposit has already been paid. Everything else (the original item,
-   * or the pre-item placeholder row below) uses the plan-chosen amount, same
-   * as before this task. Distinguishing on `item.title` is a deliberate,
-   * documented special case, not an oversight — see the module-level
-   * comment on `BALANCE_ITEM_TITLE`.
+   * Structural classification, NOT a title-string match: `items.py:26-63`
+   * stamps the original payment item's `block_id` with this `payment`
+   * block's own `block_id`; `stripe_webhook.py:158-169` stamps the later
+   * "Balance payment" item's `block_id` with the `payment_plan` block's id
+   * instead (via `checkout_service.get_payment_plan_block`). `validate_blocks`
+   * requires every block_id in a config to be unique, so these two values
+   * are guaranteed distinct — `item.block_id !== paymentBlockId` reliably
+   * means "this is the balance item," with no dependence on `item.title`
+   * (staff-authored free text with no reserved-word validation — a school
+   * could legitimately title its `payment` block "Balance payment," which
+   * would misclassify the ORIGINAL item under a title-based check).
+   * `title` is display-only below, never part of this classification.
    */
   const amountFor = (item: ApplicationItem | null): number | null => {
     if (!amounts) return null;
-    if (item && item.title === BALANCE_ITEM_TITLE) {
+    const isBalanceItem = item != null && item.block_id !== paymentBlockId;
+    if (isBalanceItem) {
       const balance = amounts.amount_full - amounts.deposit_amount;
       return balance > 0 ? balance : null;
     }

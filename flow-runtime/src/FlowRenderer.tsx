@@ -220,9 +220,13 @@ function FlowRendererInner({
         // for the original item, stripe_webhook.py:163 for the balance
         // item); this assumes at most one payment block per flow, which
         // the rest of this file and PaymentBlock already assume.
+        // `block.block_id` (this payment block's OWN id) is passed through
+        // so PaymentBlock can classify the balance item structurally
+        // (block_id mismatch), not by matching its title string.
         return (
           <PaymentBlock config={config} planChoice={planChoice}
-            items={items.filter((i) => i.kind === 'payment')} mode={mode}
+            items={items.filter((i) => i.kind === 'payment')}
+            paymentBlockId={block.block_id} mode={mode}
             onCheckout={onCheckout} onRecordOfflinePayment={onRecordOfflinePayment} />
         );
       case 'message':
