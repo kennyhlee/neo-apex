@@ -107,5 +107,91 @@
       {"name": "notes", "type": "str", "required": false}
     ],
     "custom_fields": []
+  },
+  "registration_config": {
+    "base_fields": [
+      {"name": "config_id", "type": "str", "required": true},
+      {"name": "program_id", "type": "str", "required": true},
+      {"name": "version", "type": "number", "required": true},
+      {"name": "status", "type": "selection", "required": true, "options": ["draft", "published", "archived"], "default": "draft"},
+      {"name": "blocks", "type": "str", "required": true}
+    ],
+    "custom_fields": []
+  },
+  "registration_application": {
+    "base_fields": [
+      {"name": "application_id", "type": "str", "required": true},
+      {"name": "program_id", "type": "str", "required": true},
+      {"name": "school_year", "type": "str", "required": true},
+      {"name": "status", "type": "selection", "required": true, "options": ["draft", "submitted", "in_review", "pending_items", "approved", "enrolled", "waitlisted", "declined", "withdrawn"], "default": "draft"},
+      {"name": "family_id", "type": "str", "required": false},
+      {"name": "student_id", "type": "str", "required": false},
+      {"name": "config_version", "type": "number", "required": true},
+      {"name": "channel_started", "type": "selection", "required": true, "options": ["parent", "admin"]},
+      {"name": "applicant_email", "type": "email", "required": false},
+      {"name": "token_version", "type": "number", "required": false, "default": 1},
+      {"name": "draft_data", "type": "str", "required": false},
+      {"name": "submitted_at", "type": "datetime", "required": false},
+      {"name": "decided_at", "type": "datetime", "required": false}
+    ],
+    "custom_fields": []
+  },
+  "application_item": {
+    "base_fields": [
+      {"name": "item_id", "type": "str", "required": true},
+      {"name": "application_id", "type": "str", "required": true},
+      {"name": "block_id", "type": "str", "required": true},
+      {"name": "kind", "type": "selection", "required": true, "options": ["form", "document", "esign", "payment"]},
+      {"name": "title", "type": "str", "required": true},
+      {"name": "status", "type": "selection", "required": true, "options": ["not_started", "in_progress", "submitted", "verified", "rejected", "waived"], "default": "not_started"},
+      {"name": "blocking", "type": "bool", "required": true},
+      {"name": "due_at", "type": "datetime", "required": false},
+      {"name": "completed_by", "type": "str", "required": false},
+      {"name": "payload_ref", "type": "str", "required": false}
+    ],
+    "custom_fields": []
+  },
+  "application_activity": {
+    "base_fields": [
+      {"name": "activity_id", "type": "str", "required": true},
+      {"name": "application_id", "type": "str", "required": true},
+      {"name": "type", "type": "selection", "required": true, "options": ["status_change", "item_change", "note", "email_sent"]},
+      {"name": "from_value", "type": "str", "required": false},
+      {"name": "to_value", "type": "str", "required": false},
+      {"name": "actor", "type": "str", "required": true},
+      {"name": "at", "type": "datetime", "required": true}
+    ],
+    "custom_fields": []
+  },
+  "document": {
+    "base_fields": [
+      {"name": "document_id", "type": "str", "required": true},
+      {"name": "application_id", "type": "str", "required": true},
+      {"name": "item_id", "type": "str", "required": false},
+      {"name": "filename", "type": "str", "required": true},
+      {"name": "content_type", "type": "str", "required": true},
+      {"name": "size", "type": "number", "required": true},
+      {"name": "storage_key", "type": "str", "required": true},
+      {"name": "sensitive", "type": "bool", "required": true, "default": false},
+      {"name": "uploaded_by", "type": "str", "required": true},
+      {"name": "uploaded_at", "type": "datetime", "required": true}
+    ],
+    "custom_fields": []
+  },
+  "payment": {
+    "base_fields": [
+      {"name": "payment_id", "type": "str", "required": true},
+      {"name": "application_id", "type": "str", "required": true},
+      {"name": "item_id", "type": "str", "required": false},
+      {"name": "kind", "type": "selection", "required": true, "options": ["deposit", "balance", "full", "offline"]},
+      {"name": "amount", "type": "number", "required": true},
+      {"name": "currency", "type": "str", "required": true, "default": "USD"},
+      {"name": "status", "type": "selection", "required": true, "options": ["pending", "paid", "failed", "refunded"], "default": "pending"},
+      {"name": "provider", "type": "selection", "required": true, "options": ["stripe", "offline"]},
+      {"name": "provider_ref", "type": "str", "required": false},
+      {"name": "recorded_by", "type": "str", "required": false},
+      {"name": "paid_at", "type": "datetime", "required": false}
+    ],
+    "custom_fields": []
   }
 }

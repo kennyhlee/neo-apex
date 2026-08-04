@@ -13,6 +13,7 @@ from datacore.api.registry_routes import register_registry_routes
 from datacore.api.auth_routes import register_auth_routes
 from datacore.api.unified_routes import register_unified_routes
 from datacore.api.readonly_query import register_readonly_query_routes
+from datacore.api.document_routes import register_document_routes
 
 
 def _load_cors_origins() -> list[str]:
@@ -78,6 +79,7 @@ def create_app(store: Store) -> FastAPI:
     register_auth_routes(app, store)
     register_unified_routes(app, store)
     register_readonly_query_routes(app, store)
+    register_document_routes(app, store)
 
     @app.get("/health")
     def health():

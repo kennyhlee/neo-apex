@@ -1,6 +1,7 @@
 """Unified query endpoint — DuckDB SQL over tenants, models, and entities."""
 from enum import Enum
 
+import duckdb
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -36,6 +37,14 @@ def unified_query(req: QueryRequest):
 
     The SQL runs against the table alias 'data'.
     Supported tables: entities, models, tenants.
+
+    Runs with `external=True` — DuckDB's `enable_external_access` is off, so
+    filesystem/network table functions (`read_csv`, `read_parquet`, `COPY …
+    TO`, …) fail at the engine. Nothing on this route legitimately needs
+    them, and this is the only defense that covers every caller; the SQL
+    guards in the admindash/enrollx proxies are a secondary layer that only
+    protects callers routed through them. A refused attempt surfaces as a
+    400 — the request was inadmissible, not the server broken.
     """
     qe = QueryEngine(_store)
 
@@ -47,9 +56,17 @@ def unified_query(req: QueryRequest):
             tenant_id=req.tenant_id,
             table_type=table_type,
             sql=req.sql,
+            external=True,
         )
     except TableNotFoundError:
         return {"data": [], "total": 0}
+    except duckdb.PermissionException as e:
+        # The caller's SQL asked for filesystem/network access, which
+        # `external=True` refuses. Nothing failed on the server: the request
+        # was inadmissible, so it is a 400 like any other bad SQL — the same
+        # code /api/query/readonly returns for it. A 500 here would tell the
+        # caller to retry an identical request that can never succeed.
+        raise HTTPException(status_code=400, detail=f"SQL error: {e}")
     except Exception as e:
         error_msg = str(e)
         if "Catalog Error" in error_msg or "Parser Error" in error_msg or "Binder Error" in error_msg:

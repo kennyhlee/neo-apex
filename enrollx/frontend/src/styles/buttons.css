@@ -1,0 +1,121 @@
+/* =============================================================================
+   Buttons — one implementation.
+
+   Replaces 35 button classes across 6 copy-pasted implementations
+   (.dynamic-form-btn-*, .filter-btn-*, .duplicate-modal-btn-*,
+   .bulk-add-page__btn-*, .resume-prompt__btn--*, and assorted one-offs).
+
+   Geometry reads from the density tokens, so compact mode restyles every
+   button in the product without a second rule.
+   ============================================================================= */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 var(--control-px);
+  border: 1px solid transparent;
+  border-radius: var(--control-r);
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Variants ------------------------------------------------------------ */
+
+.btn-primary {
+  background: var(--accent-ink);
+  color: var(--on-accent);
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-primary:active:not(:disabled) { background: var(--accent-active); }
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink-2);
+  border-color: var(--line);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: var(--on-accent);
+}
+.btn-danger:hover:not(:disabled) { filter: brightness(0.92); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-3);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  color: var(--accent-ink);
+  font-weight: var(--weight-semibold);
+}
+.btn-link:hover:not(:disabled) { text-decoration: underline; }
+
+/* --- Sizes --------------------------------------------------------------- */
+
+.btn-sm {
+  height: calc(var(--control-h) - 6px);
+  min-height: calc(var(--control-h) - 6px);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.btn-lg {
+  height: calc(var(--control-h) + 6px);
+  min-height: calc(var(--control-h) + 6px);
+  padding: 0 var(--space-6);
+  font-size: var(--text-lg);
+}
+
+/* Icon-only buttons stay square and keep an accessible target on touch. */
+.btn-icon {
+  width: var(--control-h);
+  padding: 0;
+  flex: none;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* On touch pointers every button clears the 44px minimum target. */
+@media (pointer: coarse) {
+  .btn,
+  .btn-sm {
+    min-height: var(--tap-min);
+  }
+  .btn-icon {
+    width: var(--tap-min);
+  }
+}

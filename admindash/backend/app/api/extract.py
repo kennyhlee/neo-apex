@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from app.auth import require_authenticated_user
 from app.config import settings
+from app.tenancy import require_tenant_match
 
 router = APIRouter()
 
@@ -18,7 +19,7 @@ router = APIRouter()
 async def extract_student(
     tenant_id: str,
     request: Request,
-    user=Depends(require_authenticated_user),
+    user=Depends(require_tenant_match),
 ) -> StreamingResponse:
     """Stream a multipart file upload through to Papermite."""
     headers = {

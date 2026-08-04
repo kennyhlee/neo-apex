@@ -22,6 +22,13 @@ DEFAULT_ABBREVS = {
     "program": "PR",
     "lead": "LD",
     "family": "FA",
+    "registration_config": "RC",
+    "registration_application": "RA",
+    "application_item": "AI",
+    "application_activity": "AA",
+    "document": "DC",
+    "payment": "PY",
+    "enrollment": "EN",
 }
 
 

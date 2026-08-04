@@ -713,7 +713,7 @@ git commit -m "feat(datacore): auto-ID abbreviations for registration entity typ
 
 **Interfaces:**
 - Consumes: `document` entity definition (Task 8), `DC` abbrev (Task 9), the existing `Store` entity-write path (find via `grep -n "def create_entity\|def insert" datacore/src/datacore/store.py` and reuse — do NOT write LanceDB rows by hand).
-- Produces (the roadmap contract): `POST /api/documents/{tenant_id}` body `{application_id, item_id?, filename, content_type, size, sensitive}` → `201 {"document_id": ..., "upload_url": ..., "storage_key": ...}`; `GET /api/documents/{tenant_id}/{document_id}/url` → `200 {"download_url": ...}`, 404 if no such document entity. Storage key format: `{tenant_id}/{application_id}/{document_id}/{filename}`.
+- Produces (the roadmap contract): `POST /api/documents/{tenant_id}` body `{application_id, item_id?, filename, content_type, size, sensitive, uploaded_by}` → `201 {"document_id": ..., "upload_url": ..., "storage_key": ...}`; `GET /api/documents/{tenant_id}/{document_id}/url` → `200 {"download_url": ...}`, 404 if no such document entity. Storage key format: `{tenant_id}/{application_id}/{document_id}/{filename}`.
 
 Settings (env, no prefix change — DataCore reads plain env vars like `DATACORE_DUPLICATE_CHECK_THRESHOLD` does): `DATACORE_R2_ENDPOINT`, `DATACORE_R2_BUCKET`, `DATACORE_R2_ACCESS_KEY_ID`, `DATACORE_R2_SECRET_ACCESS_KEY`, `DATACORE_R2_URL_TTL_SECONDS` (default 900).
 

@@ -95,7 +95,8 @@ Every `ADJUST(bindings)` line in later tasks resolves against this file. This ta
 
 ## DataCore blob API (open datacore/src/datacore/api/document_routes.py)
 - Does POST /api/documents/{tenant_id} require an auth dependency? → 
-- Accepted body fields (is uploaded_by accepted? if not, how is it set?) → 
+- Accepted body fields → 
+- `uploaded_by`: **already bound, do not re-decide.** DataCore requires the field and cannot verify it, so this facade MUST derive it — `parent:{application entity_id}` for a parent upload — and MUST NOT accept it from the client. Confirm only that DataCore still requires it (roadmap, DataCore blob API). → 
 - 201 response keys → 
 - GET /api/documents/{tenant_id}/{document_id}/url auth + response keys → 
 
@@ -1528,7 +1529,10 @@ def create_document(token: str, body: CreateDocumentBody) -> Response:
             "content_type": body.content_type,
             "size": body.size,
             "sensitive": sensitive,
-            "uploaded_by": f"parent:{application_id}",  # ADJUST(bindings): if DataCore's blob POST does not accept uploaded_by, route the value however bindings say it is set
+            # Derived here, never taken from `body` — see the roadmap's blob
+            # API contract. `application_id` comes from the signed token, so
+            # this value is as trustworthy as the token itself.
+            "uploaded_by": f"parent:{application_id}",
         },
     )
     return _passthrough(resp)

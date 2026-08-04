@@ -260,3 +260,15 @@ def test_family_preserves_provided_id():
         )
         assert resp.status_code == 201
         assert resp.json()["base_data"]["family_id"] == "CUSTOM-FA-001"
+
+
+def test_registration_abbrevs_present():
+    """Verify all registration entity type abbreviations are in DEFAULT_ABBREVS."""
+    from datacore.api.routes import DEFAULT_ABBREVS
+    assert DEFAULT_ABBREVS["registration_application"] == "RA"
+    assert DEFAULT_ABBREVS["registration_config"] == "RC"
+    assert DEFAULT_ABBREVS["application_item"] == "AI"
+    assert DEFAULT_ABBREVS["application_activity"] == "AA"
+    assert DEFAULT_ABBREVS["document"] == "DC"
+    assert DEFAULT_ABBREVS["payment"] == "PY"
+    assert DEFAULT_ABBREVS["enrollment"] == "EN"

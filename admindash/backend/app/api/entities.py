@@ -2,8 +2,8 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from app.auth import require_authenticated_user
 from app.config import settings
+from app.tenancy import require_tenant_match
 
 router = APIRouter()
 
@@ -42,7 +42,7 @@ async def create_entity(
     tenant_id: str,
     entity_type: str,
     request: Request,
-    user=Depends(require_authenticated_user),
+    user=Depends(require_tenant_match),
 ) -> Response:
     return await _proxy_to_datacore(
         "POST", f"/api/entities/{tenant_id}/{entity_type}", request, user["_token"]
@@ -55,7 +55,7 @@ async def archive_entities(
     tenant_id: str,
     entity_type: str,
     request: Request,
-    user=Depends(require_authenticated_user),
+    user=Depends(require_tenant_match),
 ) -> Response:
     return await _proxy_to_datacore(
         "POST",
@@ -70,7 +70,7 @@ async def restore_entities(
     tenant_id: str,
     entity_type: str,
     request: Request,
-    user=Depends(require_authenticated_user),
+    user=Depends(require_tenant_match),
 ) -> Response:
     return await _proxy_to_datacore(
         "POST",
@@ -85,7 +85,7 @@ async def next_id(
     tenant_id: str,
     entity_type: str,
     request: Request,
-    user=Depends(require_authenticated_user),
+    user=Depends(require_tenant_match),
 ) -> Response:
     return await _proxy_to_datacore(
         "GET",
@@ -100,7 +100,7 @@ async def duplicate_check(
     tenant_id: str,
     entity_type: str,
     request: Request,
-    user=Depends(require_authenticated_user),
+    user=Depends(require_tenant_match),
 ) -> Response:
     return await _proxy_to_datacore(
         "POST",
@@ -117,7 +117,7 @@ async def update_entity(
     entity_type: str,
     entity_id: str,
     request: Request,
-    user=Depends(require_authenticated_user),
+    user=Depends(require_tenant_match),
 ) -> Response:
     return await _proxy_to_datacore(
         "PUT",

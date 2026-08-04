@@ -19,6 +19,7 @@
   - `POST /api/registration/{tenant_id}/applications/{application_id}/actions` body `{"action": <name>, ...params}`; names used here: `save_draft, complete_item, submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link`.
   - `POST /api/registration/{tenant_id}/applications/{application_id}/checkout` → JSON containing a Stripe Checkout URL (Plan 3).
   - Document proxies: `POST /api/documents/{tenant_id}` body `{application_id, item_id?, filename, content_type, size, sensitive}` → `{document_id, upload_url, storage_key}`; `GET /api/documents/{tenant_id}/{document_id}/url` → `{download_url}`.
+  - **`uploaded_by` is absent from that body on purpose.** DataCore's blob API requires it, but a client value is worthless — the enrollx proxy derives it from the authenticated caller (the staff `user_id`) and adds it before calling DataCore. Do not send it from the frontend, and do not "fix" the proxy to accept it (roadmap, DataCore blob API).
   - **Money is integer cents.** The `payment_plan` block's `config` is exactly Plan 3's shape: `{"currency": "usd", "amount_full": <int cents>, "plans": [{"type": "pay_in_full"}, {"type": "deposit", "deposit_amount": <int cents>}]}` — `plans` is an array of objects keyed by `type`, and `deposit_amount` lives ON the deposit plan object. UI inputs/labels are dollars; convert at the edge (`Math.round(dollars * 100)` in, `cents / 100` out).
   - The chosen plan is stored at `draft_data.payment_plan_selection` (Plan 3 contract).
   - Application status values: `draft|submitted|in_review|pending_items|approved|enrolled|waitlisted|declined|withdrawn`. Item status values: `not_started|in_progress|submitted|verified|rejected|waived`.
@@ -1620,6 +1621,10 @@ export async function getDocumentUrl(
 /**
  * Full upload path for one required doc: presign via the document proxy, PUT
  * the bytes to R2, then complete the item so status derivation runs (Plan 2).
+ *
+ * No `uploaded_by` in the body: the enrollx proxy derives it from the caller's
+ * JWT (the staff `user_id`) and must not accept it from here (roadmap,
+ * DataCore blob API).
  */
 export async function uploadDocumentForItem(
   tenantId: string,

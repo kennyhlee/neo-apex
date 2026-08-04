@@ -5,8 +5,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
-from app.auth import require_authenticated_user
 from app.config import settings
+from app.tenancy import require_tenant_match
 
 router = APIRouter()
 
@@ -198,7 +198,7 @@ def public_lead_model(tenant_id: str):
 
 
 @router.post("/leads/{tenant_id}", status_code=201)
-def create_lead(tenant_id: str, body: LeadCreate, user=Depends(require_authenticated_user)):
+def create_lead(tenant_id: str, body: LeadCreate, user=Depends(require_tenant_match)):
     base = body.model_dump(exclude_none=True, exclude={"source"})
     src = body.source if body.source in ("manual", "email_import") else "manual"
     base["source"] = src
@@ -207,7 +207,7 @@ def create_lead(tenant_id: str, body: LeadCreate, user=Depends(require_authentic
 
 
 @router.get("/leads/{tenant_id}")
-def list_leads(tenant_id: str, stage: str | None = None, user=Depends(require_authenticated_user)):
+def list_leads(tenant_id: str, stage: str | None = None, user=Depends(require_tenant_match)):
     where = "entity_type = 'lead' AND _status = 'active'"
     if stage:
         if stage not in _stage_options(tenant_id, user["_token"]):
@@ -218,7 +218,7 @@ def list_leads(tenant_id: str, stage: str | None = None, user=Depends(require_au
 
 
 @router.get("/leads/{tenant_id}/{lead_id}")
-def get_lead(tenant_id: str, lead_id: str, user=Depends(require_authenticated_user)):
+def get_lead(tenant_id: str, lead_id: str, user=Depends(require_tenant_match)):
     lead = _get_lead(tenant_id, lead_id, user["_token"])
     if not lead:
         raise HTTPException(404, "Lead not found")
@@ -245,7 +245,7 @@ def _log_stage_change(tenant: str, lead_id: str, frm: str, to: str, token: str |
 
 @router.post("/leads/{tenant_id}/{lead_id}/activities", status_code=201)
 def add_activity(tenant_id: str, lead_id: str, body: ActivityCreate,
-                 user=Depends(require_authenticated_user)):
+                 user=Depends(require_tenant_match)):
     if body.type not in ACTIVITY_TYPES:
         raise HTTPException(400, f"Unknown activity type: {body.type}")
     return _dc_create(tenant_id, "lead_activity", {
@@ -256,7 +256,7 @@ def add_activity(tenant_id: str, lead_id: str, body: ActivityCreate,
 
 @router.post("/leads/{tenant_id}/{lead_id}/convert", status_code=201)
 def convert_lead(tenant_id: str, lead_id: str, body: ConvertRequest,
-                 user=Depends(require_authenticated_user)):
+                 user=Depends(require_tenant_match)):
     token = user["_token"]
     lead = _get_lead(tenant_id, lead_id, token)
     if not lead:
@@ -299,7 +299,7 @@ def convert_lead(tenant_id: str, lead_id: str, body: ConvertRequest,
 
 
 @router.get("/leads/{tenant_id}/{lead_id}/activities")
-def list_activities(tenant_id: str, lead_id: str, user=Depends(require_authenticated_user)):
+def list_activities(tenant_id: str, lead_id: str, user=Depends(require_tenant_match)):
     rows = _dc_query(
         tenant_id,
         f"SELECT * FROM data WHERE entity_type = 'lead_activity' "
@@ -310,7 +310,7 @@ def list_activities(tenant_id: str, lead_id: str, user=Depends(require_authentic
 
 @router.patch("/leads/{tenant_id}/{lead_id}/stage")
 def update_stage(tenant_id: str, lead_id: str, body: StageUpdate,
-                 user=Depends(require_authenticated_user)):
+                 user=Depends(require_tenant_match)):
     opts = _stage_options(tenant_id, user["_token"])
     if body.stage not in opts:
         raise HTTPException(400, f"Unknown stage: {body.stage}")

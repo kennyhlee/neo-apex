@@ -159,3 +159,42 @@ def test_query_bad_sql(uf_client):
         "sql": "THIS IS NOT SQL",
     })
     assert resp.status_code == 400
+
+
+def test_query_blocks_filesystem_access(uf_client):
+    """`/api/query` runs the engine with external access disabled, so a DuckDB
+    file-reading table function fails here — not only on the
+    `/api/query/readonly` variant, and regardless of which caller (launchpad,
+    papermite, a proxy, or a direct client) sent the SQL.
+
+    Asserts the *permission* failure, not that the response happens to echo the
+    query text: the previous `"read_csv" in detail` assertion also passed for a
+    plain syntax error, so it never actually proved external access was off.
+    400, not 500 — the request was inadmissible, nothing broke."""
+    client, _ = uf_client
+    resp = client.post("/api/query", json={
+        "tenant_id": "t1",
+        "table": "entities",
+        "sql": "SELECT * FROM read_csv('/etc/passwd')",
+    })
+    assert resp.status_code == 400
+    detail = resp.json()["detail"].lower()
+    assert "permission error" in detail
+    assert "file system operations are disabled" in detail
+
+
+def test_query_blocks_replacement_scan(uf_client):
+    """DuckDB's replacement scan reads a file from a bare string literal in
+    table position, with no function call to match on. With external access
+    off the scan never fires, so the path falls through to catalog lookup and
+    is reported as a missing table — which is the proof it was not opened."""
+    client, _ = uf_client
+    resp = client.post("/api/query", json={
+        "tenant_id": "t1",
+        "table": "entities",
+        "sql": "SELECT * FROM '/etc/passwd'",
+    })
+    assert resp.status_code == 400
+    detail = resp.json()["detail"].lower()
+    assert "catalog error" in detail
+    assert "does not exist" in detail
