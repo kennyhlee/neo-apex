@@ -6,6 +6,10 @@
     "admindash-backend": { "host": "localhost", "port": 5610 },
     "papermite-frontend": { "host": "localhost", "port": 5700 },
     "papermite-backend": { "host": "localhost", "port": 5710 },
-    "datacore": { "host": "localhost", "port": 5800 }
+    "datacore": { "host": "localhost", "port": 5800 },
+    "enrollx-frontend": { "host": "localhost", "port": 5900 },
+    "enrollx-backend": { "host": "localhost", "port": 5910 },
+    "familyhub-frontend": { "host": "localhost", "port": 6000 },
+    "familyhub-backend": { "host": "localhost", "port": 6010 }
   }
 }

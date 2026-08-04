@@ -12,7 +12,7 @@ NeoApex is an education/enrollment management platform. Active services:
 - **admindash** — School operations product for school administrators. React frontend (port 5600) + Python FastAPI backend (port 5610). The backend proxies authenticated requests to DataCore and Papermite.
 - **ui-tokens** — Shared CSS design tokens package.
 
-Placeholder directories (empty): `apexflow`, `enrollx`, `familyhub`, `sampledoc`.
+Placeholder directories (empty): `apexflow`, `sampledoc`.
 
 ## Commands
 
@@ -71,6 +71,10 @@ Defined in `services.json` at repo root. All services read from this file.
 | Papermite frontend | 5700 |
 | Papermite backend | 5710 |
 | DataCore backend | 5800 |
+| EnrollX frontend | 5900 |
+| EnrollX backend | 5910 |
+| FamilyHub frontend | 6000 |
+| FamilyHub backend | 6010 |
 
 To change a port: edit `services.json`, restart affected services.
 

@@ -50,9 +50,13 @@ DATACORE_PORT=$(read_port "datacore")
 LAUNCHPAD_BE_PORT=$(read_port "launchpad-backend")
 PAPERMITE_BE_PORT=$(read_port "papermite-backend")
 ADMINDASH_BE_PORT=$(read_port "admindash-backend")
+ENROLLX_BE_PORT=$(read_port "enrollx-backend")
+FAMILYHUB_BE_PORT=$(read_port "familyhub-backend")
 LAUNCHPAD_FE_PORT=$(read_port "launchpad-frontend")
 PAPERMITE_FE_PORT=$(read_port "papermite-frontend")
 ADMINDASH_FE_PORT=$(read_port "admindash-frontend")
+ENROLLX_FE_PORT=$(read_port "enrollx-frontend")
+FAMILYHUB_FE_PORT=$(read_port "familyhub-frontend")
 
 # Service definitions: name, port, type (backend/frontend)
 SERVICES=(
@@ -60,9 +64,13 @@ SERVICES=(
   "launchpad-backend:$LAUNCHPAD_BE_PORT:backend"
   "papermite-backend:$PAPERMITE_BE_PORT:backend"
   "admindash-backend:$ADMINDASH_BE_PORT:backend"
+  "enrollx-backend:$ENROLLX_BE_PORT:backend"
+  "familyhub-backend:$FAMILYHUB_BE_PORT:backend"
   "launchpad-frontend:$LAUNCHPAD_FE_PORT:frontend"
   "papermite-frontend:$PAPERMITE_FE_PORT:frontend"
   "admindash-frontend:$ADMINDASH_FE_PORT:frontend"
+  "enrollx-frontend:$ENROLLX_FE_PORT:frontend"
+  "familyhub-frontend:$FAMILYHUB_FE_PORT:frontend"
 )
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -236,6 +244,18 @@ start_service() {
       uv run uvicorn app.main:app --app-dir backend --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
+    enrollx-backend)
+      info "Starting $name on port $port..."
+      cd "$SCRIPT_DIR/enrollx"
+      uv run uvicorn app.main:app --app-dir backend --port "$port" --reload > "$log_file" 2>&1 &
+      cd "$SCRIPT_DIR"
+      ;;
+    familyhub-backend)
+      info "Starting $name on port $port..."
+      cd "$SCRIPT_DIR/familyhub"
+      uv run uvicorn app.main:app --app-dir backend --port "$port" --reload > "$log_file" 2>&1 &
+      cd "$SCRIPT_DIR"
+      ;;
     launchpad-frontend)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/launchpad/frontend"
@@ -251,6 +271,18 @@ start_service() {
     admindash-frontend)
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/admindash/frontend"
+      npm run dev > "$log_file" 2>&1 &
+      cd "$SCRIPT_DIR"
+      ;;
+    enrollx-frontend)
+      info "Starting $name on port $port..."
+      cd "$SCRIPT_DIR/enrollx/frontend"
+      npm run dev > "$log_file" 2>&1 &
+      cd "$SCRIPT_DIR"
+      ;;
+    familyhub-frontend)
+      info "Starting $name on port $port..."
+      cd "$SCRIPT_DIR/familyhub/frontend"
       npm run dev > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
