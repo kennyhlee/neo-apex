@@ -262,3 +262,33 @@ business id an entity carries in its own `base_data` (`application_id` on
   (`familyhub/backend/tests/` contains only `__init__.py` and
   `test_health.py`) — every subsequent backend task is building its test
   file from scratch, not extending one.
+
+## 8. Task 2 outcomes — all three routes already existed; nothing built
+
+Task 2's brief (public config bundle, documents list, tenant-scoped
+request-link) invoked the Step 1 conditional-skip check. On inspection, all
+three routes were **already implemented** in
+`enrollx/backend/app/api/internal.py`, guarded by the router-level
+`Depends(require_internal_key)`, and already had passing test coverage in
+`enrollx/backend/tests/test_internal_api.py`. Per Step 1 ("Build only what is
+missing"), no new route, no new test file, and no code change was made. The
+one change in this task is this bindings addendum.
+
+| Route (as implemented) | Response | Guard | Covering test(s) |
+|---|---|---|---|
+| `GET /internal/registration/{tenant_id}/{program_id}/config` | 200 `{"config": <flattened row>, "program": <flattened row>, "capacity": {"capacity", "approved", "enrolled", "full"}}`; 404 if program or published config missing | router-level `require_internal_key` | `test_config_bundle_includes_capacity_state` (`test_internal_api.py:64-73`); guard: `test_all_internal_routes_require_key` (`:32-45`) |
+| `GET /internal/application-by-token/{token}/documents` | 200 `{"documents": [{"entity_id", "document_id", "filename", "uploaded_by", "item_id"}]}`, filtered to `uploaded_by == "parent:{eid}"` OR `not sensitive` (own uploads always visible regardless of sensitivity) | router-level `require_internal_key`; token errors funnel through `resolve_token` → 401 | `test_documents_route_filters_sensitive_foreign_uploads`, `test_non_sensitive_staff_document_is_visible_to_parent` (`test_internal_api.py:151-196`); guard: `test_all_internal_routes_require_key` |
+| `POST /internal/registration/{tenant_id}/request-link` | body `{"email": str, "program_id": str \| None}` → **always** 200 `{}` (not `{"sent": n}` — the brief's roadmap-contract default was superseded even before Task 1; the send is fire-and-forget via `BackgroundTasks`, so match/no-match is never observable in the body or the response timing) | router-level `require_internal_key` | `test_request_link_always_200_and_sends_only_on_match` (`test_internal_api.py:132-148`); guard: `test_all_internal_routes_require_key` |
+
+Note for consumers (familyhub, later Plan 5 tasks): the config-bundle's
+`"program"` key is the **full flattened program row** (includes `program_id`,
+`name`, `capacity`, `status`, etc.), not the brief's imagined
+`{program_id, name, capacity, is_full}` shape — read fullness from the
+sibling top-level `"capacity"` key's `"full"` boolean, not from
+`program.is_full` (that field does not exist). The request-link route's body
+is always the empty object `{}`, never `{"sent": n}` — familyhub's facade
+must not attempt to surface a count to the parent.
+
+Full enrollx suite at the time of this check: `504 passed` (no change from
+the recorded baseline — this task added zero lines of application or test
+code).
