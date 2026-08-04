@@ -15,7 +15,18 @@ async def query(
 ) -> Response:
     """Read raw bytes, forward to DataCore /api/query, return verbatim."""
     body = await request.body()
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request body must be valid JSON",
+        )
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request body must be a JSON object",
+        )
     assert_tenant_scoped_sql(payload.get("sql", ""), user["tenant_id"])
     content_type = request.headers.get("content-type", "application/json")
     try:

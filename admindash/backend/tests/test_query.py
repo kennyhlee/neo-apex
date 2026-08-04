@@ -41,3 +41,31 @@ def test_query_surfaces_datacore_500_verbatim(client):
     )
     assert resp.status_code == 500
     assert resp.json() == {"error": "boom"}
+
+
+@respx.mock
+def test_malformed_json_body_returns_400(client):
+    """Invalid JSON must be rejected with 400, not an uncaught 500."""
+    respx.get("http://localhost:5800/auth/me").mock(
+        return_value=httpx.Response(200, json={"id": "u1", "tenant_id": "t1"})
+    )
+    resp = client.post(
+        "/api/query",
+        content=b"{not valid json",
+        headers={"Authorization": "Bearer good", "Content-Type": "application/json"},
+    )
+    assert resp.status_code == 400
+
+
+@respx.mock
+def test_non_object_json_body_returns_400(client):
+    """A JSON array or scalar body must be rejected with 400, not an AttributeError 500."""
+    respx.get("http://localhost:5800/auth/me").mock(
+        return_value=httpx.Response(200, json={"id": "u1", "tenant_id": "t1"})
+    )
+    resp = client.post(
+        "/api/query",
+        json=["SELECT 1"],
+        headers={"Authorization": "Bearer good"},
+    )
+    assert resp.status_code == 400

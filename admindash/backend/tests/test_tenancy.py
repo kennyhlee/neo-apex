@@ -47,3 +47,53 @@ def test_sql_guard_rejects_foreign_table():
 def test_sql_guard_rejects_global_table():
     with pytest.raises(HTTPException):
         assert_tenant_scoped_sql("SELECT * FROM global", "acme")
+
+
+# ── Round 1 hardening: comma-lists, quoted identifiers, CTE conservatism ──
+
+
+def test_sql_guard_rejects_comma_joined_foreign_table():
+    """Implicit joins (comma-separated FROM list) must check every table, not just the first."""
+    with pytest.raises(HTTPException) as exc:
+        assert_tenant_scoped_sql(
+            "SELECT * FROM acme_entities, othertenant_entities", "acme"
+        )
+    assert exc.value.status_code == 403
+
+
+def test_sql_guard_rejects_double_quoted_foreign_table():
+    with pytest.raises(HTTPException) as exc:
+        assert_tenant_scoped_sql('SELECT * FROM "othertenant_entities"', "acme")
+    assert exc.value.status_code == 403
+
+
+def test_sql_guard_rejects_bracketed_foreign_table():
+    with pytest.raises(HTTPException) as exc:
+        assert_tenant_scoped_sql("SELECT * FROM [othertenant_entities]", "acme")
+    assert exc.value.status_code == 403
+
+
+def test_sql_guard_rejects_backtick_quoted_foreign_table():
+    with pytest.raises(HTTPException) as exc:
+        assert_tenant_scoped_sql("SELECT * FROM `othertenant_entities`", "acme")
+    assert exc.value.status_code == 403
+
+
+def test_sql_guard_allows_aliased_comma_list_of_own_tables():
+    """A comma-separated list where every table IS tenant-prefixed must still pass."""
+    assert_tenant_scoped_sql(
+        "SELECT * FROM acme_entities e, acme_models m", "acme"
+    )
+
+
+def test_sql_guard_rejects_cte_reference():
+    """Conservative-by-design: a WITH ... FROM cte reference is rejected because
+    `cte` isn't tenant-prefixed. Nothing in admindash builds SQL with WITH through
+    this route (chat's run_query tool posts straight to DataCore, bypassing this
+    guard entirely), so over-blocking a hypothetical CTE here is intentional, not
+    a regression."""
+    with pytest.raises(HTTPException) as exc:
+        assert_tenant_scoped_sql(
+            "WITH cte AS (SELECT * FROM acme_entities) SELECT * FROM cte", "acme"
+        )
+    assert exc.value.status_code == 403
