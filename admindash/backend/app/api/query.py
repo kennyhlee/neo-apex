@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.auth import require_authenticated_user
 from app.config import settings
-from app.tenancy import assert_tenant_scoped_sql
+from app.tenancy import assert_query_tenant_match, assert_sql_uses_data_alias
 
 router = APIRouter()
 
@@ -27,7 +27,8 @@ async def query(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Request body must be a JSON object",
         )
-    assert_tenant_scoped_sql(payload.get("sql", ""), user["tenant_id"])
+    assert_query_tenant_match(payload.get("tenant_id"), user)
+    assert_sql_uses_data_alias(payload.get("sql", ""))
     content_type = request.headers.get("content-type", "application/json")
     try:
         resp = httpx.post(

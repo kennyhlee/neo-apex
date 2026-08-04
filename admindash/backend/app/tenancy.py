@@ -1,15 +1,20 @@
 """Tenant-scope enforcement dependencies.
 
 Every route with a {tenant_id} path parameter must require that the
-authenticated user belongs to that tenant. The SQL guard is defense in
-depth for the raw query passthrough — it is the sole admindash-side tenant
-check on /api/query, which has no {tenant_id} path param.
+authenticated user belongs to that tenant.
 
-This is a lexical guard, not a SQL parser. It deliberately errs on the side
-of rejecting anything it cannot confidently classify as tenant-prefixed
-(including CTE references like `FROM cte` — nothing in admindash currently
-builds SQL with a WITH clause through this route, so that's intentional,
-not a known-good case being over-blocked).
+/api/query has no {tenant_id} path param — DataCore scopes a query by the
+request body's `tenant_id` field, not by table naming (DataCore always
+registers the tenant's table under the fixed alias `data`; see
+datacore/src/datacore/query.py). So for that route:
+
+  - `assert_query_tenant_match` is the REAL tenant-match check: the body's
+    tenant_id must equal the caller's own tenant.
+  - `assert_sql_uses_data_alias` is defense in depth: every table reference
+    in the SQL must be exactly the `data` alias DataCore registers, which
+    blocks DuckDB function-table escapes such as `FROM read_csv(...)` /
+    `FROM read_parquet(...)` (DataCore only disables external access when
+    called with `external=True`, which this route does not use).
 """
 import re
 
@@ -18,8 +23,7 @@ from fastapi import Depends, HTTPException, status
 from app.auth import require_authenticated_user
 
 # Keywords that introduce one or more table references, optionally
-# comma-separated (e.g. "FROM a, b"). LanceDB table names are
-# {tenant}_entities / {tenant}_models / {tenant}_sequences plus `global`.
+# comma-separated (e.g. "FROM a, b").
 _TABLE_KEYWORDS = re.compile(r"\b(?:from|join|into|update)\b", re.IGNORECASE)
 
 # Keywords/tokens that end a table-reference list — bounds how far past a
@@ -32,10 +36,13 @@ _CLAUSE_STOP = re.compile(
 
 # A single table-reference token: a double-quoted, backtick-quoted, or
 # bracket-quoted identifier, or a bare identifier. Anything trailing (an
-# alias, a comma, more SQL) is left for the caller to split on.
+# alias, a comma, more SQL, or a function-call's "(...)") is left for the
+# caller to split on.
 _TABLE_TOKEN = re.compile(
     r'\s*(?:"(?P<dq>[^"]+)"|`(?P<bt>[^`]+)`|\[(?P<br>[^\]]+)\]|(?P<bare>[A-Za-z_]\w*))'
 )
+
+_DATA_ALIAS = "data"
 
 
 def require_tenant_match(tenant_id: str, user=Depends(require_authenticated_user)) -> dict:
@@ -47,14 +54,31 @@ def require_tenant_match(tenant_id: str, user=Depends(require_authenticated_user
     return user
 
 
+def assert_query_tenant_match(request_tenant_id, user: dict) -> None:
+    """Real tenant-match check for /api/query: the body's tenant_id (the
+    field DataCore actually scopes the query by) must equal the caller's own
+    tenant. A missing/non-string tenant_id is also rejected — DataCore
+    requires it, so its absence is not a legitimate request."""
+    if not isinstance(request_tenant_id, str) or request_tenant_id != user.get("tenant_id"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Request tenant_id does not match token tenant",
+        )
+
+
 def _clause_after(sql: str, start: int) -> str:
     """Text from `start` up to the next clause-terminating keyword (or EOS)."""
     stop = _CLAUSE_STOP.search(sql, start)
     return sql[start:stop.start()] if stop else sql[start:]
 
 
-def assert_tenant_scoped_sql(sql: str, tenant_id: str) -> None:
-    prefix = f"{tenant_id.lower()}_"
+def assert_sql_uses_data_alias(sql: str) -> None:
+    """Defense in depth for /api/query: every table reference in the SQL must
+    be exactly the `data` alias (case-insensitive, quoting stripped) that
+    DataCore registers the tenant's table under. Anything else — another
+    name, a DuckDB table function like read_csv(...), a CTE reference — is
+    rejected, since `data` is the only legitimate table shape this route
+    ever needs."""
     for keyword in _TABLE_KEYWORDS.finditer(sql):
         clause = _clause_after(sql, keyword.end())
         for segment in clause.split(","):
@@ -62,11 +86,11 @@ def assert_tenant_scoped_sql(sql: str, tenant_id: str) -> None:
             if not match:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Query contains a table reference that could not be verified as tenant-scoped",
+                    detail="Query contains a table reference that could not be verified",
                 )
             table = match.group("dq") or match.group("bt") or match.group("br") or match.group("bare")
-            if not table or not table.lower().startswith(prefix):
+            if not table or table.lower() != _DATA_ALIAS:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Query references non-tenant table '{table}'",
+                    detail=f"Query references disallowed table '{table}'",
                 )

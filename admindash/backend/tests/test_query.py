@@ -36,7 +36,7 @@ def test_query_surfaces_datacore_500_verbatim(client):
     )
     resp = client.post(
         "/api/query",
-        json={"sql": "SELECT 1"},
+        json={"tenant_id": "t1", "sql": "SELECT 1"},
         headers={"Authorization": "Bearer good"},
     )
     assert resp.status_code == 500
