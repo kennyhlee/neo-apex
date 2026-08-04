@@ -27,7 +27,7 @@ export function ReviewBlock({
     const its = items.filter((i) => i.block_id === blockId);
     if (its.length === 0) return false;
     return its.filter((i) => i.blocking).every(isDone) &&
-      (its.some((i) => i.blocking) ? true : its.some(isDone));
+      (its.some((i) => i.blocking) ? true : its.every(isDone));
   };
 
   return (
