@@ -146,6 +146,33 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.tooManyPaymentPlan': 'Only one payment plan step is allowed per flow.',
     'builder.tooManyPayment': 'Only one payment step is allowed per flow.',
     'builder.publishBlocked': 'Fix the issues above before publishing.',
+
+    // New application (Task 8)
+    'newApp.title': 'New application',
+    'newApp.program': 'Program',
+    'newApp.schoolYear': 'School year',
+    'newApp.applicantEmail': 'Parent email (optional)',
+    'newApp.create': 'Create application',
+    'newApp.created': 'Application created.',
+    'newApp.createError': 'Could not create the application.',
+
+    // Staff-assisted entry (Task 8)
+    'entry.title': 'Application entry',
+    'entry.viewDetail': 'View detail',
+    'entry.notFound': 'Application not found.',
+    'entry.noConfig': 'No registration flow is published for this program.',
+    'entry.saveError': 'Could not save the draft.',
+    'entry.itemCompleted': 'Step saved.',
+    'entry.uploaded': 'Document uploaded.',
+    'entry.uploadError': 'Upload failed.',
+    'entry.checkoutError': 'Could not start checkout.',
+    'entry.submitted': 'Application submitted.',
+    'entry.offlineTitle': 'Record offline payment',
+    'entry.offlineAmount': 'Amount (USD)',
+    'entry.offlineRecorded': 'Offline payment recorded.',
+
+    // Shared action-error fallback (tracking pages, Task 9/10)
+    'detail.actionError': 'Could not complete that action.',
   },
   'zh-CN': {
     // Navbar / shared chrome
@@ -290,5 +317,32 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.tooManyPaymentPlan': '每个流程只能有一个付款方式步骤。',
     'builder.tooManyPayment': '每个流程只能有一个付款步骤。',
     'builder.publishBlocked': '请先解决上述问题再发布。',
+
+    // 新建申请（任务 8）
+    'newApp.title': '新建申请',
+    'newApp.program': '项目',
+    'newApp.schoolYear': '学年',
+    'newApp.applicantEmail': '家长邮箱（可选）',
+    'newApp.create': '创建申请',
+    'newApp.created': '申请已创建。',
+    'newApp.createError': '申请创建失败。',
+
+    // 工作人员协助录入（任务 8）
+    'entry.title': '申请录入',
+    'entry.viewDetail': '查看详情',
+    'entry.notFound': '未找到该申请。',
+    'entry.noConfig': '该项目尚未发布报名流程。',
+    'entry.saveError': '草稿保存失败。',
+    'entry.itemCompleted': '该步骤已保存。',
+    'entry.uploaded': '文件已上传。',
+    'entry.uploadError': '上传失败。',
+    'entry.checkoutError': '无法发起支付。',
+    'entry.submitted': '申请已提交。',
+    'entry.offlineTitle': '记录线下付款',
+    'entry.offlineAmount': '金额（美元）',
+    'entry.offlineRecorded': '线下付款已记录。',
+
+    // 通用操作失败提示（跟踪页面，任务 9/10）
+    'detail.actionError': '操作未能完成。',
   },
 };
