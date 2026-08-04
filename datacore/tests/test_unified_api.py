@@ -159,3 +159,18 @@ def test_query_bad_sql(uf_client):
         "sql": "THIS IS NOT SQL",
     })
     assert resp.status_code == 400
+
+
+def test_query_blocks_filesystem_access(uf_client):
+    """`/api/query` runs the engine with external access disabled, so a
+    DuckDB file-reading table function fails here — not only on the
+    `/api/query/readonly` variant, and regardless of which caller (launchpad,
+    papermite, a proxy, or a direct client) sent the SQL."""
+    client, _ = uf_client
+    resp = client.post("/api/query", json={
+        "tenant_id": "t1",
+        "table": "entities",
+        "sql": "SELECT * FROM read_csv('/etc/passwd')",
+    })
+    assert resp.status_code in (400, 500)
+    assert "read_csv" in resp.json()["detail"] or "external access" in resp.json()["detail"].lower()

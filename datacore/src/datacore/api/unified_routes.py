@@ -36,6 +36,13 @@ def unified_query(req: QueryRequest):
 
     The SQL runs against the table alias 'data'.
     Supported tables: entities, models, tenants.
+
+    Runs with `external=True` — DuckDB's `enable_external_access` is off, so
+    filesystem/network table functions (`read_csv`, `read_parquet`, `COPY …
+    TO`, …) fail at the engine. Nothing on this route legitimately needs
+    them, and this is the only defense that covers every caller; the SQL
+    guards in the admindash/enrollx proxies are a secondary layer that only
+    protects callers routed through them.
     """
     qe = QueryEngine(_store)
 
@@ -47,6 +54,7 @@ def unified_query(req: QueryRequest):
             tenant_id=req.tenant_id,
             table_type=table_type,
             sql=req.sql,
+            external=True,
         )
     except TableNotFoundError:
         return {"data": [], "total": 0}
