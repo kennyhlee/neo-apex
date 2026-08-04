@@ -191,3 +191,58 @@ def test_settle_payment_item_rejects_non_payment_and_double_pay(fake_dc):
                                    fake_dc.get_entity("acme", "application_item", paid["entity_id"]),
                                    provider="offline", kind="full", amount=1)
     assert exc.value.status_code == 409
+
+
+# ── I6: predicates on sparsely-written fields ─────────────────────────────
+
+def test_first_stripe_payment_in_a_tenant_settles(fake_dc):
+    """I6 regression. `provider_ref` is written ONLY by settle_payment_item,
+    so in a tenant with no prior Stripe payment the column does not exist and
+    a SQL predicate on it is a DuckDB binder error -> 400 -> 500 out of
+    enrollx. Stripe would retry that same failure forever, so the FIRST
+    payment in every tenant could never settle. Blocks Plan 3's webhook.
+    """
+    app = fake_dc.dc_create("acme", "registration_application",
+                            {"application_id": "A1", "program_id": "PR1",
+                             "status": "submitted"})
+    item = fake_dc.dc_create("acme", "application_item", {
+        "item_id": "i1", "application_id": app["entity_id"], "block_id": "b4",
+        "kind": "payment", "title": "Payment", "status": "not_started",
+        "blocking": True})
+    # No payment row exists anywhere in this tenant yet.
+    assert fake_dc.find("payment") == []
+
+    result = engine.settle_payment_item(
+        "acme", app["entity_id"],
+        fake_dc.get_entity("acme", "application_item", item["entity_id"]),
+        provider="stripe", kind="full", amount=50000,
+        provider_ref="cs_first_ever", actor="webhook")
+    assert result["already_settled"] is False
+    assert len(fake_dc.find("payment")) == 1
+
+
+def test_get_program_on_tenant_with_no_programs_returns_none(fake_dc):
+    """I6, same shape: `program_id` is not a column until something writes
+    one, so the SQL predicate turned a should-be-404 into a 500."""
+    assert engine.get_program("emptytenant", "PR1") is None
+
+
+def test_capacity_state_on_a_brand_new_tenant(fake_dc):
+    """I6, DEFENSIVE — not a proven-reachable 500 today.
+
+    capacity_state filters registration_application/enrollment on
+    program_id+status with zero of either row present. Today every caller
+    reaches it only after a program AND a config exist, and those rows supply
+    both columns, so the SQL form did not actually fail here. It is the same
+    shape as the two real bugs above and one new caller away from being one,
+    so it is filtered in Python too and pinned here.
+    """
+    seed_program_and_config(fake_dc, capacity=10)
+    assert fake_dc.find("registration_application") == []
+    assert fake_dc.find("enrollment") == []
+    assert engine.capacity_state("acme", "PR1") == {
+        "capacity": 10, "approved": 0, "enrolled": 0, "full": False}
+
+
+def test_published_config_lookup_on_empty_tenant(fake_dc):
+    assert engine.get_published_config("emptytenant", "PR1") is None

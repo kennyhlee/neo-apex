@@ -68,6 +68,8 @@ import json
 import re
 import uuid
 
+from fastapi import HTTPException
+
 
 def _scalar_to_str(v):
     """Verbatim mirror of datacore/src/datacore/query.py::_scalar_to_str.
@@ -123,10 +125,26 @@ class FakeDataCore:
         self.seq += 1
         return f"TT-{entity_type[:2].upper()}26{self.seq:04d}"
 
+    # Columns that exist on every row regardless of what base_data was written.
+    SYSTEM_COLUMNS = {"entity_id", "entity_type", "_status", "_tenant"}
+
     def list_entities(self, tenant_id, entity_type, where="", token=None):
-        out = [dict(r) for r in self.rows
-               if r["entity_type"] == entity_type and r["_tenant"] == tenant_id]
+        tenant_rows = [r for r in self.rows if r["_tenant"] == tenant_id]
+        out = [dict(r) for r in tenant_rows if r["entity_type"] == entity_type]
         for field, value in self._parse_where(where):
+            # Mirror DuckDB's binder error. DataCore only materializes a
+            # flattened column when at least one row in the TENANT'S TABLE
+            # (any entity_type — the table is flattened across all of them)
+            # carries that key. Filtering on a field nothing has written yet
+            # is a binder error, surfacing as a 400 from /api/query. Without
+            # this the fake silently returned [] and hid a whole class of
+            # "fails on the first row in every tenant" bugs (finding I6).
+            if field not in self.SYSTEM_COLUMNS and not any(
+                    field in r for r in tenant_rows):
+                raise HTTPException(
+                    400,
+                    f"DataCore query failed: Binder Error: Referenced column "
+                    f"{field!r} not found in FROM clause")
             out = [r for r in out if str(r.get(field, "")) == value]
         return out
 

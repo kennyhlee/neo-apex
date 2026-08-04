@@ -101,6 +101,33 @@ def require_application(tenant_id, entity_id, token=None) -> dict:
     return row
 
 
+def rows_matching(tenant_id, entity_type, token=None, **equals) -> list[dict]:
+    """List rows of `entity_type` and apply equality filters IN PYTHON.
+
+    Why not a SQL `where`: DataCore's query engine only materializes a
+    flattened column when at least one row in the tenant's table already
+    carries that key. Filtering in SQL on a field nothing has written yet
+    makes DuckDB raise a binder error, which surfaces as a 400 from
+    /api/query and a 500 out of enrollx — so a predicate on a
+    sparsely-written field fails on the FIRST such row in every tenant,
+    exactly when it must not (a brand-new tenant's first parent visit, the
+    first Stripe payment, ...).
+
+    `entity_type` and `_status` are real system columns present on every
+    row, so the type-scoped query underneath is always safe. Use this
+    wherever the predicate field may not exist yet; keep a SQL `where` only
+    for fields guaranteed to be populated AND result sets large enough that
+    the filtering must happen server-side.
+
+    Comparison is string-based because every flattened value arrives as a
+    string (see `as_bool`).
+    """
+    rows = dc.list_entities(tenant_id, entity_type, "", token)
+    for field, value in equals.items():
+        rows = [r for r in rows if str(r.get(field, "")) == str(value)]
+    return rows
+
+
 def get_items(tenant_id, application_entity_id, token=None) -> list[dict]:
     where = f"application_id = {dc.sql_literal(application_entity_id)}"
     return dc.list_entities(tenant_id, "application_item", where, token)
@@ -109,19 +136,24 @@ def get_items(tenant_id, application_entity_id, token=None) -> list[dict]:
 def get_program(tenant_id, program_id, token=None):
     """Match by the human `program_id` field first, then fall back to
     entity_id — callers may hold either depending on where the id came
-    from."""
-    where = f"program_id = {dc.sql_literal(program_id)}"
-    rows = dc.list_entities(tenant_id, "program", where, token)
+    from.
+
+    Filtered in Python: on a tenant with zero programs the `program_id`
+    column does not exist, and the old SQL predicate turned a should-be-404
+    into a 500. Programs per tenant are few.
+    """
+    rows = rows_matching(tenant_id, "program", token, program_id=program_id)
     if not rows:
-        where = f"entity_id = {dc.sql_literal(program_id)}"
-        rows = dc.list_entities(tenant_id, "program", where, token)
+        rows = rows_matching(tenant_id, "program", token, entity_id=program_id)
     return rows[0] if rows else None
 
 
 def get_published_config(tenant_id, program_id, token=None):
-    where = (f"program_id = {dc.sql_literal(program_id)} "
-             f"AND status = {dc.sql_literal('published')}")
-    rows = dc.list_entities(tenant_id, "registration_config", where, token)
+    """Filtered in Python — same reason as get_program: on a tenant with no
+    registration_config rows yet, `status`/`program_id` may not exist as
+    columns. Configs per program are a handful."""
+    rows = rows_matching(tenant_id, "registration_config", token,
+                         program_id=program_id, status="published")
     return rows[0] if rows else None
 
 
@@ -132,8 +164,8 @@ def get_config_for_application(tenant_id, app_row, token=None):
     application keeps working against the version it was created under
     even after a newer version is published."""
     program_id = app_row.get("program_id", "")
-    where = f"program_id = {dc.sql_literal(program_id)}"
-    rows = dc.list_entities(tenant_id, "registration_config", where, token)
+    rows = rows_matching(tenant_id, "registration_config", token,
+                         program_id=program_id)
     want = int(app_row.get("config_version") or 0)
     for r in rows:
         if int(r.get("version") or 0) == want:
@@ -163,14 +195,22 @@ def set_application_status(tenant_id, app_row, new_status, actor, token=None, ex
 
 
 def capacity_state(tenant_id, program_id, token=None) -> dict:
+    """Filtered in Python for the same sparse-column reason as get_program.
+
+    This one is reached on a parent's very FIRST visit to a new tenant's
+    program (public_config), when zero registration_application and zero
+    enrollment rows exist and neither `program_id` nor `status` is a column
+    on those types yet — the SQL predicate 500'd there. The tradeoff is that
+    counting now pulls the tenant's applications and enrollments rather than
+    counting server-side; acceptable at current scale, and the place to
+    revisit first if capacity checks get slow.
+    """
     program = get_program(tenant_id, program_id, token)
     capacity = (program or {}).get("capacity")
-    approved_where = (f"program_id = {dc.sql_literal(program_id)} "
-                       f"AND status = {dc.sql_literal('approved')}")
-    approved = dc.list_entities(tenant_id, "registration_application", approved_where, token)
-    enrolled_where = (f"program_id = {dc.sql_literal(program_id)} "
-                       f"AND status = {dc.sql_literal('active')}")
-    enrollments = dc.list_entities(tenant_id, "enrollment", enrolled_where, token)
+    approved = rows_matching(tenant_id, "registration_application", token,
+                             program_id=program_id, status="approved")
+    enrollments = rows_matching(tenant_id, "enrollment", token,
+                                program_id=program_id, status="active")
     full = capacity is not None and len(approved) + len(enrollments) >= int(capacity)
     return {"capacity": int(capacity) if capacity is not None else None,
             "approved": len(approved), "enrolled": len(enrollments), "full": full}
@@ -307,9 +347,18 @@ def settle_payment_item(tenant_id, application_entity_id, item_row, *, provider,
         raise HTTPException(400, "settle_payment_item targets a payment item")
 
     if provider_ref:
-        where = (f"application_id = {dc.sql_literal(application_entity_id)} "
-                 f"AND provider_ref = {dc.sql_literal(provider_ref)}")
-        existing = dc.list_entities(tenant_id, "payment", where, token)
+        # provider_ref is filtered in PYTHON, not SQL. It is written only by
+        # this function, so in a tenant with no prior Stripe payment the
+        # column does not exist and a SQL predicate on it makes DuckDB raise
+        # a binder error -> 400 from /api/query -> 500 here. Stripe would
+        # then retry the same failure forever, so the FIRST payment in every
+        # tenant could never settle. `application_id` IS safe to keep in SQL
+        # (payments, items and activities all write it), and it narrows the
+        # result to one application's payments — trivially small to scan.
+        where = f"application_id = {dc.sql_literal(application_entity_id)}"
+        candidates = dc.list_entities(tenant_id, "payment", where, token)
+        existing = [p for p in candidates
+                    if str(p.get("provider_ref", "")) == str(provider_ref)]
         if existing:
             existing_payment = existing[0]
             return {
