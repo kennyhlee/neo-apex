@@ -31,6 +31,13 @@ export default function BlockConfigPanel({ block, onChange }: BlockConfigPanelPr
     onChange({ ...block, config: { ...block.config, ...patch } });
 
   // Money: integer cents in config, dollars in the UI (DISPATCH-CONTEXT).
+  // A non-number `c` renders as $0.00 here — indistinguishable from a
+  // genuinely-unset amount. That's intentional: this input isn't the place
+  // to diagnose "absent vs. malformed," and draft saves go through the
+  // invariant-free entity API so a bad value can land here before publish
+  // ever runs. `ConfigBuilderPage`'s `validateForPublish`/`isValidCents` is
+  // what actually surfaces a present-but-wrong-type amount as an error,
+  // rather than this input silently masking it as a legitimate zero fee.
   const centsToDollars = (c: unknown) => (typeof c === 'number' ? c / 100 : 0);
   const dollarsToCents = (s: string) => Math.max(0, Math.round(Number(s || 0) * 100));
 
@@ -147,9 +154,14 @@ export default function BlockConfigPanel({ block, onChange }: BlockConfigPanelPr
             {!d.blocking && (
               <label className="bcp-inline">
                 <span>{t('builder.dueDays')}</span>
-                <input type="number" min={0} value={d.due_days_after_approval ?? ''}
+                <input type="number" min={0} step="1" value={d.due_days_after_approval ?? ''}
                   onChange={(e) => setDoc(i, {
-                    due_days_after_approval: e.target.value === '' ? undefined : Number(e.target.value),
+                    // Whole days only — no `step` means a browser accepts "3.5",
+                    // and the backend's due_days_after_approval check rejects a
+                    // non-int with a raw 422 at publish. Truncate here so the
+                    // value is always an integer the moment it's typed.
+                    due_days_after_approval: e.target.value === ''
+                      ? undefined : Math.max(0, Math.trunc(Number(e.target.value))),
                   })} />
               </label>
             )}
@@ -257,10 +269,15 @@ export default function BlockConfigPanel({ block, onChange }: BlockConfigPanelPr
       {!block.blocking && (
         <div className="bcp-row">
           <label htmlFor={id('due')}>{t('builder.dueDays')}</label>
-          <input id={id('due')} type="number" min={0}
+          <input id={id('due')} type="number" min={0} step="1"
             value={block.due_days_after_approval ?? ''}
             onChange={(e) => setTop({
-              due_days_after_approval: e.target.value === '' ? undefined : Number(e.target.value),
+              // Same truncation as the per-doc field above — the backend's
+              // `isinstance(ddaa, int)` check (items.py validate_blocks)
+              // rejects a float with a raw 422 at publish; keep it an
+              // integer from the moment it's entered.
+              due_days_after_approval: e.target.value === ''
+                ? undefined : Math.max(0, Math.trunc(Number(e.target.value))),
             })} />
         </div>
       )}

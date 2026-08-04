@@ -49,6 +49,30 @@ function withReview(blocks: FlowBlock[], reviewTitle: string): FlowBlock[] {
 }
 
 /**
+ * Type-faithful integer-cents check, matching the backend's `isinstance(x,
+ * int)` (items.py validate_blocks) rather than `Number(...)`'s coercion —
+ * `Number("10000")` and `Number(true)` both produce a valid-looking finite
+ * number, which would let a stringified/boolean amount slip past this gate
+ * and fail only at the real publish_config 422. A non-integer, negative, or
+ * wrong-typed value is treated identically here (this function only needs to
+ * flag "not safe to publish," not diagnose why) — `BlockConfigPanel`'s
+ * `centsToDollars` renders any of them as an unremarkable $0.00, so this
+ * check is what actually surfaces the problem to staff instead of it being
+ * silently masked as a legitimate zero fee.
+ */
+function isValidCents(v: unknown): boolean {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0;
+}
+
+/** Same integer-or-absent contract as `due_days_after_approval` throughout
+ *  the backend (items.py's block-level check; `derive_items`'s per-doc
+ *  `int(due_days)` truncation) — `undefined` is fine (field not set), any
+ *  other non-integer is not. */
+function isValidDueDays(v: unknown): boolean {
+  return v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 0);
+}
+
+/**
  * Client-side mirror of the backend's `validate_blocks`
  * (`enrollx/backend/app/registration/items.py:68-140`), PLUS the
  * cross-block-type cardinality rule that function does not enforce (payment
@@ -76,6 +100,11 @@ function validateForPublish(blocks: FlowBlock[], t: (key: string) => string): st
     if (!b.title.trim()) {
       issues.push(`${label}: ${t('builder.errTitleRequired')}`);
     }
+    // Backend checks this on every block type, not only documents/payment_plan
+    // (items.py validate_blocks: `if "due_days_after_approval" in b: ...`).
+    if (!isValidDueDays(b.due_days_after_approval)) {
+      issues.push(`${label}: ${t('builder.errDueDaysInvalid')}`);
+    }
     if (b.type === 'documents') {
       const docs = Array.isArray(b.config.docs) ? (b.config.docs as RequiredDoc[]) : [];
       if (docs.length === 0) {
@@ -83,22 +112,25 @@ function validateForPublish(blocks: FlowBlock[], t: (key: string) => string): st
       } else if (docs.some((d) => !d.name || !d.name.trim())) {
         issues.push(`${label}: ${t('builder.errDocNameRequired')}`);
       }
+      // Not checked by validate_blocks itself, but `derive_items` truncates a
+      // non-int per-doc due_days_after_approval via Python's `int(...)`
+      // (silent, not even a 422) — worth catching client-side since the
+      // backend never will.
+      if (docs.some((d) => !isValidDueDays(d.due_days_after_approval))) {
+        issues.push(`${label}: ${t('builder.errDueDaysInvalid')}`);
+      }
     }
     if (b.type === 'payment_plan') {
       const plans = Array.isArray(b.config.plans) ? (b.config.plans as PaymentPlanOption[]) : [];
       if (plans.length === 0) {
         issues.push(`${label}: ${t('builder.errPlansEmpty')}`);
       }
-      const amountFull = Number(b.config.amount_full);
-      if (!Number.isFinite(amountFull) || amountFull < 0) {
+      if (!isValidCents(b.config.amount_full)) {
         issues.push(`${label}: ${t('builder.errAmountInvalid')}`);
       }
       const deposit = plans.find((p) => p.type === 'deposit');
-      if (deposit) {
-        const depositAmt = Number(deposit.deposit_amount);
-        if (!Number.isFinite(depositAmt) || depositAmt < 0) {
-          issues.push(`${label}: ${t('builder.errDepositInvalid')}`);
-        }
+      if (deposit && !isValidCents(deposit.deposit_amount)) {
+        issues.push(`${label}: ${t('builder.errDepositInvalid')}`);
       }
     }
   });
@@ -344,6 +376,12 @@ export default function ConfigBuilderPage() {
         <section className="builder-list" aria-label={t('builder.blocksHeading')}>
           <h2>{t('builder.blocksHeading')}</h2>
           <ol>
+            {/* `key={b.block_id}` assumes uniqueness, which this page's own
+                `newBlockId()` guarantees but an externally-authored/legacy
+                config could violate. Deferred: worst case is a React
+                duplicate-key warning, not data corruption — edits below are
+                index-based (`blocks.map((b, i) => ...)`), not keyed off
+                block_id, so a collision can't cross-wire two blocks' state. */}
             {blocks.map((b, i) => (
               <li key={b.block_id}
                 className={i === selected ? 'builder-row builder-row--selected' : 'builder-row'}>

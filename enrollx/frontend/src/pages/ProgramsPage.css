@@ -1,4 +1,9 @@
 .programs-page { padding: 20px; max-width: 960px; margin: 0 auto; }
+/* .page-header/.page-title/.page-subtitle/.programs-muted/.programs-error below
+   are reused as-is by ConfigBuilderPage.tsx (no shared common.css exists yet) —
+   this works only because Vite bundles every statically-imported page's CSS
+   into one stylesheet; renaming or removing these classes silently breaks that
+   page's chrome with no build error. */
 .page-header { display: flex; align-items: center; justify-content: space-between;
   gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .page-title { margin: 0; font-size: 22px; color: var(--ink);
