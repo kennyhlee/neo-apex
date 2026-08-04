@@ -3,8 +3,8 @@
 Trust chain (do not reorder, do not let any write precede step 3):
 1. The Stripe signature authenticates the payload (503 if no webhook secret
    is configured, 400 on a bad signature).
-2. Session metadata names the tenant, application and item (400 if any is
-   missing).
+2. Session metadata names the tenant, application and item, and names a kind
+   this system understands.
 3. The tenant's stored stripe_account_id must equal the event's connected-
    account id BEFORE ANY WRITE — otherwise one tenant could settle payments
    against another tenant's application.
@@ -13,6 +13,28 @@ Trust chain (do not reorder, do not let any write precede step 3):
 
 Unauthenticated by design (Stripe, not a NeoApex caller, hits this route) —
 it trusts only the Stripe signature.
+
+STATUS-CODE POLICY (binding — an HTTP status here is a RETRY INSTRUCTION to
+Stripe, not an error report to a human):
+
+- Non-2xx means "this may succeed later". Stripe retries a failing delivery
+  for up to three days and DISABLES an endpoint that keeps failing — at which
+  point no tenant on the platform settles any payment. So a condition that
+  can never succeed on retry must NOT be non-2xx, however wrong it is.
+- Permanent per-event conditions therefore return 200 with
+  {"received": true, "handled": false, "reason": "<code>"} and a
+  logger.warning/error. Those log lines, not the status code, are the
+  alerting surface. A second payment against an already-verified item is the
+  realistic one (staff double-click, parent paying in two tabs, a parent
+  paying online while staff records an offline payment): its provider_ref
+  differs so the dedupe misses, settle_payment_item raises 409, and left
+  uncaught that 409 is what takes the endpoint down platform-wide.
+- 400 is reserved for a failed SIGNATURE and 503 for an unconfigured webhook
+  secret. Both are configuration faults where loudness and retries are right.
+- Genuine 5xx (DataCore unreachable, etc.) are left to propagate so Stripe's
+  retries do the work they are designed for.
+- Every response carries a `handled` key, so a consumer never has to infer
+  it from absence.
 """
 import logging
 from datetime import datetime, timedelta, timezone
@@ -39,6 +61,18 @@ router = APIRouter()
 # application_item row, so the lookup is safe to leave in SQL (task-7-
 # corrections.md C5), unlike the sparse provider_ref column below.
 BALANCE_ITEM_TITLE = "Balance payment"
+
+# The payment kinds checkout_service mints and settle_payment_item/the
+# balance follow-up understand. An unrecognized kind would record a payment
+# of unknown kind and silently skip the deposit->balance obligation, so it is
+# rejected rather than defaulted.
+VALID_KINDS = {"full", "deposit", "balance"}
+
+
+def _not_handled(reason: str, **extra) -> dict:
+    """The 200 body for a permanent per-event condition — see the module
+    docstring's status-code policy. Never used for transient failures."""
+    return {"received": True, "handled": False, "reason": reason, **extra}
 
 
 def _as_plain_dict(obj):
@@ -163,7 +197,7 @@ async def stripe_webhook(request: Request):
     event = _as_plain_dict(event)
 
     if event["type"] != "checkout.session.completed":
-        return {"received": True, "handled": False}
+        return _not_handled("unsupported_event_type")
 
     session = event["data"]["object"]
     meta = session.get("metadata") or {}
@@ -176,7 +210,15 @@ async def stripe_webhook(request: Request):
             "stripe webhook rejected: missing metadata (tenant_id=%r application_id=%r "
             "item_id=%r session_id=%r)", tenant_id, application_id, item_id, session.get("id"),
         )
-        raise HTTPException(400, "Session metadata missing tenant/application/item")
+        return _not_handled("missing_metadata")
+
+    if kind not in VALID_KINDS:
+        logger.warning(
+            "stripe webhook rejected: unknown payment kind (kind=%r tenant_id=%r "
+            "application_id=%r item_id=%r session_id=%r)",
+            kind, tenant_id, application_id, item_id, session.get("id"),
+        )
+        return _not_handled("invalid_kind")
 
     # Step 3 of the trust chain: connected account must map to exactly this
     # tenant before any write. Both operands must be truthy before comparing
@@ -193,11 +235,11 @@ async def stripe_webhook(request: Request):
             "stored_account=%r event_account=%r application_id=%r session_id=%r)",
             tenant_id, stored_account, account, application_id, session.get("id"),
         )
-        raise HTTPException(400, "Connected account does not match tenant")
+        return _not_handled("account_mismatch")
 
     session_id = str(session["id"])
     if _already_processed(tenant_id, application_id, session_id):
-        return {"received": True, "duplicate": True}
+        return _not_handled("duplicate", duplicate=True)
 
     items = get_items(tenant_id, application_id, None)
     item_row = next((i for i in items if str(i.get("entity_id")) == str(item_id)), None)
@@ -207,22 +249,44 @@ async def stripe_webhook(request: Request):
             "application_id=%r item_id=%r session_id=%r)",
             tenant_id, application_id, item_id, session_id,
         )
-        raise HTTPException(400, "Session metadata names an unknown application item")
+        return _not_handled("unknown_item")
 
     amount = int(session.get("amount_total") or 0)
     currency = str(session.get("currency") or "usd").lower()
-    result = settle_payment_item(
-        tenant_id,
-        application_id,
-        item_row,
-        provider="stripe",
-        kind=kind,
-        amount=amount,
-        currency=currency,
-        provider_ref=session_id,
-        recorded_by="stripe:webhook",
-        token=None,
-    )
+    try:
+        result = settle_payment_item(
+            tenant_id,
+            application_id,
+            item_row,
+            provider="stripe",
+            kind=kind,
+            amount=amount,
+            currency=currency,
+            provider_ref=session_id,
+            recorded_by="stripe:webhook",
+            token=None,
+        )
+    except HTTPException as exc:
+        if not 400 <= exc.status_code < 500:
+            # A 5xx out of settle_payment_item is DataCore being unreachable
+            # or similar — genuinely transient, so let it propagate and let
+            # Stripe's retries do the work they are designed for.
+            raise
+        # 409 "item is already verified" is the realistic case: a SECOND
+        # payment against the same item, whose provider_ref differs so the
+        # dedupe above missed it. Real money was collected and there is no
+        # payment row for it — but a non-2xx here would have Stripe retry a
+        # permanently-failing delivery for three days and then disable the
+        # endpoint for every tenant. So: 200, and shout in the log.
+        logger.error(
+            "stripe webhook could not settle payment (status=%s detail=%r "
+            "tenant_id=%r application_id=%r item_id=%r session_id=%r kind=%r "
+            "amount=%r currency=%r) — money may have been collected with no "
+            "payment record; reconcile manually",
+            exc.status_code, exc.detail, tenant_id, application_id, item_id,
+            session_id, kind, amount, currency,
+        )
+        return _not_handled("settlement_rejected")
 
     # Everything below is best-effort. settle_payment_item already committed
     # the payment + item write above, so a transient failure here (a

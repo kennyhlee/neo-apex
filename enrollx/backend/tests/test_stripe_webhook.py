@@ -12,6 +12,7 @@ import time
 
 import pytest
 import stripe
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.config import settings
@@ -216,11 +217,19 @@ def test_other_event_types_ignored(client, webhook_env, monkeypatch):
     assert webhook_env["settled"] == []
 
 
-def test_account_mismatch_400_and_no_writes(client, webhook_env, monkeypatch):
+def test_account_mismatch_200_not_handled_and_no_writes(client, webhook_env, monkeypatch):
+    """A connected-account mismatch can never succeed on retry, so it must
+    NOT be non-2xx: Stripe retries a failing delivery for three days and
+    disables an endpoint that keeps failing, which would stop settlement for
+    every tenant on the platform. The security property is unchanged and
+    non-negotiable — NOTHING is written."""
     stub_event(monkeypatch, completed_event(account="acct_attacker"))
     resp = post(client)
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    assert resp.json()["handled"] is False
+    assert resp.json()["reason"] == "account_mismatch"
     assert webhook_env["settled"] == []
+    assert webhook_env["emails"] == []
 
 
 def test_duplicate_event_noops(client, webhook_env, monkeypatch):
@@ -228,7 +237,11 @@ def test_duplicate_event_noops(client, webhook_env, monkeypatch):
     stub_event(monkeypatch, completed_event())
     resp = post(client)
     assert resp.status_code == 200
-    assert resp.json()["duplicate"] is True
+    body = resp.json()
+    assert body["duplicate"] is True
+    # `handled` is total across every response — a consumer never has to
+    # infer it from absence.
+    assert body["handled"] is False
     assert webhook_env["settled"] == []
     assert webhook_env["emails"] == []
 
@@ -269,25 +282,80 @@ def test_completed_session_settles_and_sends_receipt(client, webhook_env, monkey
     assert "50" in receipt["html"] or "500.00" in receipt["html"]
 
 
-def test_missing_metadata_400(client, webhook_env, monkeypatch):
+def test_missing_metadata_200_not_handled(client, webhook_env, monkeypatch):
+    """Permanent condition -> 200 handled:false (see the status-code policy
+    in the module docstring), and — unchanged — no writes."""
     event = completed_event()
     event["data"]["object"]["metadata"] = {}
     stub_event(monkeypatch, event)
     resp = post(client)
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    assert resp.json()["handled"] is False
+    assert resp.json()["reason"] == "missing_metadata"
     assert webhook_env["settled"] == []
+    assert webhook_env["emails"] == []
 
 
-def test_unknown_item_id_400(client, webhook_env, monkeypatch):
-    """Metadata names an item id that get_items does not return -> 400,
-    must not settle (C1's mandated new test)."""
+def test_unknown_item_id_200_not_handled(client, webhook_env, monkeypatch):
+    """Metadata names an item id that get_items does not return. Permanent,
+    so 200 handled:false; must not settle (C1's mandated new test)."""
     stub_event(monkeypatch, completed_event(item_id="AI999999"))
     resp = post(client)
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    assert resp.json()["handled"] is False
+    assert resp.json()["reason"] == "unknown_item"
     assert webhook_env["settled"] == []
 
 
-def test_account_and_stored_both_absent_400(client, webhook_env, monkeypatch):
+def test_invalid_kind_200_not_handled(client, webhook_env, monkeypatch):
+    """An unrecognized `kind` would record a payment of unknown kind and
+    silently skip the deposit->balance obligation, so it is rejected rather
+    than defaulted — permanently, hence 200 handled:false."""
+    stub_event(monkeypatch, completed_event(kind="subscription"))
+    resp = post(client)
+    assert resp.status_code == 200
+    assert resp.json()["handled"] is False
+    assert resp.json()["reason"] == "invalid_kind"
+    assert webhook_env["settled"] == []
+
+
+def test_settlement_conflict_200_not_handled_and_no_second_payment(
+    client, webhook_env, monkeypatch
+):
+    """The C2 trigger: a SECOND payment against the same item (staff
+    double-click, parent paying in two tabs, or a parent paying online while
+    staff records an offline payment). Its provider_ref differs, so the
+    dedupe misses and settle_payment_item raises 409 "already verified".
+    Uncaught that 409 is retried by Stripe for three days and then disables
+    the endpoint for every tenant on the platform."""
+    def conflicting_settle(tenant_id, application_id, item_row, **kwargs):
+        raise HTTPException(409, "Payment item is already verified")
+
+    monkeypatch.setattr("app.api.stripe_webhook.settle_payment_item", conflicting_settle)
+    stub_event(monkeypatch, completed_event(session_id="cs_test_second"))
+    resp = post(client)
+    assert resp.status_code == 200
+    assert resp.json()["handled"] is False
+    assert resp.json()["reason"] == "settlement_rejected"
+    assert webhook_env["settled"] == []
+    assert webhook_env["emails"] == []
+
+
+def test_settlement_5xx_propagates_for_retry(client, webhook_env, monkeypatch):
+    """The other half of the policy: a genuine 5xx (DataCore unreachable) IS
+    transient, so it must keep propagating and let Stripe retry. Swallowing
+    it as 200 would silently drop a real payment."""
+    def unreachable(tenant_id, application_id, item_row, **kwargs):
+        raise HTTPException(502, "DataCore is unreachable")
+
+    monkeypatch.setattr("app.api.stripe_webhook.settle_payment_item", unreachable)
+    stub_event(monkeypatch, completed_event())
+    resp = post(client)
+    assert resp.status_code == 502
+    assert webhook_env["emails"] == []
+
+
+def test_account_and_stored_both_absent_200_not_handled(client, webhook_env, monkeypatch):
     """F1: a tenant that hasn't finished Connect onboarding has no stored
     stripe_account_id, and a platform-level (non-Connect) event has no
     `account` at all. Two ABSENT values are not an equality of Stripe
@@ -298,7 +366,9 @@ def test_account_and_stored_both_absent_400(client, webhook_env, monkeypatch):
     )
     stub_event(monkeypatch, completed_event(account=None))
     resp = post(client)
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    assert resp.json()["handled"] is False
+    assert resp.json()["reason"] == "account_mismatch"
     assert webhook_env["settled"] == []
 
 
