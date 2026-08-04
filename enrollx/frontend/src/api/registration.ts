@@ -1,14 +1,23 @@
 import type { RequiredDoc } from '@neoapex/flow-runtime';
 import { ENROLLX_API_URL } from '../config.ts';
 import { authHeaders, jsonOrThrow } from './client.ts';
-import type { ApplicationRow } from '../types/registration.ts';
+import type { ApplicationRow, ItemRow } from '../types/registration.ts';
 
 const API_BASE = ENROLLX_API_URL;
+
+/**
+ * 201 response envelope from `engine.create_application` — verified
+ * (INTERFACE-MAP §3): `{application, items}`, not a bare `ApplicationRow`.
+ */
+export interface CreateApplicationResponse {
+  application: ApplicationRow;
+  items: ItemRow[];
+}
 
 export async function createApplication(
   tenantId: string,
   body: { program_id: string; school_year: string; channel: 'admin'; applicant_email?: string },
-): Promise<ApplicationRow> {
+): Promise<CreateApplicationResponse> {
   const resp = await fetch(`${API_BASE}/api/registration/${tenantId}/applications`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
