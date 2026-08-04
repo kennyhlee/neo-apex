@@ -141,7 +141,20 @@ export default function ApplicationEntryPage() {
   }, [draftDataRaw]);
 
   const rendererItems = useMemo(() => items.map((i) => ({
-    item_id: i.item_id, application_id: i.application_id, block_id: i.block_id,
+    // `item_id` here is flow-runtime's `ApplicationItem.item_id`, which every
+    // block component (PaymentBlock's onCheckout/onRecordOfflinePayment,
+    // FlowRenderer's own onCompleteItem call) sends straight back to us as
+    // the id to act on. It must be DataCore's `entity_id`, NOT the business
+    // `item_id` field application_item rows also carry — the backend's
+    // `_require_item` (`actions.py:41-47`) calls `get_entity(...)`, which
+    // resolves by entity_id, and the two are independently-generated
+    // strings that never match (`engine.py:265` mints the business
+    // `item_id` field separately from whatever entity_id DataCore assigns
+    // the row). Sending the business id here 404s every item-scoped action
+    // ("Item not found on this application") while page load and free-text
+    // autosave, which never touch this field, keep working — the same
+    // identifier trap as the route param, one level down.
+    item_id: i.entity_id, application_id: i.application_id, block_id: i.block_id,
     kind: i.kind, title: i.title, status: i.status,
     // `blocking` is a top-level DataCore field, so it arrives as the string
     // "true"/"false" as often as a real boolean — coerce with toBoolish
@@ -197,7 +210,8 @@ export default function ApplicationEntryPage() {
     const item = items.find((i) => i.block_id === blockId && i.title === doc.name);
     if (!item) { toast({ message: t('entry.uploadError'), tone: 'danger' }); return; }
     try {
-      await uploadDocumentForItem(tenant, applicationId, item.item_id, doc, file);
+      // entity_id, not the business item_id field — see rendererItems' comment.
+      await uploadDocumentForItem(tenant, applicationId, item.entity_id, doc, file);
       await loadAppAndItems();
       toast({ message: t('entry.uploaded'), tone: 'success' });
     } catch (e) {
