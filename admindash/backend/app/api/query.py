@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.auth import require_authenticated_user
 from app.config import settings
+from app.tenancy import assert_tenant_scoped_sql
 
 router = APIRouter()
 
@@ -14,6 +15,8 @@ async def query(
 ) -> Response:
     """Read raw bytes, forward to DataCore /api/query, return verbatim."""
     body = await request.body()
+    payload = await request.json()
+    assert_tenant_scoped_sql(payload.get("sql", ""), user["tenant_id"])
     content_type = request.headers.get("content-type", "application/json")
     try:
         resp = httpx.post(

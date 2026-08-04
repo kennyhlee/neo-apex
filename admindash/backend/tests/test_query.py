@@ -29,7 +29,7 @@ def test_unauthenticated_query_returns_401(client):
 @respx.mock
 def test_query_surfaces_datacore_500_verbatim(client):
     respx.get("http://localhost:5800/auth/me").mock(
-        return_value=httpx.Response(200, json={"id": "u1"})
+        return_value=httpx.Response(200, json={"id": "u1", "tenant_id": "t1"})
     )
     respx.post("http://localhost:5800/api/query").mock(
         return_value=httpx.Response(500, json={"error": "boom"})
