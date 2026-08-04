@@ -1,0 +1,83 @@
+/* Mobile-first: base styles target a ~375px phone -- a parent reaching this
+   page has just lost their link and is very likely on a phone, mid-errand,
+   mildly frustrated. Widen at 720px. Tokens only -- verified against
+   familyhub's theme.css; there is no `--border-color` token (only
+   `--border-primary`), matching the convention already used in
+   RegisterPage.css / HubPage.css. */
+
+.request-link-page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.request-link-page h1 {
+  font-size: var(--text-xl);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2);
+}
+
+.request-link-body {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.request-link-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.request-link-form label {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.request-link-form input {
+  font-size: 1rem; /* >=16px prevents iOS zoom-on-focus */
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.request-link-form input:disabled {
+  opacity: 0.6;
+}
+
+.request-link-primary {
+  min-height: var(--tap-min);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent-ink);
+  color: var(--text-inverse);
+  font-size: 1rem;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.request-link-primary:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.request-link-sent {
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  color: var(--text-primary);
+  margin: var(--space-4) 0 0;
+}
+
+@media (min-width: 720px) {
+  .request-link-page {
+    padding: var(--space-6);
+  }
+  .request-link-page h1 {
+    font-size: var(--text-2xl);
+  }
+}
