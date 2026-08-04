@@ -120,3 +120,135 @@ def test_enrolled_derivation_after_all_items_closed(client, fake_dc):
     assert row["status"] == "enrolled"
     acts = fake_dc.find("application_activity", application_id=eid)
     assert any(a["from_value"] == "approved" and a["to_value"] == "enrolled" for a in acts)
+
+
+# ── I5: the link-verified address outranks parent free text ───────────────
+
+def test_draft_email_cannot_override_present_applicant_email(client, fake_dc):
+    """I5 regression. `draft.family.primary_email` is free text a parent can
+    change via save_draft; `applicant_email` is the address the magic link was
+    actually delivered to. Preferring the draft value let a parent type another
+    family's email and have their student silently attached to that family.
+    """
+    victim = fake_dc.dc_create("acme", "family", {
+        "family_name": "Other Family", "primary_email": "victim@example.com"})
+
+    seed_program_and_config(fake_dc)
+    resp = client.post("/api/registration/acme/applications", json={
+        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin",
+        "applicant_email": "parent@example.com"})
+    created = resp.json()
+    eid = created["application"]["entity_id"]
+    # Parent claims someone else's email in the draft.
+    hostile = {**DRAFT, "family": {**DRAFT["family"],
+                                   "primary_email": "victim@example.com"}}
+    act(client, eid, "save_draft", draft_data=hostile)
+    for item in created["items"]:
+        if item["base_data"]["blocking"]:
+            act(client, eid, "complete_item", item_id=item["entity_id"])
+    act(client, eid, "submit")
+
+    data = act(client, eid, "approve").json()
+    assert data["family_id"] != victim["entity_id"], \
+        "draft email hijacked an existing family"
+    matched = fake_dc.get_entity("acme", "family", data["family_id"])
+    assert matched["primary_email"] == "parent@example.com"
+
+
+def test_draft_email_is_used_when_no_applicant_email(client, fake_dc):
+    """The draft value stays a FALLBACK — staff-created applications with no
+    applicant_email still match on it."""
+    existing = fake_dc.dc_create("acme", "family", {
+        "family_name": "Lee", "primary_email": "draft-only@example.com"})
+    seed_program_and_config(fake_dc)
+    created = client.post("/api/registration/acme/applications", json={
+        "program_id": "PR1", "school_year": "2026-2027", "channel": "admin"}).json()
+    eid = created["application"]["entity_id"]
+    act(client, eid, "save_draft", draft_data={
+        **DRAFT, "family": {**DRAFT["family"],
+                            "primary_email": "draft-only@example.com"}})
+    for item in created["items"]:
+        if item["base_data"]["blocking"]:
+            act(client, eid, "complete_item", item_id=item["entity_id"])
+    act(client, eid, "submit")
+    assert act(client, eid, "approve").json()["family_id"] == existing["entity_id"]
+
+
+def test_approve_logs_which_family_it_matched_or_created(client, fake_dc):
+    """I5: the family linkage was invisible in the audit trail."""
+    created = submitted_application(client, fake_dc)
+    eid = created["application"]["entity_id"]
+    data = act(client, eid, "approve").json()
+    acts = fake_dc.find("application_activity", application_id=eid)
+    notes = [a["to_value"] for a in acts if a["type"] == "note"]
+    assert f"family_created:{data['family_id']}" in notes
+
+    # A second application matching the same family logs `family_matched`.
+    second = submitted_application(client, fake_dc)
+    second_eid = second["application"]["entity_id"]
+    second_data = act(client, second_eid, "approve").json()
+    assert second_data["family_id"] == data["family_id"]
+    second_notes = [a["to_value"] for a in
+                    fake_dc.find("application_activity", application_id=second_eid)
+                    if a["type"] == "note"]
+    assert f"family_matched:{data['family_id']}" in second_notes
+
+
+# ── I8: approvals with no identifying data must not mint junk ─────────────
+
+def _submitted_with_draft(client, fake_dc, draft, applicant_email=None):
+    seed_program_and_config(fake_dc)
+    body = {"program_id": "PR1", "school_year": "2026-2027", "channel": "admin"}
+    if applicant_email:
+        body["applicant_email"] = applicant_email
+    created = client.post("/api/registration/acme/applications", json=body).json()
+    eid = created["application"]["entity_id"]
+    if draft is not None:
+        act(client, eid, "save_draft", draft_data=draft)
+    for item in created["items"]:
+        if item["base_data"]["blocking"]:
+            act(client, eid, "complete_item", item_id=item["entity_id"])
+    assert act(client, eid, "submit").status_code == 200
+    return eid
+
+
+def test_approve_422_when_no_family_identifying_data(client, fake_dc):
+    """I8. A staff-created application with no applicant_email and empty items
+    used to approve into a brand-new family literally named "Family", one per
+    approval."""
+    eid = _submitted_with_draft(client, fake_dc, None)
+    resp = act(client, eid, "approve")
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert "no family-identifying data" in detail["error"]
+    assert any("primary_email" in m for m in detail["missing"])
+    # Nothing was created.
+    assert fake_dc.find("family") == []
+    assert fake_dc.find("student") == []
+    assert fake_dc.find("enrollment") == []
+    assert fake_dc.get_entity("acme", "registration_application",
+                              eid)["status"] == "submitted"
+
+
+def test_approve_422_when_student_has_no_name(client, fake_dc):
+    """I8, second half: family data present but the student is nameless."""
+    eid = _submitted_with_draft(client, fake_dc, {
+        "family": {"primary_email": "someone@example.com"},
+        "student": {"first_name": "  ", "last_name": ""}})
+    resp = act(client, eid, "approve")
+    assert resp.status_code == 422
+    assert "no student name" in resp.json()["detail"]["error"]
+    assert fake_dc.find("student") == []
+    # The family guard passed, so no family should have been minted either —
+    # the student check runs before any write.
+    assert fake_dc.find("family") == []
+
+
+def test_approve_succeeds_with_only_a_phone_signature(client, fake_dc):
+    """The guard accepts any of the three signature forms, not just email."""
+    eid = _submitted_with_draft(client, fake_dc, {
+        "family": {"primary_phone": "(555) 987-6543"},
+        "student": {"first_name": "Ana", "last_name": "Diaz"}})
+    resp = act(client, eid, "approve")
+    assert resp.status_code == 200
+    assert fake_dc.find("student", first_name="Ana")

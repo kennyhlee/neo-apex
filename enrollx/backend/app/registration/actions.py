@@ -11,7 +11,11 @@ from fastapi import HTTPException
 
 from app.registration import datacore as dc
 from app.registration import emails, engine, tokens
-from app.registration.family import match_or_create_family
+from app.registration.family import (
+    match_or_create_family,
+    normalize_signature,
+    signature_key,
+)
 from app.registration.items import validate_blocks
 from app.registration.statuses import assert_item_transition
 
@@ -265,21 +269,57 @@ def _approve(tenant_id, application_entity_id, params, actor, token):
                                   "allowed": ["submitted", "in_review"]})
     draft = json.loads(app_row.get("draft_data") or "{}")
 
-    # 1. Family: match-or-create from draft family fields (+ applicant email fallback).
+    # 1. Family: match-or-create from draft family fields.
     # Called serially, exactly once for this approval — see the module-level
     # concurrency note in family.py: match_or_create_family is a read-then-write
     # with no locking, so this must never be fanned out across siblings or
     # wrapped in a concurrent construct.
+    #
+    # `applicant_email` OUTRANKS the draft-supplied `primary_email`. The
+    # applicant email is the address the magic link was actually delivered to
+    # — it is link-verified. `draft.family.primary_email` is free text the
+    # parent can change at will via save_draft, so letting it win meant a
+    # parent could type another family's email and have their student silently
+    # attached to that existing family. The draft value is now only a fallback
+    # for staff-created applications that have no applicant_email at all.
     family_fields = dict(draft.get("family") or {})
-    if app_row.get("applicant_email") and not family_fields.get("primary_email"):
+    if app_row.get("applicant_email"):
         family_fields["primary_email"] = app_row["applicant_email"]
-    family_id = match_or_create_family(tenant_id, family_fields, token)
+
+    # I8: refuse to mint a junk family. Nothing upstream guarantees any
+    # family-identifying data exists — applicant_email is optional,
+    # complete_item never inspects draft_data, and _submit only checks item
+    # statuses. Without this guard a staff-created application with no email
+    # and empty items approves into a brand-new family literally named
+    # "Family", one per approval, corrupting the core family registry.
+    if not signature_key(normalize_signature(family_fields)):
+        raise HTTPException(422, {
+            "error": "Cannot approve: no family-identifying data on the application",
+            "missing": ["family.primary_email (or applicant_email)",
+                        "family.primary_phone",
+                        "family.family_name + family.primary_address"],
+            "hint": "At least one of these signatures is required to match or "
+                    "create a family.",
+        })
+
+    student_fields = dict(draft.get("student") or {})
+    first_name = str(student_fields.pop("first_name", "") or "").strip()
+    last_name = str(student_fields.pop("last_name", "") or "").strip()
+    if not first_name and not last_name:
+        raise HTTPException(422, {
+            "error": "Cannot approve: the application has no student name",
+            "missing": ["student.first_name", "student.last_name"],
+        })
+
+    family_id, family_outcome = match_or_create_family(tenant_id, family_fields, token)
+    engine.log_activity(
+        tenant_id, application_entity_id, "note", "",
+        f"family_{family_outcome}:{family_id}", actor, token)
 
     # 2. Student
-    student_fields = dict(draft.get("student") or {})
     student_base = {
-        "first_name": student_fields.pop("first_name", ""),
-        "last_name": student_fields.pop("last_name", ""),
+        "first_name": first_name,
+        "last_name": last_name,
         "family_id": family_id,
         "status": "Enrolled",
     }
