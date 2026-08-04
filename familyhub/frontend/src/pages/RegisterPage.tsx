@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FlowRenderer } from '@neoapex/flow-runtime';
 import type { ApplicationItem, ApplicationSummary } from '@neoapex/flow-runtime';
@@ -128,6 +128,11 @@ export default function RegisterPage() {
   const [starting, setStarting] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  // Set the instant `onStart` has a token in hand -- before the resume
+  // effect below can ever see the new `token` on a re-render. Guards that
+  // effect from re-firing a second, wholly redundant `fetchApplication`
+  // right after a successful start (see the effect's comment).
+  const startedLocallyRef = useRef(false);
 
   // Load the public config bundle (program name, capacity state, blocks).
   // This is unauthenticated and pre-start -- it never needs a token. (Phase
@@ -153,8 +158,15 @@ export default function RegisterPage() {
   // Resume path: `?token=` present -> load the application directly and
   // skip the email-capture phase entirely, once the config bundle is also
   // in hand (needed so a slow bundle fetch can't race the phase transition).
+  // Guarded by `startedLocallyRef`: without it, `onStart` setting `token`
+  // (previously '') makes both guards below pass on the very next render,
+  // firing a second, wholly redundant `fetchApplication` right after a
+  // successful start -- and that redundant fetch's own failure (a flaky
+  // connection, a masked 502, a 429) would otherwise replace a
+  // successfully-mounted FlowRenderer with "this link is invalid" seconds
+  // after the application was created.
   useEffect(() => {
-    if (!token || !bundle) return;
+    if (!token || !bundle || startedLocallyRef.current) return;
     let cancelled = false;
     fetchApplication(token)
       .then((h) => {
@@ -163,7 +175,13 @@ export default function RegisterPage() {
         setPhase('running');
       })
       .catch(() => {
-        if (!cancelled) setPhase('invalidLink');
+        // Never downgrade a phase that is already `running` -- mirrors the
+        // `prev === 'running' ? prev : ...` guard the sibling bundle-load
+        // effect above already uses. Belt-and-suspenders alongside the
+        // `startedLocallyRef` guard: this effect should not even re-fire
+        // once running, but if it somehow did, its failure must still
+        // never imply the link itself is bad.
+        if (!cancelled) setPhase((prev) => (prev === 'running' ? prev : 'invalidLink'));
       });
     return () => {
       cancelled = true;
@@ -172,7 +190,15 @@ export default function RegisterPage() {
 
   const refreshHub = useCallback(async () => {
     if (!token) return;
-    setHub(await fetchApplication(token));
+    try {
+      setHub(await fetchApplication(token));
+    } catch {
+      // A post-action refresh failing is not evidence the action itself
+      // failed -- swallow it here so `onCompleteItem`/`onUploadDocument`'s
+      // own try/catch below (which reports "the action failed") never
+      // fires for a refresh that merely blipped after the real action
+      // already succeeded. Same root cause as HubPage's `load()`.
+    }
   }, [token]);
 
   async function onStart(e: FormEvent) {
@@ -187,6 +213,9 @@ export default function RegisterPage() {
     setStarting(true);
     try {
       const started = await startRegistration(tenantId, programId, value);
+      // Must be set before `setToken` -- otherwise the resume effect's
+      // guard is not yet in place on the very next render.
+      startedLocallyRef.current = true;
       setToken(started.token);
       setLinkSent(true);
       // `started` already carries the fresh application + items -- reuse

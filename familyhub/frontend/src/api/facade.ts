@@ -20,8 +20,28 @@ import {
  */
 const API_BASE = FAMILYHUB_API_URL;
 
+/**
+ * Carries the upstream HTTP status so callers can distinguish "this link
+ * is genuinely bad" (401/404) from a transient failure (a masked 5xx, a
+ * 429, a dropped mobile connection) -- the backend's `relay()` goes out of
+ * its way to preserve enrollx's real 401 and mask a genuine 5xx to a fixed
+ * 502 specifically so the client can tell the two apart; this is what
+ * reads that distinction back out instead of discarding it. Message shape
+ * is unchanged (`HTTP {status}`), so any existing `.message` reader keeps
+ * working.
+ */
+export class FacadeError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`HTTP ${status}`);
+    this.name = 'FacadeError';
+    this.status = status;
+  }
+}
+
 async function jsonOrThrow<T>(resp: Response): Promise<T> {
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  if (!resp.ok) throw new FacadeError(resp.status);
   return resp.json() as Promise<T>;
 }
 

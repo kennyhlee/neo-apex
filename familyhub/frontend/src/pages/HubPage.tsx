@@ -8,6 +8,7 @@ import {
 } from '@neoapex/flow-runtime';
 import {
   decodeToken,
+  FacadeError,
   fetchApplication,
   getDocumentUrl,
   startCheckout,
@@ -144,28 +145,50 @@ function isDone(status: ItemStatus): boolean {
   return (DONE_ITEM_STATUSES as readonly string[]).includes(status);
 }
 
+/**
+ * 401 (bad/tampered token) and 404 (unknown/revoked token) are the only
+ * responses that mean "this link is genuinely bad". Everything else --
+ * a masked 502 (enrollx or DataCore down), a 429, a network failure that
+ * never reached the facade at all (plain non-`FacadeError` rejection) --
+ * is transient and must not send the parent to the invalid-link screen.
+ */
+function isInvalidLinkError(err: unknown): boolean {
+  return err instanceof FacadeError && (err.status === 401 || err.status === 404);
+}
+
 export default function HubPage() {
   const { token = '' } = useParams();
   const { t } = useTranslation();
   const [hub, setHub] = useState<HubBundle | null>(null);
   const [invalid, setInvalid] = useState(false);
+  // Transient load/refresh failure -- a masked 5xx, a 429, an offline
+  // phone. Distinct from `invalid`: it gets a retry affordance, never the
+  // "this link is invalid or has expired" screen.
+  const [loadError, setLoadError] = useState(false);
   const [busyItem, setBusyItem] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  // Used both for the retry banner/button and for post-action refreshes
+  // (`onUpload`/`onPay`-adjacent `onSubmit`). `load()`'s failure must NEVER
+  // flip `invalid` -- a refresh blipping after a successful action, or a
+  // parent tapping retry, is not evidence the link itself is bad. Only the
+  // very first fetch (the effect below) can ever set `invalid`, since only
+  // there is there no existing working hub to protect.
   const load = useCallback(async () => {
     try {
-      setHub(await fetchApplication(token));
-      setInvalid(false);
+      const h = await fetchApplication(token);
+      setHub(h);
+      setLoadError(false);
     } catch {
-      setInvalid(true);
+      setLoadError(true);
     }
   }, [token]);
 
   // Inlined (rather than calling `load` from here) so the initial fetch
-  // can be cancellation-guarded the same way RegisterPage's effects are;
-  // `load` itself is reused below purely for post-action refreshes.
+  // can be cancellation-guarded the same way RegisterPage's effects are,
+  // AND so it alone -- never `load()` -- is allowed to set `invalid`.
   useEffect(() => {
     let cancelled = false;
     fetchApplication(token)
@@ -173,9 +196,15 @@ export default function HubPage() {
         if (cancelled) return;
         setHub(h);
         setInvalid(false);
+        setLoadError(false);
       })
-      .catch(() => {
-        if (!cancelled) setInvalid(true);
+      .catch((err) => {
+        if (cancelled) return;
+        if (isInvalidLinkError(err)) {
+          setInvalid(true);
+        } else {
+          setLoadError(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -251,6 +280,16 @@ export default function HubPage() {
   }
 
   if (!hub) {
+    if (loadError) {
+      return (
+        <div className="hub-page">
+          <p className="hub-banner tone-danger" role="alert">{t('hub.loadError')}</p>
+          <button type="button" className="hub-action secondary" onClick={() => void load()}>
+            {t('common.retry')}
+          </button>
+        </div>
+      );
+    }
     return <div className="hub-page"><p className="hub-loading">{t('hub.loading')}</p></div>;
   }
 
@@ -364,6 +403,15 @@ export default function HubPage() {
         <p>{t(`statusBanner.${status}`)}</p>
         {status === 'declined' && <p className="hub-contact">{t('hub.contactSchool')}</p>}
       </section>
+
+      {loadError && (
+        <p className="hub-error hub-retry-row" role="alert">
+          <span>{t('hub.loadError')}</span>
+          <button type="button" className="hub-action secondary" onClick={() => void load()}>
+            {t('common.retry')}
+          </button>
+        </p>
+      )}
 
       {actionError && <p className="hub-error" role="alert">{actionError}</p>}
 
