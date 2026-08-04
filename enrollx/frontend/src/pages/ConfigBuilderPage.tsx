@@ -1,5 +1,5 @@
 // enrollx/frontend/src/pages/ConfigBuilderPage.tsx
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { FlowRenderer } from '@neoapex/flow-runtime';
 import type {
@@ -315,13 +315,53 @@ export default function ConfigBuilderPage() {
   // violates it — e.g. an existing config authored before this rule existed.
   const validationErrors = useMemo(() => validateForPublish(blocks, t), [blocks, t]);
 
+  /**
+   * Focus management for the step list (a11y).
+   *
+   * Every reordering control can destroy the element holding focus:
+   * `move(i, -1)` to index 0 DISABLES the very ↑ button that was clicked, and
+   * `×` unmounts its own button outright. Either way focus falls back to
+   * `<body>` and a keyboard user is silently dumped to the top of the
+   * document — in the densest keyboard surface on the branch. `FlowRenderer`
+   * got proper focus management on step change; this list had none.
+   *
+   * A ref, not state: the target is only meaningful for the single commit
+   * that follows the mutation, and re-rendering to record it would be
+   * pointless. The effect runs after every render but exits immediately
+   * unless something queued a target.
+   */
+  const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  const pendingFocus = useRef<number | 'add' | null>(null);
+
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (target === null) return;
+    pendingFocus.current = null;
+    if (target === 'add') addBtnRef.current?.focus();
+    else rowRefs.current[target]?.focus();
+  });
+
   const move = (i: number, delta: -1 | 1) => {
     const j = i + delta;
     if (j < 0 || j >= blocks.length) return;
     const next = [...blocks];
     [next[i], next[j]] = [next[j], next[i]];
+    // Follow the row to its new position rather than leaving focus on a
+    // now-possibly-disabled arrow.
+    pendingFocus.current = j;
     setBlocks(next);
     setSelected(j);
+  };
+
+  const removeBlock = (i: number) => {
+    const next = blocks.filter((_, j) => j !== i);
+    // The next row takes the removed row's index; removing the last row falls
+    // back to the previous one, and emptying the list falls back to "Add".
+    pendingFocus.current = next.length === 0 ? 'add' : Math.min(i, next.length - 1);
+    rowRefs.current.length = next.length;
+    setBlocks(next);
+    setSelected(-1);
   };
 
   /**
@@ -447,7 +487,9 @@ export default function ConfigBuilderPage() {
             {blocks.map((b, i) => (
               <li key={b.block_id}
                 className={i === selected ? 'builder-row builder-row--selected' : 'builder-row'}>
-                <button type="button" className="builder-row-main" onClick={() => setSelected(i)}>
+                <button type="button" className="builder-row-main"
+                  ref={(el) => { rowRefs.current[i] = el; }}
+                  onClick={() => setSelected(i)}>
                   <span className="builder-row-type">{t(`builder.blockType.${b.type}`)}</span>
                   <span className="builder-row-title">{b.title}</span>
                 </button>
@@ -456,10 +498,7 @@ export default function ConfigBuilderPage() {
                 <Button variant="ghost" size="sm" icon aria-label={`${t('builder.moveDown')}: ${b.title}`}
                   disabled={i === blocks.length - 1} onClick={() => move(i, 1)}>↓</Button>
                 <Button variant="ghost" size="sm" icon aria-label={`${t('builder.remove')}: ${b.title}`}
-                  onClick={() => {
-                    setBlocks(blocks.filter((_, j) => j !== i));
-                    setSelected(-1);
-                  }}>×</Button>
+                  onClick={() => removeBlock(i)}>×</Button>
               </li>
             ))}
             <li className="builder-row builder-row--fixed">
@@ -475,7 +514,7 @@ export default function ConfigBuilderPage() {
                 <option key={bt} value={bt}>{t(`builder.blockType.${bt}`)}</option>
               ))}
             </select>
-            <Button variant="secondary" onClick={() => {
+            <Button variant="secondary" ref={addBtnRef} onClick={() => {
               const b = newBlock(effectiveAddType, t(`builder.blockType.${effectiveAddType}`));
               setBlocks([...blocks, b]);
               setSelected(blocks.length);
