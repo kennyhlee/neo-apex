@@ -1,2 +1,11 @@
 /* enrollx/frontend/src/pages/ApplicationEntryPage.css */
 .entry-page { padding: 20px; max-width: 900px; margin: 0 auto; }
+
+/* Offline-payment modal: what is due, and the deposit caveat. Tokens only. */
+.entry-offline-due { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
+.entry-offline-due strong { color: var(--ink); }
+.entry-offline-warning {
+  margin: 0 0 12px; padding: 8px 12px; font-size: 13px;
+  background: var(--warning-muted); color: var(--ink);
+  border: 1px solid var(--warning); border-radius: var(--radius-sm);
+}

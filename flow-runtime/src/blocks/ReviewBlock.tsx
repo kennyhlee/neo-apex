@@ -51,9 +51,12 @@ export function ReviewBlock({
         </p>
       )}
 
+      {/* `.catch(() => {})` on onSubmit: FlowRenderer's `submit()` propagates
+          the host's rethrow (which the host has already toasted), so without
+          it the rejection escapes to the global unhandled-rejection handler. */}
       <button type="button" className="fr-btn fr-btn--primary"
         disabled={!canSubmit || busy || mode === 'preview'}
-        onClick={() => void onSubmit()}>
+        onClick={() => void onSubmit().catch(() => {})}>
         {busy ? t('submitting') : t('submitApplication')}
       </button>
     </div>

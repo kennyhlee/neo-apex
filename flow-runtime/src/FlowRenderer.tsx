@@ -85,7 +85,34 @@ function FlowRendererInner({
   const scheduleAutosave = (next: Record<string, unknown>) => {
     if (mode === 'preview') return;
     window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => { void onSaveDraft(next); }, AUTOSAVE_MS);
+    // `.catch(() => {})`: the host toasts the failure and rethrows, so the
+    // rejection is already reported — swallowing it here only stops it
+    // escaping to the global unhandled-rejection handler and drowning real
+    // errors in console noise. Same reasoning at every `void` site below.
+    saveTimer.current = window.setTimeout(
+      () => { void onSaveDraft(next).catch(() => {}); }, AUTOSAVE_MS);
+  };
+
+  /**
+   * Flush any pending debounced autosave immediately.
+   *
+   * `advance()` already does this before moving on, but jumping straight to a
+   * step via the step rail used to call `setStep(i)` with no flush at all. The
+   * gap that opens is a money bug, not a cosmetic one: select "deposit", click
+   * the Payment step inside the 1500 ms debounce window, click Pay — checkout
+   * re-reads `draft_data.payment_plan_selection` FROM THE SERVER, which still
+   * holds the previous value. If that was `pay_in_full`, the UI shows the
+   * deposit amount while Stripe charges the full amount. Narrow window,
+   * but it is exactly "amount shown ≠ amount charged".
+   *
+   * `.catch(() => {})` because the host already surfaces save failures via its
+   * own toast and rethrows; without it the rejection escapes to the global
+   * unhandled-rejection handler (A11).
+   */
+  const flushAutosave = () => {
+    if (mode === 'preview') return;
+    window.clearTimeout(saveTimer.current);
+    void onSaveDraft(draftRef.current).catch(() => {});
   };
 
   const itemsFor = (block: FlowBlock) => items.filter((i) => i.block_id === block.block_id);
@@ -257,7 +284,7 @@ function FlowRendererInner({
             <li key={b.block_id}>
               <button type="button" className="fr-step-btn"
                 aria-current={i === step ? 'step' : undefined}
-                onClick={() => { setShowErrors(false); setStep(i); }}>
+                onClick={() => { flushAutosave(); setShowErrors(false); setStep(i); }}>
                 {blockComplete(b)
                   ? <span className="fr-step-done" aria-hidden="true">✓</span>
                   : <span aria-hidden="true">{i + 1}</span>}
@@ -277,14 +304,14 @@ function FlowRendererInner({
       <div className="fr-footer">
         {step > 0 ? (
           <button type="button" className="fr-btn" disabled={busy}
-            onClick={() => { setShowErrors(false); setStep((s) => s - 1); }}>
+            onClick={() => { flushAutosave(); setShowErrors(false); setStep((s) => s - 1); }}>
             {t('back')}
           </button>
         ) : <span />}
         <span className="fr-footer-spacer" />
         {step < blocks.length - 1 && (
           <button type="button" className="fr-btn fr-btn--primary" disabled={busy}
-            onClick={() => void advance()}>
+            onClick={() => void advance().catch(() => {})}>
             {busy ? t('saving') : t('next')}
           </button>
         )}

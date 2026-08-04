@@ -1,9 +1,9 @@
 // enrollx/frontend/src/pages/ApplicationEntryPage.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FlowRenderer } from '@neoapex/flow-runtime';
+import { FlowRenderer, formatCents, planAmounts, plansOf } from '@neoapex/flow-runtime';
 import type {
-  ApplicationSummary, FlowBlock, RegistrationConfigDef, RequiredDoc,
+  ApplicationSummary, FlowBlock, PaymentPlanKind, RegistrationConfigDef, RequiredDoc,
 } from '@neoapex/flow-runtime';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
@@ -172,6 +172,68 @@ export default function ApplicationEntryPage() {
     applicant_email: app.applicant_email,
   } : null;
 
+  /**
+   * Offline-payment amount derivation — the same computation `PaymentBlock`
+   * already performs one component away, repeated here because the host owns
+   * the offline modal.
+   *
+   * `settle_payment_item` marks the item **verified regardless of amount** —
+   * there is no server-side check at all. So an empty free-text field with no
+   * default let staff type `50` against a $500 fee, mark it satisfied, and
+   * let the application proceed. Prefilling the derived amount (and showing
+   * what is due) is the only thing standing between a typo and a
+   * half-collected fee.
+   *
+   * Classification mirrors `PaymentBlock.amountFor`: an item whose `block_id`
+   * is not the `payment` block's own id is the later "Balance payment" item
+   * (`stripe_webhook.py` stamps it with the payment_plan block's id), so it
+   * is due the remainder rather than the chosen plan's amount.
+   */
+  const planBlock = config?.blocks.find((b) => b.type === 'payment_plan') ?? null;
+  const paymentBlockId =
+    config?.blocks.find((b) => b.type === 'payment')?.block_id ?? null;
+  const planAmountsOrNull = planBlock ? planAmounts(planBlock) : null;
+  const planKinds: PaymentPlanKind[] = planBlock ? plansOf(planBlock).map((p) => p.type) : [];
+  // `values` comes from a parsed JSON blob, so its members are real JS types
+  // — no string coercion (DISPATCH-CONTEXT's data-shape rule).
+  const rawSelection = typeof values.payment_plan_selection === 'string'
+    ? values.payment_plan_selection : '';
+  const chosenPlan: PaymentPlanKind | null =
+    planKinds.includes(rawSelection as PaymentPlanKind) ? (rawSelection as PaymentPlanKind)
+      : planKinds.length === 1 ? planKinds[0] : null;
+
+  const dueCentsFor = (item: ItemRow | null): number | null => {
+    if (!item || !planAmountsOrNull) return null;
+    if (paymentBlockId != null && item.block_id !== paymentBlockId) {
+      const balance = planAmountsOrNull.amount_full - planAmountsOrNull.deposit_amount;
+      return balance > 0 ? balance : null;
+    }
+    if (!chosenPlan) return null;
+    return chosenPlan === 'deposit'
+      ? planAmountsOrNull.deposit_amount : planAmountsOrNull.amount_full;
+  };
+
+  const offlineItem = offlineItemId
+    ? items.find((i) => i.entity_id === offlineItemId) ?? null : null;
+  const offlineDueCents = dueCentsFor(offlineItem);
+  /**
+   * An offline DEPOSIT strands the balance, and this is a Plan 3 backend gap
+   * the frontend cannot close (recorded as a follow-up, deliberately not
+   * fixed on this branch): `_deposit_already_paid` looks for
+   * `kind='deposit' AND status='paid'`, and this action always sends the
+   * default `kind="offline"`, so the deposit is invisible to it;
+   * `_ensure_balance_obligation` only ever runs from the Stripe webhook. Net
+   * effect — the item verifies, NO balance item is created, no reminder goes
+   * out, and `_open_payment_item` then 409s on any later balance checkout.
+   *
+   * Warned rather than refused on purpose: the money genuinely did arrive, so
+   * blocking the record would lose the only trace of it. What staff need is
+   * to know the balance will not chase itself.
+   */
+  const offlineStrandsBalance =
+    offlineItem != null && chosenPlan === 'deposit'
+    && (paymentBlockId == null || offlineItem.block_id === paymentBlockId);
+
   // ---- FlowRenderer callbacks — every mutation reports via useToast -------
 
   const handleSaveDraft = async (v: Record<string, unknown>) => {
@@ -298,7 +360,14 @@ export default function ApplicationEntryPage() {
         onUploadDocument={handleUploadDocument}
         onCheckout={handleCheckout}
         onSubmit={handleSubmit}
-        onRecordOfflinePayment={(itemId) => setOfflineItemId(itemId)}
+        onRecordOfflinePayment={(itemId) => {
+          setOfflineItemId(itemId);
+          // Prefill from the derived amount rather than leaving an empty
+          // free-text field — see `dueCentsFor`'s note. Dollars in the UI,
+          // integer cents on the wire.
+          const cents = dueCentsFor(items.find((i) => i.entity_id === itemId) ?? null);
+          setOfflineAmount(cents != null ? (cents / 100).toFixed(2) : '');
+        }}
       />
 
       <Modal open={offlineItemId != null} onClose={() => setOfflineItemId(null)}
@@ -315,6 +384,16 @@ export default function ApplicationEntryPage() {
             </Button>
           </>
         }>
+        {offlineStrandsBalance && (
+          <p className="entry-offline-warning" role="alert">
+            {t('entry.offlineDepositWarning')}
+          </p>
+        )}
+        {offlineDueCents != null && (
+          <p className="entry-offline-due">
+            {t('entry.offlineDue')}: <strong>{formatCents(offlineDueCents)}</strong>
+          </p>
+        )}
         <div className="bcp-row">
           <label htmlFor="offline-amount">{t('entry.offlineAmount')}</label>
           <input id="offline-amount" type="number" min={0} step="0.01" value={offlineAmount}

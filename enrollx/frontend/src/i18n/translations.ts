@@ -175,6 +175,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'entry.submitted': 'Application submitted.',
     'entry.offlineTitle': 'Record offline payment',
     'entry.offlineAmount': 'Amount (USD)',
+    'entry.offlineDue': 'Amount due',
+    'entry.offlineDepositWarning':
+      'This family chose the deposit plan. Recording it offline will not create the balance item or send a balance reminder — collect and record the remaining balance separately.',
     'entry.offlineRecorded': 'Offline payment recorded.',
 
     // Shared action-error fallback (tracking pages, Task 9/10)
@@ -409,6 +412,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'entry.submitted': '申请已提交。',
     'entry.offlineTitle': '记录线下付款',
     'entry.offlineAmount': '金额（美元）',
+    'entry.offlineDue': '应付金额',
+    'entry.offlineDepositWarning':
+      '该家庭选择了定金付款方式。线下记录不会生成尾款项目，也不会发送尾款提醒——请另行收取并记录剩余尾款。',
     'entry.offlineRecorded': '线下付款已记录。',
 
     // 通用操作失败提示（跟踪页面，任务 9/10）
