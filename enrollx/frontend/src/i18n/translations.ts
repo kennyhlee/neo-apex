@@ -173,6 +173,27 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Shared action-error fallback (tracking pages, Task 9/10)
     'detail.actionError': 'Could not complete that action.',
+
+    // Applications pipeline (Task 9)
+    'apps.title': 'Applications',
+    'apps.viewToggle': 'View',
+    'apps.table': 'Table',
+    'apps.board': 'Board',
+    'apps.filterProgram': 'Program',
+    'apps.filterYear': 'School year',
+    'apps.filterStatus': 'Status',
+    'apps.all': 'All',
+    'apps.colId': 'Application',
+    'apps.colProgram': 'Program',
+    'apps.colYear': 'School year',
+    'apps.colStatus': 'Status',
+    'apps.colChannel': 'Channel',
+    'apps.colSubmitted': 'Submitted',
+    'apps.channel.parent': 'Parent',
+    'apps.channel.admin': 'Staff',
+    'apps.empty': 'No applications match.',
+    'apps.columnEmpty': 'None',
+    'apps.loadError': 'Could not load applications.',
   },
   'zh-CN': {
     // Navbar / shared chrome
@@ -344,5 +365,26 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // 通用操作失败提示（跟踪页面，任务 9/10）
     'detail.actionError': '操作未能完成。',
+
+    // 报名申请流水线（任务 9）
+    'apps.title': '报名申请',
+    'apps.viewToggle': '视图',
+    'apps.table': '表格',
+    'apps.board': '看板',
+    'apps.filterProgram': '项目',
+    'apps.filterYear': '学年',
+    'apps.filterStatus': '状态',
+    'apps.all': '全部',
+    'apps.colId': '申请编号',
+    'apps.colProgram': '项目',
+    'apps.colYear': '学年',
+    'apps.colStatus': '状态',
+    'apps.colChannel': '渠道',
+    'apps.colSubmitted': '提交时间',
+    'apps.channel.parent': '家长',
+    'apps.channel.admin': '员工',
+    'apps.empty': '没有符合条件的申请。',
+    'apps.columnEmpty': '暂无',
+    'apps.loadError': '无法加载申请列表。',
   },
 };
