@@ -15,10 +15,15 @@ Divergence from tokens.py, by design (this task's brief, not an oversight):
 - The state carries an `issued` timestamp and expires after
   STATE_TTL_SECONDS. Magic links deliberately have no expiry (revocation is
   bumping token_version instead) — that is a different tradeoff for a
-  different channel and is NOT replicated here; this state is single-use,
-  short-lived, and started interactively by a staff member, so a fixed TTL
-  is the right shape and nothing about tokens.py's no-expiry design
-  transfers to it.
+  different channel and is NOT replicated here; this state is short-lived
+  and minted interactively by a staff member, so a fixed TTL is the right
+  shape and nothing about tokens.py's no-expiry design transfers to it.
+  What the TTL provides is a BOUNDED replay window, not single use: there
+  is no nonce store, so the same state verifies repeatedly until it
+  expires. That is not exploitable — the callback is only useful when
+  paired with an OAuth `code`, which Stripe issues and redeems exactly
+  once — but the guarantee is "authentic and fresh", not "used at most
+  once", and it should not be relied on as the latter.
 - tokens.py's unbounded split()+exact-3-unpack is load-bearing there
   because BOTH tenant_id and application_id are attacker-adjacent dynamic
   fields, so a bounded split could let a dot shift the boundary between

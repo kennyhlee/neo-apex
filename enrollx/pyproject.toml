@@ -9,7 +9,11 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "httpx>=0.28",
-    "stripe>=12",
+    # Pinned to the 15.x line: app/api/stripe_webhook.py::_as_plain_dict
+    # reasons explicitly about stripe>=15 semantics (StripeObject is no
+    # longer a dict subclass and has no .get()), so 12-14 would be wrong at
+    # runtime and a future major could change it again.
+    "stripe>=15,<16",
 ]
 
 [project.optional-dependencies]
