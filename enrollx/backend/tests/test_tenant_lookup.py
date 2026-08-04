@@ -70,3 +70,108 @@ def test_entity_base_data_strips_system_columns():
     }
     base = entity_base_data(row)
     assert base == {"name": "Acme School", "stripe_account_id": "acct_123"}
+
+
+# ── tenant_write_payload: the write-side split ────────────────────────────
+
+FLAT_TENANT_ROW = {
+    "entity_id": "acme",
+    "entity_type": "tenant",
+    "base_data": "name: Acme School\n_abbrev: ACS",
+    "custom_fields": "",
+    "vector": [0.0, 0.0],
+    "_version": "4",
+    "_status": "active",
+    "_change_id": "chg_1",
+    "_created_at": "2026-01-01T00:00:00+00:00",
+    "_updated_at": "2026-02-01T00:00:00+00:00",
+    "name": "Acme School",
+    "_abbrev": "ACS",
+    "note": None,
+}
+
+
+def test_tenant_write_payload_keeps_abbrev_and_drops_meta():
+    from app.tenant_lookup import tenant_write_payload
+
+    base, custom = tenant_write_payload(FLAT_TENANT_ROW)
+    assert base == {"name": "Acme School", "_abbrev": "ACS"}
+    assert custom == {}
+
+
+def test_tenant_write_payload_splits_custom_fields_out_of_base_data():
+    from app.tenant_lookup import tenant_write_payload
+
+    row = {
+        **FLAT_TENANT_ROW,
+        "custom_fields": 'district: North\n"seat count": 30\ntags[2]: a,b\nmeta:\n  x: 1',
+        "district": "North",
+        "seat count": "30",
+        "tags": '["a", "b"]',
+        "meta": '{"x": 1}',
+    }
+    base, custom = tenant_write_payload(row)
+    assert custom == {
+        "district": "North", "seat count": "30", "tags": '["a", "b"]', "meta": '{"x": 1}',
+    }
+    # DataCore's put_entity raises ValueError when base_data and
+    # custom_fields share a key, so the split must be exclusive.
+    assert set(base) & set(custom) == set()
+    assert base["_abbrev"] == "ACS"
+
+
+def test_tenant_write_payload_ignores_unrecognized_toon_keys():
+    """Conservative by design: a key the TOON scanner cannot match back to an
+    actual column is left where it was rather than dropped."""
+    from app.tenant_lookup import tenant_write_payload
+
+    row = {**FLAT_TENANT_ROW, "custom_fields": "ghost: 1"}
+    base, custom = tenant_write_payload(row)
+    assert custom == {}
+    assert base == {"name": "Acme School", "_abbrev": "ACS"}
+
+
+def test_update_tenant_entity_sends_changes_and_custom_fields(monkeypatch):
+    from app import tenant_lookup
+
+    seen = {}
+    monkeypatch.setattr(
+        tenant_lookup, "dc_update",
+        lambda t, et, eid, base, tok, custom_fields=None: seen.update(
+            tenant=t, entity_type=et, entity_id=eid, base=base,
+            custom=custom_fields, token=tok,
+        ) or {"entity_id": eid},
+    )
+    row = {**FLAT_TENANT_ROW, "custom_fields": "district: North", "district": "North"}
+    tenant_lookup.update_tenant_entity("acme", row, {"stripe_account_id": "acct_1"}, "tok")
+
+    assert seen["tenant"] == "acme"
+    assert seen["entity_type"] == "tenant"
+    assert seen["entity_id"] == "acme"
+    assert seen["token"] == "tok"
+    assert seen["base"] == {
+        "name": "Acme School", "_abbrev": "ACS", "stripe_account_id": "acct_1",
+    }
+    assert seen["custom"] == {"district": "North"}
+
+
+def test_update_tenant_entity_change_wins_over_a_colliding_custom_field(monkeypatch):
+    """A change key that also exists as a custom field must end up in
+    base_data only — sending it in both trips DataCore's overlap check."""
+    from app import tenant_lookup
+
+    seen = {}
+    monkeypatch.setattr(
+        tenant_lookup, "dc_update",
+        lambda t, et, eid, base, tok, custom_fields=None: seen.update(
+            base=base, custom=custom_fields) or {"entity_id": eid},
+    )
+    row = {
+        **FLAT_TENANT_ROW,
+        "custom_fields": "stripe_account_id: acct_old",
+        "stripe_account_id": "acct_old",
+    }
+    tenant_lookup.update_tenant_entity("acme", row, {"stripe_account_id": "acct_new"})
+
+    assert seen["base"]["stripe_account_id"] == "acct_new"
+    assert seen["custom"] == {}
