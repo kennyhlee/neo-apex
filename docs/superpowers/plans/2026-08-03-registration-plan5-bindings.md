@@ -292,3 +292,151 @@ must not attempt to surface a count to the parent.
 Full enrollx suite at the time of this check: `504 passed` (no change from
 the recorded baseline — this task added zero lines of application or test
 code).
+
+## E2E smoke results (2026-08-04)
+
+Task 12. Executed against the real dev stack (`./start-services.sh`) on
+branch `feat/registration-plan5-familyhub` at `38cca88`. Dev tenant `acme`,
+staff login `jane@acme.edu` / `admin123` (pre-seeded by
+`datacore/src/datacore/auth/seed.py`, not created new). **No browser was
+available in this environment** — every browser-only step was either
+substituted with an equivalent API call (noted explicitly) or recorded as
+NOT EXECUTED, never claimed as passed. `DATACORE_R2_*`, `STRIPE_*`, and
+`RESEND_*` were **absent** from `~/.zshrc` — confirmed by grep before
+starting, not assumed.
+
+| Step | Result | Notes |
+|---|---|---|
+| 1 — boot and health | PASS (with note) | `datacore`, `enrollx-backend`, `familyhub-backend` all healthy. Runbook's `curl localhost:5800/api/health` 404s — datacore's real health route is `GET /health` (`datacore/src/datacore/api/__init__.py:84`), not `/api/health`. Runbook text defect, not an app bug. |
+| 2 — variables / staff login | PASS | Runbook's example `admin@acme.test`/`changeme` don't exist; used the real seeded dev user `jane@acme.edu`/`admin123`, tenant `acme`. Login response key is `token`, not `access_token` (runbook's own fallback `d.get("token")` correctly handles this — no code defect). |
+| 3 — staff creates program + publishes flow | SUBSTITUTED | No browser, so the Flow Builder UI was not clicked through. Instead: created `program` entity "Fall 2026 Smoke" (`AAC-PR260001`, entity_id `34d33c983fa0`, capacity 20, `start_date: 2027-09-01`) and a `registration_config` (`AAC-RC260001`, entity_id `614a6eaa3314`) with a `form` block (student name fields), a `documents` block (doc "Immunization record", `sensitive: true`), and a `review` block, via the staff JWT + generic `/api/entities/{tenant}/{type}` proxy — the same backend path `ConfigBuilderPage.tsx` calls. Published via `POST /api/registration/acme/applications/614a6eaa3314/actions {"action":"publish_config"}` → 200, `status: "published"`. **Confirms the publish-path-slot-is-entity_id contract from the bindings holds** (used entity_id `614a6eaa3314`, not business id `AAC-RC260001`; the wrong one would have 404'd per the Plan 4 postmortem this file cites). **Lost coverage: the Flow Builder UI itself was never exercised — its React state, drag-and-drop block ordering, and client-side validation are unverified.** |
+| 4 — parent fetches bundle + starts | PASS | `GET /api/registration/acme/AAC-PR260001` → 200, `config.status: "published"`, `program.capacity: 20`, `capacity: {"capacity":20,"approved":0,"enrolled":0,"full":false}`. `POST .../start` → 201, `{application, items, token, link, hub_url}`. **Seam 3 confirmed here**: program `start_date` is `2027-09-01`; returned `application.school_year` is `"2027-2028"` — the *program's* year, not `2026-2027` (today's default) — proving `familyhub/backend/app/api/registration.py:_school_year_from_program` is wired, not the wall-clock fallback. |
+| 5 — parent works the application | PASS with one BLOCKED sub-step and one runbook-script defect found | See breakdown below. |
+| 6 — staff approves | PASS (on 2nd application; 1st application's approve call correctly failed per a runbook defect, see below) | `POST /api/registration/acme/applications/{entity_id}/actions {"action":"approve"}` → 200, application `status: "approved"`, family/student/enrollment created. |
+| 7 — parent sees Approved (browser) | SUBSTITUTED (bundle-fetch only) + NOT EXECUTED (visual/mobile) | `GET /api/application/{token}` after approval shows `application.status: "approved"` and both items `status: "submitted"` — the data the Approved banner would render from is correct. **The actual page render, the "Still needed from you" section, and mobile device-toolbar layout were never viewed — no browser.** No payment block exists in this smoke config, so the Stripe sub-step is N/A here regardless of key availability. |
+| 8 — lost-link flow | PASS (curl) / NOT EXECUTED (browser + email) | Known-email and unknown-email `POST /api/application/request-link` both returned `200 {"status":"ok"}`, byte-identical. The `/request-link` browser page and actual Resend delivery were not exercised — no browser, no Resend key. |
+| 9 — full registration in browser | NOT EXECUTED | No browser available. This is the plan's acceptance gate for the FlowRenderer/frontend path and could not be run. See hand-off. |
+| 10 — record + commit | this section | — |
+
+### Step 5 breakdown
+
+- `save_draft`, `complete_item` (form item), and the parent-action guard
+  (`{"action":"approve"}` via the familyhub facade) — **PASS**. Guard
+  returned `403 {"detail":"Action not permitted via the family channel.
+  Allowed: complete_item, save_draft, submit"}` and enrollx's own log shows
+  no `/internal/.../actions` call for `approve` was ever made — the facade
+  rejected it before proxying, confirming **seam 4**.
+- Document upload (`POST /api/application/{token}/documents` →
+  presign → R2 PUT → `complete_item` with `payload_ref` → download URL) —
+  **BLOCKED, not a code defect**: `DATACORE_R2_ENDPOINT` /
+  `DATACORE_R2_ACCESS_KEY_ID` / `DATACORE_R2_SECRET_ACCESS_KEY` /
+  `DATACORE_R2_BUCKET` are all read via bare `os.environ[...]` with no
+  fallback (`datacore/src/datacore/documents.py:18-20,49`) and were absent
+  from `~/.zshrc`. The presign call threw `KeyError:
+  'DATACORE_R2_ENDPOINT'` inside DataCore (confirmed in
+  `.logs/datacore.log`), surfaced to enrollx as a 500 and masked by
+  familyhub's 5xx policy to `502 {"detail":"Registration is temporarily
+  unavailable..."}`. **Seam 6 (document authorization / `uploaded_by`
+  derivation) is therefore UNVERIFIED end-to-end** — the whole path that
+  would exercise it never got a document_id. As a deviation from the
+  script, `complete_item` was called on the document item with no
+  `payload_ref` (no real document exists) purely to unblock `submit` for
+  the rest of the chain; this proves nothing about R2 presigning or the
+  parent-download authorization rule.
+- **Runbook-script defect found**: the runbook's own Step 5 example,
+  `{"action":"save_draft","draft_data":{"student_first_name":"Mei",
+  "student_last_name":"Smoke"}}`, does not match what `_approve`
+  (`enrollx/backend/app/registration/actions.py:323-325`) actually reads —
+  it expects a **nested** `draft.student.first_name` /
+  `draft.student.last_name` (and `draft.family.*` for family matching), not
+  flat `student_first_name` keys. Following the runbook's literal script on
+  application `AAC-RA260001` (entity `f9cdfd7f8db2`) and then calling
+  `approve` produced `422 {"error":"Cannot approve: the application has no
+  student name","missing":["student.first_name","student.last_name"]}` —
+  reproducible, not a fluke. A **second** application
+  (`AAC-RA260002`, entity `e94b16f74023`) was started and driven through
+  with the corrected nested shape
+  (`{"student":{"first_name":"Mei","last_name":"Smoke2"},"family":
+  {"family_name":"Smoke Family","primary_email":"smoke-parent-2@example.com"}}`),
+  and `approve` succeeded (200, family/student/enrollment created). This is
+  a documentation defect in the task-12 runbook script, not an application
+  bug — `_approve`'s nested-shape expectation is real production behavior,
+  exercised correctly once the draft shape matched it. First application
+  (`AAC-RA260001`) was left in `submitted` status, not approved.
+
+### The six seams — what was observed
+
+1. **Internal key match.** No 401 was ever returned from any `/internal/*`
+   or familyhub-proxied call across the whole run — confirms
+   `FAMILYHUB_ENROLLX_INTERNAL_KEY` and `ENROLLX_INTERNAL_KEY` both resolved
+   to the same dev default (`config.py` in both services default to
+   `dev-internal-key-change-in-prod`; neither env var was overridden).
+2. **Magic-link round-trip + revocation.** Minted via `start`, verified
+   repeatedly via the hub bundle route (200). Tampering the token's last
+   character → `401 {"detail":"Invalid link"}`. Then staff-called
+   `resend_link` (bumps stored `token_version`) — the **old** token, which
+   worked seconds before, immediately 401'd, and the **new** token from the
+   response worked. Real revocation against the stored `token_version`,
+   confirmed live, not just by reading the code.
+3. **`school_year` from program `start_date`.** Program's `start_date`
+   `2027-09-01` (school year 2027-2028) vs. today's wall-clock default
+   (2026-2027, since today is 2026-08-04) — the created application's
+   `school_year` was `"2027-2028"`, the program's year. Silent-failure mode
+   would have been `"2026-2027"`; that did not happen.
+4. **Parent action allowlist.** `PUT /api/application/{token}
+   {"action":"approve"}` → `403`, allowed-list message names only
+   `complete_item, save_draft, submit`. enrollx's access log for this run
+   shows no `/internal/application-by-token/.../actions` hit for the
+   approve attempt at all — confirms the facade rejected it before
+   proxying, not merely that enrollx also rejected it.
+5. **Request-link always-200.** Known email (`smoke-parent-2@example.com`)
+   and unknown email (`never-registered@example.com`) both returned
+   `200 {"status":"ok"}` — `diff` of the two response bodies was empty.
+6. **Document authorization.** **UNVERIFIED** — blocked entirely by missing
+   `DATACORE_R2_*` credentials before any document row was ever created.
+   Neither the `uploaded_by == "parent:{entity_id}"` derivation nor the
+   cross-application document-id refusal could be exercised this run.
+
+### Integration break found
+
+None in application code. The one real break was environmental: this dev
+shell has no `DATACORE_R2_*` credentials configured, so the entire
+document-upload/download path (and therefore seam 6) is unreachable in this
+environment. This is a **BLOCKED** finding, not a FAIL — no application code
+was touched to work around it, and none should be; the fix is operational
+(add real or MinIO-backed R2 test credentials to the dev environment).
+
+### Hand-off checklist — still requires a human
+
+- [ ] **Step 3 (Flow Builder UI)**: click through the actual builder at
+  `http://localhost:5900` — form/documents/review block authoring, drag
+  ordering, client-side validation. Only the resulting API contract was
+  exercised here.
+- [ ] **Step 7 (Approved banner + mobile layout)**: open
+  `http://localhost:6000/application/{token}` for entity `e94b16f74023`
+  (business id `AAC-RA260002`) in a real browser and device-toolbar mobile
+  view; the backend state is confirmed correct, the render is not.
+- [ ] **Step 8 (request-link page + real email)**: submit
+  `http://localhost:6000/request-link?tenant=acme` in a browser; configure
+  a real Resend test key to confirm delivery and that the emailed link
+  opens the hub.
+- [ ] **Step 9 (full FlowRenderer happy path)**: the plan's actual
+  acceptance gate — register a new parent end-to-end in a private browser
+  window through `http://localhost:6000/register/acme/AAC-PR260001`,
+  including a real document photo/PDF upload, and confirm the approved
+  state renders after a staff approval + refresh. Not executed at all.
+- [ ] **Document authorization (seam 6)**: once `DATACORE_R2_*` test
+  credentials are available, re-run the document slot → R2 PUT → complete →
+  download-URL chain, and specifically attempt to fetch another
+  application's `document_id` to confirm it's refused.
+- [ ] **Payment step**: no `payment`/`payment_plan` block was included in
+  the smoke config and Stripe test keys are absent — the checkout/Pay-now
+  path is completely untested this run, browser or otherwise.
+- [ ] Consider fixing the runbook script's Step 5 `draft_data` example (flat
+  `student_first_name`/`student_last_name`) to the nested
+  `{"student": {...}, "family": {...}}` shape `_approve` actually reads, so
+  the next person running this doesn't hit the same reproducible 422.
+
+Full enrollx and familyhub suites were **not** re-run as part of this task
+(out of scope for a runbook task; Task 1's `504 passed` baseline for
+enrollx stands unchanged since no application code was modified).
