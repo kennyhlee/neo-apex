@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'link';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -13,6 +13,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
   loadingText?: string;
   children?: ReactNode;
+  /**
+   * Forwarded to the underlying `<button>`. React 19 passes `ref` to function
+   * components as an ordinary prop, but `ButtonHTMLAttributes` doesn't declare
+   * it, so it has to be named here for TypeScript. Needed by callers that must
+   * move focus programmatically — e.g. the Flow Builder restoring focus after
+   * a row is moved or removed and the focused control disappears.
+   */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 /**
