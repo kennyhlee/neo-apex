@@ -12,7 +12,6 @@ export interface FlowBlock {
 
 export interface RegistrationConfigDef {
   config_id: string;
-  program_id: string;
   version: number;
   status: 'draft' | 'published' | 'archived';
   blocks: FlowBlock[];
@@ -34,7 +33,6 @@ export type ItemKind = 'form' | 'document' | 'esign' | 'payment';
 /** The slice of a registration_application entity the renderer needs. */
 export interface ApplicationSummary {
   application_id: string;
-  program_id: string;
   school_year: string;
   status: ApplicationStatus;
   channel_started: 'parent' | 'admin';
@@ -89,3 +87,35 @@ export interface PaymentPlanOption {
 
 /** Item statuses that count as "done" for gating (spec §5). */
 export const DONE_ITEM_STATUSES: readonly ItemStatus[] = ['submitted', 'verified', 'waived'];
+
+/** The `form` block `entity_type` naming the application itself. */
+export const APPLICATION_ENTITY_TYPE = 'registration_application';
+
+/**
+ * Base fields of `registration_application` owned by the registration engine.
+ *
+ * Two consumers, one list: the hosts exclude these when hydrating an
+ * application-model form block (a parent must never be shown an editable
+ * `status` or `config_version`), and enrollx's engine rejects a form answer
+ * that targets one with a 400. The Python side restates it as
+ * `engine.ENGINE_OWNED_APPLICATION_FIELDS` — the two MUST stay identical.
+ *
+ * `registration_application_id` is included even though the spec's field
+ * table omits it: DataCore auto-assigns `"{entity_type}_id"` when absent and
+ * `create_application` pre-sets it, so it is engine-owned in practice.
+ */
+export const ENGINE_OWNED_APPLICATION_FIELDS: readonly string[] = [
+  'application_id',
+  'registration_application_id',
+  'school_year',
+  'status',
+  'family_id',
+  'student_id',
+  'config_version',
+  'channel_started',
+  'applicant_email',
+  'token_version',
+  'draft_data',
+  'submitted_at',
+  'decided_at',
+];

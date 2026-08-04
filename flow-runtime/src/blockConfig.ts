@@ -3,6 +3,7 @@ import type {
   ApplicationItem, FlowBlock, FlowField, PaymentPlanKind, PaymentPlanOption,
   RegistrationConfigDef, RequiredDoc,
 } from './types';
+import { APPLICATION_ENTITY_TYPE, ENGINE_OWNED_APPLICATION_FIELDS } from './types';
 
 /**
  * Fields of a form block. `config.fields` is the HOST-hydrated list (set when
@@ -113,4 +114,58 @@ export function paymentAmountFor(
   const chosen = resolvePlanKind(config, planChoice);
   if (!chosen) return null;
   return chosen === 'deposit' ? amounts.deposit_amount : amounts.amount_full;
+}
+
+/**
+ * The academic year straddling `now`, rolling over each July: `${y}-${y+1}`
+ * where `y` is `now`'s year when the month is July or later, else the
+ * previous year. `getMonth()` is 0-indexed, so `>= 6` IS July.
+ *
+ * Lives here so both channels derive the identical default: the staff New
+ * Application form prefills it, the parent start page shows it read-only,
+ * and familyhub-backend + enrollx restate the same rule in Python
+ * (`_school_year_for_date`, `engine.default_school_year`).
+ */
+export function defaultSchoolYear(now: Date = new Date()): string {
+  const y = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${y}-${y + 1}`;
+}
+
+/** A tenant model definition, as both hosts already hold it. */
+export interface ModelFieldSource {
+  base_fields: FlowField[];
+  custom_fields: FlowField[];
+}
+
+/**
+ * The fields a `form` block sourced from an entity model should render.
+ *
+ * THE ONE derivation, shared by every host, because the two rules below are
+ * easy to get subtly different and a mistake is visible to parents:
+ *
+ * 1. The entity's own `{entityType}_id` is auto-generated and never editable
+ *    (project convention) — always excluded.
+ * 2. For `registration_application` ONLY, the engine owns every base field
+ *    (`ENGINE_OWNED_APPLICATION_FIELDS`), so only the tenant's
+ *    `custom_fields` are offered — those are the agreement/signature fields
+ *    model setup extracted from the real admission packet. The engine-owned
+ *    exclusion is deliberately NOT applied to other entity types: `status`
+ *    is a perfectly legitimate `student` field and dropping it there would
+ *    silently delete a field staff rely on.
+ *
+ * Restated server-side by enrollx's `engine.model_form_fields`, which
+ * hydrates the parent channel (familyhub holds no DataCore credential).
+ */
+export function hydratedFormFields(
+  entityType: string, model: ModelFieldSource,
+): FlowField[] {
+  const isApplication = entityType === APPLICATION_ENTITY_TYPE;
+  const fields = isApplication
+    ? model.custom_fields
+    : [...model.base_fields, ...model.custom_fields];
+  const excluded = new Set<string>([`${entityType}_id`]);
+  if (isApplication) {
+    for (const name of ENGINE_OWNED_APPLICATION_FIELDS) excluded.add(name);
+  }
+  return fields.filter((f) => !excluded.has(f.name));
 }

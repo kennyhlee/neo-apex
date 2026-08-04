@@ -5,5 +5,6 @@ export { validateFlowField } from './validateField';
 export {
   formFields, docsOf, plansOf, planAmounts, messageBody,
   resolvePlanKind, paymentAmountFor,
+  defaultSchoolYear, hydratedFormFields, type ModelFieldSource,
 } from './blockConfig';
 export { formatCents } from './money';
