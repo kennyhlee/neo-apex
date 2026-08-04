@@ -65,21 +65,27 @@ BLOCKS = json.dumps(
 )
 
 
+# Numeric fields are STRINGS here on purpose: DataCore's query path flattens
+# every column to a string (query.py::_scalar_to_str), so a canned row that
+# carries native ints never exercises the int() coercions the real code
+# depends on.
 def application_row(selection="pay_in_full", status="submitted"):
     return {
         "entity_id": "RA260001",
         "entity_type": "registration_application",
         "program_id": "PR26001",
-        "config_version": 3,
+        "config_version": "3",
         "status": status,
         "applicant_email": "parent@example.com",
-        "token_version": 1,
+        "token_version": "1",
         "draft_data": json.dumps({"payment_plan_selection": selection}),
         "_status": "active",
     }
 
 
-CONFIG_ROW = {"entity_id": "RC26001", "program_id": "PR26001", "version": 3, "blocks": BLOCKS}
+CONFIG_ROW = {
+    "entity_id": "RC26001", "program_id": "PR26001", "version": "3", "blocks": BLOCKS,
+}
 ITEM_ROW = {
     "entity_id": "AI260007",
     "application_id": "RA260001",
@@ -111,13 +117,20 @@ def make_fake_dc_query(rows_by_marker):
 
 @pytest.fixture
 def wire(monkeypatch):
-    """Wire canned DataCore rows + connected tenant + stripe key."""
+    """Wire canned DataCore rows + connected tenant + stripe key.
+
+    registration_config no longer comes through dc_query: it goes through
+    engine.rows_matching (list_entities, which scopes to _status='active'),
+    so it is stubbed at app.checkout_service's own namespace — patching
+    app.registration.engine.rows_matching would not be seen by the
+    already-bound import here.
+    """
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_123")
 
-    def _wire(application, deposit_paid=False, tenant=TENANT_ROW, item=ITEM_ROW):
+    def _wire(application, deposit_paid=False, tenant=TENANT_ROW, item=ITEM_ROW,
+              configs=(CONFIG_ROW,)):
         rows = {
             "entity_type = 'registration_application'": [application],
-            "entity_type = 'registration_config'": [CONFIG_ROW],
             "entity_type = 'application_item'": [item] if item else [],
             "entity_type = 'payment'": (
                 [{"entity_id": "PY260001", "kind": "deposit", "status": "paid"}]
@@ -126,6 +139,19 @@ def wire(monkeypatch):
             ),
         }
         monkeypatch.setattr("app.checkout_service.dc_query", make_fake_dc_query(rows))
+
+        def fake_rows_matching(tenant_id, entity_type, token=None, **equals):
+            if entity_type != "registration_config":
+                return []
+            # Mirrors rows_matching: string comparison, _status='active' rows
+            # only (the caller's `configs` stands in for that scoping).
+            return [
+                dict(r) for r in configs
+                if r.get("_status", "active") == "active"
+                and all(str(r.get(k, "")) == str(v) for k, v in equals.items())
+            ]
+
+        monkeypatch.setattr("app.checkout_service.rows_matching", fake_rows_matching)
         monkeypatch.setattr(
             "app.checkout_service.get_tenant_entity",
             lambda t, tok: dict(tenant) if tenant else None,
@@ -224,3 +250,60 @@ def test_unconfigured_stripe_503(wire, fake_stripe, monkeypatch):
     with pytest.raises(HTTPException) as exc:
         create()
     assert exc.value.status_code == 503
+
+
+# ── config revision selection ─────────────────────────────────────────────
+
+def config_row(entity_id, amount_full, version="3", status="active"):
+    blocks = json.loads(BLOCKS)
+    blocks[0]["config"]["amount_full"] = amount_full
+    return {
+        "entity_id": entity_id,
+        "program_id": "PR26001",
+        "version": version,
+        "_status": status,
+        "blocks": json.dumps(blocks),
+    }
+
+
+def test_archived_config_revision_is_not_charged(wire, fake_stripe):
+    """Superseded revisions live in the same table with _status='archived',
+    and rollback (actions.py:427-437) re-publishes an archived config KEEPING
+    its original version number — so two rows can share program_id/version
+    and carry different amount_full. The archived one is listed first here,
+    so a query without the active filter would take it as rows[0] and charge
+    the wrong amount."""
+    wire(
+        application_row("pay_in_full"),
+        configs=(
+            config_row("RC26000", 99900, status="archived"),
+            config_row("RC26001", 50000, status="active"),
+        ),
+    )
+    assert create()["amount"] == 50000
+
+
+def test_config_version_matched_numerically_against_a_string_column(wire, fake_stripe):
+    """`version` is a STRING column like every other flattened field, and the
+    application's config_version is a string too — the match has to be an
+    int() comparison, not a SQL `version = 3` predicate (which would make
+    DuckDB cast the whole column and blow up on any non-numeric version
+    written by another service into the same tenant table)."""
+    wire(
+        application_row("pay_in_full"),
+        configs=(
+            config_row("RC26002", 99900, version="4"),
+            config_row("RC26001", 50000, version="3"),
+        ),
+    )
+    assert create()["amount"] == 50000
+
+
+def test_no_config_for_this_version_409(wire, fake_stripe):
+    """Strict — no fallback to the currently-published config, which would
+    silently charge a different amount than the application was quoted."""
+    wire(application_row(), configs=(config_row("RC26002", 99900, version="4"),))
+    with pytest.raises(HTTPException) as exc:
+        create()
+    assert exc.value.status_code == 409
+    assert fake_stripe["session_create"] == []

@@ -18,6 +18,7 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.registration.datacore import dc_query, sql_literal
+from app.registration.engine import rows_matching
 from app.tenant_lookup import get_tenant_entity
 
 
@@ -40,15 +41,47 @@ def get_application(tenant_id: str, application_id: str, token: str | None) -> d
     return rows[0] if rows else None
 
 
+def _as_int(value) -> int | None:
+    """Flattened DataCore values are always strings — including numbers."""
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
 def get_payment_plan_block(tenant_id: str, application: dict, token: str | None) -> dict:
+    """The payment_plan block of the EXACT config revision this application
+    was started against — it carries the amount that will be charged.
+
+    Goes through rows_matching (list_entities under the hood, which scopes to
+    `_status = 'active'`) and filters `version` in Python, for two reasons:
+
+    - Superseded revisions stay in the same table with _status='archived'
+      (store.py:350-355), and a config is updated at least twice on its way
+      to published. Worse, rollback (actions.py:427-437) deliberately
+      re-publishes an archived config KEEPING its original version number,
+      so two rows can share a version and carry different blocks — i.e. a
+      different amount_full. Without the active filter, `rows[0]` picked one
+      in unspecified DuckDB scan order: a wrong-amount-charged hazard.
+    - Every flattened column is a string (query.py:189-235), so
+      `WHERE version = 3` makes DuckDB cast the whole column to INTEGER.
+      The tenant's entities table holds every entity type from every
+      service, so one admindash or papermite entity with a non-numeric
+      `version` raises Conversion Error -> DataCore 500 -> no checkout works
+      for that tenant.
+
+    Deliberately NOT engine.get_config_for_application: its published-config
+    fallback would silently charge a different amount than the one this
+    application was quoted. Nothing matching is a strict 409.
+    """
     program_id = str(application.get("program_id") or "")
     version = int(application.get("config_version") or 0)
-    rows = dc_query(
-        tenant_id,
-        "SELECT * FROM data WHERE entity_type = 'registration_config' "
-        f"AND program_id = {sql_literal(program_id)} AND version = {version}",
-        token,
-    )
+    rows = [
+        r
+        for r in rows_matching(tenant_id, "registration_config", token,
+                               program_id=program_id)
+        if _as_int(r.get("version")) == version
+    ]
     if not rows:
         raise HTTPException(409, "No registration config found for this application")
     blocks = rows[0].get("blocks")
