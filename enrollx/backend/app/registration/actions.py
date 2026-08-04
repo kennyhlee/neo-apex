@@ -339,6 +339,7 @@ def _publish_config(tenant_id, config_entity_id, params, actor, token):
     cfg = dc.get_entity(tenant_id, "registration_config", config_entity_id, token)
     if not cfg:
         raise HTTPException(404, "registration_config not found")
+    was_published_before = cfg.get("status") == "archived"
     if cfg.get("status") == "published":
         raise HTTPException(409, "Config is already published")
     try:
@@ -349,24 +350,46 @@ def _publish_config(tenant_id, config_entity_id, params, actor, token):
     if errors:
         raise HTTPException(422, {"error": "Invalid blocks", "details": errors})
 
+    program_id = cfg.get("program_id", "")
+    siblings = dc.list_entities(
+        tenant_id, "registration_config",
+        f"program_id = {dc.sql_literal(program_id)}", token)
+
     # Archive any currently published config for the same program — item
     # derivation assumes exactly one published config per program, so two
     # configs left `published` at once would make it ambiguous which one a
     # new application derives its items from.
-    program_id = cfg.get("program_id", "")
-    where = (f"program_id = {dc.sql_literal(program_id)} "
-             f"AND status = {dc.sql_literal('published')}")
-    prior = dc.list_entities(tenant_id, "registration_config", where, token)
-    max_version = 0
-    for p in prior:
-        max_version = max(max_version, int(p.get("version") or 0))
+    for p in siblings:
+        if p["entity_id"] == cfg["entity_id"] or p.get("status") != "published":
+            continue
         p_base = engine.entity_base_data(p)
         p_base["status"] = "archived"
         dc.dc_update(tenant_id, "registration_config", p["entity_id"], p_base, token)
 
     base = engine.entity_base_data(cfg)
     base["status"] = "published"
-    base["version"] = max_version + 1
+    if was_published_before:
+        # Re-publishing an archived config is a ROLLBACK to that generation, so
+        # it keeps its original version. Chosen over rejecting the re-publish
+        # because a version number must identify exactly one config content
+        # permanently: applications pin `config_version`, and
+        # get_config_for_application resolves that pin against archived rows
+        # too. Minting a NEW version for unchanged content would silently
+        # re-point every application pinned to the old number at a different
+        # config. Preserving it keeps every existing pin resolving to the same
+        # blocks it always did, and makes rollback a first-class operation
+        # rather than something callers must fake by cloning a draft.
+        base["version"] = int(cfg.get("version") or 0)
+    else:
+        # Scan ALL configs for the program, not just published ones. Scanning
+        # published-only returned 0 whenever none was currently published (e.g.
+        # every config archived), handing the new config version 1 and
+        # colliding with the archived original.
+        # Self is excluded: a draft's `version` is a placeholder until publish
+        # assigns the real one.
+        base["version"] = max((int(s.get("version") or 0) for s in siblings
+                               if s["entity_id"] != cfg["entity_id"]),
+                              default=0) + 1
     updated = dc.dc_update(tenant_id, "registration_config", cfg["entity_id"], base, token)
     return {"config": updated}
 
