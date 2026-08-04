@@ -129,6 +129,57 @@ def test_connect_link_503_when_secret_key_missing(as_user, monkeypatch):
     assert "ENROLLX_STRIPE_SECRET_KEY" in resp.json()["detail"]
 
 
+# ── GET /api/stripe/{tenant_id}/status ────────────────────────────────────
+
+def test_connect_status_requires_auth(stripe_settings):
+    resp = TestClient(app).get("/api/stripe/acme/status")
+    assert resp.status_code == 401
+
+
+def test_connect_status_cross_tenant_403(as_user):
+    resp = as_user(tenant="acme").get("/api/stripe/globex/status")
+    assert resp.status_code == 403
+
+
+def test_connect_status_parent_role_403(as_user):
+    resp = as_user(role="parent").get("/api/stripe/acme/status")
+    assert resp.status_code == 403
+
+
+def test_connect_status_connected(as_user, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.stripe_connect.get_tenant_entity",
+        lambda t, tok: {**TENANT_ROW, "stripe_account_id": "acct_test_789"},
+    )
+    resp = as_user().get("/api/stripe/acme/status")
+    assert resp.status_code == 200
+    assert resp.json() == {"connected": True, "account_id": "acct_test_789"}
+
+
+def test_connect_status_not_connected(as_user, monkeypatch):
+    """The case that was broken: before ANY tenant has written
+    stripe_account_id there is no such flattened column, so the settings
+    page's client-built `SELECT stripe_account_id ...` binder-errored (400)
+    and the admin saw a load-failure banner on the page whose only job in
+    that state is to offer the Connect button. This route never filters on
+    the sparse field, so an unconnected tenant is a plain 200."""
+    monkeypatch.setattr(
+        "app.api.stripe_connect.get_tenant_entity", lambda t, tok: dict(TENANT_ROW)
+    )
+    resp = as_user().get("/api/stripe/acme/status")
+    assert resp.status_code == 200
+    assert resp.json() == {"connected": False, "account_id": None}
+
+
+def test_connect_status_no_tenant_row(as_user, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.stripe_connect.get_tenant_entity", lambda t, tok: None
+    )
+    resp = as_user().get("/api/stripe/acme/status")
+    assert resp.status_code == 200
+    assert resp.json() == {"connected": False, "account_id": None}
+
+
 @pytest.fixture
 def callback_env(monkeypatch):
     """Wire the callback's tenant read/write; return the recorded writes.
