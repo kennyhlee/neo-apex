@@ -29,6 +29,23 @@ Divergence from tokens.py, by design (this task's brief, not an oversight):
   any dots inside tenant_id itself — there is no second field for a dot to
   be confused with, so this bounded split does not reopen the class of bug
   tokens.py's comment warns about.
+
+Freshness has TWO bounds, both measured against the verifying process's
+own clock:
+- STATE_TTL_SECONDS bounds how OLD `issued` may be — this is the replay
+  window this module exists to close.
+- STATE_CLOCK_SKEW_SECONDS bounds how far into the FUTURE `issued` may be.
+  Without this, `time.time() - issued` for a future-dated `issued` is
+  negative and therefore always <= STATE_TTL_SECONDS, so a state minted by
+  a clock running ahead of the verifier's would never expire — the age
+  check alone is not a bound on future-dated timestamps, only on past
+  ones. enrollx runs multi-instance on Fly, so the instance that calls
+  make_state and the instance that later calls verify_state are not
+  guaranteed to share a clock; ordinary NTP drift between them is
+  infrastructure behavior, not an attack. 60 seconds is generous slack for
+  that drift (production hosts are typically NTP-synced to within a few
+  seconds) while staying negligible next to the 15-minute TTL, so it does
+  not meaningfully widen the callback replay window this mechanism bounds.
 """
 import base64
 import hashlib
@@ -38,6 +55,9 @@ import time
 from app.config import settings
 
 STATE_TTL_SECONDS = 15 * 60
+# Allowance for the verifying instance's clock to lag behind the minting
+# instance's — see the module docstring's "Freshness has TWO bounds" note.
+STATE_CLOCK_SKEW_SECONDS = 60
 
 
 def _sign(tenant_id: str, issued: int) -> str:
@@ -55,11 +75,23 @@ def verify_state(state: str) -> str | None:
     """Return the tenant_id if `state` is authentic and fresh, else None.
 
     Fails closed on every malformed shape — bad base64, wrong segment
-    count, empty segments, a non-numeric issued time, or a bad/tampered
-    signature — by falling through to the `except` below and returning
-    None. Never raises to the caller, and never includes the secret or a
-    computed/expected signature in anything (there is nothing to log or
-    raise here in the first place).
+    count, empty segments, a non-numeric issued time, a bad/tampered
+    signature, a too-old `issued`, or a too-far-future `issued` beyond
+    STATE_CLOCK_SKEW_SECONDS of clock slack — by falling through to the
+    `except` below or an explicit `return None`. Never raises to the
+    caller, and never includes the secret or a computed/expected signature
+    in anything (there is nothing to log or raise here in the first
+    place).
+
+    CALLER OBLIGATION: `None` means authentication failed, full stop. The
+    caller MUST treat it as a hard rejection of the callback — never fall
+    through to a default tenant, an "anonymous" tenant, or any Stripe call
+    keyed on the (absent) return value. `None` is the only falsy value this
+    function can return (a real tenant_id is always a non-empty string, see
+    _validate_id upstream), so `if not tenant_id:` is a safe and correct
+    guard — but the point is to check it, not that a truthiness shortcut
+    happens to be available. Skipping this check is exactly the cross-tenant
+    Stripe-account-attachment attack this module exists to prevent.
     """
     try:
         padded = state + "=" * (-len(state) % 4)
@@ -72,6 +104,9 @@ def verify_state(state: str) -> str | None:
         return None
     if not hmac.compare_digest(sig, _sign(tenant_id, issued)):
         return None
-    if time.time() - issued > STATE_TTL_SECONDS:
+    now = time.time()
+    if now - issued > STATE_TTL_SECONDS:
+        return None
+    if issued - now > STATE_CLOCK_SKEW_SECONDS:
         return None
     return tenant_id

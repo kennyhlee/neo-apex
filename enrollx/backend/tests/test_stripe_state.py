@@ -57,6 +57,31 @@ def test_state_expires():
     assert verify_state(stale) is None
 
 
+def test_state_rejects_issued_beyond_clock_skew_allowance():
+    """A future-dated `issued` more than STATE_CLOCK_SKEW_SECONDS ahead of
+    the verifier's clock must be rejected — without this bound, a state
+    minted by a clock running ahead of the verifier's would have
+    time.time() - issued always negative (<= STATE_TTL_SECONDS), so it
+    would never expire via the age check alone."""
+    from app.stripe_state import STATE_CLOCK_SKEW_SECONDS, _sign, verify_state
+
+    issued = int(time.time()) + STATE_CLOCK_SKEW_SECONDS + 5
+    raw = f"acme.{issued}.{_sign('acme', issued)}"
+    future = base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+    assert verify_state(future) is None
+
+
+def test_state_accepts_issued_just_inside_clock_skew_allowance():
+    """A modest future-dated `issued`, within the allowed clock-skew slack,
+    is ordinary infrastructure drift (not an attack) and must still verify."""
+    from app.stripe_state import STATE_CLOCK_SKEW_SECONDS, _sign, verify_state
+
+    issued = int(time.time()) + STATE_CLOCK_SKEW_SECONDS - 5
+    raw = f"acme.{issued}.{_sign('acme', issued)}"
+    slightly_ahead = base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+    assert verify_state(slightly_ahead) == "acme"
+
+
 # ── Malformed-input matrix (parent-task requirement: each case its own test) ──
 
 
