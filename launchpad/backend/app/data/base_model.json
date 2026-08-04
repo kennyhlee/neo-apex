@@ -112,7 +112,6 @@
   "registration_config": {
     "base_fields": [
       {"name": "config_id", "type": "str", "required": true},
-      {"name": "program_id", "type": "str", "required": true},
       {"name": "version", "type": "number", "required": true},
       {"name": "status", "type": "selection", "required": true, "options": ["draft", "published", "archived"], "default": "draft"},
       {"name": "blocks", "type": "str", "required": true}
@@ -122,7 +121,6 @@
   "registration_application": {
     "base_fields": [
       {"name": "application_id", "type": "str", "required": true},
-      {"name": "program_id", "type": "str", "required": true},
       {"name": "school_year", "type": "str", "required": true},
       {"name": "status", "type": "selection", "required": true, "options": ["draft", "submitted", "in_review", "pending_items", "approved", "enrolled", "waitlisted", "declined", "withdrawn"], "default": "draft"},
       {"name": "family_id", "type": "str", "required": false},
