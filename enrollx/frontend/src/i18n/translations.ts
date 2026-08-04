@@ -122,7 +122,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.planDeposit': 'Deposit',
     'builder.amountFull': 'Full amount (USD)',
     'builder.depositAmount': 'Deposit amount (USD)',
-    'builder.collects': 'Collects',
     'builder.messageBody': 'Message text',
     'builder.selectBlock': 'Select a step to edit its settings.',
     'builder.saveDraft': 'Save draft',
@@ -142,9 +141,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.errPlansEmpty': 'must offer at least one payment plan',
     'builder.errAmountInvalid': 'full amount must be zero or greater',
     'builder.errDepositInvalid': 'deposit amount must be zero or greater',
+    'builder.errDepositRange':
+      'deposit amount must be greater than zero and less than the full amount',
     'builder.errDueDaysInvalid': 'days due after approval must be a whole number, zero or greater',
     'builder.tooManyPaymentPlan': 'Only one payment plan step is allowed per flow.',
     'builder.tooManyPayment': 'Only one payment step is allowed per flow.',
+    'builder.errPlanWithoutPayment':
+      'A payment plan step needs a payment step, or the family is never charged.',
+    'builder.errPaymentWithoutPlan':
+      'A payment step needs a payment plan step to take its amount from.',
+    'builder.errPaymentBeforePlan': 'The payment step must come after the payment plan step.',
     'builder.publishBlocked': 'Fix the issues above before publishing.',
 
     // New application (Task 8)
@@ -354,7 +360,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.planDeposit': '定金',
     'builder.amountFull': '全额金额（美元）',
     'builder.depositAmount': '定金金额（美元）',
-    'builder.collects': '收取',
     'builder.messageBody': '说明文字',
     'builder.selectBlock': '选择一个步骤进行设置。',
     'builder.saveDraft': '保存草稿',
@@ -373,9 +378,13 @@ export const translations: Record<Locale, Record<string, string>> = {
     'builder.errPlansEmpty': '必须提供至少一种付款方式',
     'builder.errAmountInvalid': '全额金额必须大于或等于零',
     'builder.errDepositInvalid': '定金金额必须大于或等于零',
+    'builder.errDepositRange': '定金金额必须大于零且小于全额金额',
     'builder.errDueDaysInvalid': '录取后期限（天）必须是零或正整数',
     'builder.tooManyPaymentPlan': '每个流程只能有一个付款方式步骤。',
     'builder.tooManyPayment': '每个流程只能有一个付款步骤。',
+    'builder.errPlanWithoutPayment': '有付款方式步骤却没有付款步骤，家庭将永远不会被收费。',
+    'builder.errPaymentWithoutPlan': '付款步骤需要一个付款方式步骤来确定金额。',
+    'builder.errPaymentBeforePlan': '付款步骤必须排在付款方式步骤之后。',
     'builder.publishBlocked': '请先解决上述问题再发布。',
 
     // 新建申请（任务 8）

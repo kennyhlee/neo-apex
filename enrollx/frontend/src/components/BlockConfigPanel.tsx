@@ -232,19 +232,14 @@ export default function BlockConfigPanel({ block, onChange }: BlockConfigPanelPr
     );
   };
 
-  // ---- payment / message ------------------------------------------------
-  const renderPayment = () => (
-    <div className="bcp-row">
-      <label htmlFor={id('col')}>{t('builder.collects')}</label>
-      <select id={id('col')}
-        value={typeof block.config.collects === 'string' ? block.config.collects : 'full'}
-        onChange={(e) => setCfg({ collects: e.target.value })}>
-        <option value="full">full</option>
-        <option value="deposit">deposit</option>
-      </select>
-    </div>
-  );
-
+  // ---- message ----------------------------------------------------------
+  // A `payment` block deliberately has NO type-specific panel: its amount is
+  // derived entirely from the `payment_plan` block plus
+  // `draft_data.payment_plan_selection`, so there is nothing here for staff
+  // to set. The previous "Collects: full | deposit" dropdown wrote
+  // `config.collects`, which was read by nothing — not checkout_service.py,
+  // not items.py, not any block — so staff choosing "deposit" got a full
+  // charge with no signal their setting had been ignored.
   const renderMessage = () => (
     <div className="bcp-row bcp-row--stack">
       <label htmlFor={id('body')}>{t('builder.messageBody')}</label>
@@ -285,7 +280,6 @@ export default function BlockConfigPanel({ block, onChange }: BlockConfigPanelPr
       {block.type === 'form' && renderForm()}
       {block.type === 'documents' && renderDocuments()}
       {block.type === 'payment_plan' && renderPaymentPlan()}
-      {block.type === 'payment' && renderPayment()}
       {block.type === 'message' && renderMessage()}
     </div>
   );

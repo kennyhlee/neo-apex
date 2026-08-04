@@ -34,7 +34,12 @@ function newBlock(type: BlockType, title: string): FlowBlock {
         ...base,
         config: { currency: 'usd', amount_full: 0, plans: [{ type: 'pay_in_full' }] },
       };
-    case 'payment': return { ...base, config: { collects: 'full' } };
+    // A `payment` block has no config of its own: the amount is derived
+    // entirely from the `payment_plan` block plus
+    // `draft_data.payment_plan_selection` (checkout_service.py). The former
+    // `collects: 'full' | 'deposit'` seed was read by nothing anywhere in
+    // the stack — removed rather than wired to something invented.
+    case 'payment': return { ...base, config: {} };
     case 'message': return { ...base, blocking: false, required: false, config: { body: '' } };
     default: return { ...base, config: {} };
   }
@@ -95,6 +100,31 @@ function validateForPublish(blocks: FlowBlock[], t: (key: string) => string): st
   if (paymentPlanCount > 1) issues.push(t('builder.tooManyPaymentPlan'));
   if (paymentCount > 1) issues.push(t('builder.tooManyPayment'));
 
+  /**
+   * Payment pairing and ordering. Three configs that pass every per-block
+   * check and are still dead ends at runtime — none of which
+   * `validate_blocks` catches, so the builder is the only place they can be
+   * caught (INTERFACE-MAP Gap §5):
+   *
+   * 1. `payment_plan` with NO `payment` block — `derive_items` only creates
+   *    a payment item from a `payment` block, so the family picks a plan and
+   *    is never charged. Silent revenue loss with no error anywhere.
+   * 2. `payment` with NO `payment_plan` — `checkout_service.get_payment_plan_block`
+   *    409s at checkout; there is nothing to derive an amount from.
+   * 3. `payment` ordered BEFORE `payment_plan` — the family reaches Pay
+   *    before choosing, and `_plan_selection` 409s. (It happens to survive
+   *    when exactly one plan is offered, since the choice is then implied,
+   *    but authoring it is never intentional and the flow reads backwards,
+   *    so this is enforced unconditionally.)
+   */
+  const paymentIdx = blocks.findIndex((b) => b.type === 'payment');
+  const planIdx = blocks.findIndex((b) => b.type === 'payment_plan');
+  if (planIdx >= 0 && paymentIdx < 0) issues.push(t('builder.errPlanWithoutPayment'));
+  if (paymentIdx >= 0 && planIdx < 0) issues.push(t('builder.errPaymentWithoutPlan'));
+  if (paymentIdx >= 0 && planIdx >= 0 && paymentIdx < planIdx) {
+    issues.push(t('builder.errPaymentBeforePlan'));
+  }
+
   blocks.forEach((b, i) => {
     const label = b.title.trim() || `${t(`builder.blockType.${b.type}`)} #${i + 1}`;
     if (!b.title.trim()) {
@@ -131,6 +161,20 @@ function validateForPublish(blocks: FlowBlock[], t: (key: string) => string): st
       const deposit = plans.find((p) => p.type === 'deposit');
       if (deposit && !isValidCents(deposit.deposit_amount)) {
         issues.push(`${label}: ${t('builder.errDepositInvalid')}`);
+      } else if (deposit && isValidCents(b.config.amount_full)) {
+        // `isValidCents` accepts 0, and `togglePlan('deposit', true)` seeds
+        // `deposit_amount: 0` — so a freshly-added deposit plan's DEFAULT
+        // state is one `checkout_service.py:170-171` rejects with a 409
+        // (`deposit_amount <= 0 or deposit_amount >= amount_full`), and
+        // `stripe_webhook.py` silently skips the balance item and its
+        // reminder when the balance is <= 0. Nothing else compares the two
+        // amounts, so without this a school publishes a flow that looks
+        // fine and the first family to pay gets an opaque error.
+        const dep = deposit.deposit_amount as number;
+        const full = b.config.amount_full as number;
+        if (dep <= 0 || dep >= full) {
+          issues.push(`${label}: ${t('builder.errDepositRange')}`);
+        }
       }
     }
   });
