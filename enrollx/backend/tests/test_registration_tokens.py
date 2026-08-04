@@ -99,6 +99,43 @@ def test_wrong_segment_count_rejected():
         parse_link_token(too_many)
 
 
+def test_dot_in_tenant_id_rejected_at_mint():
+    """A dot in tenant_id would break the delimiter-free invariant that
+    parse_link_token's unbounded split() + exact-3 unpack relies on."""
+    with pytest.raises(TokenError):
+        make_link_token("ac.me", "abc123def456", 1)
+
+
+def test_dot_in_application_id_rejected_at_mint():
+    with pytest.raises(TokenError):
+        make_link_token("acme", "abc.123", 1)
+
+
+def test_empty_tenant_id_rejected_at_mint():
+    with pytest.raises(TokenError):
+        make_link_token("", "abc123def456", 1)
+
+
+def test_empty_application_id_rejected_at_mint():
+    with pytest.raises(TokenError):
+        make_link_token("acme", "", 1)
+
+
+def test_non_int_token_version_rejected_at_mint():
+    with pytest.raises(TokenError):
+        make_link_token("acme", "abc123def456", None)
+    with pytest.raises(TokenError):
+        make_link_token("acme", "abc123def456", "not-a-number")
+
+
+def test_non_int_token_version_rejected_at_verify():
+    tok = make_link_token("acme", "abc123def456", 1)
+    with pytest.raises(TokenError):
+        verify_link_token(tok, None)
+    with pytest.raises(TokenError):
+        verify_link_token(tok, "not-a-number")
+
+
 def test_empty_segment_rejected():
     import base64
 
