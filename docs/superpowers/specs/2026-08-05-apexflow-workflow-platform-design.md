@@ -75,11 +75,11 @@ transitions: [{transition_id, from, to, action, actor: family | staff | system,
 
 Ordered `[{step_id, type: form | documents | message, title, required, blocking, available_in: [state_id], config}]`.
 
-- `form` config: `sections: [{section_id, entity_model, fields: [{name, required}], mode: create | match_or_create}]`. The designer's field picker lists **all** base + custom fields of the referenced model (minus engine-owned/id fields) — the current builder's gap (optional fields invisible) is closed structurally: the picker is generated from the model definition, so a model change is a designer refresh away.
+- `form` config: `sections: [{section_id, entity_model, fields: [{name, required}], mode: create | match_or_create, repeat?: {min, max}}]`. `repeat` renders the section as an add-another list (e.g. emergency contacts) producing one entity per instance at commit. The designer's field picker lists **all** base + custom fields of the referenced model (minus engine-owned/id fields) — the current builder's gap (optional fields invisible) is closed structurally: the picker is generated from the model definition, so a model change is a designer refresh away.
 - `documents` config: `docs: [{name, description, sensitive, blocking, due_days_after_state?}]`.
 - `message` config: `{body}` with an optional acknowledgment item.
 
-Section answers autosave into `draft_data`. Data leaves the instance only via the `commit_sections` effect on a transition: each committed section writes to its entity model (`match_or_create` reuses the bulk-add orchestration), and resulting ids land in `subject_refs`. **Engine-owned instance fields are never section-writable** (400 on attempt); flow-runtime exports the owned-field list as a constant.
+Section answers autosave into `draft_data`. Data leaves the instance only via the `commit_sections` effect on a transition: each committed section writes to its entity model (`match_or_create` reuses the bulk-add orchestration), and resulting ids land in `subject_refs`. Sections commit in declaration order with **link-field injection**: when a later section's model declares a field named `{earlier_model}_id` (e.g. `family_id` on `student` and `contact`; `student_id`/`family_id` on `registration_application`), the engine stamps the resolved id — link fields are engine-written and never rendered in the form. Field mapping is by-name identity: a picked field *is* the model field, so there is no mapping table to maintain. **Engine-owned instance fields are never section-writable** (400 on attempt); flow-runtime exports the owned-field list as a constant.
 
 ## 4. Engine semantics
 
@@ -120,7 +120,7 @@ The template composes from the tenant's models, so the defaults must reach indus
 - **`student`** — preferred name, gender, grade, school attending, allergies, dietary restrictions, medications, physician name/phone, insurance carrier/policy, special needs/IEP notes, photo/media release.
 - **`family`** — guardian 2 name/phone/email/relationship, employer(s), home address split fields.
 - **`contact`** — relationship, phone, and flags `emergency_contact`, `authorized_pickup`, `pickup_excluded`.
-- **`registration_application`** — retained as the enrollment template's application-facts model: `school_year, requested_start_date, schedule_days, pickup_method, handbook_acknowledged, liability_waiver_signed, tuition_agreement_signed, signature_name, signature_date` (plus tenant customization: agreements, initials, …).
+- **`registration_application`** — retained as the enrollment template's application-facts model: `school_year, student_id, family_id` (link fields, engine-stamped at commit), `requested_start_date, schedule_days, pickup_method, handbook_acknowledged, liability_waiver_signed, tuition_agreement_signed, signature_name, signature_date` (plus tenant customization: agreements, initials, …). The committed entity is the durable admission record — the workflow instance remains the process record (state, items, activity).
 
 **Papermite finalize merges, never replaces**: for an entity type that already exists in the tenant's models, extracted fields matching existing base fields by name are dropped and the remainder append to `custom_fields`. This rule (from the whole-school revision) is what keeps model setup and the designer coherent, and it applies to every entity type.
 
