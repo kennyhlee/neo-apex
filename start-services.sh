@@ -50,12 +50,12 @@ DATACORE_PORT=$(read_port "datacore")
 LAUNCHPAD_BE_PORT=$(read_port "launchpad-backend")
 PAPERMITE_BE_PORT=$(read_port "papermite-backend")
 ADMINDASH_BE_PORT=$(read_port "admindash-backend")
-ENROLLX_BE_PORT=$(read_port "enrollx-backend")
+APEXFLOW_BE_PORT=$(read_port "apexflow-backend")
 FAMILYHUB_BE_PORT=$(read_port "familyhub-backend")
 LAUNCHPAD_FE_PORT=$(read_port "launchpad-frontend")
 PAPERMITE_FE_PORT=$(read_port "papermite-frontend")
 ADMINDASH_FE_PORT=$(read_port "admindash-frontend")
-ENROLLX_FE_PORT=$(read_port "enrollx-frontend")
+APEXFLOW_FE_PORT=$(read_port "apexflow-frontend")
 FAMILYHUB_FE_PORT=$(read_port "familyhub-frontend")
 
 # Service definitions: name, port, type (backend/frontend)
@@ -64,12 +64,12 @@ SERVICES=(
   "launchpad-backend:$LAUNCHPAD_BE_PORT:backend"
   "papermite-backend:$PAPERMITE_BE_PORT:backend"
   "admindash-backend:$ADMINDASH_BE_PORT:backend"
-  "enrollx-backend:$ENROLLX_BE_PORT:backend"
+  "apexflow-backend:$APEXFLOW_BE_PORT:backend"
   "familyhub-backend:$FAMILYHUB_BE_PORT:backend"
   "launchpad-frontend:$LAUNCHPAD_FE_PORT:frontend"
   "papermite-frontend:$PAPERMITE_FE_PORT:frontend"
   "admindash-frontend:$ADMINDASH_FE_PORT:frontend"
-  "enrollx-frontend:$ENROLLX_FE_PORT:frontend"
+  "apexflow-frontend:$APEXFLOW_FE_PORT:frontend"
   "familyhub-frontend:$FAMILYHUB_FE_PORT:frontend"
 )
 
@@ -244,9 +244,9 @@ start_service() {
       uv run uvicorn app.main:app --app-dir backend --port "$port" > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
-    enrollx-backend)
+    apexflow-backend)
       info "Starting $name on port $port..."
-      cd "$SCRIPT_DIR/enrollx"
+      cd "$SCRIPT_DIR/apexflow"
       uv run uvicorn app.main:app --app-dir backend --port "$port" --reload > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
@@ -274,9 +274,18 @@ start_service() {
       npm run dev > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;
-    enrollx-frontend)
+    apexflow-frontend)
+      # apexflow/frontend does not exist yet (scaffolded in a later task —
+      # see .superpowers/sdd/2026-08-05-apexflow-plan1-foundations/). Guard
+      # against it explicitly: under `set -euo pipefail`, a `cd` into a
+      # missing directory would abort this whole script, not just skip this
+      # one service.
+      if [ ! -d "$SCRIPT_DIR/apexflow/frontend" ]; then
+        warn "$name skipped — apexflow/frontend does not exist yet"
+        return 0
+      fi
       info "Starting $name on port $port..."
-      cd "$SCRIPT_DIR/enrollx/frontend"
+      cd "$SCRIPT_DIR/apexflow/frontend"
       npm run dev > "$log_file" 2>&1 &
       cd "$SCRIPT_DIR"
       ;;

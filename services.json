@@ -9,7 +9,7 @@
     "papermite-frontend": { "host": "localhost", "port": 5700 },
     "papermite-backend": { "host": "localhost", "port": 5710 },
     "datacore": { "host": "localhost", "port": 5800 },
-    "enrollx-frontend": { "host": "localhost", "port": 5900 },
-    "enrollx-backend": { "host": "localhost", "port": 5910 }
+    "apexflow-frontend": { "host": "localhost", "port": 5900 },
+    "apexflow-backend": { "host": "localhost", "port": 5910 }
   }
 }
