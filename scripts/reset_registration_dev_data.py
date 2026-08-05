@@ -77,8 +77,16 @@ def active_entity_ids(base: str, tenant: str, entity_type: str) -> list[str]:
     return [r["entity_id"] for r in resp.json().get("data", []) if r.get("entity_id")]
 
 
-def existing_custom_fields(base: str, tenant: str, entity_type: str) -> list[dict]:
-    """The tenant's current custom fields for one entity type, or []."""
+def existing_fields(base: str, tenant: str, entity_type: str) -> list[dict]:
+    """The tenant's current fields for one entity type, base AND custom, in
+    that order.
+
+    Both buckets matter. Model setup had replaced the registration models with
+    the EXTRACTION's shape, so document-derived fields such as `school_id`
+    were sitting in `base_fields` — reading only `custom_fields` (as this
+    first did) silently deleted them on reseed, which is precisely the data
+    loss spec §4 rule 1 exists to prevent.
+    """
     resp = httpx.post(f"{base}/query", json={
         "tenant_id": tenant, "table": "models",
         "sql": f"SELECT model_definition FROM data WHERE _status = 'active' "
@@ -97,7 +105,8 @@ def existing_custom_fields(base: str, tenant: str, entity_type: str) -> list[dic
             return []
     if not isinstance(raw, dict):
         return []
-    return [f for f in raw.get("custom_fields") or [] if isinstance(f, dict)]
+    return ([f for f in raw.get("base_fields") or [] if isinstance(f, dict)]
+            + [f for f in raw.get("custom_fields") or [] if isinstance(f, dict)])
 
 
 def reseed_definition(base: str, tenant: str, base_model: dict) -> dict:
@@ -105,14 +114,22 @@ def reseed_definition(base: str, tenant: str, base_model: dict) -> dict:
 
     The same merge rule Papermite's finalize applies (spec §4 rule 1), so a
     reseed restores the engine-owned base fields WITHOUT deleting whatever
-    model setup extracted from the school's real admission packet.
+    model setup extracted from the school's real admission packet. Every
+    pre-existing field that is not itself an engine base field survives as a
+    custom field -- including extraction-only fields like `school_id`, which
+    the spec names explicitly.
     """
     out = {}
     for entity_type in RESEED_TYPES:
         base_fields = base_model[entity_type]["base_fields"]
         base_names = {f["name"] for f in base_fields}
-        custom = [f for f in existing_custom_fields(base, tenant, entity_type)
-                  if f.get("name") not in base_names]
+        custom, seen = [], set()
+        for f in existing_fields(base, tenant, entity_type):
+            name = f.get("name")
+            if not name or name in base_names or name in seen:
+                continue
+            custom.append(f)
+            seen.add(name)
         out[entity_type] = {"base_fields": base_fields, "custom_fields": custom}
     return out
 
@@ -121,6 +138,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("tenants", nargs="*", default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--models-only", action="store_true",
+                        help="Reseed the model definitions without archiving "
+                             "any registration rows. Use this to repair a "
+                             "model without destroying flow work in progress.")
     args = parser.parse_args()
     tenants = args.tenants or DEFAULT_TENANTS
     base = f"http://localhost:{load_port()}/api"
@@ -128,7 +149,7 @@ def main() -> int:
 
     for tenant in tenants:
         print(f"\n== {tenant} ==")
-        for entity_type in REGISTRATION_TYPES:
+        for entity_type in ([] if args.models_only else REGISTRATION_TYPES):
             ids = active_entity_ids(base, tenant, entity_type)
             print(f"  {entity_type}: {len(ids)} active row(s)")
             if not ids or args.dry_run:
