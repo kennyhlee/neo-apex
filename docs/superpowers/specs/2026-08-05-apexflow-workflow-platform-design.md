@@ -96,7 +96,7 @@ One bespoke write surface, mirroring registration's shape:
 - Item-level actions (`save_draft, complete_item, verify_item, reject_item, waive_item`) are engine built-ins operating on items, available in any non-terminal state, with actor rules (family may only `save_draft`/`complete_item`).
 - Internal token-scoped routes for familyhub keep Plan 2's shape (`/internal/instance-by-token/{token}` read/actions/documents, `/internal/workflows/{tenant_id}/{definition_id}/start`, request-link), with family-permitted actions = item built-ins + transitions whose `actor: family`.
 
-**Guard primitives (v1):** `all_blocking_items_complete`, `items_in_status {step_ids?, status}`, `capacity_available {count_states, capacity_field, scope_context_key?}` (e.g. count instances in approved-like states per `school_year` against `tenant.capacity`), `data_condition {condition}` (the same expression schema as step `show_if`), `actor_role`.
+**Guard primitives (v1):** `all_blocking_items_complete`, `items_in_status {step_ids?, status}`, `capacity_available {count_states, capacity_field, scope_context_key?}` (e.g. count instances in approved-like states per `school_year` against `tenant.capacity`), `data_condition {condition}` (the same expression schema as step `show_if`), `date_window {start?, end?}` (pure clock check at action time — no scheduler; enables time-boxed intake and early-bird/guarded-alternative patterns), `actor_role`.
 
 **Effect primitives (v1):** `commit_sections {section_ids}`, `set_entity_field {ref, field, value}` (e.g. student status), `send_email {template}`, `issue_link`, `start_due_clocks {step_ids}`, `set_context {key, value}`.
 
@@ -104,7 +104,7 @@ The library is small and deliberately so: fully definable machines, vetted primi
 
 ## 5. Designer (apexflow-frontend)
 
-Two editors over one definition: the **step editor** (compose steps; per-section model+field pickers driven live from the tenant's model definitions) and the **machine editor** (states, transitions, guard/effect composition from the primitive library, with publish-time validation surfaced inline). Live preview mounts the real flow-runtime renderer in `preview` mode. Template gallery instantiates a copy the admin owns and edits freely. Versioning/publish follows registration's builder: drafts via generic entity writes, `publish_definition` as the sole authoring action.
+Two editors over one definition: the **step editor** (compose steps; per-section model+field pickers driven live from the tenant's model definitions) and the **machine editor** (states, transitions, guard/effect composition from the primitive library, with publish-time validation surfaced inline). Live preview mounts the real flow-runtime renderer in `preview` mode. Template gallery instantiates a copy the admin owns and edits freely. Versioning/publish follows registration's builder: drafts via generic entity writes, `publish_definition` as the sole authoring action. For `channel_access: family` definitions, the publish screen surfaces the shareable family start URL — distribution (email blasts, QR codes, website embeds) happens through the tenant's own marketing channels, not the platform.
 
 ## 6. Channels
 
@@ -156,7 +156,7 @@ Registration's strategy generalizes: table-driven machine execution tests (the e
 
 ## 13. Out of scope (v1)
 
-Payments (deleted; own template later), esign, conditional field logic, parent accounts, automated waitlist offers, cross-workflow orchestration (one workflow triggering another), scheduled/time-triggered transitions beyond due-date clocks, workflow analytics.
+Payments (deleted; own template later), esign, conditional field logic, parent accounts, automated waitlist offers, cross-workflow orchestration (one workflow triggering another; the future `start_workflow` effect — until then, handoffs are a `send_email` of the target workflow's link), scheduled/time-triggered transitions beyond due-date clocks, workflow analytics.
 
 ## 14. Risks
 
