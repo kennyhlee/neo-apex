@@ -144,7 +144,7 @@ Upload a policy/handbook/operations document → Papermite extracts → a drafti
 2. **Designer** — apexflow-frontend step + machine editors, live preview, template gallery, publish.
 3. **Channels** — AdminDash tracking/entry + proxies; familyhub generalization; browser click-through of the enrollment template both channels (document upload deferred to manual verification while R2 creds are absent).
 4. **AI authoring** — document → draft definition (own spec).
-5. **More templates** — program signup, attendance; the primitives they demand; payments workflow re-introduction (revert Plan 3 from history into apexflow shape).
+5. **More templates** — program signup, attendance; the primitives they demand; payments re-introduction (revert Plan 3 from history into apexflow shape): a `payment` step type (`provider: stripe | offline`) so card entry happens only in Stripe's hosted surface (never as form/model fields — PCI), webhook settlement as system-actor item completion, offline (check/cash) recording as a staff-verified item, and scheduled transitions for installments/autopay. Conditional plan-choice flows (monthly card vs one-time check) then compose from ordinary `show_if` steps — no new branching machinery.
 
 ## 12. Testing
 
