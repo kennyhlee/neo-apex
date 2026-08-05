@@ -51,7 +51,7 @@ def test_parse_exposes_scope_without_verifying():
 
 def test_magic_link_url_uses_familyhub_base():
     tok = make_link_token("acme", "abc123def456", 1)
-    assert magic_link_url(tok) == f"http://localhost:6000/application/{tok}"
+    assert magic_link_url(tok) == f"http://localhost:8080/application/{tok}"
 
 
 def test_different_tenant_rejected():

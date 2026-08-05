@@ -42,7 +42,7 @@ class Settings(BaseSettings):
                     "FAMILYHUB_ENROLLX_INTERNAL_KEY must be set to a real secret in production"
                 )
         elif not origins:
-            origins = ["http://localhost:6000"]
+            origins = ["http://localhost:8080"]
 
         object.__setattr__(self, "cors_allowed_origins", origins)
         return self

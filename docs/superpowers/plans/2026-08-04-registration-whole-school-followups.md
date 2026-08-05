@@ -82,15 +82,17 @@ Each of the three fixes tightened the fixture as well as the code.
 
 ## 3. Environment problems (not caused by this revision)
 
-1. **Chrome cannot open familyhub's dev frontend at all.** Port **6000** is on
-   Chrome's blocked-port list (X11), so `http://localhost:6000` fails with
-   `ERR_UNSAFE_PORT` in every Chrome tab. The click-through was run against a
-   second dev server on port 6100 with
-   `FAMILYHUB_CORS_ALLOWED_ORIGINS=http://localhost:6000,http://localhost:6100`.
-   **Recommendation: change `familyhub-frontend` in `services.json` to a port
-   Chrome allows (e.g. 6001 or 6100).** As it stands nobody can open the parent
-   UI in Chrome without a workaround. Note the CORS allowlist is derived from
-   `services.json`, so the port change fixes both halves at once.
+1. ~~**Chrome cannot open familyhub's dev frontend at all.**~~ **RESOLVED.**
+   Port **6000** is on Chrome's blocked-port list (X11), so
+   `http://localhost:6000` failed with `ERR_UNSAFE_PORT` in every Chrome tab,
+   and the click-through had to run against a second dev server on port 6100.
+   `familyhub-frontend` is now **8080** in `services.json` — a normal
+   customer-facing port that no browser blocks. Everything derives from that
+   one entry (vite's dev port, `config.ts`'s API URL, `start-services.sh`, and
+   the CORS allowlist), so the single edit covered all of it; the dev-fallback
+   origin in `familyhub/backend/app/config.py` and enrollx's
+   `DEV_FAMILYHUB_PUBLIC_URL` / `familyhub_url` magic-link base were updated to
+   match.
 
 2. **`papermite/backend/tests/test_auth.py` fails to import** —
    `ImportError: cannot import name 'get_registry_store' from 'app.storage'`.

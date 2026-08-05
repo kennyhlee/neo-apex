@@ -9,7 +9,7 @@
     "datacore": { "host": "localhost", "port": 5800 },
     "enrollx-frontend": { "host": "localhost", "port": 5900 },
     "enrollx-backend": { "host": "localhost", "port": 5910 },
-    "familyhub-frontend": { "host": "localhost", "port": 6000 },
+    "familyhub-frontend": { "host": "localhost", "port": 8080 },
     "familyhub-backend": { "host": "localhost", "port": 6010 }
   }
 }

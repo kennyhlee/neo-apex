@@ -16,7 +16,7 @@ MIN_SECRET_LENGTH = 32
 # default below and validate_production_secrets, same as DEV_LINK_SECRET /
 # DEV_INTERNAL_KEY above — one constant per value so the two can't drift.
 DEV_STRIPE_REDIRECT_URL = "http://localhost:5910/api/stripe/connect/callback"
-DEV_FAMILYHUB_PUBLIC_URL = "http://localhost:6000"
+DEV_FAMILYHUB_PUBLIC_URL = "http://localhost:8080"
 DEV_FRONTEND_PUBLIC_URL = "http://localhost:5900"
 
 
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     internal_key: str = DEV_INTERNAL_KEY
     resend_api_key: str = ""
     email_from: str = "NeoApex Registration <registration@floatify.com>"
-    familyhub_url: str = "http://localhost:6000"
+    familyhub_url: str = "http://localhost:8080"
 
     # ── Stripe Connect / payments (Plan 3) ─────────────────────────────
     stripe_client_id: str = ""       # ENROLLX_STRIPE_CLIENT_ID (ca_...)
