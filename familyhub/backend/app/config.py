@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # enrollx's dev default:
     enrollx_internal_key: str = "dev-internal-key-change-in-prod"  # ADJUST(bindings): enrollx dev default
     cors_allowed_origins: Union[Optional[str], List[str]] = None
-    port: int = 6010
+    port: int = 5630
 
     @model_validator(mode="after")
     def parse_and_validate_cors(self):
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
                     "FAMILYHUB_ENROLLX_INTERNAL_KEY must be set to a real secret in production"
                 )
         elif not origins:
-            origins = ["http://localhost:8080"]
+            origins = ["http://localhost:5620"]
 
         object.__setattr__(self, "cors_allowed_origins", origins)
         return self

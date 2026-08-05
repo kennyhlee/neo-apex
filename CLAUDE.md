@@ -11,7 +11,7 @@ NeoApex is an education/enrollment management platform. Active services:
 - **papermite** — Document ingestion gateway. Upload documents → AI extraction → model definition finalization. Python backend + React frontend.
 - **admindash** — School operations product for school administrators. React frontend (port 5600) + Python FastAPI backend (port 5610). The backend proxies authenticated requests to DataCore and Papermite.
 - **enrollx** — Staff-facing enrollment system of action: registration flow builder, application lifecycle, tracking. React frontend (port 5900) + Python FastAPI backend (port 5910).
-- **familyhub** — Family-facing registration channel: parent registration runtime and parent hub. React frontend (port 8080) + Python FastAPI backend (port 6010). Deliberately has no staff auth surface.
+- **familyhub** — Family-facing registration channel: parent registration runtime and parent hub. React frontend (port 5620) + Python FastAPI backend (port 5630). Deliberately has no staff auth surface.
 - **ui-tokens** — Shared CSS design tokens package.
 
 Placeholder directories (empty): `apexflow`, `sampledoc`.
@@ -70,13 +70,13 @@ Defined in `services.json` at repo root. All services read from this file.
 | LaunchPad backend | 5510 |
 | AdminDash frontend | 5600 |
 | AdminDash backend | 5610 |
+| FamilyHub frontend | 5620 |
+| FamilyHub backend | 5630 |
 | Papermite frontend | 5700 |
 | Papermite backend | 5710 |
 | DataCore backend | 5800 |
 | EnrollX frontend | 5900 |
 | EnrollX backend | 5910 |
-| FamilyHub frontend | 8080 |
-| FamilyHub backend | 6010 |
 
 To change a port: edit `services.json`, restart affected services.
 

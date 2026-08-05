@@ -86,13 +86,14 @@ Each of the three fixes tightened the fixture as well as the code.
    Port **6000** is on Chrome's blocked-port list (X11), so
    `http://localhost:6000` failed with `ERR_UNSAFE_PORT` in every Chrome tab,
    and the click-through had to run against a second dev server on port 6100.
-   `familyhub-frontend` is now **8080** in `services.json` — a normal
-   customer-facing port that no browser blocks. Everything derives from that
-   one entry (vite's dev port, `config.ts`'s API URL, `start-services.sh`, and
-   the CORS allowlist), so the single edit covered all of it; the dev-fallback
-   origin in `familyhub/backend/app/config.py` and enrollx's
-   `DEV_FAMILYHUB_PUBLIC_URL` / `familyhub_url` magic-link base were updated to
-   match.
+   familyhub now sits at **5620** (frontend) / **5630** (backend) in
+   `services.json` — no browser blocks either, and the pair slots into the
+   56xx block beside admindash instead of squatting on a popular default like
+   8080. Everything derives from those entries (vite's dev port, `config.ts`'s
+   API URL, `start-services.sh`, and the CORS allowlist), so the edit covered
+   all of it; the dev-fallback origin and `port` in
+   `familyhub/backend/app/config.py`, and enrollx's `DEV_FAMILYHUB_PUBLIC_URL`
+   / `familyhub_url` magic-link base, were updated to match.
 
 2. **`papermite/backend/tests/test_auth.py` fails to import** —
    `ImportError: cannot import name 'get_registry_store' from 'app.storage'`.

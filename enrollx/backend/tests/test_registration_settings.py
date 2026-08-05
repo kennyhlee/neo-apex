@@ -23,7 +23,7 @@ def test_registration_settings_defaults(monkeypatch):
     assert s.internal_key == "dev-internal-key-change-in-prod"
     assert s.resend_api_key == ""
     assert s.email_from == "NeoApex Registration <registration@floatify.com>"
-    assert s.familyhub_url == "http://localhost:8080"
+    assert s.familyhub_url == "http://localhost:5620"
 
 
 def test_registration_settings_env_overrides(monkeypatch):

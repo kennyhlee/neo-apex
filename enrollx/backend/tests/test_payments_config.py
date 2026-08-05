@@ -22,7 +22,7 @@ def test_payment_settings_defaults(monkeypatch):
     assert s.stripe_secret_key == ""
     assert s.stripe_webhook_secret == ""
     assert s.stripe_redirect_url == "http://localhost:5910/api/stripe/connect/callback"
-    assert s.familyhub_public_url == "http://localhost:8080"
+    assert s.familyhub_public_url == "http://localhost:5620"
     assert s.frontend_public_url == "http://localhost:5900"
     assert s.balance_due_days == 30
 
@@ -93,8 +93,8 @@ def test_familyhub_public_url_independent_when_both_set(monkeypatch):
 def test_familyhub_public_url_default_when_neither_set(monkeypatch):
     _clean_familyhub_vars(monkeypatch)
     s = Settings()
-    assert s.familyhub_url == "http://localhost:8080"
-    assert s.familyhub_public_url == "http://localhost:8080"
+    assert s.familyhub_url == "http://localhost:5620"
+    assert s.familyhub_public_url == "http://localhost:5620"
 
 
 # ── C3: production guard on the Stripe secrets + public URLs ──────────────
@@ -213,7 +213,7 @@ def test_production_allows_localhost_stripe_redirect_url_when_stripe_not_configu
 # familyhub_public_url — guarded CONDITIONALLY on stripe_secret_key ────
 
 def test_production_rejects_localhost_familyhub_public_url_when_stripe_configured(monkeypatch):
-    _prod(monkeypatch, ENROLLX_FAMILYHUB_PUBLIC_URL="http://localhost:8080")
+    _prod(monkeypatch, ENROLLX_FAMILYHUB_PUBLIC_URL="http://localhost:5620")
     with pytest.raises(ValidationError) as exc:
         Settings()
     assert "ENROLLX_FAMILYHUB_PUBLIC_URL" in str(exc.value)
@@ -229,9 +229,9 @@ def test_production_allows_localhost_familyhub_public_url_when_stripe_not_config
     _prod(monkeypatch)
     monkeypatch.delenv("ENROLLX_STRIPE_SECRET_KEY", raising=False)
     monkeypatch.delenv("ENROLLX_STRIPE_WEBHOOK_SECRET", raising=False)
-    monkeypatch.setenv("ENROLLX_FAMILYHUB_PUBLIC_URL", "http://localhost:8080")
+    monkeypatch.setenv("ENROLLX_FAMILYHUB_PUBLIC_URL", "http://localhost:5620")
     s = Settings()
-    assert s.familyhub_public_url == "http://localhost:8080"
+    assert s.familyhub_public_url == "http://localhost:5620"
 
 
 # frontend_public_url — guarded CONDITIONALLY on stripe_secret_key ─────
