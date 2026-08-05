@@ -38,6 +38,7 @@ DATA = {
     "context.empty_meta": {},
     "context.explicit_none": None,
     "context.flag": True,
+    "context.flag_false": False,
 }
 
 MISSING_SOURCE = "context.does_not_exist"
@@ -84,6 +85,7 @@ PRESENT_CASES = [
     ("student.middle_name", "truthy", None, False),
     ("student.age", "truthy", None, False),  # 0 is falsy
     ("context.flag", "truthy", None, True),
+    ("context.flag_false", "truthy", None, False),  # explicit Python False
     ("context.empty_tags", "truthy", None, False),
     ("context.tags", "truthy", None, True),
     ("context.explicit_none", "truthy", None, False),

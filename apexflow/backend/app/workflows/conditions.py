@@ -54,6 +54,9 @@ def _eval_leaf(cond: Condition, data: dict[str, Any]) -> bool:
     if op == "ne":
         return value != cond.value
     if op == "in":
+        # Condition._validate_in_value (schema.py) guarantees cond.value is a
+        # list whenever op == "in", so this is never a TypeError/substring
+        # surprise waiting to happen — see that validator's docstring.
         return value in cond.value
 
     raise ValueError(f"unknown condition op: {op!r}")  # pragma: no cover — schema enum guards this

@@ -66,6 +66,25 @@ class Condition(BaseModel):
     op: Literal["eq", "ne", "in", "empty", "not_empty", "truthy"]
     value: Any = None
 
+    @model_validator(mode="after")
+    def _validate_in_value(self) -> "Condition":
+        """`op="in"` requires a list `value`.
+
+        Without this guard, evaluate_condition's `value in cond.value` either
+        crashes (value=None -> `TypeError: argument of type 'NoneType' is
+        not iterable`; value=5 -> not iterable) or silently does Python
+        substring-membership when value is a str (`"K" in "K12"` -> True) —
+        neither is the intended "member of an authored list" semantics.
+        Rejecting non-list values here, at parse time, means evaluate_condition
+        never has to defend against a malformed Condition.
+        """
+        if self.op == "in" and not isinstance(self.value, list):
+            raise ValueError(
+                "Condition op 'in' requires 'value' to be a list "
+                f"(got {type(self.value).__name__}: {self.value!r})"
+            )
+        return self
+
 
 # A group's list items may themselves be leaves or nested groups (spec's
 # "nesting" example: `all` of `any`). The forward reference to ConditionGroup

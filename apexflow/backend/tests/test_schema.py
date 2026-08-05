@@ -69,6 +69,48 @@ def test_condition_value_defaults_to_none():
     assert c.value is None
 
 
+# --- Condition op="in" value-shape guard --------------------------------------
+# (post-review fix: evaluate_condition's `value in cond.value` crashed with a
+# TypeError for non-iterable values and silently did Python substring
+# membership for str values — guarded at the schema level instead so a
+# malformed Condition can never reach the evaluator.)
+
+def test_condition_in_with_list_value_is_valid():
+    c = Condition(source="student.grade", op="in", value=["K", "1", "2"])
+    assert c.value == ["K", "1", "2"]
+
+
+def test_condition_in_with_omitted_value_is_rejected():
+    with pytest.raises(ValidationError):
+        Condition(source="student.grade", op="in")
+
+
+def test_condition_in_with_none_value_is_rejected():
+    with pytest.raises(ValidationError):
+        Condition(source="student.grade", op="in", value=None)
+
+
+def test_condition_in_with_scalar_value_is_rejected():
+    with pytest.raises(ValidationError):
+        Condition(source="student.grade", op="in", value=5)
+
+
+def test_condition_in_with_string_value_is_rejected():
+    # Guards against silent substring semantics: "K" in "K12" is True in
+    # Python, which is not the intended "member of an authored list" meaning
+    # of the "in" op.
+    with pytest.raises(ValidationError):
+        Condition(source="student.grade", op="in", value="K12")
+
+
+@pytest.mark.parametrize("op", ["eq", "ne", "empty", "not_empty", "truthy"])
+def test_non_in_ops_do_not_require_list_value(op):
+    # The list-value guard is specific to op="in" — other ops accept any
+    # value shape (including the default None).
+    Condition(source="student.grade", op=op, value="K")
+    Condition(source="student.grade", op=op)
+
+
 # --- ConditionGroup ----------------------------------------------------------
 
 def test_condition_group_all_alias_round_trip():
@@ -301,7 +343,7 @@ def test_section_def_rejects_bad_mode():
 
 # --- StepDef ---------------------------------------------------------------------
 
-def test_step_def_round_trip_minimal():
+def test_step_def_round_trip_message_type():
     payload = {
         "step_id": "welcome",
         "type": "message",
@@ -314,11 +356,13 @@ def test_step_def_round_trip_minimal():
         "config": {"body": "Welcome to enrollment"},
     }
     first, dumped = _round_trip(StepDef, payload)
+    assert first.type == "message"
     assert first.show_if is None
     assert first.review is None
+    assert dumped["config"] == {"body": "Welcome to enrollment"}
 
 
-def test_step_def_round_trip_with_show_if_and_review():
+def test_step_def_round_trip_documents_type_with_show_if_and_review():
     payload = {
         "step_id": "documents",
         "type": "documents",
@@ -331,22 +375,40 @@ def test_step_def_round_trip_with_show_if_and_review():
         "config": {"docs": [{"name": "immunization", "description": "", "sensitive": True, "blocking": True}]},
     }
     first, dumped = _round_trip(StepDef, payload)
+    assert first.type == "documents"
     assert first.review == "staff"
     assert isinstance(first.show_if, ConditionGroup)
     assert dumped["show_if"]["all"][0]["source"] == "context.school_year"
+    assert dumped["config"]["docs"][0]["name"] == "immunization"
 
 
-@pytest.mark.parametrize("step_type", ["form", "documents", "message"])
-def test_step_def_accepts_all_types(step_type):
-    StepDef(
-        step_id="s",
-        type=step_type,
-        title="T",
-        required=True,
-        blocking=True,
-        available_in=[],
-        config={},
-    )
+def test_step_def_round_trip_form_type():
+    payload = {
+        "step_id": "family_details",
+        "type": "form",
+        "title": "Family details",
+        "required": True,
+        "blocking": True,
+        "available_in": ["draft"],
+        "show_if": None,
+        "review": None,
+        "config": {
+            "sections": [
+                {
+                    "section_id": "family_section",
+                    "entity_model": "family",
+                    "fields": [{"name": "guardian1_name", "required": True}],
+                    "mode": "create",
+                    "repeat": None,
+                }
+            ]
+        },
+    }
+    first, dumped = _round_trip(StepDef, payload)
+    assert first.type == "form"
+    assert first.review is None
+    assert dumped["config"]["sections"][0]["section_id"] == "family_section"
+    assert dumped["config"]["sections"][0]["entity_model"] == "family"
 
 
 def test_step_def_rejects_bad_review():
