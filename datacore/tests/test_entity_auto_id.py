@@ -263,12 +263,13 @@ def test_family_preserves_provided_id():
 
 
 def test_registration_abbrevs_present():
-    """Verify all registration entity type abbreviations are in DEFAULT_ABBREVS."""
+    """Verify surviving registration entity type abbreviations are in DEFAULT_ABBREVS.
+
+    registration_config, application_item, application_activity, and payment
+    are retired (ApexFlow Plan 1 Task 2) and no longer appear here; their
+    generic workflow_* replacements are covered by test_abbrevs_workflow.py.
+    """
     from datacore.api.routes import DEFAULT_ABBREVS
     assert DEFAULT_ABBREVS["registration_application"] == "RA"
-    assert DEFAULT_ABBREVS["registration_config"] == "RC"
-    assert DEFAULT_ABBREVS["application_item"] == "AI"
-    assert DEFAULT_ABBREVS["application_activity"] == "AA"
     assert DEFAULT_ABBREVS["document"] == "DC"
-    assert DEFAULT_ABBREVS["payment"] == "PY"
     assert DEFAULT_ABBREVS["enrollment"] == "EN"
