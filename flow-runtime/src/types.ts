@@ -103,10 +103,18 @@ export const APPLICATION_ENTITY_TYPE = 'registration_application';
  * `registration_application_id` is included even though the spec's field
  * table omits it: DataCore auto-assigns `"{entity_type}_id"` when absent and
  * `create_application` pre-sets it, so it is engine-owned in practice.
+ *
+ * `school_id` is here for the same reason, one step removed: Papermite's
+ * extraction emits it from the application PDF, but WHICH school is already
+ * implied by the tenant the application belongs to. Asking an applicant to
+ * type it is asking them to restate the URL they arrived on. It is excluded
+ * from every applicant-facing form and rejected on write; the school is
+ * surfaced as read-only context instead (`FlowRendererProps.schoolName`).
  */
 export const ENGINE_OWNED_APPLICATION_FIELDS: readonly string[] = [
   'application_id',
   'registration_application_id',
+  'school_id',
   'school_year',
   'status',
   'family_id',

@@ -111,7 +111,7 @@ def test_complete_item_still_records_its_status_change(client, fake_dc):
 
 
 @pytest.mark.parametrize("field", ["status", "config_version", "application_id",
-                                   "token_version", "draft_data"])
+                                   "token_version", "draft_data", "school_id"])
 def test_engine_owned_field_write_is_rejected_400(client, fake_dc, field):
     created = create(client)
     eid = created["application"]["entity_id"]
@@ -153,3 +153,20 @@ def test_a_student_form_block_does_not_touch_the_application(client, fake_dc):
     row = fake_dc.get_entity("acme", "registration_application", eid)
     assert "first_name" not in row
     assert json.loads(row["draft_data"])["s1"] == {"first_name": "Mia"}
+
+
+def test_school_id_is_never_offered_to_an_applicant(client, fake_dc):
+    """Which school an application belongs to is implied by the tenant, so
+    `school_id` is engine-owned: excluded from the hydrated field list even
+    though Papermite's extraction puts it in the model's custom_fields."""
+    from app.registration import engine
+
+    fake_dc.set_model("acme", "registration_application", {
+        "base_fields": [{"name": "application_id", "type": "str", "required": True}],
+        "custom_fields": [
+            {"name": "school_id", "type": "str", "required": False},
+            {"name": "agreement_signed_by", "type": "str", "required": True},
+        ]})
+    fields = [f["name"] for f in
+              engine.model_form_fields("acme", "registration_application")]
+    assert fields == ["agreement_signed_by"]

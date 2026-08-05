@@ -12,6 +12,17 @@ export interface FormBlockProps {
   showErrors: boolean;
   readOnly: boolean;
   onChange: (name: string, value: unknown) => void;
+  /**
+   * Pre-filled, non-editable facts shown above the inputs — the school and
+   * the school year on an application-model block.
+   *
+   * Deliberately NOT rendered as disabled inputs: a disabled input still
+   * reads as "a thing you were supposed to fill", and these are context the
+   * engine already knows from the tenant and the application. They are
+   * display-only and are never collected, so nothing here reaches
+   * `onChange` or `draft_data`.
+   */
+  context?: { label: string; value: string }[];
 }
 
 function labelOf(name: string): string {
@@ -19,7 +30,7 @@ function labelOf(name: string): string {
 }
 
 export function FormBlock({
-  blockId, fields, values, errors, showErrors, readOnly, onChange,
+  blockId, fields, values, errors, showErrors, readOnly, onChange, context,
 }: FormBlockProps) {
   const t = useFlowT();
   const baseId = useId();
@@ -103,10 +114,28 @@ export function FormBlock({
     }
   };
 
-  if (fields.length === 0) return <p className="fr-empty">{t('noFields')}</p>;
+  const contextRows = (context ?? []).filter((c) => c.value);
+  const contextNode = contextRows.length > 0 ? (
+    <dl className="fr-context">
+      {contextRows.map((c) => (
+        <div key={c.label} className="fr-context-row">
+          <dt>{c.label}</dt>
+          <dd>{c.value}</dd>
+        </div>
+      ))}
+    </dl>
+  ) : null;
+
+  // Context still renders when the model contributes no editable fields —
+  // "here is the school you are applying to" is worth showing on its own,
+  // and `noFields` alone would read as a broken step.
+  if (fields.length === 0) {
+    return contextNode ?? <p className="fr-empty">{t('noFields')}</p>;
+  }
 
   return (
     <div className="fr-form-fields">
+      {contextNode}
       {fields.map((field) => {
         const id = idFor(field.name);
         const err = showErrors ? errors[field.name] : null;

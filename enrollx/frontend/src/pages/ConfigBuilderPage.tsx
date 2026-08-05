@@ -556,7 +556,8 @@ export default function ConfigBuilderPage() {
         <section className="builder-preview" aria-label={t('builder.preview')}>
           <h2>{t('builder.preview')}</h2>
           <FlowRenderer config={previewConfig} mode="preview" application={null} items={[]}
-            values={{}} onSaveDraft={noopSave} onCompleteItem={noopItem}
+            values={{}} schoolName={user?.tenant_name} onSaveDraft={noopSave}
+            onCompleteItem={noopItem}
             onUploadDocument={noopUpload} onCheckout={noopCheckout} onSubmit={noopSubmit} />
         </section>
       </div>

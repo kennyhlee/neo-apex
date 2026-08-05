@@ -3,8 +3,8 @@ import type {
   ApplicationItem, ApplicationSummary, FlowBlock, FlowMode,
   PaymentPlanKind, RegistrationConfigDef, RequiredDoc,
 } from './types';
-import { DONE_ITEM_STATUSES } from './types';
-import { formFields } from './blockConfig';
+import { APPLICATION_ENTITY_TYPE, DONE_ITEM_STATUSES } from './types';
+import { defaultSchoolYear, formFields } from './blockConfig';
 import { validateFlowField } from './validateField';
 import { FlowLocaleContext, flowLocale, useFlowLocale, useFlowT, type Locale } from './i18n';
 import { FormBlock } from './blocks/FormBlock';
@@ -65,6 +65,19 @@ export interface FlowRendererProps {
   onSubmit: () => Promise<void>;
   /** Staff mode only: open the host's offline-payment recorder for the item. */
   onRecordOfflinePayment?: (itemId: string) => void;
+  /**
+   * The school's display name, shown pre-filled and NON-EDITABLE on an
+   * application-model form block alongside the school year.
+   *
+   * Which school an application belongs to is implied by the tenant, so it is
+   * never collected from the applicant — `school_id` is in
+   * `ENGINE_OWNED_APPLICATION_FIELDS` for exactly that reason. This prop is
+   * how the applicant still SEES which school they are applying to on the
+   * form itself. Host-supplied because flow-runtime never fetches: enrollx
+   * reads it from the signed-in user's tenant, familyhub from the public
+   * config bundle's `tenant.name`.
+   */
+  schoolName?: string;
 }
 
 const AUTOSAVE_MS = 1500;
@@ -72,7 +85,7 @@ const AUTOSAVE_MS = 1500;
 function FlowRendererInner({
   config, mode, application, items, values,
   onSaveDraft, onCompleteItem, onUploadDocument, onCheckout, onSubmit,
-  onRecordOfflinePayment,
+  onRecordOfflinePayment, schoolName,
 }: Omit<FlowRendererProps, 'locale'>) {
   const t = useFlowT();
   // Handed to `validateFlowField`, which is pure and so cannot use a hook —
@@ -244,13 +257,25 @@ function FlowRendererInner({
 
   const renderBlock = (block: FlowBlock) => {
     switch (block.type) {
-      case 'form':
+      case 'form': {
+        // Only the application-model block gets the school/year context: on a
+        // student or family block those facts belong to the application, not
+        // to the row being filled in, and repeating them on every step is
+        // noise.
+        const isApplicationBlock =
+          block.config.entity_type === APPLICATION_ENTITY_TYPE;
+        const context = isApplicationBlock ? [
+          { label: t('school'), value: schoolName ?? '' },
+          { label: t('schoolYear'),
+            value: application?.school_year ?? defaultSchoolYear() },
+        ] : undefined;
         return (
           <FormBlock blockId={block.block_id} fields={formFields(block)}
             values={blockValues(block)} errors={formErrors(block)}
-            showErrors={showErrors} readOnly={busy}
+            showErrors={showErrors} readOnly={busy} context={context}
             onChange={(name, value) => setFieldValue(block, name, value)} />
         );
+      }
       case 'documents':
         return (
           <DocumentsBlock block={block} items={itemsFor(block)} mode={mode}

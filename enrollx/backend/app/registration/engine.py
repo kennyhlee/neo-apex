@@ -27,8 +27,13 @@ ADMITTED_STATUSES = {"approved", "enrolled"}
 # lists MUST stay identical. A form-block answer naming one of these is
 # rejected with a 400 (actions._apply_application_fields); the hosts also
 # exclude them when hydrating an application-model form block.
+# `school_id` is engine-owned one step removed: Papermite's extraction emits
+# it from the application PDF, but WHICH school is already implied by the
+# tenant. It is never collected from an applicant — the school is shown as
+# read-only context instead (FlowRendererProps.schoolName).
 ENGINE_OWNED_APPLICATION_FIELDS = frozenset({
-    "application_id", "registration_application_id", "school_year", "status",
+    "application_id", "registration_application_id", "school_id",
+    "school_year", "status",
     "family_id", "student_id", "config_version", "channel_started",
     "applicant_email", "token_version", "draft_data", "submitted_at",
     "decided_at",

@@ -95,3 +95,20 @@
 .fr-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .fr-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .fr-btn--primary { background: var(--accent-ink); border-color: var(--accent-ink); color: var(--text-inverse); }
+
+/* Pre-filled, non-editable context on an application-model form block (the
+   school and school year). A definition list, not disabled inputs: these are
+   facts the engine already knows from the tenant and the application, and a
+   disabled input still reads as "something you were meant to fill in".
+   `grid-column: 1 / -1` because `.fr-form-fields` is an auto-fill grid —
+   without it this lands in a single narrow column. */
+.fr-context {
+  grid-column: 1 / -1; margin: 0; padding: 10px 12px;
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  background: var(--bg-subtle, var(--bg-card));
+  display: grid; gap: 6px;
+}
+.fr-context-row { display: flex; gap: 8px; align-items: baseline; }
+.fr-context-row dt { margin: 0; min-width: 9ch; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); }
+.fr-context-row dd { margin: 0; font-size: 14px; color: var(--text-primary); }

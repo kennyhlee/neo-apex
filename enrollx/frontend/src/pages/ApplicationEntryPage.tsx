@@ -374,6 +374,7 @@ export default function ApplicationEntryPage() {
         application={summary}
         items={rendererItems}
         values={values}
+        schoolName={user?.tenant_name}
         onSaveDraft={handleSaveDraft}
         onCompleteItem={handleCompleteItem}
         onUploadDocument={handleUploadDocument}

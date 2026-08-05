@@ -332,6 +332,7 @@ export default function RegisterPage() {
           config={hub.config}
           mode="parent"
           locale={locale}
+          schoolName={bundle.tenant.name}
           application={toApplicationSummary(hub.application)}
           items={toApplicationItems(hub.items)}
           values={parseDraft(hub.application)}
