@@ -77,9 +77,7 @@
       {"name": "is_emergency", "type": "bool", "required": false},
       {"name": "is_authorized_pickup", "type": "bool", "required": false},
       {"name": "family_id", "type": "str", "required": true},
-      {"name": "emergency_contact", "type": "bool", "required": false},
-      {"name": "authorized_pickup", "type": "bool", "required": false},
-      {"name": "pickup_excluded", "type": "bool", "required": false}
+      {"name": "is_pickup_excluded", "type": "bool", "required": false}
     ],
     "custom_fields": []
   },
