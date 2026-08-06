@@ -3,15 +3,17 @@
 // editor and Task 9's live preview pane, plus a right rail of validation
 // errors. Route: `/definitions/:entityId`.
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useDraftStore } from '../editor/draftStore.ts';
 import StepEditor from '../editor/StepEditor.tsx';
 import MachineEditor from '../editor/MachineEditor.tsx';
 import PreviewPane from '../editor/PreviewPane.tsx';
+import PublishDialog from '../editor/PublishDialog.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
+import type { ChannelAccess } from '../types/designer.ts';
 import './EditorPage.css';
 
 type EditorTab = 'steps' | 'machine' | 'preview';
@@ -19,10 +21,27 @@ type EditorTab = 'steps' | 'machine' | 'preview';
 export default function EditorPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { entityId } = useParams<{ entityId: string }>();
   const tenantId = user?.tenant_id ?? '';
   const store = useDraftStore(tenantId, entityId);
   const [tab, setTab] = useState<EditorTab>('steps');
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
+
+  async function handleOpenPublish() {
+    // Task 10 binding rule: flush any pending autosave before opening the
+    // dialog, so its own on-open validate/lineage fetch reads the
+    // just-persisted draft rather than one still sitting in the debounce
+    // window.
+    setPublishBusy(true);
+    try {
+      await store.flush();
+      setShowPublishDialog(true);
+    } finally {
+      setPublishBusy(false);
+    }
+  }
 
   if (store.loading) {
     return <p className="page-placeholder">{t('common.loading')}</p>;
@@ -90,8 +109,47 @@ export default function EditorPage() {
               {saveLabel}
             </span>
           )}
+          {def.status === 'draft' && (
+            <>
+              <label className="editor-channel-select">
+                {t('editor.channelAccess.label')}
+                <select
+                  value={def.channel_access}
+                  disabled={store.readOnly}
+                  onChange={(e) => store.setChannelAccess(e.target.value as ChannelAccess)}
+                >
+                  <option value="staff_only">{t('definitions.channel.staffOnly')}</option>
+                  <option value="family">{t('definitions.channel.family')}</option>
+                </select>
+              </label>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => void handleOpenPublish()}
+                disabled={store.saving || publishBusy}
+                loading={publishBusy}
+                loadingText={t('editor.publish.preparing')}
+              >
+                {t('editor.publish.button')}
+              </Button>
+            </>
+          )}
         </div>
       </header>
+
+      {def.status === 'draft' && (
+        <PublishDialog
+          open={showPublishDialog}
+          tenantId={tenantId}
+          entityId={def.entity_id}
+          definitionId={def.definition_id}
+          name={def.name}
+          version={def.version}
+          channelAccess={def.channel_access}
+          onClose={() => setShowPublishDialog(false)}
+          onPublished={() => navigate('/')}
+        />
+      )}
 
       {def.status !== 'draft' && (
         <div className="editor-readonly-banner" role="status">

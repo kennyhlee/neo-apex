@@ -50,6 +50,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, getBundle, validateDefinition } from '../api/designer.ts';
 import { updateEntity } from '../api/client.ts';
 import type {
+  ChannelAccess,
   DefinitionDetail,
   DefinitionHealth,
   EntityModelsMap,
@@ -86,6 +87,11 @@ export interface DraftStore {
   steps: WorkflowStepDef[];
   setSteps: (updater: StepsUpdater) => void;
   setMachine: (updater: MachineUpdater) => void;
+  /** Edits `definition.channel_access` — same draft field as everything
+   * else this store owns (autosaved on the same debounce), not a
+   * publish-time-only choice. Task 10 binding rule: lives in the editor
+   * header near the Publish button, not inside PublishDialog. */
+  setChannelAccess: (value: ChannelAccess) => void;
   /** `definition.status !== "draft"` — every mutating control the editor
    * renders should be disabled when this is true (task review fix #6);
    * `setSteps`/`setMachine` also self-guard against it as a backstop. */
@@ -99,6 +105,14 @@ export interface DraftStore {
   savedAt: number | null;
   validation: ValidationState;
   reload: () => Promise<void>;
+  /**
+   * Task 10: cancel any pending debounce and, if the draft is dirty,
+   * persist immediately and await the write — the Publish button calls
+   * this before opening PublishDialog so its own on-open `validateDefinition`
+   * call reads the just-saved row, not a stale one still sitting in the
+   * 800ms autosave window. Resolves immediately if nothing is dirty.
+   */
+  flush: () => Promise<void>;
 }
 
 /** Extracts `{"parse_error": "..."}` from a 422 `ApiError` body
@@ -364,6 +378,15 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     [markDirty],
   );
 
+  const setChannelAccess = useCallback(
+    (value: ChannelAccess) => {
+      if (definitionRef.current && definitionRef.current.status !== 'draft') return;
+      setDefinition((prev) => (prev ? { ...prev, channel_access: value } : prev));
+      markDirty();
+    },
+    [markDirty],
+  );
+
   // `load` is the reusable reload path (retry button, `reload()`). The
   // mount/entityId-change effect below deliberately does NOT call it
   // directly — same reasoning as DefinitionsPage.tsx's own `load` doc
@@ -475,6 +498,31 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, entityId]);
 
+  // Task 10: Publish button's pre-open flush. Cancels the debounce timer
+  // (so it can't ALSO fire and race this write) and, only if there's
+  // actually something unsaved, runs the save immediately and awaits it —
+  // `runAutosave` re-validates its own dirty/status/in-flight guards, so
+  // this is just "do it now instead of after 800ms" rather than a second
+  // code path. The wait-out-any-in-flight-save loop below covers the
+  // narrow race where a debounce-triggered save started microtasks before
+  // this fires (savingRef true, but not from THIS call) — without it,
+  // calling `runAutosave` immediately would just re-queue behind that save
+  // (`queuedForEntityRef`) and resolve before the queued retry actually
+  // ran, handing the Publish dialog a promise that resolved before the
+  // draft was actually fully flushed.
+  const flush = useCallback(async () => {
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = null;
+    }
+    while (savingRef.current) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (dirtyRef.current) {
+      await runAutosave();
+    }
+  }, [runAutosave]);
+
   const readOnly = definition ? definition.status !== 'draft' : false;
 
   return {
@@ -487,6 +535,7 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     steps,
     setSteps,
     setMachine,
+    setChannelAccess,
     readOnly,
     dirty,
     saving,
@@ -494,5 +543,6 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     savedAt,
     validation,
     reload: load,
+    flush,
   };
 }

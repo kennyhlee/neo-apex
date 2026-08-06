@@ -1054,10 +1054,83 @@
   font-size: var(--text-base);
 }
 
+/* --- PublishDialog (Task 10) -------------------------------------------- */
+
+.editor-channel-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.editor-channel-select select {
+  height: var(--control-h);
+  padding: 0 var(--control-px);
+  border: 1px solid var(--line);
+  border-radius: var(--control-r);
+  font-size: var(--text-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.publish-dialog-body,
+.publish-dialog-success {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.publish-dialog-version {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.publish-dialog-status {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.publish-dialog-status-danger {
+  color: var(--danger);
+  font-weight: var(--weight-semibold);
+}
+
+.publish-dialog-family {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.publish-dialog-family label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+}
+
+.publish-dialog-family-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.publish-dialog-family-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--control-px);
+  border: 1px solid var(--line);
+  border-radius: var(--control-r);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono, monospace);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
+
 @media (max-width: 768px) {
   .step-card-header { flex-wrap: wrap; }
   .step-title-input { order: 3; flex-basis: 100%; }
   .machine-state-row-fields { flex-direction: column; align-items: stretch; }
   .transition-group-header { flex-wrap: wrap; }
   .preview-pane-toolbar { align-items: stretch; }
+  .publish-dialog-family-row { flex-direction: column; align-items: stretch; }
 }
