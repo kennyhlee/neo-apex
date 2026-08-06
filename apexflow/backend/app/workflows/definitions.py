@@ -137,12 +137,39 @@ def publish_definition(tenant_id: str, entity_id: str, token: str | None = None)
 
     base = entity_base_data(row)
     base["status"] = "published"
+    # Carry the lineage's current lineage_status forward across a publish:
+    # without this, publishing a new version of a deprecated/retired lineage
+    # silently reverts it to "active" (the fresh draft row's own default),
+    # undoing a prior deprecate/retire. Fall back to "active" only when
+    # there is no prior published row at all (first publish of a lineage).
+    base["lineage_status"] = (prior_published or {}).get("lineage_status", "active")
     return dc.dc_update(tenant_id, "workflow_definition", entity_id, base, token)
 
 
-def _set_lineage_status(tenant_id: str, entity_id: str, new_lineage_status: str,
-                         token: str | None = None) -> dict:
+def _require_published_row(tenant_id: str, entity_id: str, token: str | None, action: str) -> dict:
+    """Load a workflow_definition row and require `status == "published"`.
+
+    deprecate/reactivate/retire all operate on "the published row" of a
+    lineage (spec §3 "Definition lifecycle": lineage_status is read from the
+    published row) — calling one of these against a draft or superseded row
+    doesn't have a coherent meaning (there is no "the" lineage state to flip
+    on a row that was never, or is no longer, the live version), so it 409s
+    with an actionable message instead of silently mutating a row nothing
+    reads lineage state from.
+    """
     row = _require_definition_row(tenant_id, entity_id, token)
+    if row.get("status") != "published":
+        raise HTTPException(
+            409,
+            f"cannot {action} workflow_definition {entity_id!r}: status is "
+            f"{row.get('status')!r}, not 'published'",
+        )
+    return row
+
+
+def _set_lineage_status(tenant_id: str, entity_id: str, new_lineage_status: str,
+                         action: str, token: str | None = None) -> dict:
+    row = _require_published_row(tenant_id, entity_id, token, action)
     base = entity_base_data(row)
     base["lineage_status"] = new_lineage_status
     return dc.dc_update(tenant_id, "workflow_definition", entity_id, base, token)
@@ -151,12 +178,12 @@ def _set_lineage_status(tenant_id: str, entity_id: str, new_lineage_status: str,
 def deprecate_definition(tenant_id: str, entity_id: str, token: str | None = None) -> dict:
     """lineage_status -> deprecated. Reversible (spec §3): stops new
     instances, in-flight instances and their magic links continue."""
-    return _set_lineage_status(tenant_id, entity_id, "deprecated", token)
+    return _set_lineage_status(tenant_id, entity_id, "deprecated", "deprecate", token)
 
 
 def reactivate_definition(tenant_id: str, entity_id: str, token: str | None = None) -> dict:
     """lineage_status -> active. Inverse of deprecate."""
-    return _set_lineage_status(tenant_id, entity_id, "active", token)
+    return _set_lineage_status(tenant_id, entity_id, "active", "reactivate", token)
 
 
 def count_open_instances(tenant_id: str, lineage_definition_id: str,
@@ -183,7 +210,7 @@ def retire_definition(tenant_id: str, entity_id: str, force_cancel: bool = False
     task — Task 8 owns `cancel_instance`/bulk-cancel and wires this branch
     for real. # ADJUST: Task 8
     """
-    row = _require_definition_row(tenant_id, entity_id, token)
+    row = _require_published_row(tenant_id, entity_id, token, "retire")
     lineage_id = row.get("definition_id")
     open_count = count_open_instances(tenant_id, lineage_id, token)
     if open_count > 0:

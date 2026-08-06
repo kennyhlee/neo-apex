@@ -205,6 +205,51 @@ def test_publish_cross_tenant_row_404s(client, fake_dc):
     assert resp.status_code == 404
 
 
+def test_republish_already_published_row_is_idempotent(client, fake_dc):
+    """Re-publishing the row that is ALREADY the published version of its
+    lineage must not supersede itself, and must leave exactly one published
+    row behind (coordinator review finding)."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-lineage-idem", status="published")
+
+    resp = act(client, eid, "publish")
+    assert resp.status_code == 200
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["status"] == "published"
+
+    published = [
+        r for r in fake_dc.find("workflow_definition", definition_id="wd-lineage-idem")
+        if r["status"] == "published"
+    ]
+    assert len(published) == 1
+    assert published[0]["entity_id"] == eid
+
+
+def test_publish_new_version_preserves_deprecated_lineage_status(client, fake_dc):
+    """Coordinator review finding #1: deprecate(v1) -> publish(v2) must NOT
+    silently revert the lineage to active. lineage_status is read from the
+    published row (spec §3), so publish must carry it forward from the row
+    it supersedes rather than defaulting the new row to "active"."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    v1_eid = _seed_definition(fake_dc, definition_id="wd-lineage-deprecate-then-publish",
+                              version=1, status="published")
+    assert act(client, v1_eid, "deprecate").status_code == 200
+
+    v2_eid = _seed_definition(fake_dc, definition_id="wd-lineage-deprecate-then-publish",
+                              version=2, status="draft")
+    resp = act(client, v2_eid, "publish")
+    assert resp.status_code == 200
+    assert resp.json()["base_data"]["lineage_status"] == "deprecated"
+
+    from app.workflows.definitions import get_published_definition
+    published = get_published_definition(TENANT, "wd-lineage-deprecate-then-publish")
+    assert published["lineage_status"] == "deprecated"
+
+    v1_row = fake_dc.get_entity(TENANT, "workflow_definition", v1_eid)
+    assert v1_row["status"] == "superseded"
+
+
 # --- deprecate / reactivate ------------------------------------------------
 
 
@@ -221,6 +266,29 @@ def test_deprecate_then_reactivate_lineage_status(client, fake_dc):
     assert resp.status_code == 200
     row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
     assert row["lineage_status"] == "active"
+
+
+def test_deprecate_against_draft_row_returns_409(client, fake_dc):
+    """Coordinator review finding #2: deprecate/reactivate/retire must only
+    act on the published row of a lineage."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-lineage-draft-guard", status="draft")
+
+    resp = act(client, eid, "deprecate")
+    assert resp.status_code == 409
+    assert "published" in resp.json()["detail"].lower()
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["lineage_status"] == "active"  # untouched
+
+
+def test_reactivate_against_superseded_row_returns_409(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-lineage-superseded-guard",
+                           status="superseded")
+
+    resp = act(client, eid, "reactivate")
+    assert resp.status_code == 409
 
 
 # --- retire ------------------------------------------------------------
@@ -415,3 +483,28 @@ def test_model_impact_field_filter_narrows_to_matching_field(client, fake_dc):
     refs = resp.json()["references"]
     assert len(refs) == 1
     assert refs[0]["definition_id"] == "wd-impact-5"
+
+
+def test_model_impact_is_tenant_scoped(client, fake_dc):
+    """A published definition in another tenant referencing the same
+    entity_type must never leak into this tenant's model-impact scan."""
+    _seed_definition(
+        fake_dc, definition_id="wd-impact-6", status="published",
+        machine=_model_impact_machine(), steps=_model_impact_steps(),
+    )
+    other_base = {
+        "definition_id": "wd-impact-other-tenant",
+        "name": "Other tenant",
+        "version": 1,
+        "status": "published",
+        "lineage_status": "active",
+        "channel_access": "staff_only",
+        "machine": json.dumps(_model_impact_machine()),
+        "steps": json.dumps(_model_impact_steps()),
+    }
+    fake_dc.dc_create("globex", "workflow_definition", other_base)
+
+    resp = client.get(f"/api/workflows/{TENANT}/model-impact?entity_type=student")
+    refs = resp.json()["references"]
+    assert refs  # this tenant's own reference is still present
+    assert all(r["definition_id"] == "wd-impact-6" for r in refs)
