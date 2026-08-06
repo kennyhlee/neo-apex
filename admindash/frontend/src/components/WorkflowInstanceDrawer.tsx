@@ -15,6 +15,7 @@ import {
   actionButtonsFor,
   itemActionVisibility,
   parseMachineStates,
+  settledSection,
   type InstanceRow,
 } from '../utils/workflowData.ts';
 import Modal from './ui/Modal.tsx';
@@ -49,6 +50,22 @@ interface WorkflowActivityRow {
 }
 
 const CANCEL_ACTION = 'cancel_instance';
+
+/** Per-section fetch-failure flags, keyed the same as the four parallel
+ * `refetch` calls. Fix round 1, live-browser-gate finding #2: one section's
+ * query rejecting (originally `activitySql`'s DuckDB reserved-keyword 400,
+ * but the same gap would let any future per-column Binder Error do the
+ * same) must not blank the sections whose OWN fetch succeeded. */
+interface SectionErrors {
+  items: boolean;
+  documents: boolean;
+  activity: boolean;
+  allowed: boolean;
+}
+
+const NO_SECTION_ERRORS: SectionErrors = {
+  items: false, documents: false, activity: false, allowed: false,
+};
 
 /** Same "raw string if unparseable" fallback as `WorkflowPipelinePage`'s own
  * `formatOpenedAt` — kept as a local copy since that one isn't exported. */
@@ -95,23 +112,45 @@ export default function WorkflowInstanceDrawer(
   const [documents, setDocuments] = useState<WorkflowDocumentRow[]>([]);
   const [activity, setActivity] = useState<WorkflowActivityRow[]>([]);
   const [allowed, setAllowed] = useState<string[]>([]);
+  const [sectionErrors, setSectionErrors] = useState<SectionErrors>(NO_SECTION_ERRORS);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const instanceEntityId = instance.entity_id;
 
+  // `Promise.allSettled` (not `Promise.all`): each of the four sections is
+  // set from its OWN result via `settledSection`, so one query rejecting
+  // (e.g. a Binder/Parser Error DataCore 400s) never prevents the other
+  // three `setState` calls from running with their real data. A failed
+  // section renders its own inline retry note instead of the whole drawer
+  // going blank.
   const refetch = useCallback(async () => {
-    const [itemsRes, docsRes, actRes, allowedRes] = await Promise.all([
-      postQuery(tenant, 'entities', itemsSql(instanceEntityId)),
-      postQuery(tenant, 'entities', documentsSql(instanceEntityId)),
-      postQuery(tenant, 'entities', activitySql(instanceEntityId)),
-      getAllowedActions(tenant, instanceEntityId),
+    const [itemsRes, docsRes, actRes, allowedRes] = await Promise.allSettled([
+      postQuery(tenant, 'entities', itemsSql(instanceEntityId))
+        .then((r) => r.data as unknown as WorkflowItemRow[]),
+      postQuery(tenant, 'entities', documentsSql(instanceEntityId))
+        .then((r) => r.data as unknown as WorkflowDocumentRow[]),
+      postQuery(tenant, 'entities', activitySql(instanceEntityId))
+        .then((r) => r.data as unknown as WorkflowActivityRow[]),
+      getAllowedActions(tenant, instanceEntityId).then((r) => r.allowed),
     ]);
-    setItems(itemsRes.data as unknown as WorkflowItemRow[]);
-    setDocuments(docsRes.data as unknown as WorkflowDocumentRow[]);
-    setActivity(actRes.data as unknown as WorkflowActivityRow[]);
-    setAllowed(allowedRes.allowed);
+
+    const itemsSec = settledSection(itemsRes, [] as WorkflowItemRow[]);
+    const docsSec = settledSection(docsRes, [] as WorkflowDocumentRow[]);
+    const actSec = settledSection(actRes, [] as WorkflowActivityRow[]);
+    const allowedSec = settledSection(allowedRes, [] as string[]);
+
+    setItems(itemsSec.data);
+    setDocuments(docsSec.data);
+    setActivity(actSec.data);
+    setAllowed(allowedSec.data);
+    setSectionErrors({
+      items: itemsSec.failed,
+      documents: docsSec.failed,
+      activity: actSec.failed,
+      allowed: allowedSec.failed,
+    });
   }, [tenant, instanceEntityId]);
 
   useEffect(() => {
@@ -224,6 +263,13 @@ export default function WorkflowInstanceDrawer(
           <h3>{t('workflows.drawer.items')}</h3>
           {loading ? (
             <p>{t('common.loading')}</p>
+          ) : sectionErrors.items ? (
+            <p className="workflow-section-error" role="alert">
+              {t('workflows.drawer.sectionLoadError')}{' '}
+              <Button size="sm" variant="link" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            </p>
           ) : items.length === 0 ? (
             <p className="workflow-drawer-empty">{t('workflows.drawer.noItems')}</p>
           ) : (
@@ -276,7 +322,16 @@ export default function WorkflowInstanceDrawer(
           )}
 
           <h3>{t('workflows.drawer.documents')}</h3>
-          {documents.length === 0 ? (
+          {loading ? (
+            <p>{t('common.loading')}</p>
+          ) : sectionErrors.documents ? (
+            <p className="workflow-section-error" role="alert">
+              {t('workflows.drawer.sectionLoadError')}{' '}
+              <Button size="sm" variant="link" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            </p>
+          ) : documents.length === 0 ? (
             <p className="workflow-drawer-empty">{t('workflows.drawer.noDocuments')}</p>
           ) : (
             <ul className="workflow-document-list">
@@ -293,7 +348,16 @@ export default function WorkflowInstanceDrawer(
           )}
 
           <h3>{t('leads.activityTimeline')}</h3>
-          {activity.length === 0 ? (
+          {loading ? (
+            <p>{t('common.loading')}</p>
+          ) : sectionErrors.activity ? (
+            <p className="workflow-section-error" role="alert">
+              {t('workflows.drawer.sectionLoadError')}{' '}
+              <Button size="sm" variant="link" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            </p>
+          ) : activity.length === 0 ? (
             <p className="workflow-drawer-empty">{t('workflows.drawer.noActivity')}</p>
           ) : (
             <ul className="activity-list">
@@ -313,8 +377,20 @@ export default function WorkflowInstanceDrawer(
 
           <h3>{t('workflows.drawer.actions')}</h3>
           <div className="workflow-actions-bar">
-            {!loading && transitionActions.length === 0 && !canCancel && (
-              <p className="workflow-drawer-empty">{t('workflows.drawer.noActions')}</p>
+            {loading ? (
+              <p>{t('common.loading')}</p>
+            ) : sectionErrors.allowed ? (
+              <p className="workflow-section-error" role="alert">
+                {t('workflows.drawer.sectionLoadError')}{' '}
+                <Button size="sm" variant="link" onClick={() => void refetch()}>
+                  {t('common.retry')}
+                </Button>
+              </p>
+            ) : (
+              transitionActions.length === 0 &&
+              !canCancel && (
+                <p className="workflow-drawer-empty">{t('workflows.drawer.noActions')}</p>
+              )
             )}
             {transitionActions.map((action) => (
               <Button

@@ -166,11 +166,20 @@ export function documentsSql(instanceEntityId: string): string {
  * drawer's activity feed reads top-to-bottom as a timeline, same convention
  * as `LeadDetailDrawer`'s activity list (which sorts client-side; this one
  * sorts in SQL since `at` is always present on every activity row).
+ *
+ * `at` is quoted as `"at"` in the `ORDER BY` — it's a DuckDB RESERVED
+ * keyword (used in `AT TIME ZONE`/temporal syntax), so the bare identifier
+ * 400s DataCore's `/api/query` with `Parser Error: syntax error at or near
+ * "FROM"` (fix round 1, live-browser-gate finding: reproduced with curl
+ * against live DataCore). `entity_type`/`_status`/`instance_id` and the
+ * other builders' column names (`definition_id`, `version`,
+ * `application_id`, `_created_at`) are not DuckDB keywords and need no
+ * quoting.
  */
 export function activitySql(instanceEntityId: string): string {
   return (
     `SELECT * FROM data WHERE entity_type = 'workflow_activity' AND _status = 'active' ` +
-    `AND instance_id = '${escapeSqlLiteral(instanceEntityId)}' ORDER BY at ASC`
+    `AND instance_id = '${escapeSqlLiteral(instanceEntityId)}' ORDER BY "at" ASC`
   );
 }
 
@@ -211,6 +220,35 @@ export function itemActionVisibility(
     reject: true,
     waive: status !== 'verified',
   };
+}
+
+export interface SettledSection<T> {
+  data: T;
+  failed: boolean;
+}
+
+/**
+ * Maps one `Promise.allSettled` result to a section's render state: the
+ * resolved value on success, or `fallback` + `failed: true` on rejection.
+ * Generic so the drawer's four parallel fetches (items/documents/activity/
+ * allowed-actions) can each be mapped through the same function instead of
+ * four inline try/catches.
+ *
+ * Fix round 1, live-browser-gate finding #2: the drawer originally awaited
+ * all four fetches via `Promise.all`, so ONE rejecting query (the `at`
+ * reserved-keyword 400 above, but any future per-column Binder Error on an
+ * empty table would do the same) threw before any `setState` call ran —
+ * every section rendered its "empty" copy even though items/documents/
+ * allowed-actions had already succeeded. Routing each fetch through this
+ * helper after a `Promise.allSettled` means a section's own state is set
+ * from its own result regardless of what happened to the other three.
+ */
+export function settledSection<T>(
+  result: PromiseSettledResult<T>,
+  fallback: T,
+): SettledSection<T> {
+  if (result.status === 'fulfilled') return { data: result.value, failed: false };
+  return { data: fallback, failed: true };
 }
 
 /**

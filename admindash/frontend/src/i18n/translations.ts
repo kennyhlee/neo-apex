@@ -327,6 +327,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'workflows.drawer.confirmCancelDismiss': 'Keep it',
     'workflows.drawer.confirmCancelAction': 'Cancel instance',
     'workflows.drawer.confirmCancelPrompt': 'This closes the instance permanently. Applicants and staff will no longer be able to act on it. This cannot be undone.',
+    'workflows.drawer.sectionLoadError': "Couldn't load this section.",
 
     // Bulk Add Students
     'bulkAdd.entryButton': 'Bulk add',
@@ -837,6 +838,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'workflows.drawer.confirmCancelDismiss': '\u4fdd\u7559',
     'workflows.drawer.confirmCancelAction': '\u53d6\u6d88\u5b9e\u4f8b',
     'workflows.drawer.confirmCancelPrompt': '\u6b64\u64cd\u4f5c\u5c06\u6c38\u4e45\u5173\u95ed\u8be5\u5b9e\u4f8b\uff0c\u7533\u8bf7\u4eba\u548c\u5458\u5de5\u90fd\u5c06\u65e0\u6cd5\u518d\u5bf9\u5176\u8fdb\u884c\u64cd\u4f5c\u3002\u6b64\u64cd\u4f5c\u65e0\u6cd5\u64a4\u9500\u3002',
+    'workflows.drawer.sectionLoadError': '\u65e0\u6cd5\u52a0\u8f7d\u6b64\u90e8\u5206\u3002',
 
     // Bulk Add Students
     'bulkAdd.entryButton': '\u6279\u91cf\u6dfb\u52a0',

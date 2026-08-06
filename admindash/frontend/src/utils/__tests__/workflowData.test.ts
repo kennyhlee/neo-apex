@@ -10,6 +10,7 @@ import {
   activitySql,
   actionButtonsFor,
   itemActionVisibility,
+  settledSection,
   usableModels,
   asBool,
   toItemView,
@@ -207,15 +208,15 @@ describe('documentsSql', () => {
 });
 
 describe('activitySql', () => {
-  it('builds the exact SELECT ordered by at ascending', () => {
+  it('builds the exact SELECT ordered by "at" ascending, with at quoted (DuckDB reserved keyword)', () => {
     expect(activitySql('inst-1')).toBe(
-      "SELECT * FROM data WHERE entity_type = 'workflow_activity' AND _status = 'active' AND instance_id = 'inst-1' ORDER BY at ASC",
+      "SELECT * FROM data WHERE entity_type = 'workflow_activity' AND _status = 'active' AND instance_id = 'inst-1' ORDER BY \"at\" ASC",
     );
   });
 
   it('escapes a single quote in the instance id', () => {
     expect(activitySql("o'brien")).toBe(
-      "SELECT * FROM data WHERE entity_type = 'workflow_activity' AND _status = 'active' AND instance_id = 'o''brien' ORDER BY at ASC",
+      "SELECT * FROM data WHERE entity_type = 'workflow_activity' AND _status = 'active' AND instance_id = 'o''brien' ORDER BY \"at\" ASC",
     );
   });
 });
@@ -255,6 +256,28 @@ describe('itemActionVisibility', () => {
     for (const s of ['not_started', 'in_progress', 'submitted', 'verified', 'rejected', 'waived']) {
       expect(itemActionVisibility(s).reject).toBe(true);
     }
+  });
+});
+
+describe('settledSection', () => {
+  it('unwraps a fulfilled result with failed: false', () => {
+    const result: PromiseSettledResult<string[]> = { status: 'fulfilled', value: ['a', 'b'] };
+    expect(settledSection(result, [])).toEqual({ data: ['a', 'b'], failed: false });
+  });
+
+  it('falls back to the supplied value with failed: true on rejection', () => {
+    const result: PromiseSettledResult<string[]> = {
+      status: 'rejected',
+      reason: new Error('boom'),
+    };
+    expect(settledSection(result, ['fallback'])).toEqual({ data: ['fallback'], failed: true });
+  });
+
+  it('an empty-array fallback stays independent per call (no shared-reference surprise)', () => {
+    const rejected: PromiseSettledResult<string[]> = { status: 'rejected', reason: 'x' };
+    const a = settledSection(rejected, []);
+    const b = settledSection(rejected, []);
+    expect(a.data).not.toBe(b.data);
   });
 });
 
