@@ -51,7 +51,11 @@ entity_id, never a business id). `uploaded_by` is DERIVED server-side from
 the verified token as `"family:{instance_entity_id}"` -- never accepted from
 a client body (roadmap security rule, verbatim) -- `TokenCreateDocumentRequest`
 below has no `uploaded_by` field, so pydantic's default `extra="ignore"`
-drops a client-supplied one before the handler ever sees the body.
+drops a client-supplied one before the handler ever sees the body. `sensitive`
+(Plan 3 Task 4) is the same story: `TokenCreateDocumentRequest` no longer
+carries it either -- `create_document_by_token` derives it from the pinned
+definition's `documents`-step `config.docs` entry matching the target item
+(`_derived_sensitive` below), never from the client.
 
 Error-relay convention for the DataCore blob hops on THIS (family/token)
 surface: masked to a fixed 502 on any non-2xx, never the raw DataCore status
@@ -111,12 +115,16 @@ class RequestLinkRequest(BaseModel):
 class TokenCreateDocumentRequest(BaseModel):
     # SECURITY: no `uploaded_by` field here, deliberately (see module
     # docstring) -- pydantic's default extra="ignore" drops a client-supplied
-    # one before this model is ever constructed.
+    # one before this model is ever constructed. Same reasoning now applies
+    # to `sensitive` (Plan 3 Task 4): it is no longer accepted from the
+    # client at all -- `_derived_sensitive` below computes it server-side
+    # from the pinned definition, so a client-supplied `sensitive` in the
+    # body is silently dropped by pydantic's default extra="ignore" rather
+    # than trusted.
     item_id: str | None = None
     filename: str
     content_type: str
     size: int
-    sensitive: bool = False
 
 
 # --- token resolution --------------------------------------------------------
@@ -272,10 +280,29 @@ def _capacity_summary(tenant_id: str, lineage_definition_id: str, machine_def) -
 
 @router.get("/internal/workflows/{tenant_id}/{definition_id}/config")
 def workflow_config(tenant_id: str, definition_id: str):
+    """The internal config bundle familyhub's parent runtime renders from
+    directly (Plan 3 Task 4). `_require_family_channel_definition` still
+    404s (never 403s) for missing/staff-only lineages -- but a deprecated or
+    retired lineage's PUBLISHED row still passes that check (it only gates
+    on `channel_access`, never `lineage_status`) and its bundle is still
+    returned here: the family runtime needs `lineage_status` precisely so it
+    can render the friendly closed-lineage page instead of erroring, and
+    `engine.create_instance` remains the actual 409 gate against starting a
+    NEW instance on a non-active lineage -- this read route was never that
+    gate.
+
+    `"models"` carries every entity model the published steps reference
+    (`defs.referenced_entity_models`/`defs.fetch_models`, same recipe
+    `designer.py::get_bundle`/`publish_definition` already use) so the
+    family runtime can render steps without a second round trip for model
+    shape. No staff JWT exists on this token-scoped surface, so `token` is
+    always `None` here -- unlike the staff-side callers of the same
+    helpers."""
     row = _require_family_channel_definition(tenant_id, definition_id)
 
     machine_def, steps = defs.parse_machine_steps(row)
     tenant_row = dc.get_entity(tenant_id, "tenant", tenant_id)
+    models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), None)
 
     return {
         "definition": {
@@ -285,6 +312,8 @@ def workflow_config(tenant_id: str, definition_id: str):
             "machine": machine_def.model_dump(by_alias=True),
             "steps": [s.model_dump(by_alias=True) for s in steps],
         },
+        "models": models,
+        "lineage_status": row.get("lineage_status", "active"),
         "tenant": {"tenant_id": tenant_id, "name": (tenant_row or {}).get("name", tenant_id)},
         "capacity": _capacity_summary(tenant_id, definition_id, machine_def),
     }
@@ -386,12 +415,47 @@ def _blob_request(method: str, path: str, json_body: dict | None = None) -> http
         raise HTTPException(502, "DataCore is unreachable")
 
 
+def _derived_sensitive(ctx, item_id: str | None) -> bool:
+    """Server-derived `sensitive` flag for a token document upload (Plan 3
+    Task 4) -- the pinned definition decides this, never the client.
+
+    Resolves `item_id` (a `workflow_item` entity_id, same id shape
+    `action_by_token`'s own `item_id` params use) to its `workflow_item`
+    row's `step_id`, then to that step in `ctx.definition["steps"]` (the
+    PINNED steps -- `build_eval_context` already loads these against the
+    instance's pinned version, same as every other route in this module),
+    then to the `config.docs` entry whose `name` equals the item's `title`
+    (`engine.py::_derive_item_specs` stamps `title = doc["name"]` at
+    creation, so this is an exact match, not a fuzzy one). Returns `False`
+    -- never raises -- when `item_id` is absent/`None` (a free-standing
+    upload with no item, e.g. a staff-side ad hoc attachment) or doesn't
+    resolve to a documents-kind item with a matching `docs` entry; this
+    mirrors `TokenCreateDocumentRequest`'s old client-supplied default."""
+    if not item_id:
+        return False
+    item = next((i for i in ctx.items if i.get("entity_id") == item_id), None)
+    if item is None:
+        return False
+    step = next((s for s in ctx.definition["steps"] if s.step_id == item.get("step_id")), None)
+    if step is None or step.type != "documents":
+        return False
+    title = item.get("title")
+    for doc in step.config.get("docs", []) or []:
+        if doc.get("name") == title:
+            return bool(doc.get("sensitive", False))
+    return False
+
+
 @router.post("/internal/instance-by-token/{token}/documents", status_code=201)
 def create_document_by_token(token: str, body: TokenCreateDocumentRequest):
     """Presign an upload slot for this token's instance. `uploaded_by` is
     DERIVED from the verified token (`family:{instance_entity_id}`) -- never
-    read from the client body, which has no such field to read."""
+    read from the client body, which has no such field to read. `sensitive`
+    is likewise DERIVED (Plan 3 Task 4) from the pinned definition via
+    `_derived_sensitive`, not accepted from the client at all -- see
+    `TokenCreateDocumentRequest`'s docstring."""
     tenant_id, instance_row = resolve_token(token)
+    ctx = machine.build_eval_context(tenant_id, instance_row, actor=_family_actor(instance_row))
     eid = instance_row["entity_id"]
     resp = _blob_request("POST", f"/api/documents/{tenant_id}", {
         "application_id": eid,  # DataCore's own fixed field name; see module docstring
@@ -399,7 +463,7 @@ def create_document_by_token(token: str, body: TokenCreateDocumentRequest):
         "filename": body.filename,
         "content_type": body.content_type,
         "size": body.size,
-        "sensitive": body.sensitive,
+        "sensitive": _derived_sensitive(ctx, body.item_id),
         "uploaded_by": _family_actor(instance_row),
     })
     if resp.status_code not in (200, 201):
