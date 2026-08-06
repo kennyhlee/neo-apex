@@ -4,9 +4,9 @@ A guardrail over the shared QueryEngine for untrusted (e.g. LLM-authored) SQL.
 Validates the SQL is a single read statement, caps rows, and runs it through the
 existing engine with external access disabled. Does NOT reimplement execution.
 
-The SQL shape guard below is the SOURCE OF TRUTH for the copies in
-admindash/backend/app/tenancy.py and enrollx/backend/app/tenancy.py. It is
-defense in depth, not the authoritative control: the authoritative control is
+The SQL shape guard below is the SOURCE OF TRUTH for the copy in
+admindash/backend/app/tenancy.py. It is defense in depth, not the
+authoritative control: the authoritative control is
 `QueryEngine.query(..., external=True)`, which sets DuckDB's
 `enable_external_access=false` so filesystem/network access fails at the engine
 regardless of what the guard did or did not spot.
@@ -29,10 +29,9 @@ READONLY_MAX_ROWS = 200
 
 # ── BEGIN shared SQL shape guard ──────────────────────────────────────────
 # SOURCE OF TRUTH: datacore/src/datacore/api/readonly_query.py. This block is
-# copied verbatim into admindash/backend/app/tenancy.py and
-# enrollx/backend/app/tenancy.py — those services must not take a package
-# dependency on datacore. Keep the three copies byte-identical; the copies
-# assert it (see each service's guard tests).
+# copied verbatim into admindash/backend/app/tenancy.py — that service must
+# not take a package dependency on datacore. Keep the two copies
+# byte-identical; the copies assert it (see each service's guard tests).
 
 # DuckDB filesystem/network *function* calls, matched only as `name(` so a
 # column named e.g. read_receipts is not rejected. Families, not literal

@@ -17,7 +17,7 @@ export type { ApplicationStatus, ItemStatus } from '@neoapex/flow-runtime';
  * DataCore's own `entity_id`, and a business id the engine mints
  * separately (`application_id` on applications, `item_id` on items). The
  * backend keys every write on `entity_id`. Whenever you build a payload
- * for `completeItem`, `uploadDocumentFile`, or `startCheckout`, the value
+ * for `completeItem` or `uploadDocumentFile`, the value
  * you send MUST be `entityData(row).entity_id` (or the row's own top-level
  * `entity_id`) -- never `entityData(row).item_id`. See the field-by-field
  * note on each function below.
@@ -51,7 +51,7 @@ export function entityData(e: EntityRecord | undefined | null): Record<string, u
  * `entityData(row).entity_id` is `undefined` there.
  *
  * Both shapes genuinely occur on the register page: `fetchApplication`
- * relays FLATTENED rows, while `startRegistration` hands back enrollx's
+ * relays FLATTENED rows, while `startRegistration` hands back apexflow's
  * `dc_create` ENVELOPES and `RegisterPage` mounts those directly to save a
  * round trip. Reading the id through `entityData` therefore worked on the
  * resume path and yielded `''` on the start path — so a parent who had just
@@ -68,10 +68,9 @@ export function entityId(e: EntityRecord | undefined | null): string {
 }
 
 /**
- * The school this registration belongs to, as enrollx names it. A curated
- * two-field summary built server-side (`engine.tenant_label`), NOT a
- * flattened DataCore row -- so unlike an `EntityRecord` these need no
- * stringly-typed coercion.
+ * The school this registration belongs to. A curated two-field summary
+ * built server-side, NOT a flattened DataCore row -- so unlike an
+ * `EntityRecord` these need no stringly-typed coercion.
  */
 export interface TenantSummary {
   tenant_id: string;
@@ -79,8 +78,8 @@ export interface TenantSummary {
 }
 
 /**
- * Computed capacity snapshot (`enrollx/backend/app/registration/engine.py`
- * `capacity_state`), school-wide for one school year. There is NO `is_full`
+ * Computed capacity snapshot (`apexflow/backend/app/api/internal.py`
+ * `_capacity_summary`), school-wide for one school year. There is NO `is_full`
  * anywhere else -- fullness lives ONLY here. This is a freshly-built Python
  * dict, NOT a DataCore row, so FastAPI serializes its `int`/`bool` values as
  * real JSON types and these fields need NO coercion.
@@ -97,7 +96,9 @@ export interface CapacityState {
 export interface RegistrationBundle {
   /** Normalized: `blocks` parsed from its wire JSON-string into `FlowBlock[]`,
    *  `version` coerced to a number. Ready to pass straight to `FlowRenderer`.
-   *  Entity-sourced form blocks arrive already model-hydrated by enrollx. */
+   *  `blocks` currently ships empty (no steps/sections -> blocks compiler
+   *  yet -- see `registration.py`'s module docstring); entity-sourced form
+   *  blocks were model-hydrated server-side by enrollx before Task 12. */
   config: RegistrationConfigDef;
   tenant: TenantSummary;
   capacity: CapacityState;
@@ -109,7 +110,7 @@ export interface StartResponse {
   /** The magic-link token -- the parent's only credential from here on. */
   token: string;
   /** Absolute mailto-style link (`{familyhub_url}/application/{token}`) --
-   *  what enrollx put in the confirmation email. Display-only; do not use
+   *  what apexflow puts in the confirmation email. Display-only; do not use
    *  this for in-app navigation, use `hub_url` instead. */
   link: string;
   /** Relative in-app route (`/application/{token}`) added by familyhub's
@@ -134,7 +135,7 @@ export interface DocumentSlot {
  * Result of decoding (NOT verifying) a magic-link token's two plaintext
  * segments. This is a convenience for reading which tenant/application a
  * token names before any request completes -- it carries no proof of
- * authenticity. Only enrollx's `resolve_token`/`verify_link_token` (which
+ * authenticity. Only apexflow's `resolve_token`/`verify_link_token` (which
  * familyhub never calls -- it holds no `link_secret`) actually authenticate
  * a token; treat a decoded value as displayable, never as an access check.
  */
@@ -143,7 +144,7 @@ export interface DecodedToken {
   /**
    * IDENTIFIER TRAP, in the token itself: this segment is the
    * application's DataCore `entity_id`
-   * (`enrollx/backend/app/api/internal.py` `_send_magic_link` mints the
+   * (`apexflow/backend/app/api/internal.py` `_send_magic_link` mints the
    * token from `app_row["entity_id"]`), NOT the business `application_id`
    * field that shows up in `application.application_id` for display. Do
    * not rename this to `applicationId` in a later task -- that name has

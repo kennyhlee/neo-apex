@@ -10,7 +10,7 @@ The product has two halves:
 - **Frontend** (`frontend/`): React SPA on port 5600
 - **Backend** (`backend/`): Python FastAPI service on port 5610 that the SPA calls. The backend proxies authenticated requests to DataCore (entities, queries, auth) and Papermite (document extract).
 
-Part of the NeoApex ecosystem alongside papermite, datacore, launchpad, and the placeholder modules apexflow, enrollx, familyhub.
+Part of the NeoApex ecosystem alongside papermite, datacore, launchpad, apexflow, and familyhub.
 
 ## Commands
 

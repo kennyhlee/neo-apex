@@ -90,3 +90,28 @@ def test_merge_does_not_mutate_either_input():
     _merge_model_definition(SEEDED, EXTRACTED)
     assert repr(SEEDED) == before_seeded
     assert repr(EXTRACTED) == before_extracted
+
+
+def test_extracted_fields_matching_an_existing_custom_field_are_dropped():
+    """First write wins for custom fields too, not just base fields."""
+    seeded = {
+        "registration_application": {
+            "base_fields": [{"name": "application_id", "type": "str", "required": True}],
+            "custom_fields": [{"name": "agreement_signed_by", "type": "str", "required": True}],
+        },
+    }
+    extracted = {
+        "registration_application": {
+            "base_fields": [],
+            "custom_fields": [
+                {"name": "agreement_signed_by", "type": "str", "required": False},
+                {"name": "new_field", "type": "str", "required": False},
+            ],
+        },
+    }
+    merged = _merge_model_definition(seeded, extracted)
+    custom = merged["registration_application"]["custom_fields"]
+    assert [f["name"] for f in custom] == ["agreement_signed_by", "new_field"]
+    # The existing custom field's declaration is preserved verbatim, not
+    # overwritten by the extracted field of the same name.
+    assert custom[0]["required"] is True

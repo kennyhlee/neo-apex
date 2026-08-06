@@ -69,8 +69,7 @@ def test_endpoint_maps_execution_error_to_400(seeded_store):
 
 # ── BEGIN shared SQL guard corpus ─────────────────────────────────────────
 # SOURCE OF TRUTH: datacore/tests/test_readonly_query.py. Copied verbatim into
-# admindash/backend/tests/test_tenancy.py and
-# enrollx/backend/tests/test_auth_guards.py, the way the guard itself is.
+# admindash/backend/tests/test_tenancy.py, the way the guard itself is.
 # Requires `re`, `pytest`, `Path` and the service's own `_DENY` in scope.
 
 ESCAPES = [
@@ -185,7 +184,6 @@ LEGITIMATE = [
 _GUARD_FILES = (
     "datacore/src/datacore/api/readonly_query.py",
     "admindash/backend/app/tenancy.py",
-    "enrollx/backend/app/tenancy.py",
 )
 
 
@@ -210,21 +208,25 @@ def test_escape_corpus_covers_every_deny_branch():
         assert any(probe.search(sql) for sql in ESCAPES), f"no escape exercises {branch}"
 
 
-def test_guard_block_is_byte_identical_in_all_three_services():
+def test_guard_block_is_byte_identical_in_both_services():
     """The guard is a deliberate copy, not an import. Drift is the failure mode
     this whole arrangement risks, so assert it directly."""
     root = _repo_root()
     if root is None:
         pytest.skip("repo root (services.json) not found")
     paths = [root / f for f in _GUARD_FILES]
-    if not all(p.exists() for p in paths):
-        pytest.skip("not a full-suite checkout")
+    for p in paths:
+        if not p.exists():
+            pytest.fail(
+                f"SQL-guard drift test: guard file missing: {p} — "
+                "if it moved, update _GUARD_FILES"
+            )
     blocks = []
     for p in paths:
         text = p.read_text(encoding="utf-8")
         blocks.append(text[text.index("# ── BEGIN shared SQL shape guard"):
                           text.index("# ── END shared SQL shape guard")])
-    assert blocks[0] == blocks[1] == blocks[2]
+    assert blocks[0] == blocks[1]
 # ── END shared SQL guard corpus ───────────────────────────────────────────
 
 

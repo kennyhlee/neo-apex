@@ -11,10 +11,16 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     datacore_url: str = "http://localhost:5800"
-    enrollx_url: str = "http://localhost:5910"
-    # Must equal enrollx's ENROLLX_INTERNAL_KEY. Dev default below must match
-    # enrollx's dev default:
-    enrollx_internal_key: str = "dev-internal-key-change-in-prod"  # ADJUST(bindings): enrollx dev default
+
+    # Task 10: registration/config/actions/documents/request-link all
+    # retarget from enrollx to apexflow-backend's token-scoped internal API
+    # (docs/superpowers/plans/2026-08-05-apexflow-plan1-interface-map.md §7,
+    # task-10-brief.md's familyhub retarget). Must equal apexflow's
+    # APEXFLOW_INTERNAL_KEY. Dev default below must match apexflow's dev
+    # default (apexflow/backend/app/config.py DEV_INTERNAL_KEY).
+    apexflow_url: str = "http://localhost:5910"
+    apexflow_internal_key: str = "dev-internal-key-change-in-prod"  # ADJUST(bindings): apexflow dev default
+
     cors_allowed_origins: Union[Optional[str], List[str]] = None
     port: int = 5630
 
@@ -37,9 +43,9 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "wildcard '*' in FAMILYHUB_CORS_ALLOWED_ORIGINS is not permitted in production"
                 )
-            if not self.enrollx_internal_key or self.enrollx_internal_key == "dev-internal-key-change-in-prod":
+            if not self.apexflow_internal_key or self.apexflow_internal_key == "dev-internal-key-change-in-prod":
                 raise ValueError(
-                    "FAMILYHUB_ENROLLX_INTERNAL_KEY must be set to a real secret in production"
+                    "FAMILYHUB_APEXFLOW_INTERNAL_KEY must be set to a real secret in production"
                 )
         elif not origins:
             origins = ["http://localhost:5620"]

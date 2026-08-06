@@ -1,0 +1,145 @@
+# apexflow/backend/app/api/instances.py
+"""Instances API routes (Task 6 creation route; Task 8 action route).
+
+`POST /api/workflows/{tenant_id}/definitions/{definition_id}/instances`
+(Task 6). `POST /api/workflows/{tenant_id}/instances/{instance_entity_id}
+/actions` (Task 8) — the single action endpoint: item-level operations
+(`save_draft`, `complete_item`, `verify_item`, `reject_item`, `waive_item`),
+`cancel_instance`, and machine transitions all dispatch through
+`app.workflows.machine.execute_action`. This module is HTTP wiring only; all
+business logic lives in app.workflows.engine / app.workflows.machine.
+
+DECISION (task-6-brief.md): the brief's own Produces line writes the route as
+`.../definitions/{entity_id}/instances`, then immediately asks "is that the
+published ROW's entity_id, or the LINEAGE's business definition_id?" and
+answers itself: the path segment is the lineage's `definition_id` (stable
+across a lineage's draft/published/superseded versions), NOT a DataCore row
+`entity_id`. A caller creating an instance knows "the enrollment workflow"
+(the lineage) — not which numbered version happens to be currently
+published, which is exactly what `engine.create_instance` ->
+`get_published_definition` resolves internally. The path param is named
+`definition_id` here (not `entity_id`) to make that concrete, even though it
+occupies the same URL position as app/api/definitions.py's `{entity_id}`
+(which DOES address one specific row — a different resource, deliberately
+disambiguated by param name here since the two are easy to conflate, per the
+interface map's identifier-trap gotcha).
+
+DECISION (Task 8): the actions route's `{instance_entity_id}` path param
+genuinely IS a DataCore `entity_id` (unlike the creation route's lineage
+`definition_id` above) — `workflow_instance` rows have no separate
+lineage-vs-row identity split the way `workflow_definition` rows do (Task 6's
+`create_instance` already returns/looks instances up by `entity_id`
+throughout). `actor = user.get("user_id", "staff")` follows the enrollx
+precedent (`enrollx/backend/app/api/registration.py`, interface map §2) for
+deriving a staff actor string from the auth dependency's return shape.
+"""
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
+
+from app.auth import require_staff_tenant
+from app.workflows import datacore as dc
+from app.workflows import engine
+from app.workflows import machine
+
+router = APIRouter(prefix="/api/workflows")
+
+
+class CreateInstanceRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    context: dict = {}
+    channel: Literal["staff", "family"]
+    applicant_email: str | None = None
+
+
+@router.post("/{tenant_id}/definitions/{definition_id}/instances", status_code=201)
+def create_instance_route(tenant_id: str, definition_id: str, body: CreateInstanceRequest,
+                          user: dict = Depends(require_staff_tenant)):
+    """Create a workflow_instance (+ derived items) for the published version
+    of the `definition_id` lineage. See module docstring for why the path
+    param is the lineage id, not a row entity_id.
+
+    Staff-authenticated (`require_staff_tenant`) even for `channel: "family"`
+    — this is the staff-assisted entry path (spec §6 "AdminDash tracking":
+    "staff-assisted entry mounts flow-runtime in staff mode"). The
+    unauthenticated family self-serve path is Task 10's internal/token-scoped
+    `/internal/workflows/{tenant_id}/{definition_id}/start` route.
+
+    DECISION (Task 8, code-review follow-up): `engine.create_instance` never
+    ran system auto-advance — a machine whose INITIAL state already
+    satisfies a `system` transition's guard (e.g. a `data_condition` on a
+    creation-time `context` value) would sit un-advanced until the first
+    item mutation triggered `run_system_transitions` from inside
+    `execute_action`. `engine.py` cannot fix this itself without an
+    `engine.py -> machine.py` import (machine.py already imports engine.py
+    for the item built-ins — a reverse import would cycle), so this route
+    does it: re-fetch the FLATTENED instance row `engine.create_instance`'s
+    own envelope-shaped return can't be fed straight into
+    `machine.build_eval_context` (see engine.py's row-shape convention
+    note), build a `ctx`, and run `run_system_transitions` once before
+    responding. `result["instance"]` is replaced with `ctx.instance` (the
+    flattened, possibly-advanced row) — this deliberately changes the
+    response's `"instance"` shape from the create envelope
+    (`{"entity_id", "entity_type", "base_data": {...}}`) to the same
+    flattened shape the actions route (`instance_action_route`, below)
+    already returns, for one consistent contract across both routes.
+    `"items"` is left as `engine.create_instance` derived it — no seed
+    machine in this codebase has a creation-time system transition with an
+    item-mutating effect, and re-querying items unconditionally here would
+    be speculative scope beyond what triggered this fix.
+    """
+    token = user.get("_token")
+    actor = user.get("user_id", "staff")
+    result = engine.create_instance(
+        tenant_id, definition_id, body.context, body.channel,
+        applicant_email=body.applicant_email, token=token,
+    )
+
+    instance_entity_id = result["instance"]["entity_id"]
+    instance_row = dc.get_entity(tenant_id, "workflow_instance", instance_entity_id, token)
+    ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
+    machine.run_system_transitions(ctx)
+    result["instance"] = ctx.instance
+    return result
+
+
+class ActionRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    action: str
+
+
+@router.post("/{tenant_id}/instances/{instance_entity_id}/actions")
+def instance_action_route(tenant_id: str, instance_entity_id: str, body: ActionRequest,
+                          user: dict = Depends(require_staff_tenant)):
+    """The single action endpoint (Task 8): `{"action": name, ...params}` ->
+    `200 {"instance": row}`, plus `"item"` when an item built-in other than
+    `save_draft` ran (`ctx.item_result`, `app.workflows.primitives.
+    EvalContext`'s side channel — see machine.py's module docstring,
+    decision 6).
+
+    Staff-authenticated even for a family-permitted action (`actor:
+    "family"` transitions, `save_draft`/`complete_item`) — this is the
+    staff-facing surface (AdminDash staff-assisted entry). The
+    unauthenticated family/token-scoped surface is Task 10's internal
+    `/internal/instance-by-token/{token}/actions` route, which will call
+    `app.workflows.machine.execute_action` the same way with `actor`
+    derived from the verified token instead of the JWT.
+    """
+    token = user.get("_token")
+    actor = user.get("user_id", "staff")
+
+    instance_row = dc.get_entity(tenant_id, "workflow_instance", instance_entity_id, token)
+    if instance_row is None:
+        raise HTTPException(404, "workflow_instance not found")
+
+    ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
+    params = body.model_dump(exclude={"action"})
+    updated_instance = machine.execute_action(ctx, body.action, params)
+
+    response = {"instance": updated_instance}
+    if ctx.item_result is not None:
+        response["item"] = ctx.item_result
+    return response

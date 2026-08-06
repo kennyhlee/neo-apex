@@ -9,11 +9,16 @@ Multi-service education/enrollment management platform.
 | LaunchPad frontend | Tenant onboarding & admin UI | 5500 | 55xx |
 | LaunchPad backend | Tenant lifecycle & identity API | 5510 | 55xx |
 | AdminDash frontend | Operations dashboard UI | 5600 | 56xx |
+| AdminDash backend | Operations dashboard API | 5610 | 56xx |
+| FamilyHub frontend | Family registration channel UI | 5620 | 56xx |
+| FamilyHub backend | Family registration channel API | 5630 | 56xx |
 | Papermite frontend | Document ingestion UI | 5700 | 57xx |
 | Papermite backend | Document ingestion API | 5710 | 57xx |
 | DataCore backend | Storage, query engine & auth server | 5800 | 58xx |
+| ApexFlow frontend | Workflow platform UI (Phase 2) | 5900 | 59xx |
+| ApexFlow backend | Workflow platform API | 5910 | 59xx |
 
-**Port convention:** Each service owns a 100-port block in the `55xx-58xx` range (avoids Chrome-blocked ports and common macOS/dev tool conflicts). Frontend = `X00`, backend = `X10`. Future services continue the pattern: `59xx`, `60xx`, etc.
+**Port convention:** Each service owns a 100-port block in the `55xx-59xx` range (avoids Chrome-blocked ports and common macOS/dev tool conflicts). Frontend = `X00`, backend = `X10`. Future services continue the pattern: `60xx`, etc.
 
 ## Architecture
 
@@ -53,9 +58,14 @@ All service hostnames and ports are defined in `services.json` at the repo root:
     "launchpad-frontend": { "host": "localhost", "port": 5500 },
     "launchpad-backend": { "host": "localhost", "port": 5510 },
     "admindash-frontend": { "host": "localhost", "port": 5600 },
+    "admindash-backend": { "host": "localhost", "port": 5610 },
+    "familyhub-frontend": { "host": "localhost", "port": 5620 },
+    "familyhub-backend": { "host": "localhost", "port": 5630 },
     "papermite-frontend": { "host": "localhost", "port": 5700 },
     "papermite-backend": { "host": "localhost", "port": 5710 },
-    "datacore": { "host": "localhost", "port": 5800 }
+    "datacore": { "host": "localhost", "port": 5800 },
+    "apexflow-frontend": { "host": "localhost", "port": 5900 },
+    "apexflow-backend": { "host": "localhost", "port": 5910 }
   }
 }
 ```

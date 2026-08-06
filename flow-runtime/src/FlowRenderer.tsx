@@ -71,11 +71,11 @@ export interface FlowRendererProps {
    *
    * Which school an application belongs to is implied by the tenant, so it is
    * never collected from the applicant — `school_id` is in
-   * `ENGINE_OWNED_APPLICATION_FIELDS` for exactly that reason. This prop is
-   * how the applicant still SEES which school they are applying to on the
-   * form itself. Host-supplied because flow-runtime never fetches: enrollx
-   * reads it from the signed-in user's tenant, familyhub from the public
-   * config bundle's `tenant.name`.
+   * `ENGINE_OWNED_FIELDS` for exactly that reason. This prop is how the
+   * applicant still SEES which school they are applying to on the form
+   * itself. Host-supplied because flow-runtime never fetches: a staff host
+   * would read it from the signed-in user's tenant, familyhub from the
+   * public config bundle's `tenant.name`.
    */
   schoolName?: string;
 }

@@ -30,7 +30,18 @@
       {"name": "status", "type": "selection", "required": false, "options": ["Active", "Inactive", "Enrolled", "Withdrawn", "Graduated", "Waitlisted", "Suspended", "Transferred"]},
       {"name": "family_id", "type": "str", "required": true},
       {"name": "primary_address", "type": "str", "required": true},
-      {"name": "mailing_address", "type": "str", "required": false}
+      {"name": "mailing_address", "type": "str", "required": false},
+      {"name": "grade", "type": "str", "required": false},
+      {"name": "school_attending", "type": "str", "required": false},
+      {"name": "allergies", "type": "str", "required": false},
+      {"name": "dietary_restrictions", "type": "str", "required": false},
+      {"name": "medications", "type": "str", "required": false},
+      {"name": "physician_name", "type": "str", "required": false},
+      {"name": "physician_phone", "type": "phone", "required": false},
+      {"name": "insurance_carrier", "type": "str", "required": false},
+      {"name": "insurance_policy", "type": "str", "required": false},
+      {"name": "special_needs_notes", "type": "str", "required": false},
+      {"name": "photo_media_release", "type": "bool", "required": false}
     ],
     "custom_fields": []
   },
@@ -41,7 +52,17 @@
       {"name": "primary_address", "type": "str", "required": true},
       {"name": "mailing_address", "type": "str", "required": false},
       {"name": "primary_phone", "type": "phone", "required": false},
-      {"name": "primary_email", "type": "email", "required": false}
+      {"name": "primary_email", "type": "email", "required": false},
+      {"name": "guardian2_name", "type": "str", "required": false},
+      {"name": "guardian2_phone", "type": "phone", "required": false},
+      {"name": "guardian2_email", "type": "email", "required": false},
+      {"name": "guardian2_relationship", "type": "str", "required": false},
+      {"name": "guardian1_employer", "type": "str", "required": false},
+      {"name": "guardian2_employer", "type": "str", "required": false},
+      {"name": "address_street", "type": "str", "required": false},
+      {"name": "address_city", "type": "str", "required": false},
+      {"name": "address_state", "type": "str", "required": false},
+      {"name": "address_zip", "type": "str", "required": false}
     ],
     "custom_fields": []
   },
@@ -55,7 +76,8 @@
       {"name": "email", "type": "email", "required": false},
       {"name": "is_emergency", "type": "bool", "required": false},
       {"name": "is_authorized_pickup", "type": "bool", "required": false},
-      {"name": "family_id", "type": "str", "required": true}
+      {"name": "family_id", "type": "str", "required": true},
+      {"name": "is_pickup_excluded", "type": "bool", "required": false}
     ],
     "custom_fields": []
   },
@@ -109,53 +131,73 @@
     ],
     "custom_fields": []
   },
-  "registration_config": {
-    "base_fields": [
-      {"name": "config_id", "type": "str", "required": true},
-      {"name": "version", "type": "number", "required": true},
-      {"name": "status", "type": "selection", "required": true, "options": ["draft", "published", "archived"], "default": "draft"},
-      {"name": "blocks", "type": "str", "required": true}
-    ],
-    "custom_fields": []
-  },
   "registration_application": {
     "base_fields": [
       {"name": "application_id", "type": "str", "required": true},
-      {"name": "school_year", "type": "str", "required": true},
-      {"name": "status", "type": "selection", "required": true, "options": ["draft", "submitted", "in_review", "pending_items", "approved", "enrolled", "waitlisted", "declined", "withdrawn"], "default": "draft"},
-      {"name": "family_id", "type": "str", "required": false},
+      {"name": "school_year", "type": "str", "required": false},
       {"name": "student_id", "type": "str", "required": false},
-      {"name": "config_version", "type": "number", "required": true},
-      {"name": "channel_started", "type": "selection", "required": true, "options": ["parent", "admin"]},
-      {"name": "applicant_email", "type": "email", "required": false},
-      {"name": "token_version", "type": "number", "required": false, "default": 1},
-      {"name": "draft_data", "type": "str", "required": false},
-      {"name": "submitted_at", "type": "datetime", "required": false},
-      {"name": "decided_at", "type": "datetime", "required": false}
+      {"name": "family_id", "type": "str", "required": false},
+      {"name": "requested_start_date", "type": "date", "required": false},
+      {"name": "schedule_days", "type": "str", "required": false},
+      {"name": "pickup_method", "type": "str", "required": false},
+      {"name": "handbook_acknowledged", "type": "bool", "required": false},
+      {"name": "liability_waiver_signed", "type": "bool", "required": false},
+      {"name": "tuition_agreement_signed", "type": "bool", "required": false},
+      {"name": "signature_name", "type": "str", "required": false},
+      {"name": "signature_date", "type": "date", "required": false}
     ],
     "custom_fields": []
   },
-  "application_item": {
+  "workflow_definition": {
+    "base_fields": [
+      {"name": "definition_id", "type": "str", "required": true},
+      {"name": "name", "type": "str", "required": true},
+      {"name": "version", "type": "number", "required": true},
+      {"name": "status", "type": "selection", "required": true, "options": ["draft", "published", "superseded"], "default": "draft"},
+      {"name": "lineage_status", "type": "selection", "required": true, "options": ["active", "deprecated", "retired"], "default": "active"},
+      {"name": "channel_access", "type": "selection", "required": true, "options": ["staff_only", "family"], "default": "staff_only"},
+      {"name": "machine", "type": "str", "required": true},
+      {"name": "steps", "type": "str", "required": true}
+    ],
+    "custom_fields": []
+  },
+  "workflow_instance": {
+    "base_fields": [
+      {"name": "instance_id", "type": "str", "required": true},
+      {"name": "definition_id", "type": "str", "required": true},
+      {"name": "definition_version", "type": "number", "required": true},
+      {"name": "state", "type": "str", "required": true},
+      {"name": "subject_refs", "type": "str", "required": false},
+      {"name": "context", "type": "str", "required": false},
+      {"name": "channel_started", "type": "selection", "required": true, "options": ["family", "staff"]},
+      {"name": "applicant_email", "type": "email", "required": false},
+      {"name": "token_version", "type": "number", "required": false, "default": 1},
+      {"name": "draft_data", "type": "str", "required": false},
+      {"name": "opened_at", "type": "datetime", "required": true},
+      {"name": "closed_at", "type": "datetime", "required": false}
+    ],
+    "custom_fields": []
+  },
+  "workflow_item": {
     "base_fields": [
       {"name": "item_id", "type": "str", "required": true},
-      {"name": "application_id", "type": "str", "required": true},
-      {"name": "block_id", "type": "str", "required": true},
-      {"name": "kind", "type": "selection", "required": true, "options": ["form", "document", "esign", "payment"]},
+      {"name": "instance_id", "type": "str", "required": true},
+      {"name": "step_id", "type": "str", "required": true},
+      {"name": "kind", "type": "selection", "required": true, "options": ["form", "documents", "message-ack"]},
       {"name": "title", "type": "str", "required": true},
       {"name": "status", "type": "selection", "required": true, "options": ["not_started", "in_progress", "submitted", "verified", "rejected", "waived"], "default": "not_started"},
       {"name": "blocking", "type": "bool", "required": true},
       {"name": "due_at", "type": "datetime", "required": false},
       {"name": "completed_by", "type": "str", "required": false},
-      {"name": "payload_ref", "type": "str", "required": false},
-      {"name": "due_days_after_approval", "type": "number", "required": false}
+      {"name": "payload_ref", "type": "str", "required": false}
     ],
     "custom_fields": []
   },
-  "application_activity": {
+  "workflow_activity": {
     "base_fields": [
       {"name": "activity_id", "type": "str", "required": true},
-      {"name": "application_id", "type": "str", "required": true},
-      {"name": "type", "type": "selection", "required": true, "options": ["status_change", "item_change", "note", "email_sent"]},
+      {"name": "instance_id", "type": "str", "required": true},
+      {"name": "type", "type": "selection", "required": true, "options": ["state_change", "item_change", "note", "email_sent"]},
       {"name": "from_value", "type": "str", "required": false},
       {"name": "to_value", "type": "str", "required": false},
       {"name": "actor", "type": "str", "required": true},
@@ -175,22 +217,6 @@
       {"name": "sensitive", "type": "bool", "required": true, "default": false},
       {"name": "uploaded_by", "type": "str", "required": true},
       {"name": "uploaded_at", "type": "datetime", "required": true}
-    ],
-    "custom_fields": []
-  },
-  "payment": {
-    "base_fields": [
-      {"name": "payment_id", "type": "str", "required": true},
-      {"name": "application_id", "type": "str", "required": true},
-      {"name": "item_id", "type": "str", "required": false},
-      {"name": "kind", "type": "selection", "required": true, "options": ["deposit", "balance", "full", "offline"]},
-      {"name": "amount", "type": "number", "required": true},
-      {"name": "currency", "type": "str", "required": true, "default": "USD"},
-      {"name": "status", "type": "selection", "required": true, "options": ["pending", "paid", "failed", "refunded"], "default": "pending"},
-      {"name": "provider", "type": "selection", "required": true, "options": ["stripe", "offline"]},
-      {"name": "provider_ref", "type": "str", "required": false},
-      {"name": "recorded_by", "type": "str", "required": false},
-      {"name": "paid_at", "type": "datetime", "required": false}
     ],
     "custom_fields": []
   }

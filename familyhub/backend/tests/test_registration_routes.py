@@ -1,5 +1,12 @@
 # familyhub/backend/tests/test_registration_routes.py
-"""Public registration facade: config bundle + start (rate limited)."""
+"""Public registration facade: config bundle + start (rate limited).
+
+Task 10: retargeted from enrollx's `/internal/registration/{tenant_id}/*` to
+apexflow's `/internal/workflows/{tenant_id}/{definition_id}/*`. See
+app/api/registration.py's module docstring for the reshaping policy
+(`config.blocks` is a documented placeholder `[]` pending the Phase 3
+steps->blocks compiler; `tenant`/`capacity` pass through losslessly).
+"""
 import datetime
 import json
 
@@ -51,7 +58,7 @@ def fake_http(monkeypatch):
 @pytest.fixture(autouse=True)
 def internal_key(monkeypatch):
     from app.config import settings
-    monkeypatch.setattr(settings, "enrollx_internal_key", "test-internal-key")
+    monkeypatch.setattr(settings, "apexflow_internal_key", "test-internal-key")
 
 
 @pytest.fixture(autouse=True)
@@ -66,95 +73,109 @@ def client():
     return TestClient(app)
 
 
+TENANT = "acme"
+DEFINITION_ID = "enrollment"
+
 BUNDLE = {
-    "config": {"config_id": "RC0001", "version": 1,
-               "status": "published", "blocks": []},
-    "tenant": {"tenant_id": "acme", "name": "Acme Afterschool"},
+    "definition": {"definition_id": DEFINITION_ID, "name": "Enrollment", "version": 1,
+                   "machine": {"states": [], "transitions": []}, "steps": []},
+    "tenant": {"tenant_id": TENANT, "name": "Acme Afterschool"},
     "capacity": {"capacity": 20, "admitted": 3, "full": False},
 }
 
 
-def test_config_bundle_passthrough(client, fake_http):
-    fake_http.add("GET", "/internal/registration/acme/config", FakeResponse(200, BUNDLE))
-    resp = client.get("/api/registration/acme")
+def test_config_bundle_reshapes_definition_into_config(client, fake_http):
+    fake_http.add("GET", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/config",
+                  FakeResponse(200, BUNDLE))
+    resp = client.get(f"/api/registration/{TENANT}/{DEFINITION_ID}")
     assert resp.status_code == 200
     body = resp.json()
     assert body["tenant"]["name"] == "Acme Afterschool"
-    # fullness comes from the sibling "capacity" object
     assert body["capacity"]["full"] is False
+    assert body["config"]["config_id"] == DEFINITION_ID
+    assert body["config"]["version"] == 1
+    assert body["config"]["status"] == "published"
+    assert body["config"]["blocks"] == []  # documented Phase 3 placeholder
     # internal key was attached
     assert fake_http.calls[0]["headers"]["X-Internal-Key"] == "test-internal-key"
 
 
 def test_config_bundle_404_passthrough(client, fake_http):
-    fake_http.add("GET", "/internal/registration/nosuch/config",
-                  FakeResponse(404, {"detail": "This school is not open for registration"}))
-    resp = client.get("/api/registration/nosuch")
+    fake_http.add("GET", f"/internal/workflows/{TENANT}/nosuch/config",
+                  FakeResponse(404, {"detail": "No published workflow_definition for this lineage"}))
+    resp = client.get(f"/api/registration/{TENANT}/nosuch")
     assert resp.status_code == 404
 
 
 def test_config_bundle_masks_upstream_500(client, fake_http):
-    fake_http.add("GET", "/internal/registration/acme/config",
+    fake_http.add("GET", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/config",
                   FakeResponse(500, {"detail": "Traceback (most recent call last): ..."}))
-    resp = client.get("/api/registration/acme")
+    resp = client.get(f"/api/registration/{TENANT}/{DEFINITION_ID}")
     assert resp.status_code == 502
     assert "Traceback" not in resp.text
 
 
 def test_start_returns_token_and_hub_url(client, fake_http):
-    fake_http.add("GET", "/internal/registration/acme/config", FakeResponse(200, BUNDLE))
-    fake_http.add("POST", "/internal/registration/acme/start",
-                  FakeResponse(201, {"application": {"base_data": {"application_id": "RA260001"}},
-                                     "token": "tok123"}))
-    resp = client.post("/api/registration/acme/start",
+    fake_http.add(
+        "POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
+        FakeResponse(201, {
+            "instance": {"entity_id": "wi-1", "state": "draft", "definition_id": DEFINITION_ID},
+            "items": [{"entity_id": "item-1", "entity_type": "workflow_item",
+                      "base_data": {"kind": "form"}}],
+            "token": "tok123", "link": "http://localhost:5620/w/acme/enrollment?token=tok123",
+        }),
+    )
+    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "parent@example.com"})
     assert resp.status_code == 201
     body = resp.json()
     assert body["token"] == "tok123"
     assert body["hub_url"] == "/application/tok123"
-    # facade supplies school_year itself -- brief's parent-facing contract
-    # carries only applicant_email, but enrollx's internal start route
-    # requires school_year with no default.
+    # instance.state reshaped to application.status (identical vocabulary)
+    assert body["application"]["status"] == "draft"
+    assert body["application"]["entity_id"] == "wi-1"
+    assert body["items"] == [{"entity_id": "item-1", "entity_type": "workflow_item",
+                              "base_data": {"kind": "form"}}]
+
     start_call = next(c for c in fake_http.calls if c["method"] == "POST")
     sent = start_call["json"]
     assert sent["applicant_email"] == "parent@example.com"
-    assert "school_year" in sent and sent["school_year"]
+    assert "school_year" in sent["context"] and sent["context"]["school_year"]
 
 
 def test_start_rejects_junk_email(client, fake_http):
-    resp = client.post("/api/registration/acme/start", json={"applicant_email": "junk"})
+    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+                       json={"applicant_email": "junk"})
     assert resp.status_code == 422
-    assert fake_http.calls == []  # never reached enrollx
+    assert fake_http.calls == []  # never reached apexflow
 
 
 def test_start_passes_through_upstream_errors(client, fake_http):
-    fake_http.add("GET", "/internal/registration/acme/config", FakeResponse(200, BUNDLE))
-    fake_http.add("POST", "/internal/registration/acme/start",
-                  FakeResponse(404, {"detail": "This school is not open for registration"}))
-    resp = client.post("/api/registration/acme/start",
+    fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
+                  FakeResponse(404, {"detail": "No published workflow_definition for this lineage"}))
+    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "parent@example.com"})
     assert resp.status_code == 404
 
 
 def test_start_masks_upstream_500(client, fake_http):
-    fake_http.add("GET", "/internal/registration/acme/config", FakeResponse(200, BUNDLE))
-    fake_http.add("POST", "/internal/registration/acme/start",
+    fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
                   FakeResponse(500, {"detail": "DataCore write failed: connection reset by peer"}))
-    resp = client.post("/api/registration/acme/start",
+    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "parent@example.com"})
     assert resp.status_code == 502
     assert "DataCore" not in resp.text
 
 
 def test_start_is_rate_limited_per_ip(client, fake_http):
-    fake_http.add("GET", "/internal/registration/acme/config", FakeResponse(200, BUNDLE))
-    fake_http.add("POST", "/internal/registration/acme/start",
-                  FakeResponse(201, {"token": "tok123"}))
+    fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
+                  FakeResponse(201, {"instance": {"entity_id": "wi-1", "state": "draft"},
+                                     "items": [], "token": "tok123", "link": "http://x/link"}))
     for _ in range(10):
-        ok = client.post("/api/registration/acme/start",
+        ok = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
                          json={"applicant_email": "parent@example.com"})
         assert ok.status_code == 201
-    throttled = client.post("/api/registration/acme/start",
+    throttled = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
                             json={"applicant_email": "parent@example.com"})
     assert throttled.status_code == 429
 
@@ -166,31 +187,29 @@ def test_start_is_rate_limited_per_ip(client, fake_http):
 ])
 def test_start_derives_school_year_with_the_july_rollover(
         client, fake_http, monkeypatch, today, expected):
-    """Same rule as flow-runtime's defaultSchoolYear() and enrollx's
-    engine.default_school_year() -- all three channels must agree, because
-    the capacity snapshot the parent was shown was computed for this year.
-
-    Wall-clock is now the only source: the former program-`start_date`
-    derivation existed because a program could span a year other than the
-    current one, and a whole-school application has no such anchor.
-    """
+    """Same rule as flow-runtime's defaultSchoolYear() and apexflow's
+    enrollment template's `context.school_year` scoping -- all channels must
+    agree, because the capacity snapshot the parent was shown was computed
+    for this year."""
     monkeypatch.setattr("app.api.registration._today", lambda: today)
-    fake_http.add("POST", "/internal/registration/acme/start",
-                  FakeResponse(201, {"token": "tok123"}))
-    resp = client.post("/api/registration/acme/start",
+    fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
+                  FakeResponse(201, {"instance": {"entity_id": "wi-1", "state": "draft"},
+                                     "items": [], "token": "tok123", "link": "http://x/link"}))
+    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "parent@example.com"})
     assert resp.status_code == 201
     start_call = next(c for c in fake_http.calls if c["method"] == "POST")
-    assert start_call["json"]["school_year"] == expected
+    assert start_call["json"]["context"]["school_year"] == expected
 
 
 def test_start_no_longer_prefetches_the_config_bundle(client, fake_http):
     """The pre-flight GET existed only to read program.start_date. With the
     school year derived locally it is a wasted round trip on the parent's
-    slowest connection -- and only enrollx can answer "is this school open",
-    which the start call itself already does."""
-    fake_http.add("POST", "/internal/registration/acme/start",
-                  FakeResponse(201, {"token": "tok123"}))
-    client.post("/api/registration/acme/start",
-                json={"applicant_email": "parent@example.com"})
+    slowest connection -- and only apexflow can answer "is this school
+    open", which the start call itself already does."""
+    fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
+                  FakeResponse(201, {"instance": {"entity_id": "wi-1", "state": "draft"},
+                                     "items": [], "token": "tok123", "link": "http://x/link"}))
+    client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+               json={"applicant_email": "parent@example.com"})
     assert fake_http.calls and all(c["method"] == "POST" for c in fake_http.calls)

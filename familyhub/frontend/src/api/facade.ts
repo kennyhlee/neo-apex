@@ -24,7 +24,7 @@ const API_BASE = FAMILYHUB_API_URL;
  * Carries the upstream HTTP status so callers can distinguish "this link
  * is genuinely bad" (401/404) from a transient failure (a masked 5xx, a
  * 429, a dropped mobile connection) -- the backend's `relay()` goes out of
- * its way to preserve enrollx's real 401 and mask a genuine 5xx to a fixed
+ * its way to preserve apexflow's real 401 and mask a genuine 5xx to a fixed
  * 502 specifically so the client can tell the two apart; this is what
  * reads that distinction back out instead of discarding it. Message shape
  * is unchanged (`HTTP {status}`), so any existing `.message` reader keeps
@@ -89,40 +89,47 @@ interface RawConfigBundle {
 }
 
 /**
- * GET /api/registration/{tenant_id} -> `{config, tenant, capacity}`.
+ * GET /api/registration/{tenant_id}/{definition_id} -> `{config, tenant, capacity}`.
  *
- * Registration is admission to the school as a whole for one school year
- * (spec §1) -- there is no program segment. Fullness comes from
- * `capacity.full` (a freshly-computed boolean, no coercion needed) and is
- * school-wide for the current school year; there is no fullness field
- * anywhere else, so do not invent one.
+ * Task 10: `definition_id` (the workflow lineage id, e.g. `"enrollment"`)
+ * is now part of the path -- apexflow's workflow platform is
+ * multi-definition per tenant, unlike enrollx's one-registration-per-school
+ * model (spec §6's route shape, `/w/{tenant_id}/{definition_id}`).
+ * Fullness comes from `capacity.full` (a freshly-computed boolean, no
+ * coercion needed) -- there is no fullness field anywhere else, so do not
+ * invent one.
  *
- * The `config.blocks` this returns are already MODEL-HYDRATED by enrollx --
- * familyhub holds no DataCore credential, so an entity-sourced form block
- * would otherwise render with no fields at all. Never try to resolve model
- * fields client-side.
+ * `config.blocks` is currently ALWAYS `[]`: apexflow's definitions are
+ * steps/sections, not enrollx's `blocks` -- there is no compiler bridging
+ * the two yet (Phase 3, out of scope for Plan 1's backend-only engine
+ * work). This is a documented, deliberate gap -- see
+ * `familyhub/backend/app/api/registration.py`'s module docstring -- not a
+ * bug in this client.
  */
 export async function fetchRegistrationBundle(
   tenantId: string,
+  definitionId: string,
 ): Promise<RegistrationBundle> {
   const resp = await fetch(
-    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}`,
+    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/${encodeURIComponent(definitionId)}`,
   );
   const raw = await jsonOrThrow<RawConfigBundle>(resp);
   return { config: normalizeConfig(raw.config), tenant: raw.tenant, capacity: raw.capacity };
 }
 
 /**
- * POST /api/registration/{tenant_id}/start -> enrollx's start response
- * (`{application, items, token, link}`) plus familyhub's own `hub_url`
+ * POST /api/registration/{tenant_id}/{definition_id}/start -> apexflow's
+ * start response reshaped by familyhub-backend into the old
+ * `{application, items, token, link}` shape, plus familyhub's own `hub_url`
  * (a relative in-app path, see `StartResponse.hub_url`).
  */
 export async function startRegistration(
   tenantId: string,
+  definitionId: string,
   applicantEmail: string,
 ): Promise<StartResponse> {
   const resp = await fetch(
-    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/start`,
+    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/${encodeURIComponent(definitionId)}/start`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -158,9 +165,9 @@ async function putAction(
 }
 
 // The facade allowlists exactly {save_draft, complete_item, submit} and
-// 403s anything else BEFORE proxying (defense in depth -- enrollx enforces
-// the identical allowlist again). Params verified against
-// enrollx/backend/app/registration/actions.py: save_draft -> draft_data;
+// 403s anything else BEFORE proxying (defense in depth -- apexflow enforces
+// an equivalent allowlist again). Params verified against
+// apexflow/backend/app/workflows/engine.py: save_draft -> draft_data;
 // complete_item -> item_id (+ optional payload_ref, there is NO `payload`
 // field); submit -> no params at all.
 
@@ -264,35 +271,17 @@ export async function getDocumentUrl(token: string, documentId: string): Promise
 }
 
 /**
- * POST /api/application/{token}/checkout -> Stripe Checkout URL, carried in
- * the response's `checkout_url` key.
- * @param itemId optional (the facade's `CheckoutBody.item_id` is optional
- * too) -- but when passed, per the identifier trap, MUST be the payment
- * item's `entity_id`, matching what `flow-runtime`'s `onCheckout(itemId)`
- * hands you.
- */
-export async function startCheckout(token: string, itemId?: string): Promise<string> {
-  const resp = await fetch(`${API_BASE}/api/application/${encodeURIComponent(token)}/checkout`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ item_id: itemId ?? null }),
-  });
-  const body = await jsonOrThrow<{ checkout_url: string }>(resp);
-  return body.checkout_url;
-}
-
-/**
  * Decode (NOT verify) a magic-link token's plaintext segments. Purely a
  * display convenience -- carries no proof of authenticity. familyhub holds
  * no `link_secret` and must never attempt real verification; only
- * enrollx's `resolve_token` (reached through the facade routes above)
+ * apexflow's `resolve_token` (reached through the facade routes above)
  * authenticates a token.
  */
 export function decodeToken(token: string): DecodedToken | null {
   try {
     const padded = token + '='.repeat((4 - (token.length % 4)) % 4);
     const raw = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
-    // Exact 3-segment split, mirroring enrollx's own parse_link_token: a
+    // Exact 3-segment split, mirroring apexflow's own parse_link_token: a
     // token decodes to (tenant, application entity_id, signature) in
     // exactly one way. This function ignores the signature -- it is not a
     // verification -- but keeps the same segment-count strictness so a

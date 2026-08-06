@@ -42,7 +42,7 @@ def unified_query(req: QueryRequest):
     filesystem/network table functions (`read_csv`, `read_parquet`, `COPY …
     TO`, …) fail at the engine. Nothing on this route legitimately needs
     them, and this is the only defense that covers every caller; the SQL
-    guards in the admindash/enrollx proxies are a secondary layer that only
+    guards in the admindash proxy are a secondary layer that only
     protects callers routed through them. A refused attempt surfaces as a
     400 — the request was inadmissible, not the server broken.
     """

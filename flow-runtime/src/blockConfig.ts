@@ -123,8 +123,10 @@ export function paymentAmountFor(
  *
  * Lives here so both channels derive the identical default: the staff New
  * Application form prefills it, the parent start page shows it read-only,
- * and familyhub-backend + enrollx restate the same rule in Python
- * (`_school_year_for_date`, `engine.default_school_year`).
+ * and familyhub-backend restates the same rule in Python
+ * (`_school_year_for_date`, `familyhub/backend/app/api/registration.py`) --
+ * a staff-side host restating it must match exactly (enrollx's
+ * `engine.default_school_year` did, pre-Task-12).
  */
 export function defaultSchoolYear(now: Date = new Date()): string {
   const y = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
@@ -153,8 +155,11 @@ export interface ModelFieldSource {
  *    is a perfectly legitimate `student` field and dropping it there would
  *    silently delete a field staff rely on.
  *
- * Restated server-side by enrollx's `engine.model_form_fields`, which
- * hydrates the parent channel (familyhub holds no DataCore credential).
+ * Restated server-side by a staff host's model-field hydration (enrollx's
+ * `engine.model_form_fields`, pre-Task-12) to hydrate the parent channel
+ * (familyhub holds no DataCore credential). No staff host currently calls
+ * this function -- apexflow has no frontend yet (Phase 2) -- so it is
+ * presently unused but kept exported for that future host.
  */
 export function hydratedFormFields(
   entityType: string, model: ModelFieldSource,

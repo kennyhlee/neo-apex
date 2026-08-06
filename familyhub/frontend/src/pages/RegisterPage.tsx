@@ -7,7 +7,6 @@ import {
   fetchApplication,
   fetchRegistrationBundle,
   saveDraft,
-  startCheckout,
   startRegistration,
   submitApplication,
   uploadDocumentFile,
@@ -116,7 +115,9 @@ function parseDraft(applicationRow: EntityRecord): Record<string, unknown> {
 }
 
 export default function RegisterPage() {
-  const { tenantId = '' } = useParams();
+  // Task 10: route is now /w/:tenantId/:definitionId (spec §6), renamed
+  // from /register/:tenantId -- see App.tsx.
+  const { tenantId = '', definitionId = '' } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t, locale } = useTranslation();
@@ -143,7 +144,7 @@ export default function RegisterPage() {
   // inside the effect body itself.)
   useEffect(() => {
     let cancelled = false;
-    fetchRegistrationBundle(tenantId)
+    fetchRegistrationBundle(tenantId, definitionId)
       .then((b) => {
         if (cancelled) return;
         setBundle(b);
@@ -155,7 +156,7 @@ export default function RegisterPage() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId]);
+  }, [tenantId, definitionId]);
 
   // Resume path: `?token=` present -> load the application directly and
   // skip the email-capture phase entirely, once the config bundle is also
@@ -214,7 +215,7 @@ export default function RegisterPage() {
     setFormError(null);
     setStarting(true);
     try {
-      const started = await startRegistration(tenantId, value);
+      const started = await startRegistration(tenantId, definitionId, value);
       // Must be set before `setToken` -- otherwise the resume effect's
       // guard is not yet in place on the very next render.
       startedLocallyRef.current = true;
@@ -271,8 +272,9 @@ export default function RegisterPage() {
         <header className="register-header">
           <h1>{bundle.tenant.name}</h1>
           {/* Read-only: the school year is derived server-side from the same
-              July-rollover rule enrollx used for the capacity snapshot below,
-              so showing an editable field here could only disagree with it. */}
+              July-rollover rule familyhub-backend's `_school_year_for_date`
+              uses for the capacity snapshot below, so showing an editable
+              field here could only disagree with it. */}
           <p className="register-school-year">
             {t('register.schoolYear')}: {defaultSchoolYear()}
           </p>
@@ -368,17 +370,13 @@ export default function RegisterPage() {
               setRuntimeError(t('hub.uploadFailed'));
             }
           }}
-          onCheckout={async (itemId) => {
-            try {
-              const checkoutUrl = await startCheckout(token, itemId);
-              // Full-page redirect, not a new tab: Stripe redirects back to
-              // this same parent's `/application/{token}` on success or
-              // cancel, and a background-tab `window.open` after an
-              // `await` is exactly the pattern mobile popup blockers kill.
-              window.location.href = checkoutUrl;
-            } catch {
-              setRuntimeError(t('hub.payError'));
-            }
+          onCheckout={async () => {
+            // Payments are not part of Plan 1 -- the checkout facade route
+            // was removed along with enrollx (Task 12); apexflow has no
+            // checkout surface. `onCheckout` is a required FlowRenderer
+            // prop, so it stays wired but inert: a `payment` block can no
+            // longer be configured, so this should never actually fire.
+            setRuntimeError(t('hub.payError'));
           }}
           onSubmit={async () => {
             try {

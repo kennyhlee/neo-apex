@@ -1,5 +1,5 @@
 # familyhub/backend/app/upstream.py
-"""Outbound HTTP to enrollx (internal API) and DataCore (blob API).
+"""Outbound HTTP to apexflow (internal API) and DataCore (blob API).
 
 Every upstream call in this service goes through call_upstream so tests can
 monkeypatch ONE seam: app.upstream.httpx.request.
@@ -36,12 +36,12 @@ def call_upstream(
         )
 
 
-def internal_headers() -> dict:
-    return {"X-Internal-Key": settings.enrollx_internal_key}
+def apexflow_headers() -> dict:
+    return {"X-Internal-Key": settings.apexflow_internal_key}
 
 
-def enrollx(path: str) -> str:
-    return f"{settings.enrollx_url}{path}"
+def apexflow(path: str) -> str:
+    return f"{settings.apexflow_url}{path}"
 
 
 def datacore(path: str) -> str:

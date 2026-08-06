@@ -25,10 +25,9 @@ from app.auth import require_authenticated_user
 
 # ── BEGIN shared SQL shape guard ──────────────────────────────────────────
 # SOURCE OF TRUTH: datacore/src/datacore/api/readonly_query.py. This block is
-# copied verbatim into admindash/backend/app/tenancy.py and
-# enrollx/backend/app/tenancy.py — those services must not take a package
-# dependency on datacore. Keep the three copies byte-identical; the copies
-# assert it (see each service's guard tests).
+# copied verbatim into admindash/backend/app/tenancy.py — that service must
+# not take a package dependency on datacore. Keep the two copies
+# byte-identical; the copies assert it (see each service's guard tests).
 
 # DuckDB filesystem/network *function* calls, matched only as `name(` so a
 # column named e.g. read_receipts is not rejected. Families, not literal

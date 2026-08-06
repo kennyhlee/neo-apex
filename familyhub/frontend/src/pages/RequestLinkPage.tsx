@@ -7,11 +7,11 @@ import './RequestLinkPage.css';
 /**
  * Request-link must reveal nothing about whether an email matched an
  * application. The facade's `requestLink` always resolves to `void` on any
- * 2xx (enrollx returns `{}` on both a hit and a miss, deferring its send to
+ * 2xx (apexflow returns `{}` on both a hit and a miss, deferring its send to
  * a background task so the response is written identically either way) and
  * throws only on a genuine client-side network failure or a non-2xx from
  * the facade itself -- which is masked to a fixed 200 by the backend even
- * during an enrollx outage, per the facade's own doc comment.
+ * during an apexflow outage, per the facade's own doc comment.
  *
  * This page therefore has NO error branch for this call. `onSubmit`'s
  * `catch` deliberately does nothing but fall through to the same
