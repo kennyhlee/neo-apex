@@ -7,12 +7,14 @@ these were drafted. Auth pattern is X-Internal-Key (no JWT, no
 `require_authenticated_user` override) -- the whole point of this module.
 
 Covers task-10-brief.md Step 1's failing-test list: token scope wrong
-tenant/instance -> 403; revocation via token_version bump -> 401 (see
-app/api/internal.py's module docstring for the 401-vs-403 split this task
-pins down); family action allowlist including the blocked staff-only
-built-ins -> 403; request-link anti-enumeration (unknown email still 200
-{}); uploaded_by derivation on the token-scoped document surface; and the
-internal-key gate itself (401 for missing/wrong key).
+tenant/instance -> 401; revocation via token_version bump -> 401 (see
+app/api/internal.py's module docstring: resolve_token is UNIFORMLY 401 on
+every failure mode -- coordinator review fix, an earlier draft split this
+into 401 vs. 403 and that split was itself an existence oracle for an
+unauthenticated caller); family action allowlist including the blocked
+staff-only built-ins -> 403; request-link anti-enumeration (unknown email
+still 200 {}); uploaded_by derivation on the token-scoped document surface;
+and the internal-key gate itself (401 for missing/wrong key).
 """
 import json
 
@@ -258,27 +260,33 @@ def test_actions_by_token_unknown_action_409(client, fake_dc):
     assert resp.status_code == 409
 
 
-# --- token scope: 403 (wrong tenant/instance) vs. 401 (revoked) ----------
+# --- token scope: UNIFORM 401 on every failure mode (coordinator review) ---
+#
+# A 403-vs-401 split (an earlier draft of this task) is an existence oracle:
+# an unauthenticated caller could tell "instance doesn't exist" (403) apart
+# from "instance exists but the signature/version is wrong" (401) with no
+# credential at all -- familyhub's public token routes carry no auth of
+# their own. Every resolve_token failure mode below must produce the
+# IDENTICAL status AND body.
 
 
-def test_wrong_tenant_scope_403(client, fake_dc):
+def test_wrong_tenant_scope_401(client, fake_dc):
     started = _start(client, fake_dc, definition_id="wd-scope")
     instance_eid = started["instance"]["entity_id"]
     forged = make_link_token("other-tenant", instance_eid, 1)
 
     resp = client.get(f"/internal/instance-by-token/{forged}", headers=HEADERS)
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 
-def test_unknown_instance_scope_403(client, fake_dc):
+def test_unknown_instance_scope_401(client, fake_dc):
     forged = make_link_token(TENANT, "does-not-exist", 1)
     resp = client.get(f"/internal/instance-by-token/{forged}", headers=HEADERS)
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 
 def test_revoked_token_401_after_token_version_bump(client, fake_dc):
-    """token_version bump revokes a previously-valid token -- distinct
-    (401) from the 403 wrong-scope cases above, per module docstring."""
+    """token_version bump revokes a previously-valid token."""
     started = _start(client, fake_dc, definition_id="wd-revoke")
     token = started["token"]
     instance_eid = started["instance"]["entity_id"]
@@ -295,6 +303,32 @@ def test_revoked_token_401_after_token_version_bump(client, fake_dc):
 def test_malformed_token_401(client, fake_dc):
     resp = client.get("/internal/instance-by-token/not-a-real-token", headers=HEADERS)
     assert resp.status_code == 401
+
+
+def test_token_scope_failure_bodies_are_indistinguishable(client, fake_dc):
+    """THE anti-oracle assertion: a malformed token, a wrong-tenant token, an
+    unknown-instance token, and a revoked (version-bumped) token must all
+    produce the SAME response body -- not just the same status code -- or an
+    unauthenticated caller could still tell them apart."""
+    started = _start(client, fake_dc, definition_id="wd-scope-bodies")
+    instance_eid = started["instance"]["entity_id"]
+
+    row = fake_dc.get_entity(TENANT, "workflow_instance", instance_eid)
+    base = {k: v for k, v in row.items() if k not in ("entity_id", "entity_type", "_tenant")}
+    base["token_version"] = int(base.get("token_version", 1)) + 1
+    fake_dc.dc_update(TENANT, "workflow_instance", instance_eid, base)
+
+    tokens = [
+        "not-a-real-token",
+        make_link_token("other-tenant", instance_eid, 1),
+        make_link_token(TENANT, "does-not-exist", 1),
+        started["token"],  # now revoked by the version bump above
+    ]
+    bodies = {
+        client.get(f"/internal/instance-by-token/{t}", headers=HEADERS).json()["detail"]
+        for t in tokens
+    }
+    assert len(bodies) == 1
 
 
 # --- documents (token-scoped) --------------------------------------------
@@ -382,6 +416,10 @@ def test_document_url_by_token_ownership_and_missing(client, fake_dc, monkeypatc
         "document_id": "DC-2", "application_id": eid, "filename": "staff.pdf",
         "uploaded_by": "staff-user-1", "sensitive": True, "item_id": "",
     }))
+    fake_dc.rows.append(fake_dc._store_row("doc-staff-nonsensitive", "document", TENANT, {
+        "document_id": "DC-3", "application_id": eid, "filename": "handbook.pdf",
+        "uploaded_by": "staff-user-1", "sensitive": False, "item_id": "",
+    }))
 
     class FakeResp:
         status_code = 200
@@ -397,6 +435,15 @@ def test_document_url_by_token_ownership_and_missing(client, fake_dc, monkeypatc
 
     resp = client.get(f"/internal/instance-by-token/{token}/documents/DC-2/url", headers=HEADERS)
     assert resp.status_code == 403
+
+    # Intentional generalization (coordinator review, see
+    # document_url_by_token's docstring): a NON-sensitive document uploaded
+    # by someone else on the SAME instance is downloadable, not just
+    # listable -- this is a widening relative to familyhub's pre-Task-10
+    # own-uploads-only download rule.
+    resp = client.get(f"/internal/instance-by-token/{token}/documents/DC-3/url", headers=HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["download_url"] == "https://example/download"
 
     resp = client.get(f"/internal/instance-by-token/{token}/documents/DC-999/url", headers=HEADERS)
     assert resp.status_code == 404

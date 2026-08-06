@@ -100,13 +100,21 @@ def test_hub_bundle_expired_token_passthrough(client, fake_http):
     assert resp.status_code == 401
 
 
-def test_hub_bundle_wrong_scope_passthrough(client, fake_http):
-    """apexflow's 403 (token scope wrong tenant/instance) is a real, parent-
-    safe 4xx and must pass through verbatim like any other."""
+def test_hub_bundle_wrong_scope_passthrough_is_401_not_403(client, fake_http):
+    """Coordinator review fix: apexflow's resolve_token is UNIFORMLY 401 on
+    every failure mode, including a token whose (tenant, instance) scope
+    doesn't resolve -- a 403 there would be an existence oracle (this route
+    has no auth of its own, so an unauthenticated caller could otherwise
+    tell "instance doesn't exist" apart from "instance exists but the
+    token is wrong"). This test pins the passthrough to 401, matching the
+    same identical body `test_hub_bundle_expired_token_passthrough` above
+    asserts for the "just plain invalid" case -- the two must be
+    indistinguishable from familyhub's side too."""
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}",
-                  FakeResponse(403, {"detail": "Token scope does not resolve to an instance"}))
+                  FakeResponse(401, {"detail": "Invalid or revoked link"}))
     resp = client.get(f"/api/application/{TOKEN}")
-    assert resp.status_code == 403
+    assert resp.status_code == 401
+    assert resp.json() == {"detail": "Invalid or revoked link"}
 
 
 def test_hub_bundle_masks_upstream_500(client, fake_http):
@@ -125,6 +133,19 @@ def test_allowed_parent_action_is_proxied(client, fake_http):
     assert resp.status_code == 200
     sent = fake_http.calls[0]["json"]
     assert sent["action"] == "save_draft"
+
+
+def test_withdraw_action_is_proxied(client, fake_http):
+    """Coordinator review fix: `withdraw` is an `actor: "family"` transition
+    the enrollment template declares (and apexflow's machine allows any
+    family-permitted transition through the token-scoped actions route) --
+    PARENT_ACTIONS was missing it, which 403'd a real, apexflow-legal action
+    before it ever reached the network."""
+    fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
+                  FakeResponse(200, {"instance": {"state": "withdrawn"}}))
+    resp = client.put(f"/api/application/{TOKEN}", json={"action": "withdraw"})
+    assert resp.status_code == 200
+    assert fake_http.calls[0]["json"]["action"] == "withdraw"
 
 
 def test_action_masks_upstream_500(client, fake_http):

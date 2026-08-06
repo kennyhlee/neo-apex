@@ -33,7 +33,23 @@ router = APIRouter()
 # (apexflow/backend/app/api/internal.py) re-enforces the equivalent
 # restriction independently. This check exists so a rejected action never
 # reaches the network at all, not merely so it fails somewhere.
-PARENT_ACTIONS = {"save_draft", "complete_item", "submit"}
+#
+# Coordinator review fix: this list is NOT "every action apexflow allows on
+# the family channel" by construction -- it must be kept in sync BY HAND
+# with the actor:family surface apexflow's machine.execute_action actually
+# permits (every `actor: "family"` transition the enrollment template
+# declares, plus the two item built-ins family may run) minus apexflow's
+# own BLOCKED_TOKEN_ACTIONS complement (cancel_instance/verify_item/
+# reject_item/waive_item, which are staff-only regardless of actor). The
+# enrollment template (apexflow/backend/app/templates/enrollment.py) gives
+# families `save_draft`, `complete_item`, `submit`, `withdraw`, and
+# `resubmit` as `actor: "family"` transitions/built-ins -- `withdraw` was
+# missing here (a real regression: apexflow allows it, but this facade 403'd
+# it before the request ever left familyhub). `resubmit` is template-
+# specific (only meaningful once `pending_items` exists) and is deliberately
+# NOT added here yet -- add it, and audit this list generally, the next time
+# a template's family-facing action set changes.
+PARENT_ACTIONS = {"save_draft", "complete_item", "submit", "withdraw"}
 
 
 @router.get("/application/{token}")

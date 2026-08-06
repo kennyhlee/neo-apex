@@ -172,13 +172,15 @@ def test_upload_rejects_non_positive_size(client, fake_http):
 
 
 def test_upload_with_invalid_token_passthrough(client, fake_http):
-    """apexflow answers 403 for a token whose scope doesn't resolve (see
-    apexflow/backend/app/api/internal.py's resolve_token). Relayed verbatim."""
+    """apexflow's resolve_token answers a UNIFORM 401 for every failure mode
+    (coordinator review fix: a 403 for "scope doesn't resolve" vs. 401 for
+    "signature/version wrong" would be an existence oracle -- this route has
+    no auth of its own). Relayed verbatim."""
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/documents",
-                  FakeResponse(403, {"detail": "Token scope does not resolve to an instance"}))
+                  FakeResponse(401, {"detail": "Invalid or revoked link"}))
     resp = client.post(f"/api/application/{TOKEN}/documents",
                        json={"filename": "x.pdf", "content_type": "application/pdf", "size": 10})
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 
 def test_upload_masks_apexflow_500(client, fake_http):

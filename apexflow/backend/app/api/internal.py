@@ -21,24 +21,26 @@ already rejects them for a family actor -- same belt-and-suspenders
 precedent as enrollx's internal.py checking `PARENT_ACTIONS` before calling
 `perform_action`.
 
-Two-way split on resolve_token's failure modes (task-10-brief.md Step 1 --
-neither enrollx's internal.py nor the interface map pins these to specific
-codes, so this is a Task 10 binding decision, noted here and in
-task-10-report.md):
-- Unparseable/forged token, or a signature that fails against the row's
-  CURRENT token_version (revoked) -> 401 ("Invalid or revoked link"),
-  mirroring enrollx's uniform "Invalid link" for every resolve_token failure.
-- A well-FORMED token whose (tenant_id, instance_entity_id) scope does not
-  resolve to any workflow_instance at all (wrong tenant, or an instance that
-  was never created / no longer exists) -> 403 ("Token scope does not
-  resolve"). This is new relative to enrollx (which folded this into the
-  same 401 as every other resolve_token failure) -- task-10-brief.md's own
-  Step 1 explicitly separates "token scope wrong tenant/instance -> 403"
-  from "revocation via token_version bump" as two DIFFERENT test
-  requirements, so they get two different status codes here.
-- Missing/mismatched `X-Internal-Key` stays 401 (`require_internal_key`,
-  app/auth.py) -- unrelated to token scope, the platform's existing internal-
-  auth code, unchanged.
+resolve_token's failure modes are UNIFORMLY 401 (coordinator review fix,
+superseding an earlier Task 10 draft that split this into 401 vs. 403 --
+see task-10-report.md's fix log). Every one of: an unparseable/forged
+token, a well-formed token whose (tenant_id, instance_entity_id) does not
+resolve to any workflow_instance at all (wrong tenant, or an instance that
+was never created / no longer exists), and a signature that fails against
+the row's CURRENT token_version (revoked) -- all raise the SAME
+`HTTPException(401, "Invalid or revoked link")`, identical status AND body.
+This mirrors enrollx's own uniform-401 precedent, and for the same reason:
+a 403 on "instance not found" vs. a 401 on "instance found but the
+signature/version is wrong" is an EXISTENCE ORACLE -- an unauthenticated
+caller (familyhub's public token routes carry no auth of their own) could
+binary-search a tenant's instance-id space by watching which code comes
+back. Do not reintroduce a split here without closing that leak some other
+way first.
+
+Missing/mismatched `X-Internal-Key` stays 401 too (`require_internal_key`,
+app/auth.py) -- unrelated to token scope, the platform's existing internal-
+auth code, unchanged. It is a coincidence that both land on 401, not the
+same mechanism.
 
 Document routes: `document.application_id` is DataCore's OWN required field
 name on the blob API (datacore/src/datacore/api/document_routes.py's
@@ -120,23 +122,32 @@ class TokenCreateDocumentRequest(BaseModel):
 # --- token resolution --------------------------------------------------------
 
 
+_INVALID_TOKEN_DETAIL = "Invalid or revoked link"
+
+
 def resolve_token(token: str) -> tuple[str, dict]:
     """Decode + authenticate a magic-link token against the CURRENT
-    `workflow_instance` row's `token_version`. See module docstring for the
-    401-vs-403 split this task pins down."""
+    `workflow_instance` row's `token_version`.
+
+    UNIFORM 401 on every failure mode (module docstring) -- malformed/forged
+    token, unresolved (tenant, instance) scope, and a revoked/stale
+    signature all raise the identical `HTTPException(401,
+    _INVALID_TOKEN_DETAIL)`. This is deliberate: differentiating "instance
+    doesn't exist" from "instance exists but this token is wrong" would let
+    an unauthenticated caller probe instance existence."""
     try:
         tenant_id, instance_entity_id, _sig = parse_link_token(token)
     except TokenError:
-        raise HTTPException(401, "Invalid or revoked link")
+        raise HTTPException(401, _INVALID_TOKEN_DETAIL)
 
     instance_row = dc.get_entity(tenant_id, "workflow_instance", instance_entity_id)
     if instance_row is None:
-        raise HTTPException(403, "Token scope does not resolve to an instance")
+        raise HTTPException(401, _INVALID_TOKEN_DETAIL)
 
     try:
         verify_link_token(token, int(instance_row.get("token_version") or 1))
     except TokenError:
-        raise HTTPException(401, "Invalid or revoked link")
+        raise HTTPException(401, _INVALID_TOKEN_DETAIL)
 
     return tenant_id, instance_row
 
@@ -372,8 +383,19 @@ def create_document_by_token(token: str, body: TokenCreateDocumentRequest):
 @router.get("/internal/instance-by-token/{token}/documents/{document_id}/url")
 def document_url_by_token(token: str, document_id: str):
     """Presign a download URL -- own uploads, or non-sensitive documents of
-    this instance, only (parent-upload visibility rule unchanged from
-    registration: sensitive docs are gated to their own uploader)."""
+    this instance, only. Sensitive docs are gated to their own uploader
+    (parent-upload visibility rule unchanged from registration).
+
+    INTENTIONAL GENERALIZATION (coordinator review, noted explicitly):
+    familyhub's PRE-Task-10 `get_document_url` only ever allowed a parent to
+    download a document THEY uploaded, full stop -- it had no
+    sensitivity-based exception for download the way the LISTING route
+    always did. This route instead reuses the listing route's rule
+    (own-tag OR non-sensitive) for download too, so a non-sensitive document
+    someone else uploaded to this SAME instance (e.g. a staff-uploaded,
+    non-sensitive acknowledgment doc) is now downloadable, not just
+    listable. Scope is still instance-scoped (`application_id = eid` above)
+    -- this never widens ACROSS instances, only across uploaders within one."""
     tenant_id, instance_row = resolve_token(token)
     eid = instance_row["entity_id"]
     own_tag = _family_actor(instance_row)
