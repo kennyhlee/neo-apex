@@ -9,6 +9,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useDraftStore } from '../editor/draftStore.ts';
 import StepEditor from '../editor/StepEditor.tsx';
+import MachineEditor from '../editor/MachineEditor.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import './EditorPage.css';
@@ -140,7 +141,17 @@ export default function EditorPage() {
               readOnly={store.readOnly}
             />
           )}
-          {tab === 'machine' && <p className="page-placeholder">{t('editor.machineComingSoon')}</p>}
+          {tab === 'machine' && (
+            <MachineEditor
+              tenantId={tenantId}
+              machine={store.machine}
+              onChange={store.setMachine}
+              steps={store.steps}
+              models={store.models}
+              errors={store.validation.errors}
+              readOnly={store.readOnly}
+            />
+          )}
           {tab === 'preview' && <p className="page-placeholder">{t('editor.previewComingSoon')}</p>}
         </div>
 

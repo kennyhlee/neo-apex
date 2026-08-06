@@ -150,8 +150,62 @@ export interface ValidateResult {
 /**
  * `ParamSpec.kind`'s closed vocabulary (workflows/validate.py:408-412):
  * "string_or_list" only appears on `items_in_status.status`.
+ *
+ * # ADJUST(bindings): task-8-brief.md's own prose sketches a wider kind
+ * vocabulary (str/int/bool/list/enum/condition/state-list/section-list/
+ * step-list/field-ref) for GuardEffectComposer's per-param form generator —
+ * but `designer.py`'s `_param_dict` (the actual catalog generator, read
+ * directly off disk for this task) only ever emits ONE of the five kinds
+ * below; there is no "int"/"bool"/"enum" kind, and "enum" is instead an
+ * orthogonal `PrimitiveParam.enum` list layered on top of kind "string"
+ * (e.g. `items_in_status.quantifier`: kind "string", enum ["all","any"]).
+ * The brief's state-list/section-list/step-list/field-ref categories are
+ * likewise not `kind` values at all — they're widget choices
+ * GuardEffectComposer.tsx makes by switching on the (primitive, param.name)
+ * PAIR (e.g. `capacity_available.count_states`, `commit_sections.
+ * section_ids`, `set_entity_field.ref`/`.field`), layered on top of the
+ * generic kind-based fallback for every other param. The catalog wins per
+ * this task's binding rule — this type is exactly `_param_dict`'s five
+ * kinds, unchanged from Task 2.
  */
 export type PrimitiveParamKind = 'string' | 'list' | 'string_or_list' | 'condition' | 'date';
+
+/**
+ * Engine-owned `workflow_instance` field names — verbatim mirror of
+ * `apexflow/backend/app/workflows/schema.py`'s `ENGINE_OWNED_FIELDS`
+ * frozenset (13 entries, `schema.py:32-48`). GuardEffectComposer.tsx uses
+ * this to flag a `set_entity_field` effect whose `ref === "instance"`
+ * targets one of these — `validate.py`'s `_effect_params_set_entity_field`
+ * (`validate.py:501-518`) rejects exactly this shape server-side at publish
+ * time; this is the client-side mirror so the editor can hint before that.
+ *
+ * Deliberately NOT `@neoapex/flow-runtime`'s `ENGINE_OWNED_APPLICATION_FIELDS`
+ * (`flow-runtime/src/types.ts:101`'s own doc comment: "NOT the same list as
+ * apexflow's `schema.ENGINE_OWNED_FIELDS`") — that constant is the
+ * registration-era `registration_application`-scoped field set (a
+ * completely different entity), and using it here would silently pass the
+ * wrong fields through as "safe to set" on ref "instance".
+ *
+ * `../editor/fieldPicker.ts` carries an independent copy of this same
+ * literal list for the (different) entity-model section-field-picker use
+ * case — kept as two separate literals rather than one shared export so
+ * neither call site's import graph is coupled to the other's.
+ */
+export const ENGINE_OWNED_INSTANCE_FIELDS: readonly string[] = [
+  'instance_id',
+  'workflow_instance_id',
+  'definition_id',
+  'definition_version',
+  'state',
+  'subject_refs',
+  'context',
+  'channel_started',
+  'applicant_email',
+  'token_version',
+  'draft_data',
+  'opened_at',
+  'closed_at',
+];
 
 export interface PrimitiveParam {
   name: string;
