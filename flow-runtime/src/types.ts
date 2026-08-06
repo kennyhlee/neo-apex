@@ -97,9 +97,16 @@ export const APPLICATION_ENTITY_TYPE = 'registration_application';
  * Two consumers, one list: the hosts exclude these when hydrating an
  * application-model form block (a parent must never be shown an editable
  * `status` or `config_version`), and apexflow's engine rejects a form answer
- * that targets one with a 400 (`save_draft`, `app/workflows/engine.py`). The
- * Python side restates it as `schema.ENGINE_OWNED_FIELDS` — the two MUST
- * stay identical. (Pre-Task-12 this was enrollx's
+ * that targets one with a 400 (`save_draft`, `app/workflows/engine.py`).
+ *
+ * NOT the same list as apexflow's `schema.ENGINE_OWNED_FIELDS` (that one is
+ * `workflow_instance`-scoped: `instance_id`, `state`, `subject_refs`, etc. —
+ * see `apexflow/backend/app/workflows/schema.py`). This constant is the
+ * registration-era `registration_application` field set, retained here
+ * specifically for the Phase 3 blocks compiler (`familyhub`'s config bundle
+ * still ships `"blocks": []` — `familyhub/backend/app/api/registration.py`
+ * — pending that compiler); it is not required to track apexflow's constant
+ * and the two are allowed to diverge. (Pre-Task-12 this was enrollx's
  * `engine.ENGINE_OWNED_APPLICATION_FIELDS`.)
  *
  * `registration_application_id` is included even though the spec's field
