@@ -130,20 +130,21 @@ export function flowTWith(locale: Locale | undefined, key: string): string {
 }
 
 /**
- * Locale a host has injected via `<FlowRenderer locale=.../>`. `null` means
- * no `FlowRenderer` ancestor supplied one — `useFlowT` falls back to
- * `flowLocale()` in that case, so nothing regresses for callers who render
- * flow-runtime components outside a `FlowRenderer` (e.g. a host's own
- * storybook/test harness). Internal wiring between `i18n.ts` and
- * `FlowRenderer.tsx` — hosts consume this via `useFlowT()`, not directly.
+ * Locale a host has injected via a Provider on this context. `null` means no
+ * ancestor supplied one — `useFlowT` falls back to `flowLocale()` in that
+ * case. No current consumer mounts a Provider (the registration-era
+ * `FlowRenderer` did, via a `locale` prop; it is retired) — `useFlowLocale`
+ * therefore always resolves through `flowLocale()` today, but the context
+ * stays so a future host can inject an explicit locale without every
+ * `useFlowT()` call site changing.
  */
 export const FlowLocaleContext = createContext<Locale | null>(null);
 
 /**
- * Component-scoped translate function, reactive to the locale `FlowRenderer`
- * supplies via context. Block components (Tasks 2-4) must call this instead
- * of `flowT` directly, so a language toggle keeps reaching them even once
- * they're wrapped in `React.memo` for the builder's live preview.
+ * Component-scoped translate function, reactive to whatever locale
+ * `FlowLocaleContext` carries (see above). Callers must use this instead of
+ * `flowT` directly, so a language toggle keeps reaching them even once
+ * they're wrapped in `React.memo`.
  */
 export function useFlowT(): (key: string) => string {
   const locale = useFlowLocale();

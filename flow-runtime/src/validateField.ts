@@ -20,10 +20,9 @@ const PHONE_RE = /^[+]?[\d\s\-().]{7,}$/;
  *
  * Why optional: omitting it preserves the previous behaviour exactly (a
  * per-call `flowLocale()` read), so no existing call site changes meaning and
- * nothing regresses. Callers that HAVE a locale — components under a
- * `FlowRenderer`, which is all of them in practice — should pass it, because
+ * nothing regresses. Callers that HAVE a locale should pass it, because
  * `flowLocale()` reads localStorage and so does not re-translate on a
- * language toggle the way every block component now does.
+ * language toggle the way a component under `FlowLocaleContext` does.
  */
 export function validateFlowField(
   field: FlowField, value: unknown, locale?: Locale,
