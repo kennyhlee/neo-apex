@@ -32,6 +32,20 @@
 //   recoverable state (`parseError`) from a generic network/load failure
 //   (`loadError`), so the editor can show "this draft's data is invalid"
 //   rather than a blank/opaque error.
+// - Cross-definition race follow-up (re-review of fix #4): EditorPage does
+//   NOT remount when the route's `:entityId` param changes to a different
+//   definition (same component instance, `useDraftStore` just re-runs with
+//   new args) — so the in-flight-save machinery (`savingRef`/
+//   `queuedForEntityRef`/`runAutosaveRef`) is SHARED state that survives a
+//   definition switch. Without the three-layer guard below (reset on
+//   entityId change, entity-tagged queued retries, and a final entity_id
+//   match check immediately before every PUT), an in-flight save for
+//   definition A that had a queued retry, followed by navigating straight
+//   to definition B before A's PUT resolves, could fire that retry AFTER
+//   `runAutosaveRef` has been repointed at B's closure while
+//   `definitionRef`/`machineRef`/`stepsRef` still held A's data — a PUT
+//   under B's entity_id carrying A's content. See each guard's own doc
+//   comment below for its specific role.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, getBundle, validateDefinition } from '../api/designer.ts';
 import { updateEntity } from '../api/client.ts';
@@ -148,11 +162,25 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     dirtyRef.current = dirty;
   }, [dirty]);
 
+  // The hook's PARAMETER (not state) reflecting which definition the store
+  // is CURRENTLY scoped to — synced the same render-safe way as the refs
+  // above. Read by the queued-retry check below to detect "this queued
+  // save was requested for a definition we've since navigated away from"
+  // (cross-definition race follow-up, module doc comment).
+  const currentEntityIdRef = useRef(entityId);
+  useEffect(() => {
+    currentEntityIdRef.current = entityId;
+  }, [entityId]);
+
   // In-flight-save guard (task review fix #4): plain refs, never read
   // during render, only mutated from `runAutosave`'s own async body — not
   // subject to the `refs` render-mutation rule.
   const savingRef = useRef(false);
-  const queuedRef = useRef(false);
+  // Which entityId a queued retry was requested FOR (not a plain boolean —
+  // cross-definition race follow-up: the retry must know, and re-check,
+  // which definition it was originally queued for before it's allowed to
+  // fire against `runAutosaveRef`'s CURRENT target).
+  const queuedForEntityRef = useRef<string | null>(null);
 
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const validateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -201,20 +229,53 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
    * queued re-run), don't start a second concurrent write — `put_entity`
    * archives-and-reinserts (draftStore's own module doc comment), so two
    * overlapping writers is a lost-update hazard even though each
-   * individual write is atomic. Instead flag `queuedRef` and, once the
-   * in-flight write finishes, run exactly once more reading whatever the
-   * LATEST refs hold at that point (never a stale snapshot from when the
-   * second call was originally requested).
+   * individual write is atomic. Instead flag `queuedForEntityRef` and,
+   * once the in-flight write finishes, run exactly once more reading
+   * whatever the LATEST refs hold at that point (never a stale snapshot
+   * from when the second call was originally requested).
+   *
+   * Cross-definition race follow-up (module doc comment): three layered
+   * guards make this safe across a definition switch, not just across
+   * rapid edits to the SAME definition —
+   *   1. `queuedForEntityRef` records the entityId THIS closure was
+   *      invoked for (its own `entityId` param) when queuing, not just a
+   *      boolean — so the finally block below can tell whether the
+   *      definition it was queued for is still the one the store is
+   *      currently showing.
+   *   2. The load effect resets `savingRef`/`queuedForEntityRef` the
+   *      moment `tenantId`/`entityId` changes, cancelling any retry
+   *      that was queued for the definition being navigated away from
+   *      (this fires synchronously as part of that same render's effect
+   *      processing, which always happens-before an already-in-flight
+   *      PUT's `.then`/`finally` continuation — JS is single-threaded and
+   *      a pending network response can't preempt already-queued
+   *      synchronous effect work).
+   *   3. Belt-and-suspenders, right here: even if (1)/(2) somehow didn't
+   *      catch it, refuse to PUT if `definitionRef.current.entity_id`
+   *      doesn't match the `entityId` this closure is about to write
+   *      under — `definitionRef` is a SHARED ref the load effect updates
+   *      asynchronously once ITS fetch resolves, so a drift here means
+   *      something raced ahead of that update.
    */
   const runAutosave = useCallback(async () => {
     if (savingRef.current) {
-      queuedRef.current = true;
+      queuedForEntityRef.current = entityId ?? null;
       return;
     }
     const def = definitionRef.current;
     if (!tenantId || !entityId || !def) return;
     // Hard guard (binding rule): never autosave published/superseded rows.
     if (def.status !== 'draft') return;
+    // Guard 3 above — refuse rather than send a different definition's
+    // content to this entity_id, or vice versa.
+    if (def.entity_id !== entityId) {
+      console.error(
+        '[draftStore] Refusing autosave: definitionRef.entity_id ' +
+          `(${def.entity_id}) does not match the target entityId (${entityId}) — ` +
+          'likely a save queued across a definition switch. Skipping this write.',
+      );
+      return;
+    }
 
     savingRef.current = true;
     setSaving(true);
@@ -242,9 +303,18 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     } finally {
       savingRef.current = false;
       setSaving(false);
-      if (queuedRef.current) {
-        queuedRef.current = false;
-        runAutosaveRef.current();
+      const queuedFor = queuedForEntityRef.current;
+      if (queuedFor !== null) {
+        queuedForEntityRef.current = null;
+        // Guard 1 above — drop a queued retry silently if the definition
+        // it was requested for isn't the one currently loaded; any edit
+        // that was genuinely still dirty for THAT definition at the
+        // moment of navigating away was already flushed by the
+        // flush-on-unmount effect (task review fix #3), so this isn't a
+        // data-loss regression.
+        if (queuedFor === currentEntityIdRef.current) {
+          runAutosaveRef.current();
+        }
       }
     }
   }, [tenantId, entityId, runValidate]);
@@ -327,6 +397,20 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
   }, [tenantId, entityId, clearTimers, runValidate]);
 
   useEffect(() => {
+    // Cross-definition race follow-up (module doc comment, guard 2 of 3):
+    // reset the in-flight-save machinery the moment we're scoping to a new
+    // tenantId/entityId — cancels any retry that was queued for the
+    // definition being navigated away from before its own in-flight PUT's
+    // `finally` block gets a chance to act on it. Deliberately does NOT
+    // touch `savingRef` alone without also clearing the queued flag (or
+    // vice versa) — both must move together so a stale queue can never
+    // survive into the new definition's era. Runs synchronously here
+    // (before the async `run()` below even starts), which — because JS is
+    // single-threaded — always happens-before any already-in-flight PUT's
+    // continuation, regardless of that PUT's own timing.
+    savingRef.current = false;
+    queuedForEntityRef.current = null;
+
     let cancelled = false;
 
     async function run() {
