@@ -7,6 +7,7 @@
 // `authHeaders` per API client module (apexflow-frontend's `designer.ts`
 // does the same — interface map §9's localStorage table notes these are
 // "independent copies, not shared code").
+import type { ModelFieldSource, WorkflowStepDef } from '@neoapex/flow-runtime';
 import { ADMINDASH_API_URL } from '../config.ts';
 import { asNumber } from '../utils/workflowData.ts';
 
@@ -114,12 +115,21 @@ export interface DefinitionDetail {
   lineage_status: string;
   channel_access: string;
   machine: { states: MachineStateDef[]; transitions: MachineTransitionDef[] };
-  steps: Record<string, unknown>[];
+  /** Wire mirror of `schema.py`'s `StepDef` list — typed via flow-runtime's
+   * own `WorkflowStepDef` (Task 12) rather than a loose `Record<string,
+   * unknown>[]`, since `StaffEntryPage` feeds this straight into
+   * `StepRenderer`/`draftToSectionAnswers`/`sectionAnswersToDraft`, all of
+   * which require the real shape. */
+  steps: WorkflowStepDef[];
 }
 
 export interface DefinitionBundle {
   definition: DefinitionDetail;
-  models: Record<string, unknown>;
+  /** Task 4 finding: a referenced entity model that was never set up at
+   * this tenant comes back `null` — callers (`StaffEntryPage`) must filter
+   * before handing this to `StepRenderer`, which types `models` with no
+   * null. */
+  models: Record<string, ModelFieldSource | null>;
   health: string;
   errors: string[];
 }
@@ -199,6 +209,47 @@ export async function postInstanceAction(
 }
 
 // ---- Documents ---------------------------------------------------------
+
+export interface CreateDocumentBody {
+  instance_id: string;
+  item_id?: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  sensitive?: boolean;
+}
+
+/** Apexflow's `POST /api/documents/{tenant_id}` presign response, relayed
+ * verbatim by Task 9's proxy — identical shape to familyhub's `DocumentSlot`
+ * (`document_id`/`upload_url`/`storage_key`), reimplemented here rather than
+ * shared since the two channels' API clients are independent copies by
+ * convention (interface map §9's localStorage table note applies to API
+ * clients generally, not just token storage). */
+export interface DocumentSlot {
+  document_id: string;
+  upload_url: string;
+  storage_key: string;
+}
+
+/** POST /api/workflows/{tenant_id}/documents — Task 9's staff document-create
+ * proxy (→ apexflow `POST /api/documents/{tenant_id}`). `uploaded_by` is
+ * derived server-side from the authenticated staff caller; there is no such
+ * field to send from here (`apexflow/backend/app/api/documents.py`'s
+ * `CreateDocumentRequest` has none). Step 2 of the staff upload flow: PUT the
+ * file bytes to `upload_url` with the SAME `Content-Type` sent here (R2's
+ * signature binds it), then `postInstanceAction(..., { action:
+ * 'complete_item', item_id, payload_ref: document_id })`. */
+export async function createDocument(
+  tenantId: string,
+  body: CreateDocumentBody,
+): Promise<DocumentSlot> {
+  const resp = await fetch(`${API_BASE}/api/workflows/${tenantId}/documents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  return parseOrThrow(resp);
+}
 
 /** GET /api/workflows/{tenant_id}/documents/{document_id}/url — Task 9's
  * staff document-download proxy. `document_id` here is a `document` row's

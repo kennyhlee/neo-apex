@@ -1,3 +1,5 @@
+import type { InstanceDocumentView, ModelFieldSource, WorkflowItemView } from '@neoapex/flow-runtime';
+
 /**
  * Pure logic for the AdminDash Workflows area — no network, no React, so it
  * can be exercised directly by vitest under the node environment.
@@ -223,4 +225,61 @@ export function asNumber(value: unknown, fallback = 0): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * Task 4 finding: a `DefinitionBundle.models` entry is `null` for a tenant
+ * model that was never set up (`fetch_models`'s per-referenced-model
+ * lookup can miss). `StepRenderer` types `models` as
+ * `Record<string, ModelFieldSource>` with no null — filtering here means a
+ * section bound to a dropped key resolves to `undefined` in `StepRenderer`'s
+ * own lookup, and `sectionFields` (flow-runtime) already renders that as
+ * "no fields" rather than crashing. Used by `StaffEntryPage` (Task 12);
+ * familyhub's `RegisterPage` carries an unexported equivalent (`usableModels`)
+ * since that app has no shared pure-logic test module to hoist into.
+ */
+export function usableModels(
+  models: Record<string, ModelFieldSource | null>,
+): Record<string, ModelFieldSource> {
+  const out: Record<string, ModelFieldSource> = {};
+  for (const [key, value] of Object.entries(models)) {
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
+/** DataCore stringifies every top-level scalar on a flattened row --
+ * `"false"` is truthy in JS. Does NOT apply to values already inside a
+ * parsed JSON blob (e.g. `draft_data`'s contents), which arrive as real JS
+ * types and must not be re-coerced. */
+export function asBool(v: unknown): boolean {
+  return v === true || String(v) === 'true';
+}
+
+/**
+ * A flattened `workflow_item` row (from `itemsSql` via `/api/query`) ->
+ * `StepRenderer`'s `WorkflowItemView`. Used by `StaffEntryPage` (Task 12) to
+ * hydrate the runtime's `items` prop after every create/action/refetch.
+ */
+export function toItemView(row: Record<string, unknown>): WorkflowItemView {
+  return {
+    entity_id: String(row.entity_id ?? ''),
+    step_id: String(row.step_id ?? ''),
+    kind: (row.kind as WorkflowItemView['kind']) ?? 'form',
+    title: String(row.title ?? ''),
+    status: String(row.status ?? 'not_started'),
+    blocking: asBool(row.blocking),
+  };
+}
+
+/**
+ * A flattened `document` row (from `documentsSql` via `/api/query`) ->
+ * `StepRenderer`'s `InstanceDocumentView`.
+ */
+export function toDocumentView(row: Record<string, unknown>): InstanceDocumentView {
+  return {
+    document_id: String(row.document_id ?? row.entity_id ?? ''),
+    filename: String(row.filename ?? ''),
+    item_id: row.item_id ? String(row.item_id) : undefined,
+  };
 }

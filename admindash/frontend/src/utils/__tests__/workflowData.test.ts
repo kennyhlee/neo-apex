@@ -10,6 +10,10 @@ import {
   activitySql,
   actionButtonsFor,
   itemActionVisibility,
+  usableModels,
+  asBool,
+  toItemView,
+  toDocumentView,
   type MachineStateView,
   type InstanceRow,
 } from '../workflowData.ts';
@@ -251,5 +255,71 @@ describe('itemActionVisibility', () => {
     for (const s of ['not_started', 'in_progress', 'submitted', 'verified', 'rejected', 'waived']) {
       expect(itemActionVisibility(s).reject).toBe(true);
     }
+  });
+});
+
+describe('usableModels', () => {
+  it('drops null entries, keeps the rest', () => {
+    const models = {
+      student: { base_fields: [], custom_fields: [] },
+      family: null,
+    };
+    expect(usableModels(models)).toEqual({
+      student: { base_fields: [], custom_fields: [] },
+    });
+  });
+
+  it('returns {} for an all-null or empty map', () => {
+    expect(usableModels({ a: null, b: null })).toEqual({});
+    expect(usableModels({})).toEqual({});
+  });
+});
+
+describe('asBool', () => {
+  it('treats real true and the string "true" as true', () => {
+    expect(asBool(true)).toBe(true);
+    expect(asBool('true')).toBe(true);
+  });
+
+  it('treats false, "false", and everything else as false', () => {
+    expect(asBool(false)).toBe(false);
+    expect(asBool('false')).toBe(false);
+    expect(asBool(undefined)).toBe(false);
+    expect(asBool(null)).toBe(false);
+    expect(asBool('')).toBe(false);
+    expect(asBool(0)).toBe(false);
+  });
+});
+
+describe('toItemView', () => {
+  it('maps a flattened workflow_item row, coercing blocking from its stringly-typed wire form', () => {
+    expect(toItemView({
+      entity_id: 'ITM-1', step_id: 'docs', kind: 'documents',
+      title: 'Birth certificate', status: 'submitted', blocking: 'true',
+    })).toEqual({
+      entity_id: 'ITM-1', step_id: 'docs', kind: 'documents',
+      title: 'Birth certificate', status: 'submitted', blocking: true,
+    });
+  });
+
+  it('falls back to safe defaults for missing fields', () => {
+    expect(toItemView({ entity_id: 'ITM-2' })).toEqual({
+      entity_id: 'ITM-2', step_id: '', kind: 'form', title: '',
+      status: 'not_started', blocking: false,
+    });
+  });
+});
+
+describe('toDocumentView', () => {
+  it('maps a flattened document row', () => {
+    expect(toDocumentView({
+      document_id: 'DOC-1', entity_id: 'DOC-1', filename: 'cert.pdf', item_id: 'ITM-1',
+    })).toEqual({ document_id: 'DOC-1', filename: 'cert.pdf', item_id: 'ITM-1' });
+  });
+
+  it('falls back to entity_id when document_id is absent, and leaves item_id undefined when absent', () => {
+    expect(toDocumentView({ entity_id: 'DOC-2', filename: 'x.pdf' })).toEqual({
+      document_id: 'DOC-2', filename: 'x.pdf', item_id: undefined,
+    });
   });
 });

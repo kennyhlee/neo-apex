@@ -16,25 +16,9 @@ import ProgramPage from './pages/ProgramPage.tsx';
 import FamiliesPage from './pages/FamiliesPage.tsx';
 import WorkflowsPage from './pages/WorkflowsPage.tsx';
 import WorkflowPipelinePage from './pages/WorkflowPipelinePage.tsx';
+import StaffEntryPage from './pages/StaffEntryPage.tsx';
 import { useTranslation } from './hooks/useTranslation.ts';
 import './App.css';
-
-/**
- * TASK 12 REPLACES THIS. Staff instance-creation form for a definition
- * (`/workflows/:definitionId/new`) — registered here only so the route
- * compiles and "Start staff entry" (WorkflowPipelinePage) has somewhere to
- * land; Task 10's scope is the definitions list + pipeline board, not the
- * creation form itself.
- */
-function WorkflowNewInstancePlaceholder() {
-  const { t } = useTranslation();
-  return (
-    <div className="not-found">
-      <h1>{t('workflows.startEntry')}</h1>
-      <p>{t('workflows.newInstanceComingSoon')}</p>
-    </div>
-  );
-}
 
 /**
  * Unknown URLs previously redirected to /home, so a typo looked like a
@@ -94,7 +78,7 @@ function AppRoutes() {
                       />
                       <Route
                         path="/workflows/:definitionId/new"
-                        element={<WorkflowNewInstancePlaceholder />}
+                        element={<StaffEntryPage tenant={tenant} />}
                       />
                       <Route path="/" element={<Navigate to="/home" replace />} />
                       <Route path="*" element={<NotFound />} />

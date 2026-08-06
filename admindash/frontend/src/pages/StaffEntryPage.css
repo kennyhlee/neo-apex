@@ -1,0 +1,70 @@
+.staff-entry-page {
+  animation: fadeIn var(--dur-base) var(--ease);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 72ch;
+}
+
+.staff-entry-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-muted);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+/* --- Context form (school year / applicant email) -------------------------- */
+
+.staff-entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--card-r);
+  padding: var(--space-5);
+}
+
+.staff-entry-form-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.staff-entry-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.staff-entry-field label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.staff-entry-form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --- Running view: StepRenderer + actions bar ------------------------------ */
+
+.staff-entry-page .fr-step-renderer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.staff-entry-actions-title {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
