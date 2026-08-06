@@ -65,8 +65,9 @@ admindash-backend.** `AuthContext.tsx` only does username/password login
 against its own backend's `/auth/login`, and `LoginPage.tsx` (below) has no
 `code=` query-param handling. `grep -rln "exchange"` across
 `admindash/frontend/src` and `admindash/backend` returns zero matches (auth
-routes: `admindash/backend/app/api/auth.py` has only `/auth/login` at
-`:21` and `/auth/me` at `:49`). The real exchange-code implementation lives
+routes: `admindash/backend/app/api/auth.py` has only `POST /login` at
+`:10` and `GET /me` at `:37`, each proxying to DataCore's `/auth/login`
+(`:21`) / `/auth/me` (`:49`) unchanged). The real exchange-code implementation lives
 in `datacore/src/datacore/api/auth_routes.py:78` (`POST /exchange-code`,
 issuer) and is *consumed* by `launchpad/frontend/src/api/client.ts:19`
 (`getExchangeCode`) and `papermite/frontend/src/api/client.ts`. If the
@@ -305,8 +306,8 @@ B. Density         — tokens that differ between comfortable / compact
 C. Compatibility   — every legacy token name re-pointed at a primitive
 ```
 `:26-59` (Primitives, Neutrals/Accent groups) — every color is a CSS
-custom property under `:root`, e.g. `--ground: #F8FAFC;` (`:33`),
-`--accent: #378ADD;` (`:44`), `--accent-hover: #2B6FB5;` (`:45`) — the
+custom property under `:root`, e.g. `--ground: #F8FAFC;` (`:36`),
+`--accent: #378ADD;` (`:51`), `--accent-hover: #2B6FB5;` (`:52`) — the
 `admindash/CLAUDE.md` accent/accent-ink accessibility rule (border/focus/
 `accent-color` take `--accent`; text/background take `--accent-ink`)
 governs any component the designer ports that touches color. Semantic
