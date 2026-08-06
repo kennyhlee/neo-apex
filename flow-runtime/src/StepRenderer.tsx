@@ -4,6 +4,7 @@ import type {
   Condition, ConditionGroupDef, ConditionItem, FlowField, WorkflowSectionDef, WorkflowStepDef,
 } from './types';
 import type { ModelFieldSource } from './blockConfig';
+import { labelOf } from './blockConfig';
 import { sectionFields } from './sectionFields';
 import { useFlowT } from './i18n';
 
@@ -119,17 +120,26 @@ function evalItem(item: ConditionItem, data: Record<string, unknown>): boolean {
  *   `false` — a present falsy scalar is not the same as an empty value.
  *
  * `ConditionGroupDef`'s Python counterpart's model validator guarantees
- * exactly one of `all`/`any`/`not` is set, so the final branch here is
- * unreachable in well-formed data and only guards a malformed group.
+ * exactly one of `all`/`any`/`not` is set, so — logically — only one of the
+ * three branches below should ever apply. IMPORTANT wire-shape gotcha: the
+ * backend's `model_dump(by_alias=True)` (what `designer.py`'s routes
+ * actually emit) serializes ALL THREE keys, with `null` standing in for the
+ * two that are unset — it does NOT omit them. So `group.all !== undefined`
+ * is true even when `all` is the `null`-carrying unset key, and dispatching
+ * on `!== undefined` fires the wrong branch (and crashes calling `.every`
+ * on `null`). Dispatch on `Array.isArray(...)` instead, checked in
+ * `all` -> `any` -> `not` order, which is robust to `null` on the unset
+ * keys and still preserves "exactly one is set" semantics for any
+ * well-formed group.
  *
  * Pure — no I/O, no React — so Plan 3 can exercise it directly (e.g. a
  * fixture-driven parity test against `conditions.py`) without any DOM/
  * network setup.
  */
 export function evaluateCondition(group: ConditionGroupDef, data: Record<string, unknown>): boolean {
-  if (group.all !== undefined) return group.all.every((item) => evalItem(item, data));
-  if (group.any !== undefined) return group.any.some((item) => evalItem(item, data));
-  if (group.not !== undefined) return !group.not.some((item) => evalItem(item, data));
+  if (Array.isArray(group.all)) return group.all.every((item) => evalItem(item, data));
+  if (Array.isArray(group.any)) return group.any.some((item) => evalItem(item, data));
+  if (Array.isArray(group.not)) return !group.not.some((item) => evalItem(item, data));
   throw new Error('ConditionGroup has none of all/any/not set');
 }
 
@@ -206,10 +216,6 @@ function buildConditionData(steps: WorkflowStepDef[], draft: WorkflowDraft): Rec
   return data;
 }
 
-function labelOf(name: string): string {
-  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 interface FieldControlProps {
   id: string;
   field: FlowField;
@@ -220,7 +226,10 @@ interface FieldControlProps {
 
 /** Field rendering by model field type (brief §"Field rendering"):
  *  str/email/phone -> text input, number -> number, bool -> checkbox,
- *  date/datetime -> date input, selection -> select with options. */
+ *  date/datetime -> date input, selection -> select with options (a
+ *  checkbox group instead when `field.multiple`, mirroring
+ *  `FormBlock.tsx`'s precedent — `validateFlowField` already expects a
+ *  multi-select field's value to be an array). */
 function FieldControl({ id, field, value, disabled, onChange }: FieldControlProps) {
   const str = value != null ? String(value) : '';
 
@@ -242,7 +251,26 @@ function FieldControl({ id, field, value, disabled, onChange }: FieldControlProp
         <input id={id} type="date" className="fr-input" disabled={disabled} value={str}
           onChange={(e) => onChange(e.target.value)} />
       );
-    case 'selection':
+    case 'selection': {
+      if (field.multiple) {
+        const selected = Array.isArray(value)
+          ? (value as string[])
+          : typeof value === 'string' && value ? [value] : [];
+        return (
+          <div className="fr-choice-group">
+            {(field.options ?? []).map((opt, i) => (
+              <label key={opt} className="fr-choice-label">
+                <input id={i === 0 ? id : undefined} type="checkbox" disabled={disabled}
+                  checked={selected.includes(opt)}
+                  onChange={(e) => onChange(
+                    e.target.checked ? [...selected, opt] : selected.filter((s) => s !== opt),
+                  )} />
+                {opt}
+              </label>
+            ))}
+          </div>
+        );
+      }
       return (
         <select id={id} className="fr-input" disabled={disabled} value={str}
           onChange={(e) => onChange(e.target.value)}>
@@ -250,6 +278,7 @@ function FieldControl({ id, field, value, disabled, onChange }: FieldControlProp
           {(field.options ?? []).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
         </select>
       );
+    }
     default: // str/email/phone
       return (
         <input id={id} type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'}
@@ -270,17 +299,33 @@ interface FieldRowProps {
 function FieldRow({ idPrefix, field, value, disabled, onChange }: FieldRowProps) {
   const t = useFlowT();
   const id = `${idPrefix}-${field.name}`;
+  const labelText = (
+    <>
+      {labelOf(field.name)}
+      {field.required && (
+        <>
+          <span className="fr-required" aria-hidden="true">*</span>
+          <span className="fr-sr-only"> ({t('required')})</span>
+        </>
+      )}
+    </>
+  );
+
+  // A single <label> cannot name a set of controls — a multi-select renders
+  // as a checkbox group, so it needs fieldset/legend instead (same
+  // reasoning as FormBlock.tsx's identical selection-group case).
+  if (field.type === 'selection' && field.multiple) {
+    return (
+      <fieldset className="fr-field fr-fieldset" aria-required={field.required || undefined}>
+        <legend className="fr-legend">{labelText}</legend>
+        <FieldControl id={id} field={field} value={value} disabled={disabled} onChange={onChange} />
+      </fieldset>
+    );
+  }
+
   return (
     <div className={`fr-field${field.type === 'bool' ? ' fr-field--checkbox' : ''}`}>
-      <label htmlFor={id}>
-        {labelOf(field.name)}
-        {field.required && (
-          <>
-            <span className="fr-required" aria-hidden="true">*</span>
-            <span className="fr-sr-only"> ({t('required')})</span>
-          </>
-        )}
-      </label>
+      <label htmlFor={id}>{labelText}</label>
       <FieldControl id={id} field={field} value={value} disabled={disabled} onChange={onChange} />
     </div>
   );
@@ -295,6 +340,7 @@ interface SectionRendererProps {
 }
 
 function SectionRenderer({ step, section, model, draft, onDraftChange }: SectionRendererProps) {
+  const t = useFlowT();
   const baseId = useId();
   const fields = sectionFields(section, model);
   const idPrefix = `${baseId}-${step.step_id}-${section.section_id}`;
@@ -356,12 +402,12 @@ function SectionRenderer({ step, section, model, draft, onDraftChange }: Section
           </div>
           <button type="button" className="fr-btn" disabled={rows.length <= min}
             onClick={() => removeRow(index)}>
-            Remove
+            {t('removeRow')}
           </button>
         </div>
       ))}
       <button type="button" className="fr-btn" disabled={rows.length >= max} onClick={addRow}>
-        Add another
+        {t('addAnother')}
       </button>
     </div>
   );
@@ -389,6 +435,7 @@ function DocumentsStep({ step }: { step: WorkflowStepDef }) {
 function MessageStep({ step, draft, onDraftChange }: {
   step: WorkflowStepDef; draft: WorkflowDraft; onDraftChange: (next: WorkflowDraft) => void;
 }) {
+  const t = useFlowT();
   const baseId = useId();
   const body = stepMessageBody(step);
   const paragraphs = body.split('\n').filter((p) => p.trim() !== '');
@@ -402,7 +449,7 @@ function MessageStep({ step, draft, onDraftChange }: {
           <label htmlFor={ackId}>
             <input id={ackId} type="checkbox" checked={draft[ackKey] === true}
               onChange={(e) => onDraftChange({ ...draft, [ackKey]: e.target.checked })} />
-            {' '}I acknowledge this message.
+            {' '}{t('acknowledgeMessage')}
           </label>
         </div>
       )}
@@ -458,6 +505,13 @@ export interface StepRendererProps {
  * built from `draft` (see `buildConditionData`) — a step whose `show_if`
  * evaluates false is skipped entirely (not shown greyed-out), matching how
  * the real engine would never surface it.
+ *
+ * Does NOT consult `available_in` (the machine states a step is eligible
+ * in) — that's a function of workflow-instance state, which a definition-
+ * time preview has none of. Callers that DO have a state to preview against
+ * (Task 9's staff/family preview state selector) must pre-filter `steps` to
+ * those whose `available_in` includes the selected state before passing
+ * them in here.
  */
 export function StepRenderer({ steps, models, mode, draft, onDraftChange }: StepRendererProps) {
   void mode; // reserved: only "preview" exists today, kept as an explicit prop for forward-compat.

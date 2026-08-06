@@ -166,14 +166,20 @@ export type ConditionItem = Condition | ConditionGroupDef;
 
 /**
  * Wire mirror of `schema.py`'s `ConditionGroup` (`:95-107`). Exactly one of
- * `all`/`any`/`not` is present — the Python side enforces this with a model
- * validator (`:109-117`); this TS type does not enforce it, so callers
- * (`evaluateCondition` in particular) must be defensive.
+ * `all`/`any`/`not` is semantically set — the Python side enforces this
+ * with a model validator (`:109-117`) — but on the actual wire, the
+ * backend's `model_dump(by_alias=True)` (what `designer.py`'s routes emit)
+ * serializes ALL THREE keys, with `null` for the two that are unset; it
+ * does NOT omit them. This TS type marks all three optional for
+ * convenience, but a `ConditionGroupDef` read off the wire will have all
+ * three keys present with two of them `null` — callers (`evaluateCondition`
+ * in particular) must check `Array.isArray(...)`, not `!== undefined`, to
+ * find the set one.
  */
 export interface ConditionGroupDef {
-  all?: ConditionItem[];
-  any?: ConditionItem[];
-  not?: ConditionItem[];
+  all?: ConditionItem[] | null;
+  any?: ConditionItem[] | null;
+  not?: ConditionItem[] | null;
 }
 
 /** Wire mirror of `schema.py`'s `FieldPick` (`:176-178`). */

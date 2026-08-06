@@ -2,6 +2,7 @@
 import { useId } from 'react';
 import type { FlowField } from '../types';
 import { useFlowT } from '../i18n';
+import { labelOf } from '../blockConfig';
 
 export interface FormBlockProps {
   blockId: string;
@@ -23,10 +24,6 @@ export interface FormBlockProps {
    * `onChange` or `draft_data`.
    */
   context?: { label: string; value: string }[];
-}
-
-function labelOf(name: string): string {
-  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function FormBlock({
