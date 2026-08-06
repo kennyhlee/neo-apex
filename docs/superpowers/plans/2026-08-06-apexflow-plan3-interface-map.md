@@ -1041,3 +1041,13 @@ trusting the prior map's snapshot. No other value changed between passes.
    `section_answers`; read: hydrate a fetched `instance.draft_data` back
    into a flat `WorkflowDraft`). Neither `flow-runtime` nor either channel
    frontend has a partial implementation to build on.
+
+9. **`workflows/definitions.py::parse_machine_steps`'s signature is at
+   `:40`, not `:46-47`.** The plan brief's own citation for this symbol
+   (echoed from the Plan 2 map) points at `:46-47`, which on fresh re-read
+   are two lines INSIDE the function body (`machine_dict = json.loads(...)`
+   / `steps_list = json.loads(...)`), not the `def` line — §1h above
+   already cites the correct current range (`:40-50`). Flagged here
+   explicitly per this task's own note-drifts-in-§10 requirement;
+   `referenced_entity_models (:53)` and `fetch_models (:67)` are both still
+   correct as cited, only this one symbol drifted.
