@@ -9,3 +9,4 @@ export {
   StepRenderer, evaluateCondition,
   type StepRendererProps, type StepRendererMode, type WorkflowDraft,
 } from './StepRenderer';
+export { draftToSectionAnswers, sectionAnswersToDraft } from './sectionAnswers';
