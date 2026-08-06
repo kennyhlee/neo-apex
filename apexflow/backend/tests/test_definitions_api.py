@@ -321,13 +321,34 @@ def test_retire_with_open_instances_returns_409_with_count(client, fake_dc):
     assert row["lineage_status"] == "active"
 
 
-def test_retire_force_cancel_returns_501(client, fake_dc):
+def test_retire_force_cancel_bulk_cancels_open_instances_then_retires(client, fake_dc):
+    """Task 8: force_cancel now performs a real bulk-cancel (was a 501 stub
+    through Task 5) — every open instance of the lineage is run through
+    `machine.cancel_instance` before the lineage itself flips to retired."""
     fake_dc.set_model(TENANT, "student", _valid_models()["student"])
     eid = _seed_definition(fake_dc, definition_id="wd-lineage-5", status="published")
-    _seed_instance(fake_dc, definition_id="wd-lineage-5", closed_at="")
+    open_eid = _seed_instance(fake_dc, definition_id="wd-lineage-5", closed_at="")
+    already_closed_eid = _seed_instance(
+        fake_dc, definition_id="wd-lineage-5", closed_at="2026-08-02T00:00:00+00:00")
 
     resp = act(client, eid, "retire", force_cancel=True)
-    assert resp.status_code == 501
+    assert resp.status_code == 200
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["lineage_status"] == "retired"
+
+    cancelled_row = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
+    assert cancelled_row["state"] == "cancelled"
+    assert cancelled_row["closed_at"]
+    assert int(cancelled_row["token_version"]) == 2  # started at 1 via _seed_instance's default
+
+    activities = fake_dc.find("workflow_activity", instance_id=open_eid)
+    assert activities[-1]["type"] == "state_change"
+    assert activities[-1]["to_value"] == "cancelled"
+
+    # the already-closed instance (excluded from the open-instance query) is untouched.
+    untouched_row = fake_dc.get_entity(TENANT, "workflow_instance", already_closed_eid)
+    assert untouched_row["state"] == "draft"
 
 
 def test_retire_with_no_open_instances_succeeds(client, fake_dc):

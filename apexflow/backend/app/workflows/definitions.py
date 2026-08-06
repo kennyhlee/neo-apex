@@ -18,7 +18,7 @@ which is constant across a lineage's draft/published/superseded rows while
 `entity_id` and `version` change per row.
 """
 import json
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import HTTPException
 
@@ -174,6 +174,17 @@ def reactivate_definition(tenant_id: str, entity_id: str, token: str | None = No
     return _set_lineage_status(tenant_id, entity_id, "active", "reactivate", token)
 
 
+def list_open_instances(tenant_id: str, lineage_definition_id: str,
+                        token: str | None = None) -> list[dict]:
+    """Open (`closed_at` empty/absent) `workflow_instance` rows of one
+    lineage — the same query `count_open_instances` and `retire_definition`
+    gate on, exposed as rows (not just a count) so `retire_definition` can
+    bulk-cancel each one by name (Task 8)."""
+    rows = dc.list_entities(tenant_id, "workflow_instance", "", token)
+    rows = [r for r in rows if str(r.get("definition_id", "")) == str(lineage_definition_id)]
+    return [r for r in rows if not r.get("closed_at")]
+
+
 def count_open_instances(tenant_id: str, lineage_definition_id: str,
                          token: str | None = None) -> int:
     """Open-instance count for one lineage, gating `retire`.
@@ -182,30 +193,48 @@ def count_open_instances(tenant_id: str, lineage_definition_id: str,
     Task 6 creates them): "instances of this lineage (definition_id match)
     with empty/absent closed_at" — no per-instance machine/terminal-state
     check here, since a diligently-maintained engine (Task 6/8) only ever
-    leaves closed_at empty while an instance is genuinely open.
+    leaves closed_at empty while an instance is genuinely open (Task 8's
+    `app.workflows.machine` keeps that promise: it sets `closed_at` on any
+    transition — explicit or system-auto-advanced — landing on a
+    `kind: "terminal"` state, and on `cancel_instance`).
     """
-    rows = dc.list_entities(tenant_id, "workflow_instance", "", token)
-    rows = [r for r in rows if str(r.get("definition_id", "")) == str(lineage_definition_id)]
-    return len([r for r in rows if not r.get("closed_at")])
+    return len(list_open_instances(tenant_id, lineage_definition_id, token))
 
 
-def retire_definition(tenant_id: str, entity_id: str, force_cancel: bool = False,
-                      token: str | None = None) -> dict:
+def retire_definition(tenant_id: str, entity_id: str, force_cancel: bool = False, *,
+                      actor: str | None = None, token: str | None = None,
+                      cancel_instance_fn: Callable[[str, dict, str, str | None], None] | None = None,
+                      ) -> dict:
     """lineage_status -> retired, gated on zero open instances.
 
     409 `{"open_instances": N}` when any are open and `force_cancel` is not
-    set. `force_cancel=True` with open instances present returns 501 in this
-    task — Task 8 owns `cancel_instance`/bulk-cancel and wires this branch
-    for real. # ADJUST: Task 8
+    set. When `force_cancel=True` and open instances exist, each is
+    cancelled via `cancel_instance_fn(tenant_id, instance_row, actor,
+    token)` before retirement proceeds (spec §3 "Definition lifecycle":
+    retire "is terminal and gated on open instances (zero remaining, or
+    explicit bulk-cancel)").
+
+    `cancel_instance_fn` is dependency-injected by the caller (`app.api
+    .definitions`) rather than this module importing `app.workflows.machine`
+    directly — `machine.py` imports THIS module (`_parse_machine_steps`/
+    `_fetch_models`/`_referenced_entity_models`/`_as_int`), so a
+    `definitions.py -> machine.py` import back would close a cycle. Callers
+    that pass `force_cancel=True` must supply `cancel_instance_fn` and a
+    real `actor` — an `AssertionError` (a programming error, not a request
+    error: the API layer is responsible for wiring this) if either is
+    missing while there are open instances to cancel.
     """
     row = _require_published_row(tenant_id, entity_id, token, "retire")
     lineage_id = row.get("definition_id")
-    open_count = count_open_instances(tenant_id, lineage_id, token)
-    if open_count > 0:
-        if force_cancel:
-            # ADJUST: Task 8 wires force_cancel via cancel_instance/bulk-cancel.
-            raise HTTPException(501, "force_cancel is not implemented yet (Task 8)")
-        raise HTTPException(409, {"open_instances": open_count})
+    open_rows = list_open_instances(tenant_id, lineage_id, token)
+    if open_rows:
+        if not force_cancel:
+            raise HTTPException(409, {"open_instances": len(open_rows)})
+        assert cancel_instance_fn is not None and actor, (
+            "retire_definition(force_cancel=True) requires both actor and cancel_instance_fn"
+        )
+        for instance_row in open_rows:
+            cancel_instance_fn(tenant_id, instance_row, actor, token)
 
     base = entity_base_data(row)
     base["lineage_status"] = "retired"

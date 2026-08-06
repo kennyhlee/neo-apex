@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.auth import require_staff_tenant
 from app.workflows import definitions as defs
+from app.workflows import machine
 
 router = APIRouter(prefix="/api/workflows")
 
@@ -25,10 +26,20 @@ class ActionRequest(BaseModel):
     action: str
 
 
+def _cancel_one(tenant_id: str, instance_row: dict, actor: str, token: str | None) -> None:
+    """`retire_definition`'s `cancel_instance_fn` collaborator (Task 8) —
+    lives at the API layer (not in `app.workflows.definitions`) specifically
+    to avoid a `definitions.py -> machine.py` import cycle; see
+    `definitions.retire_definition`'s docstring."""
+    ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
+    machine.cancel_instance(ctx)
+
+
 @router.post("/{tenant_id}/definitions/{entity_id}/actions")
 def definition_action(tenant_id: str, entity_id: str, body: ActionRequest,
                       user: dict = Depends(require_staff_tenant)):
     token = user.get("_token")
+    actor = user.get("user_id", "staff")
     params = body.model_dump(exclude={"action"})
 
     if body.action == "publish":
@@ -39,7 +50,8 @@ def definition_action(tenant_id: str, entity_id: str, body: ActionRequest,
         return defs.reactivate_definition(tenant_id, entity_id, token)
     if body.action == "retire":
         return defs.retire_definition(
-            tenant_id, entity_id, force_cancel=bool(params.get("force_cancel")), token=token)
+            tenant_id, entity_id, force_cancel=bool(params.get("force_cancel")),
+            actor=actor, token=token, cancel_instance_fn=_cancel_one)
 
     raise HTTPException(400, f"Unknown action: {body.action!r}")
 

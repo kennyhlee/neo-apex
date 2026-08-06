@@ -118,6 +118,16 @@ class EvalContext:
     (nothing is stored beyond the instance's existing `token_version`) —
     the caller reads it off `ctx` after running effects to surface the
     minted token to whichever route triggered the action.
+
+    `item_result` (Task 8): a second side-channel, written by
+    `app.workflows.machine`'s item-built-in dispatch (`complete_item`/
+    `verify_item`/`reject_item`/`waive_item`) to the updated `workflow_item`
+    dc_update envelope, or left `None` for every other action (including
+    `save_draft`, which mutates the instance, not an item). Lets
+    `execute_action`'s return type stay "the instance row" (per its own
+    Produces contract) while still giving `api/instances.py`'s route a way
+    to surface the item op's result under the response's `"item"` key
+    without a second DataCore round-trip.
     """
 
     tenant_id: str
@@ -131,6 +141,7 @@ class EvalContext:
     now: datetime
     token: str | None = None
     issued_link: str | None = None
+    item_result: dict | None = None
 
 
 # --- small EvalContext-flavored wrappers around app.workflows.shared -----

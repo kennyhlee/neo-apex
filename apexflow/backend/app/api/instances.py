@@ -1,13 +1,13 @@
 # apexflow/backend/app/api/instances.py
-"""Instances API routes (Task 6): instance creation.
+"""Instances API routes (Task 6 creation route; Task 8 action route).
 
-Single route this task adds: `POST
-/api/workflows/{tenant_id}/definitions/{definition_id}/instances`. Item-level
-operations (`save_draft`, `complete_item`, `verify_item`, `reject_item`,
-`waive_item`) get NO routes here — Task 8's single action endpoint
-(`POST /api/workflows/{tenant_id}/instances/{entity_id}/actions`) dispatches
-to them as built-ins, alongside machine transitions. This module is HTTP
-wiring only; all business logic lives in app.workflows.engine.
+`POST /api/workflows/{tenant_id}/definitions/{definition_id}/instances`
+(Task 6). `POST /api/workflows/{tenant_id}/instances/{instance_entity_id}
+/actions` (Task 8) — the single action endpoint: item-level operations
+(`save_draft`, `complete_item`, `verify_item`, `reject_item`, `waive_item`),
+`cancel_instance`, and machine transitions all dispatch through
+`app.workflows.machine.execute_action`. This module is HTTP wiring only; all
+business logic lives in app.workflows.engine / app.workflows.machine.
 
 DECISION (task-6-brief.md): the brief's own Produces line writes the route as
 `.../definitions/{entity_id}/instances`, then immediately asks "is that the
@@ -23,14 +23,25 @@ occupies the same URL position as app/api/definitions.py's `{entity_id}`
 (which DOES address one specific row — a different resource, deliberately
 disambiguated by param name here since the two are easy to conflate, per the
 interface map's identifier-trap gotcha).
+
+DECISION (Task 8): the actions route's `{instance_entity_id}` path param
+genuinely IS a DataCore `entity_id` (unlike the creation route's lineage
+`definition_id` above) — `workflow_instance` rows have no separate
+lineage-vs-row identity split the way `workflow_definition` rows do (Task 6's
+`create_instance` already returns/looks instances up by `entity_id`
+throughout). `actor = user.get("user_id", "staff")` follows the enrollx
+precedent (`enrollx/backend/app/api/registration.py`, interface map §2) for
+deriving a staff actor string from the auth dependency's return shape.
 """
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from app.auth import require_staff_tenant
+from app.workflows import datacore as dc
 from app.workflows import engine
+from app.workflows import machine
 
 router = APIRouter(prefix="/api/workflows")
 
@@ -61,3 +72,43 @@ def create_instance_route(tenant_id: str, definition_id: str, body: CreateInstan
         tenant_id, definition_id, body.context, body.channel,
         applicant_email=body.applicant_email, token=token,
     )
+
+
+class ActionRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    action: str
+
+
+@router.post("/{tenant_id}/instances/{instance_entity_id}/actions")
+def instance_action_route(tenant_id: str, instance_entity_id: str, body: ActionRequest,
+                          user: dict = Depends(require_staff_tenant)):
+    """The single action endpoint (Task 8): `{"action": name, ...params}` ->
+    `200 {"instance": row}`, plus `"item"` when an item built-in other than
+    `save_draft` ran (`ctx.item_result`, `app.workflows.primitives.
+    EvalContext`'s side channel — see machine.py's module docstring,
+    decision 6).
+
+    Staff-authenticated even for a family-permitted action (`actor:
+    "family"` transitions, `save_draft`/`complete_item`) — this is the
+    staff-facing surface (AdminDash staff-assisted entry). The
+    unauthenticated family/token-scoped surface is Task 10's internal
+    `/internal/instance-by-token/{token}/actions` route, which will call
+    `app.workflows.machine.execute_action` the same way with `actor`
+    derived from the verified token instead of the JWT.
+    """
+    token = user.get("_token")
+    actor = user.get("user_id", "staff")
+
+    instance_row = dc.get_entity(tenant_id, "workflow_instance", instance_entity_id, token)
+    if instance_row is None:
+        raise HTTPException(404, "workflow_instance not found")
+
+    ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
+    params = body.model_dump(exclude={"action"})
+    updated_instance = machine.execute_action(ctx, body.action, params)
+
+    response = {"instance": updated_instance}
+    if ctx.item_result is not None:
+        response["item"] = ctx.item_result
+    return response
