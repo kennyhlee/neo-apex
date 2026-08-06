@@ -164,7 +164,7 @@ _ITEM_OP_FNS: dict[str, Callable[..., dict]] = {
     "waive_item": engine.waive_item,
 }
 
-# Declaration order matters for `_allowed_actions`'s honest listing (brief:
+# Declaration order matters for `allowed_actions`'s honest listing (brief:
 # "['save_draft','complete_item'] for family; all five for staff").
 _ITEM_BUILTINS_ALL: list[str] = ["save_draft", "complete_item", "verify_item", "reject_item", "waive_item"]
 _ITEM_BUILTINS_FAMILY: list[str] = ["save_draft", "complete_item"]
@@ -348,12 +348,18 @@ def _apply_transition(ctx: EvalContext, transition: TransitionDef) -> None:
 # --- allowed-actions listing (409 body) -----------------------------------
 
 
-def _allowed_actions(ctx: EvalContext) -> list[str]:
+def allowed_actions(ctx: EvalContext) -> list[str]:
     """Currently-satisfiable NON-system actions for `ctx.actor` from the
     current state: guard-passing transition action names (declaration
     order, deduped), plus the actor-appropriate item built-in names — empty
     when the instance is terminal/cancelled (built-ins aren't satisfiable
-    there either, per `_is_terminal_state`'s use in `_run_item_builtin`)."""
+    there either, per `_is_terminal_state`'s use in `_run_item_builtin`).
+
+    Public (Plan 3 Task 3 — promoted from `_allowed_actions`, no alias
+    kept): consumed both by the two 409 raise sites below AND by the
+    staff `GET .../allowed-actions` route (`app/api/instances.py`) and the
+    family token-bundle route (`app/api/internal.py::instance_by_token`),
+    which advertise this same list outside of a failed-action 409."""
     if _is_terminal_state(ctx):
         return []
 
@@ -409,8 +415,15 @@ def _run_item_builtin(ctx: EvalContext, action_name: str, params: dict) -> None:
         if not item_entity_id:
             raise HTTPException(400, {"error": "item_id is required"})
         fn = _ITEM_OP_FNS[action_name]
-        ctx.item_result = fn(ctx.tenant_id, ctx.instance, item_entity_id, ctx.actor,
-                             token=ctx.token, now=ctx.now)
+        kwargs = {"token": ctx.token, "now": ctx.now}
+        if action_name == "complete_item":
+            # Plan 3 Task 3: thread the caller-supplied payload_ref through so
+            # a documents-kind item's completion can actually reference an
+            # uploaded document — engine.complete_item validates/writes it
+            # (see that function's own docstring). Non-`complete_item` ops
+            # have no such param to forward.
+            kwargs["payload_ref"] = params.get("payload_ref")
+        ctx.item_result = fn(ctx.tenant_id, ctx.instance, item_entity_id, ctx.actor, **kwargs)
 
     _refresh_items(ctx)
 
@@ -448,7 +461,7 @@ def _run_transition_action(ctx: EvalContext, action_name: str, params: dict) -> 
         if t.from_ == current_state and t.action == action_name and t.actor != "system"
     ]
     if not action_candidates:
-        raise HTTPException(409, {"allowed": _allowed_actions(ctx)})
+        raise HTTPException(409, {"allowed": allowed_actions(ctx)})
 
     if is_family_actor(ctx.actor):
         gated = [t for t in action_candidates if t.actor == "family"]
@@ -460,7 +473,7 @@ def _run_transition_action(ctx: EvalContext, action_name: str, params: dict) -> 
 
     winner = next((t for t in gated if _guards_pass(ctx, t)), None)
     if winner is None:
-        raise HTTPException(409, {"allowed": _allowed_actions(ctx)})
+        raise HTTPException(409, {"allowed": allowed_actions(ctx)})
     _apply_transition(ctx, winner)
 
 

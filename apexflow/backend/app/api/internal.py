@@ -324,6 +324,12 @@ def instance_by_token(token: str):
             "machine": ctx.definition["machine"].model_dump(by_alias=True),
             "steps": [s.model_dump(by_alias=True) for s in ctx.definition["steps"]],
         },
+        # Plan 3 Task 3: the family-actor-scoped list `allowed_actions`
+        # computes for `ctx.actor` (already the verified token's family
+        # actor, see `_family_actor` above) -- never includes the
+        # staff-only built-ins (`verify_item`/`reject_item`/`waive_item`),
+        # same actor-gating `allowed_actions` itself already enforces.
+        "allowed": machine.allowed_actions(ctx),
     }
 
 

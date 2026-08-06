@@ -288,6 +288,17 @@ def test_instance_by_token_returns_instance_items_definition(client, fake_dc):
     assert body["definition"]["definition_id"] == "wd-tok"
 
 
+def test_instance_by_token_includes_family_allowed_actions(client, fake_dc):
+    started = _start(client, fake_dc, definition_id="wd-tok-allowed")
+    token = started["token"]
+
+    resp = client.get(f"/internal/instance-by-token/{token}", headers=HEADERS)
+    assert resp.status_code == 200
+    allowed = resp.json()["allowed"]
+    assert "save_draft" in allowed and "complete_item" in allowed
+    assert "verify_item" not in allowed  # staff-only built-ins never appear for family
+
+
 def test_save_draft_and_submit_via_token(client, fake_dc):
     started = _start(client, fake_dc, definition_id="wd-act")
     token = started["token"]
