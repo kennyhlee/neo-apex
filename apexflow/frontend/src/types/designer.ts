@@ -5,14 +5,24 @@
 // machine-level types (StateDef/TransitionDef/GuardRef/EffectRef), which
 // this file adds.
 import type {
+  Condition,
   ConditionGroupDef,
+  ConditionItem,
   FieldPick,
   RepeatSpec,
   WorkflowSectionDef,
   WorkflowStepDef,
 } from '@neoapex/flow-runtime';
 
-export type { ConditionGroupDef, FieldPick, RepeatSpec, WorkflowSectionDef, WorkflowStepDef };
+export type {
+  Condition,
+  ConditionGroupDef,
+  ConditionItem,
+  FieldPick,
+  RepeatSpec,
+  WorkflowSectionDef,
+  WorkflowStepDef,
+};
 
 // ---- Machine (workflows/schema.py — not exported by flow-runtime) --------
 
