@@ -402,19 +402,31 @@ GUARD_PARAM_VALIDATORS: dict[str, Callable[[dict], list[str]]] = {
 class ParamSpec(NamedTuple):
     """One primitive param's shape, for the Task 2 designer read API's
     `/api/workflows/{tenant_id}/primitives` catalog — `{name, kind,
-    required, enum?}` per the interface map's binding table (§2h).
+    required, enum?, constraint?}` per the interface map's binding table
+    (§2h).
 
     `kind` is a small closed vocabulary describing what the param above
     actually accepts: "string", "list" (any non-empty list — element type
     unconstrained), "string_or_list" (a single str OR a non-empty list of
     str — only `items_in_status.status` needs this), "condition" (parses as
     a `ConditionGroup`), "date" (a `YYYY-MM-DD` string).
+
+    `constraint` (code-review follow-up, task-2-report.md): a free-form,
+    machine-parseable note for cross-param rules a flat per-param
+    `required` flag can't express — currently only `date_window`'s "at
+    least one of start/end" (`"at_least_one_of:start,end"`, set on BOTH the
+    `start` and `end` entries so either param's catalog row alone tells the
+    frontend the rule). `None` for every param whose validity doesn't
+    depend on a sibling param. This is documentation surfaced through the
+    catalog for the frontend to render — `_guard_params_date_window` above
+    is the actual enforcement and is unchanged by this field.
     """
 
     name: str
     kind: str
     required: bool
     enum: tuple[str, ...] | None = None
+    constraint: str | None = None
 
 
 # PARAM_SPECS (# ADJUST(bindings)): declarative param-shape metadata for the
@@ -454,8 +466,8 @@ PARAM_SPECS: dict[str, list[ParamSpec]] = {
         ParamSpec("condition", "condition", True),
     ],
     "date_window": [
-        ParamSpec("start", "date", False),
-        ParamSpec("end", "date", False),
+        ParamSpec("start", "date", False, constraint="at_least_one_of:start,end"),
+        ParamSpec("end", "date", False, constraint="at_least_one_of:start,end"),
     ],
     "actor_role": [
         ParamSpec("roles", "list", True),

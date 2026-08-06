@@ -271,6 +271,14 @@ def test_list_definitions_open_instances_matches_retire_gate_count(client, fake_
     assert row["open_instances"] == expected == 1
 
 
+def test_list_definitions_empty_tenant_returns_empty_list(client, fake_dc):
+    """Edge case (code review follow-up): no rows seeded at all -> a plain
+    empty list, not a 404/500."""
+    resp = client.get(f"/api/workflows/{TENANT}/definitions")
+    assert resp.status_code == 200
+    assert resp.json() == {"definitions": []}
+
+
 # --- GET .../definitions/{entity_id}/bundle ---------------------------------
 
 
@@ -364,6 +372,22 @@ def test_validate_404s_on_unknown_entity_id(client, fake_dc):
     assert resp.status_code == 404
 
 
+def test_validate_on_published_row_is_200_dry_run(client, fake_dc):
+    """Edge case (code review follow-up): validate isn't draft-only — a
+    published row runs the same dry-run recipe and 200s."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-validate-3", status="published")
+
+    resp = client.post(f"/api/workflows/{TENANT}/definitions/{eid}/validate")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["errors"] == []
+    assert body["health"] == "current"
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["status"] == "published"  # untouched
+
+
 # --- GET .../primitives ------------------------------------------------------
 
 
@@ -394,10 +418,48 @@ def test_primitives_catalog_params_match_param_specs_exactly(client, fake_dc):
                 assert got["enum"] == list(spec.enum)
             else:
                 assert "enum" not in got
+            if spec.constraint:
+                assert got["constraint"] == spec.constraint
+            else:
+                assert "constraint" not in got
 
     # no-param primitives (GUARDS/EFFECTS membership only, no PARAM_SPECS entry)
     assert by_name["all_blocking_items_complete"]["params"] == []
     assert by_name["issue_link"]["params"] == []
+
+
+def test_primitives_catalog_surfaces_date_window_at_least_one_of_constraint(client, fake_dc):
+    """date_window has no required params (start/end are each individually
+    optional), so its "at least one of start/end" rule can't be expressed
+    by PARAM_SPECS's flat `required` flag — it's carried on the `constraint`
+    field instead (validate.py's ParamSpec docstring), and must round-trip
+    through the catalog for the frontend to render it."""
+    resp = client.get(f"/api/workflows/{TENANT}/primitives")
+    guards = {g["name"]: g for g in resp.json()["guards"]}
+    params = {p["name"]: p for p in guards["date_window"]["params"]}
+    assert params["start"]["constraint"] == "at_least_one_of:start,end"
+    assert params["end"]["constraint"] == "at_least_one_of:start,end"
+
+
+# --- cross-tenant 403 on every designer route -------------------------------
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("get", "/api/workflows/othertenant/definitions"),
+        ("get", "/api/workflows/othertenant/definitions/wd_1/bundle"),
+        ("post", "/api/workflows/othertenant/definitions/wd_1/validate"),
+        ("get", "/api/workflows/othertenant/primitives"),
+    ],
+)
+def test_cross_tenant_designer_routes_are_403(client, method, path):
+    """Cross-tenant coverage for every route this task adds, following
+    tests/test_entities_api.py's pattern: `require_staff_tenant` rejects
+    before any DataCore call, so no entity needs to actually exist at
+    `wd_1` for the bundle/validate cases."""
+    resp = getattr(client, method)(path)
+    assert resp.status_code == 403
 
 
 # --- PARAM_SPECS drift guard (validate.py's own primitives, not the route) -
@@ -435,7 +497,8 @@ VALID_PARAMS: dict[str, dict] = {
     "start_due_clocks": {"step_ids": ["s1"]},
 }
 
-GUARD_PRIMITIVE_NAMES = {"items_in_status", "capacity_available", "data_condition", "actor_role"}
+GUARD_PRIMITIVE_NAMES = {"items_in_status", "capacity_available", "data_condition", "actor_role",
+                         "date_window"}
 EFFECT_PRIMITIVE_NAMES = {"commit_sections", "set_entity_field", "send_email", "set_context",
                           "start_due_clocks"}
 
@@ -503,3 +566,82 @@ def test_param_specs_required_flags_match_real_validator_behavior(primitive_name
         degraded = {k: v for k, v in minimal_params.items() if k != spec.name}
         errors = _errors_for(degraded)
         assert any(spec.name in e for e in errors), (spec.name, errors)
+
+
+def _errors_for_primitive(primitive_name: str, params: dict) -> list[str]:
+    """Shared helper (generalizes the closure inside the test above) for
+    the enum cross-check and date_window behavioral tests below: wraps
+    `params` in a minimal guard/effect transition and runs the real
+    `validate_definition`, including whatever declared steps that
+    primitive's STRUCTURAL checks cross-reference (see EXTRA_STEPS_FOR)."""
+    extra_steps = EXTRA_STEPS_FOR.get(primitive_name, [])
+    if primitive_name in GUARD_PRIMITIVE_NAMES:
+        machine_dict = _minimal_machine(guards=[{"primitive": primitive_name, "params": params}])
+    else:
+        machine_dict = _minimal_machine(effects=[{"primitive": primitive_name, "params": params}])
+    machine = MachineDef.model_validate(machine_dict)
+    steps = [StepDef.model_validate(s) for s in extra_steps]
+    return validate_definition(machine, steps, {})
+
+
+# --- enum cross-check (coordinator review finding #2) -----------------------
+
+ENUM_SPECS = [
+    (primitive_name, spec)
+    for primitive_name, specs in PARAM_SPECS.items()
+    for spec in specs
+    if spec.enum
+]
+
+
+@pytest.mark.parametrize(
+    "primitive_name,spec", ENUM_SPECS,
+    ids=[f"{p}.{s.name}" for p, s in ENUM_SPECS],
+)
+def test_enum_param_rejects_invalid_value(primitive_name, spec):
+    """Every PARAM_SPECS entry carrying an `enum` must actually be enforced
+    by the real validator, not just documented in the catalog — feed an
+    out-of-enum value through validate_definition and assert it's rejected.
+    Parametrized over every enum-carrying PARAM_SPECS entry (currently just
+    items_in_status.quantifier) so a future enum addition is covered
+    automatically."""
+    base_params = dict(VALID_PARAMS[primitive_name])
+    base_params[spec.name] = "not-a-real-enum-value"
+    errors = _errors_for_primitive(primitive_name, base_params)
+    assert any(spec.name in e for e in errors), (primitive_name, spec.name, errors)
+
+
+# --- date_window behavioral rules (coordinator review finding #1) ----------
+#
+# date_window has NO required params in PARAM_SPECS (start/end are each
+# individually optional) — its actual rule, "at least one of start/end",
+# and its per-bound date-format check, are cross-param/format logic that
+# doesn't fit the generic drift-check loop above (which only ever removes
+# ONE param from an otherwise-full set). These are dedicated behavioral
+# tests instead, exercising the same real `_guard_params_date_window` via
+# `validate_definition`.
+
+
+def test_date_window_both_bounds_present_no_error():
+    errors = _errors_for_primitive("date_window", {"start": "2026-01-01", "end": "2026-12-31"})
+    assert not any("date_window" in e for e in errors), errors
+
+
+def test_date_window_only_start_present_no_error():
+    errors = _errors_for_primitive("date_window", {"start": "2026-01-01"})
+    assert not any("date_window" in e for e in errors), errors
+
+
+def test_date_window_only_end_present_no_error():
+    errors = _errors_for_primitive("date_window", {"end": "2026-12-31"})
+    assert not any("date_window" in e for e in errors), errors
+
+
+def test_date_window_neither_bound_present_errors():
+    errors = _errors_for_primitive("date_window", {})
+    assert any("requires at least one of 'start'/'end'" in e for e in errors), errors
+
+
+def test_date_window_unparseable_date_errors():
+    errors = _errors_for_primitive("date_window", {"start": "not-a-date"})
+    assert any("not a valid YYYY-MM-DD date" in e for e in errors), errors

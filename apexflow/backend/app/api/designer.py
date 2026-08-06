@@ -88,12 +88,13 @@ def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant))
     for row in rows:
         lineage_id = row.get("definition_id")
 
-        if row.get("status") == "superseded":
-            health = "superseded"  # no computation — see _health_for_row's docstring
-        else:
-            machine, steps = defs.parse_machine_steps(row)
-            models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
-            health = _health_for_row(row, machine, steps, models)
+        # _health_for_row itself short-circuits superseded rows before ever
+        # calling definition_health — no separate outer check needed here
+        # (code-review follow-up: the outer check duplicated that same
+        # branch instead of just trusting the helper to make it).
+        machine, steps = defs.parse_machine_steps(row)
+        models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
+        health = _health_for_row(row, machine, steps, models)
 
         if lineage_id not in open_instance_counts:
             open_instance_counts[lineage_id] = defs.count_open_instances(
@@ -176,6 +177,8 @@ def _param_dict(name: str) -> list[dict[str, Any]]:
         entry: dict[str, Any] = {"name": spec.name, "kind": spec.kind, "required": spec.required}
         if spec.enum:
             entry["enum"] = list(spec.enum)
+        if spec.constraint:
+            entry["constraint"] = spec.constraint
         out.append(entry)
     return out
 
