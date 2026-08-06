@@ -38,6 +38,7 @@ from fastapi import APIRouter, Depends
 
 from app.auth import require_staff_tenant
 from app.config import settings
+from app.templates.enrollment import template_catalog
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
 from app.workflows.primitives import EFFECTS, GUARDS
@@ -195,3 +196,14 @@ def primitives_catalog(tenant_id: str, user: dict = Depends(require_staff_tenant
         "guards": [{"name": name, "params": _param_dict(name)} for name in GUARDS],
         "effects": [{"name": name, "params": _param_dict(name)} for name in EFFECTS],
     }
+
+
+@router.get("/{tenant_id}/templates")
+def templates_route(tenant_id: str, user: dict = Depends(require_staff_tenant)):
+    """Shipped workflow template catalog for the designer's template gallery
+    (Task 6) — `app.templates.enrollment.template_catalog()`, unwrapped by
+    `require_staff_tenant`'s auth check only. The catalog itself is
+    platform-wide, not tenant-scoped data (`tenant_id` exists purely for
+    route-shape/auth consistency with the rest of this router, same as every
+    other route above)."""
+    return {"templates": template_catalog()}

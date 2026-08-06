@@ -110,9 +110,21 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.title': 'Editor',
     'editor.comingSoon': 'The definition editor is coming in a later task.',
 
-    // Templates (placeholder page — later tasks)
+    // Templates (gallery page — Task 6)
     'templates.title': 'Templates',
-    'templates.comingSoon': 'Templates are coming in a later task.',
+    'templates.loadError': "Couldn't load templates.",
+    'templates.empty': 'No templates available yet.',
+    'templates.stepCount': 'Steps',
+    'templates.stateCount': 'States',
+    'templates.useTemplate': 'Use template',
+    'templates.useModalTitle': 'Name your workflow',
+    'templates.useNameLabel': 'Name',
+    'templates.useNamePlaceholder': 'e.g. Summer Camp Enrollment',
+    'templates.useNameRequired': 'Enter a name for the workflow.',
+    'templates.useCreating': 'Creating…',
+    'templates.useCreate': 'Create',
+    'templates.useToast': '"{name}" created from template.',
+    'templates.useError': "Couldn't create a workflow from this template. Try again.",
 
     // Common
     'common.loading': 'Loading...',
@@ -233,9 +245,21 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.title': '编辑器',
     'editor.comingSoon': '定义编辑器将在后续任务中推出。',
 
-    // Templates (placeholder page — later tasks)
+    // Templates (gallery page — Task 6)
     'templates.title': '模板',
-    'templates.comingSoon': '模板将在后续任务中推出。',
+    'templates.loadError': '无法加载模板。',
+    'templates.empty': '暂无可用模板。',
+    'templates.stepCount': '步骤数',
+    'templates.stateCount': '状态数',
+    'templates.useTemplate': '使用模板',
+    'templates.useModalTitle': '为工作流命名',
+    'templates.useNameLabel': '名称',
+    'templates.useNamePlaceholder': '例如：暑期营报名',
+    'templates.useNameRequired': '请输入工作流名称。',
+    'templates.useCreating': '正在创建…',
+    'templates.useCreate': '创建',
+    'templates.useToast': '已从模板创建 "{name}"。',
+    'templates.useError': '无法从此模板创建工作流，请重试。',
 
     // Common
     'common.loading': '加载中...',

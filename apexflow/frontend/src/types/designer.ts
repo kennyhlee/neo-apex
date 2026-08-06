@@ -192,3 +192,31 @@ export interface DefinitionRow {
 export interface OpenInstancesConflict {
   open_instances: number;
 }
+
+// ---- Template gallery — GET .../templates (designer.py, Task 6) ----------
+
+/**
+ * Wire mirror of `template_catalog()`'s per-entry `definition` dict
+ * (`app/templates/enrollment.py`) — plain nested `machine`/`steps` (NOT the
+ * JSON-encoded-string wire shape a `workflow_definition` row stores; see
+ * `DefinitionRow`'s own doc comment). The gallery's "Use template" flow
+ * `JSON.stringify`s these at instantiate time, same boundary
+ * `DefinitionsPage.tsx`'s `submitNewWorkflow`/`handleNewDraft` already draw
+ * (map §3/§8).
+ */
+export interface TemplateDefinition {
+  machine: MachineDef;
+  steps: WorkflowStepDef[];
+  channel_access: ChannelAccess;
+}
+
+export interface TemplateCatalogEntry {
+  template_id: string;
+  name: string;
+  description: string;
+  definition: TemplateDefinition;
+}
+
+export interface ListTemplatesResponse {
+  templates: TemplateCatalogEntry[];
+}

@@ -9,6 +9,7 @@ import type {
   DefinitionLifecycleAction,
   DefinitionRow,
   ListDefinitionsResponse,
+  ListTemplatesResponse,
   PrimitivesCatalog,
   ValidateResult,
 } from '../types/designer.ts';
@@ -153,4 +154,17 @@ export async function lifecycleAction(
 /** `lifecycleAction(tenantId, entityId, 'publish')` — named per the brief's Interfaces list. */
 export function publishDefinition(tenantId: string, entityId: string): Promise<DefinitionRow> {
   return lifecycleAction(tenantId, entityId, 'publish');
+}
+
+/**
+ * GET /api/workflows/{tenant_id}/templates — api/designer.py's
+ * `templates_route` (Task 6). Platform-wide catalog, not tenant data —
+ * `tenant_id` is present only for auth/route-shape consistency with the
+ * rest of this file's routes.
+ */
+export async function listTemplates(tenantId: string): Promise<ListTemplatesResponse> {
+  const resp = await fetch(`${API_BASE}/api/workflows/${tenantId}/templates`, {
+    headers: authHeaders(),
+  });
+  return parseOrThrow(resp);
 }

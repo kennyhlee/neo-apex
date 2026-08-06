@@ -441,6 +441,29 @@ def test_primitives_catalog_surfaces_date_window_at_least_one_of_constraint(clie
     assert params["end"]["constraint"] == "at_least_one_of:start,end"
 
 
+# --- GET .../templates (Task 6) ---------------------------------------------
+
+
+def test_templates_route_contains_enrollment(client):
+    resp = client.get(f"/api/workflows/{TENANT}/templates")
+    assert resp.status_code == 200
+    templates = resp.json()["templates"]
+    ids = {t["template_id"] for t in templates}
+    assert "enrollment" in ids
+
+    entry = next(t for t in templates if t["template_id"] == "enrollment")
+    assert entry["name"]
+    assert entry["description"]
+    definition = entry["definition"]
+    assert definition["channel_access"] == "family"
+    assert definition["machine"]["states"]
+    assert definition["steps"]
+    # alias spelling: "from", not "from_" (interface map §2i) — the route
+    # returns the same plain-dict shape `build_machine()` builds, unwrapped
+    # by any pydantic re-serialization that could drift the wire key.
+    assert definition["machine"]["transitions"][0]["from"]
+
+
 # --- cross-tenant 403 on every designer route -------------------------------
 
 
@@ -451,6 +474,7 @@ def test_primitives_catalog_surfaces_date_window_at_least_one_of_constraint(clie
         ("get", "/api/workflows/othertenant/definitions/wd_1/bundle"),
         ("post", "/api/workflows/othertenant/definitions/wd_1/validate"),
         ("get", "/api/workflows/othertenant/primitives"),
+        ("get", "/api/workflows/othertenant/templates"),
     ],
 )
 def test_cross_tenant_designer_routes_are_403(client, method, path):

@@ -168,6 +168,28 @@ def test_enrollment_template_validates_with_zero_errors():
     assert errors == []
 
 
+def test_template_catalog_contains_enrollment_and_validates_with_zero_errors():
+    """Task 6's gallery binding: `template_catalog()` must contain the
+    enrollment template, and its `definition` must pass `validate_definition`
+    with zero errors against the real base_model.json models — reusing this
+    file's own model-loading pattern (`_load_base_models`) rather than
+    hand-copying field lists, same as the dedicated
+    `test_enrollment_template_validates_with_zero_errors` above."""
+    catalog = enrollment.template_catalog()
+    entry = next((t for t in catalog if t["template_id"] == enrollment.DEFINITION_ID), None)
+    assert entry is not None
+    assert entry["name"] == enrollment.DEFINITION_NAME
+    assert entry["description"]
+
+    definition = entry["definition"]
+    assert definition["channel_access"] == "family"
+
+    machine_def = MachineDef.model_validate(definition["machine"])
+    steps = [StepDef.model_validate(s) for s in definition["steps"]]
+    errors = validate_definition(machine_def, steps, _load_base_models())
+    assert errors == []
+
+
 def test_seed_enrollment_template_publishes_via_the_real_gate(fake_dc):
     published = _seed_template(fake_dc)
     base = published["base_data"]  # dc_update envelope, not a flattened row
