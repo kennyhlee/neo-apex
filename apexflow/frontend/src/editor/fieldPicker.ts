@@ -32,6 +32,22 @@
 // `conditional` flag threads this rule through: an unconditional
 // section keeps today's unrestricted "every non-engine-owned/id/link field"
 // menu.
+//
+// Live-repro fix (browser-gate defect #1): the UNCONDITIONAL auto-include/
+// lock path (`syncModelRequiredFields`, and `SectionPanel.tsx`'s `locked`)
+// used to force-include+lock every model-`required` field with no
+// exemption at all — including a required field that also declares a
+// `default`, which `validate.py`'s `_is_exempt_field` (same function the
+// conditional path already mirrors) exempts from the unconditional
+// coverage rule too (`validate.py:718-731` calls the identical `exempt =
+// _is_link_or_id_field(...) or "default" in fdef` check the conditional
+// branch at `:742` uses via `_is_exempt_field`). A stale model-required
+// field that later gained a default (e.g. `registration_application.status`)
+// was therefore being silently force-added to every unconditional section's
+// picks and shown to parents. `isModelRequiredNoDefault`, below, is now the
+// single predicate both paths share for "auto-included+locked (uncondi-
+// tional) / forbidden (conditional)" — a required-with-default field is
+// exempt on both paths, ordinary-optional on both paths.
 import type {
   EntityModelDef,
   EntityModelField,
@@ -74,13 +90,27 @@ export function isPickableField(field: EntityModelField): boolean {
 }
 
 /**
- * A model-required field with no declared default is forbidden inside a
- * CONDITIONAL section (`validate.py`'s conditional coverage rule — see
- * module doc comment). Fields that are optional at the model level, or
- * required-but-defaulted, are unaffected.
+ * A model-required field with NO declared default — `validate.py`'s
+ * `_is_exempt_field` (`"default" in fdef`) exempts a required-with-default
+ * field from coverage rules regardless of section shape, so this is the
+ * single coverage-critical field class on both paths:
+ *  - CONDITIONAL section: forbidden outright (`isForbiddenWhenConditional`,
+ *    below — the conditional coverage rule, `validate.py:733-748`).
+ *  - UNCONDITIONAL section: auto-included + locked (`syncModelRequiredFields`
+ *    / `SectionPanel.tsx`'s `locked` — the unconditional coverage rule,
+ *    `validate.py:718-731`).
+ * A required-with-default field is, on EITHER path, a fully ordinary
+ * optional-to-include field the author may pick manually as optional or
+ * required — it is never auto-included/locked and never forbidden.
  */
-export function isForbiddenWhenConditional(field: EntityModelField): boolean {
+export function isModelRequiredNoDefault(field: EntityModelField): boolean {
   return field.required && !hasModelDefault(field);
+}
+
+/** Alias of `isModelRequiredNoDefault` kept for call-site clarity at the
+ * conditional-section forbidden-field check. */
+export function isForbiddenWhenConditional(field: EntityModelField): boolean {
+  return isModelRequiredNoDefault(field);
 }
 
 /**
@@ -104,28 +134,37 @@ export function pickableFields(
 
 /**
  * Reconcile a section's current field picks against its model for an
- * UNCONDITIONAL section: every pickable field the model marks `required` is
- * force-included and force-`required: true` (the "model-required fields
- * auto-included and un-loosenable" DECISION — task-7-brief.md) regardless
- * of what the caller passed in. Everything else in `fields` is preserved
+ * UNCONDITIONAL section: every pickable field the model marks `required`
+ * AND that has no declared default (`isModelRequiredNoDefault` — mirrors
+ * `validate.py`'s `_is_exempt_field` "default" in fdef" exemption, which
+ * applies to the unconditional coverage rule exactly as it does to the
+ * conditional one) is force-included and force-`required: true` (the
+ * "model-required fields auto-included and un-loosenable" DECISION —
+ * task-7-brief.md) regardless of what the caller passed in. A
+ * required-WITH-default field is left untouched here — same as any other
+ * model-optional field, the author may include it manually as optional or
+ * required, or leave it out. Everything else in `fields` is preserved
  * as-is (including picks the caller already made for model-optional
  * fields).
  *
  * NOT used for conditional sections — those never auto-include/lock
- * anything (a model-required field is either forbidden outright, per
- * `isForbiddenWhenConditional`, or — if it has a default — treated as a
- * fully ordinary optional field, per the task review fix). Conditional
- * sections use `dropForbiddenConditionalFields` instead, which only ever
- * REMOVES picks, never forces one in.
+ * anything (a model-required-no-default field is forbidden outright, per
+ * `isForbiddenWhenConditional`, and a required-with-default field is
+ * treated as a fully ordinary optional field, per the task review fix).
+ * Conditional sections use `dropForbiddenConditionalFields` instead, which
+ * only ever REMOVES picks, never forces one in.
  *
  * Order: existing picks keep their original position; newly-forced
- * model-required fields not already present are appended at the end.
+ * model-required-no-default fields not already present are appended at the
+ * end.
  */
 export function syncModelRequiredFields(
   fields: FieldPick[],
   model: EntityModelDef | undefined,
 ): FieldPick[] {
-  const requiredNames = new Set(pickableFields(model).filter((f) => f.required).map((f) => f.name));
+  const requiredNames = new Set(
+    pickableFields(model).filter(isModelRequiredNoDefault).map((f) => f.name),
+  );
   const byName = new Map(fields.map((f) => [f.name, f]));
   for (const name of requiredNames) {
     byName.set(name, { name, required: true });

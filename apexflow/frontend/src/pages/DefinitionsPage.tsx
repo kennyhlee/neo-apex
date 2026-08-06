@@ -18,6 +18,11 @@
 //   `templates/enrollment.py`'s seed_enrollment_template and
 //   scripts/apexflow-reseed-dev.py's push both write (map §3/§8): machine/
 //   steps are JSON-encoded STRINGS on the wire, not nested objects.
+//   Hidden when lineage_status === "retired" (browser-gate fix): retire is
+//   terminal, and a new draft copies `def.lineage_status` verbatim onto the
+//   new row, so a "New draft" off a retired lineage would carry
+//   lineage_status "retired" forward onto a fresh draft — confusing and
+//   never a legal published-row outcome for that lineage again anyway.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
@@ -441,15 +446,17 @@ export default function DefinitionsPage() {
     // way the backend gates them (see module comment).
     return (
       <div className="definitions-row-actions">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => handleNewDraft(row)}
-          loading={newDraftBusyId === row.entity_id}
-          loadingText={t('definitions.newDraftCreating')}
-        >
-          {t('definitions.actions.newDraft')}
-        </Button>
+        {row.lineage_status !== 'retired' && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleNewDraft(row)}
+            loading={newDraftBusyId === row.entity_id}
+            loadingText={t('definitions.newDraftCreating')}
+          >
+            {t('definitions.actions.newDraft')}
+          </Button>
+        )}
         {row.lineage_status === 'active' && (
           <Button
             variant="secondary"

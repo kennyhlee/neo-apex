@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import {
   dropForbiddenConditionalFields,
+  isModelRequiredNoDefault,
   pickableFields,
   sameFieldPicks,
   syncModelRequiredFields,
@@ -63,11 +64,14 @@ export default function SectionPanel({
   //
   // Unconditional: "model-required fields auto-included and un-loosenable"
   // (task-7-brief.md DECISION) — force-include+lock every model-required
-  // field. Conditional: never auto-include/lock anything; instead DROP any
-  // pick that's no longer legal (model-required, no default — task review
-  // fix #1). No read-only guard needed — a read-only definition can't be
-  // edited via any of the controls that would create the discrepancy this
-  // effect corrects in the first place, so it just never fires there.
+  // field that has NO declared default (browser-gate fix: a required field
+  // WITH a default is exempt here too, same as on the conditional path —
+  // see `fieldPicker.ts`'s `isModelRequiredNoDefault`). Conditional: never
+  // auto-include/lock anything; instead DROP any pick that's no longer
+  // legal (model-required, no default — task review fix #1). No read-only
+  // guard needed — a read-only definition can't be edited via any of the
+  // controls that would create the discrepancy this effect corrects in the
+  // first place, so it just never fires there.
   useEffect(() => {
     if (!model) return;
     if (conditional) {
@@ -237,7 +241,11 @@ function FieldPickerTable({
   }
 
   function toggleRequired(field: EntityModelField, required: boolean) {
-    if (!conditional && field.required) return; // unconditional + model-required — locked, never loosen here
+    // unconditional + model-required-with-no-default — locked, never loosen
+    // here. A required-with-default field is exempt from the coverage rule
+    // (mirrors `validate.py`'s `_is_exempt_field`) and stays a fully
+    // ordinary optional-to-toggle field even in an unconditional section.
+    if (!conditional && isModelRequiredNoDefault(field)) return;
     const current = byName.get(field.name);
     if (!current) return;
     const next = new Map(byName);
@@ -267,11 +275,15 @@ function FieldPickerTable({
           const included = pick !== undefined;
           const required = pick?.required ?? false;
           // Locking (auto-included, can't exclude/loosen) only applies to
-          // an UNCONDITIONAL section's model-required fields (task review
-          // fix #1) — in a conditional section, a model-required field is
-          // either not offered at all (see `pickableFields`) or, if
-          // model-defaulted, a fully ordinary optional field here.
-          const locked = !conditional && field.required;
+          // an UNCONDITIONAL section's model-required-with-NO-default
+          // fields (task review fix #1; browser-gate fix: a required field
+          // that also declares a default is exempt here too, mirroring
+          // `validate.py`'s `_is_exempt_field` — see fieldPicker.ts's
+          // `isModelRequiredNoDefault` doc) — in a conditional section, a
+          // model-required-no-default field is not offered at all (see
+          // `pickableFields`), and a model-defaulted one is a fully
+          // ordinary optional field here on either path.
+          const locked = !conditional && isModelRequiredNoDefault(field);
           return (
             <tr key={field.name} className={locked ? 'section-field-locked' : undefined}>
               <td>
