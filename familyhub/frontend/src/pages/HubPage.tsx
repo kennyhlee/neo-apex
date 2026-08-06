@@ -48,10 +48,10 @@ function asBool(v: unknown): boolean {
 }
 
 /** `WorkflowItemView` plus the raw `payload_ref` field a `documents`-kind
- *  item row also carries. Currently always empty in practice (bindings §10
- *  finding 2: no production code path writes `payload_ref`) -- kept so the
- *  "view document" affordance is ready the moment that gap closes, without
- *  another frontend change. */
+ *  item row also carries. `uploadDocumentFile` -> `completeItem` now writes
+ *  this (Task 3's write path, threaded through by the fix for final-review
+ *  finding C1) -- kept as its own field so the "view document" affordance
+ *  can read it straight off the item row without another frontend change. */
 interface ItemView extends WorkflowItemView {
   payload_ref?: string;
 }

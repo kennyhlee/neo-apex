@@ -151,9 +151,19 @@ export const saveDraft = (token: string, sectionAnswers: Record<string, unknown>
  * from an `InstanceBundle.items` row), never the business `item_id` field
  * -- the backend keys `_require_item` on `entity_id` and a business id
  * 404s silently on every real call.
+ * @param payloadRef For a `documents`-kind item, the just-created document's
+ * `document_id` (`uploadDocumentFile` passes it straight through). Omitted
+ * for non-document items. `engine.py::complete_item` 409s with
+ * `payload_ref_missing`/`payload_ref_invalid` on a documents-kind item that
+ * doesn't already carry one -- this is REQUIRED for those, same as the
+ * admindash staff-entry precedent (`StaffEntryPage.tsx`'s upload flow).
  */
-export const completeItem = (token: string, itemId: string) =>
-  putAction(token, { action: 'complete_item', item_id: itemId });
+export const completeItem = (token: string, itemId: string, payloadRef?: string) =>
+  putAction(token, {
+    action: 'complete_item',
+    item_id: itemId,
+    ...(payloadRef ? { payload_ref: payloadRef } : {}),
+  });
 
 /**
  * Any action name from `InstanceBundle.allowed` other than `save_draft`/
@@ -225,7 +235,7 @@ export async function uploadDocumentFile(
     body: file,
   });
   if (!put.ok) throw new Error(`Upload failed: HTTP ${put.status}`);
-  await completeItem(token, itemId);
+  await completeItem(token, itemId, slot.document_id);
   return slot.document_id;
 }
 
