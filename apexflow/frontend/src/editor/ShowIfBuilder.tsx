@@ -33,6 +33,9 @@ interface ShowIfBuilderProps {
    * "Context" group (`task-7-brief.md`'s binding rule: "context.school_year"
    * plus free-text entry). */
   sourceGroups: SourceGroup[];
+  /** True when the definition isn't a draft — disables every mutating
+   * control (task review fix #6). */
+  readOnly: boolean;
 }
 
 type Combinator = 'all' | 'any' | 'not';
@@ -71,7 +74,7 @@ function isConditionGroup(item: ConditionItem): item is ConditionGroupDef {
   return !('source' in item);
 }
 
-export default function ShowIfBuilder({ value, onChange, sourceGroups }: ShowIfBuilderProps) {
+export default function ShowIfBuilder({ value, onChange, sourceGroups, readOnly }: ShowIfBuilderProps) {
   const { t } = useTranslation();
 
   if (!value) {
@@ -81,6 +84,7 @@ export default function ShowIfBuilder({ value, onChange, sourceGroups }: ShowIfB
           type="button"
           className="btn btn-secondary btn-sm"
           onClick={() => onChange(withCombinator('all', []))}
+          disabled={readOnly}
         >
           {t('editor.showIf.add')}
         </button>
@@ -112,6 +116,7 @@ export default function ShowIfBuilder({ value, onChange, sourceGroups }: ShowIfB
           <select
             value={combinator}
             onChange={(e) => setCombinator(e.target.value as Combinator)}
+            disabled={readOnly}
           >
             {COMBINATORS.map((c) => (
               <option key={c} value={c}>
@@ -120,7 +125,7 @@ export default function ShowIfBuilder({ value, onChange, sourceGroups }: ShowIfB
             ))}
           </select>
         </label>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange(null)}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange(null)} disabled={readOnly}>
           {t('editor.showIf.remove')}
         </button>
       </div>
@@ -135,6 +140,7 @@ export default function ShowIfBuilder({ value, onChange, sourceGroups }: ShowIfB
                 value={item}
                 onChange={(next) => updateItem(idx, next)}
                 onRemove={() => removeItem(idx)}
+                readOnly={readOnly}
               />
             ) : (
               <ConditionRow
@@ -142,6 +148,7 @@ export default function ShowIfBuilder({ value, onChange, sourceGroups }: ShowIfB
                 sourceGroups={sourceGroups}
                 onChange={(next) => updateItem(idx, next)}
                 onRemove={() => removeItem(idx)}
+                readOnly={readOnly}
               />
             )}
           </li>
@@ -153,6 +160,7 @@ export default function ShowIfBuilder({ value, onChange, sourceGroups }: ShowIfB
           type="button"
           className="btn btn-secondary btn-sm"
           onClick={() => setItems([...items, { source: '', op: 'truthy' }])}
+          disabled={readOnly}
         >
           {t('editor.showIf.addCondition')}
         </button>
@@ -160,6 +168,7 @@ export default function ShowIfBuilder({ value, onChange, sourceGroups }: ShowIfB
           type="button"
           className="btn btn-ghost btn-sm"
           onClick={() => setItems([...items, { all: [], any: null, not: null }])}
+          disabled={readOnly}
         >
           {t('editor.showIf.addNestedGroup')}
         </button>
@@ -173,11 +182,13 @@ function ConditionRow({
   sourceGroups,
   onChange,
   onRemove,
+  readOnly,
 }: {
   value: Condition;
   sourceGroups: SourceGroup[];
   onChange: (next: Condition) => void;
   onRemove: () => void;
+  readOnly: boolean;
 }) {
   const { t } = useTranslation();
   const known = sourceGroups.flatMap((g) => g.options.map((o) => o.value));
@@ -212,6 +223,7 @@ function ConditionRow({
       <select
         className="showif-source-select"
         value={selectValue}
+        disabled={readOnly}
         onChange={(e) => setSource(e.target.value === CUSTOM_SENTINEL ? '' : e.target.value)}
       >
         <option value={CUSTOM_SENTINEL}>{t('editor.showIf.customSource')}</option>
@@ -232,6 +244,7 @@ function ConditionRow({
           className="showif-source-custom"
           value={value.source}
           placeholder={t('editor.showIf.customSourcePlaceholder')}
+          disabled={readOnly}
           onChange={(e) => setSource(e.target.value)}
         />
       )}
@@ -239,6 +252,7 @@ function ConditionRow({
       <select
         className="showif-op-select"
         value={value.op}
+        disabled={readOnly}
         onChange={(e) => setOp(e.target.value as Condition['op'])}
       >
         {OPS.map((op) => (
@@ -252,6 +266,7 @@ function ConditionRow({
         <ListValueEditor
           value={Array.isArray(value.value) ? value.value.map(String) : []}
           onChange={(list) => onChange({ ...value, value: list })}
+          readOnly={readOnly}
         />
       ) : value.op === 'eq' || value.op === 'ne' ? (
         <input
@@ -259,6 +274,7 @@ function ConditionRow({
           className="showif-value-input"
           value={scalarValue}
           placeholder={t('editor.showIf.valuePlaceholder')}
+          disabled={readOnly}
           onChange={(e) => onChange({ ...value, value: e.target.value })}
         />
       ) : null}
@@ -267,6 +283,7 @@ function ConditionRow({
         type="button"
         className="btn btn-ghost btn-sm showif-remove"
         onClick={onRemove}
+        disabled={readOnly}
         aria-label={t('editor.showIf.removeCondition')}
       >
         &times;
@@ -278,9 +295,11 @@ function ConditionRow({
 function ListValueEditor({
   value,
   onChange,
+  readOnly,
 }: {
   value: string[];
   onChange: (next: string[]) => void;
+  readOnly: boolean;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
@@ -309,20 +328,24 @@ function ListValueEditor({
       {value.map((v, idx) => (
         <span key={`${v}-${idx}`} className="showif-tag">
           {v}
-          <button type="button" onClick={() => removeAt(idx)} aria-label={t('editor.showIf.removeTag')}>
-            &times;
-          </button>
+          {!readOnly && (
+            <button type="button" onClick={() => removeAt(idx)} aria-label={t('editor.showIf.removeTag')}>
+              &times;
+            </button>
+          )}
         </span>
       ))}
-      <input
-        type="text"
-        className="showif-list-input"
-        value={draft}
-        placeholder={t('editor.showIf.listPlaceholder')}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={commitDraft}
-      />
+      {!readOnly && (
+        <input
+          type="text"
+          className="showif-list-input"
+          value={draft}
+          placeholder={t('editor.showIf.listPlaceholder')}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={commitDraft}
+        />
+      )}
     </div>
   );
 }
@@ -331,10 +354,12 @@ function NestedGroupEditor({
   value,
   onChange,
   onRemove,
+  readOnly,
 }: {
   value: ConditionGroupDef;
   onChange: (next: ConditionGroupDef) => void;
   onRemove: () => void;
+  readOnly: boolean;
 }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
@@ -350,6 +375,20 @@ function NestedGroupEditor({
     setEditing(true);
   }
 
+  /**
+   * Task review fix #2 (critical): the wire shape requires EXACTLY ONE of
+   * all/any/not to be a non-null array (`schema.py`'s `ConditionGroup.
+   * _exactly_one_key` model validator, and `withCombinator`'s own doc
+   * comment above). The previous version of this check only required "at
+   * least one" — `{"all": [...], "any": [...]}` passed it, then persisted
+   * via autosave, then 500'd every future `bundle`/`validate` fetch of the
+   * row (an uncaught pydantic `ValidationError` inside
+   * `parse_machine_steps`) — bricking the draft. This is the frontend half
+   * of that fix; `app/api/designer.py`'s `_parse_or_422` is the backend
+   * half (defense in depth: even if some OTHER path ever wrote a bad
+   * shape, reads degrade to a 422 the editor can recover from, never a
+   * 500).
+   */
   function commit() {
     try {
       const parsed: unknown = JSON.parse(draft);
@@ -357,12 +396,22 @@ function NestedGroupEditor({
         throw new Error('not an object');
       }
       const obj = parsed as Record<string, unknown>;
-      const asList = (k: string): ConditionItem[] | null =>
-        Array.isArray(obj[k]) ? (obj[k] as ConditionItem[]) : null;
-      const normalized: ConditionGroupDef = { all: asList('all'), any: asList('any'), not: asList('not') };
-      if (!normalized.all && !normalized.any && !normalized.not) {
-        throw new Error('needs one of all/any/not as a list');
+      const keys: Combinator[] = ['all', 'any', 'not'];
+      const listKeys = keys.filter((k) => Array.isArray(obj[k]));
+      if (listKeys.length !== 1) {
+        throw new Error('needs exactly one of all/any/not as a list');
       }
+      const solo = listKeys[0];
+      for (const k of keys) {
+        if (k !== solo && obj[k] !== undefined && obj[k] !== null) {
+          throw new Error(`'${k}' must be null when '${solo}' is set`);
+        }
+      }
+      const normalized: ConditionGroupDef = {
+        all: solo === 'all' ? (obj.all as ConditionItem[]) : null,
+        any: solo === 'any' ? (obj.any as ConditionItem[]) : null,
+        not: solo === 'not' ? (obj.not as ConditionItem[]) : null,
+      };
       onChange(normalized);
       setError(null);
       setEditing(false);
@@ -376,7 +425,7 @@ function NestedGroupEditor({
       <div className="showif-nested-header">
         <span className="showif-nested-label">{t('editor.showIf.nestedGroup')}</span>
         <div className="showif-nested-actions">
-          {!editing && (
+          {!editing && !readOnly && (
             <button type="button" className="btn btn-ghost btn-sm" onClick={startEdit}>
               {t('editor.showIf.editAsJson')}
             </button>
@@ -385,6 +434,7 @@ function NestedGroupEditor({
             type="button"
             className="btn btn-ghost btn-sm showif-remove"
             onClick={onRemove}
+            disabled={readOnly}
             aria-label={t('editor.showIf.removeCondition')}
           >
             &times;

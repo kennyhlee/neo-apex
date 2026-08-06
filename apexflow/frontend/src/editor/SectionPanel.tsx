@@ -4,7 +4,12 @@
 // live in `./fieldPicker.ts` — this file is presentation + wiring only.
 import { useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
-import { pickableFields, sameFieldPicks, syncModelRequiredFields } from './fieldPicker.ts';
+import {
+  dropForbiddenConditionalFields,
+  pickableFields,
+  sameFieldPicks,
+  syncModelRequiredFields,
+} from './fieldPicker.ts';
 import type {
   EntityModelDef,
   EntityModelField,
@@ -21,9 +26,23 @@ interface SectionPanelProps {
   onRemove: () => void;
   /** Pre-filtered to this section via `validationMatch.ts`'s `errorsForSection`. */
   errors: string[];
+  /** True when the OWNING STEP has a `show_if` set — changes the field
+   * picker's menu and locking rules (task review fix #1). */
+  conditional: boolean;
+  /** True when the definition isn't a draft — every control is disabled
+   * (task review fix #6). */
+  readOnly: boolean;
 }
 
-export default function SectionPanel({ section, models, onChange, onRemove, errors }: SectionPanelProps) {
+export default function SectionPanel({
+  section,
+  models,
+  onChange,
+  onRemove,
+  errors,
+  conditional,
+  readOnly,
+}: SectionPanelProps) {
   const { t } = useTranslation();
   const model = models[section.entity_model];
   const modelKeys = Object.keys(models).sort((a, b) => a.localeCompare(b));
@@ -35,29 +54,50 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
       ? [section.entity_model, ...modelKeys]
       : modelKeys;
 
-  // Enforce "model-required fields auto-included and un-loosenable" on
-  // every render where the resolved model (or the section's own
-  // entity_model) changes underneath this panel — covers both a freshly
-  // created section and a model definition that changed after the section
-  // was authored (e.g. a template-seeded draft, or a field newly marked
-  // required on the model).
+  // Enforce the field-picker rules on every render where the resolved
+  // model, the section's own entity_model, or `conditional` changes
+  // underneath this panel — covers a freshly created section, a model
+  // definition that changed after the section was authored, AND a step
+  // that became/stopped-being conditional through some path other than
+  // StepEditor's own show_if transition handler (e.g. bundle reload).
+  //
+  // Unconditional: "model-required fields auto-included and un-loosenable"
+  // (task-7-brief.md DECISION) — force-include+lock every model-required
+  // field. Conditional: never auto-include/lock anything; instead DROP any
+  // pick that's no longer legal (model-required, no default — task review
+  // fix #1). No read-only guard needed — a read-only definition can't be
+  // edited via any of the controls that would create the discrepancy this
+  // effect corrects in the first place, so it just never fires there.
   useEffect(() => {
     if (!model) return;
+    if (conditional) {
+      const { fields, dropped } = dropForbiddenConditionalFields(section.fields, model);
+      if (dropped.length > 0) onChange({ ...section, fields });
+      return;
+    }
     const synced = syncModelRequiredFields(section.fields, model);
     if (!sameFieldPicks(synced, section.fields)) {
       onChange({ ...section, fields: synced });
     }
-    // Only re-run when the resolved model identity or the model key
-    // changes — `section`/`onChange` are stable-enough parent callbacks and
-    // including them would re-run this every render for no benefit.
+    // Only re-run when the resolved model identity, the model key, or the
+    // conditional flag changes — `section`/`onChange` are stable-enough
+    // parent callbacks and including them would re-run this every render
+    // for no benefit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, section.entity_model]);
+  }, [model, section.entity_model, conditional]);
 
   function setEntityModel(next: string) {
     // A field pick set belongs to the OLD model — carrying it over to a
     // different model would either dangle (field doesn't exist there) or
-    // silently mean something else. Reset to a clean required-only start.
-    onChange({ ...section, entity_model: next, fields: syncModelRequiredFields([], models[next]) });
+    // silently mean something else. Reset to a clean start: required-only
+    // for an unconditional section, empty for a conditional one (nothing
+    // to auto-force there).
+    const nextModel = models[next];
+    onChange({
+      ...section,
+      entity_model: next,
+      fields: conditional ? [] : syncModelRequiredFields([], nextModel),
+    });
   }
 
   function setMode(mode: 'create' | 'match_or_create') {
@@ -72,7 +112,7 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
     <div className="section-panel">
       <div className="section-panel-header">
         <span className="section-panel-id">{section.section_id}</span>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onRemove}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onRemove} disabled={readOnly}>
           {t('editor.section.remove')}
         </button>
       </div>
@@ -85,10 +125,12 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
         </ul>
       )}
 
+      {conditional && <p className="section-conditional-notice">{t('editor.section.conditionalNotice')}</p>}
+
       <div className="section-panel-row">
         <label className="section-panel-field">
           <span>{t('editor.section.entityModel')}</span>
-          <select value={section.entity_model} onChange={(e) => setEntityModel(e.target.value)}>
+          <select value={section.entity_model} onChange={(e) => setEntityModel(e.target.value)} disabled={readOnly}>
             <option value="" disabled>
               {t('editor.section.entityModelPlaceholder')}
             </option>
@@ -105,6 +147,7 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
           <select
             value={section.mode}
             onChange={(e) => setMode(e.target.value as 'create' | 'match_or_create')}
+            disabled={readOnly}
           >
             <option value="create">{t('editor.section.modeCreate')}</option>
             <option value="match_or_create">{t('editor.section.modeMatchOrCreate')}</option>
@@ -118,6 +161,7 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
             type="checkbox"
             checked={section.repeat != null}
             onChange={(e) => setRepeatEnabled(e.target.checked)}
+            disabled={readOnly}
           />
           {t('editor.section.repeat')}
         </label>
@@ -129,6 +173,7 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
                 type="number"
                 min={0}
                 value={section.repeat.min}
+                disabled={readOnly}
                 onChange={(e) =>
                   onChange({ ...section, repeat: { ...section.repeat!, min: Number(e.target.value) } })
                 }
@@ -140,6 +185,7 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
                 type="number"
                 min={0}
                 value={section.repeat.max}
+                disabled={readOnly}
                 onChange={(e) =>
                   onChange({ ...section, repeat: { ...section.repeat!, max: Number(e.target.value) } })
                 }
@@ -154,6 +200,8 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
         <FieldPickerTable
           fields={section.fields}
           model={model}
+          conditional={conditional}
+          readOnly={readOnly}
           onChange={(next) => onChange({ ...section, fields: next })}
         />
       </div>
@@ -164,14 +212,18 @@ export default function SectionPanel({ section, models, onChange, onRemove, erro
 function FieldPickerTable({
   fields,
   model,
+  conditional,
+  readOnly,
   onChange,
 }: {
   fields: FieldPick[];
   model: EntityModelDef | undefined;
+  conditional: boolean;
+  readOnly: boolean;
   onChange: (next: FieldPick[]) => void;
 }) {
   const { t } = useTranslation();
-  const pickable = pickableFields(model);
+  const pickable = pickableFields(model, conditional);
   const byName = new Map(fields.map((f) => [f.name, f]));
 
   function toggleInclude(field: EntityModelField, included: boolean) {
@@ -185,7 +237,7 @@ function FieldPickerTable({
   }
 
   function toggleRequired(field: EntityModelField, required: boolean) {
-    if (field.required) return; // model-required — locked, never loosen here
+    if (!conditional && field.required) return; // unconditional + model-required — locked, never loosen here
     const current = byName.get(field.name);
     if (!current) return;
     const next = new Map(byName);
@@ -214,14 +266,19 @@ function FieldPickerTable({
           const pick = byName.get(field.name);
           const included = pick !== undefined;
           const required = pick?.required ?? false;
-          const locked = field.required;
+          // Locking (auto-included, can't exclude/loosen) only applies to
+          // an UNCONDITIONAL section's model-required fields (task review
+          // fix #1) — in a conditional section, a model-required field is
+          // either not offered at all (see `pickableFields`) or, if
+          // model-defaulted, a fully ordinary optional field here.
+          const locked = !conditional && field.required;
           return (
             <tr key={field.name} className={locked ? 'section-field-locked' : undefined}>
               <td>
                 <input
                   type="checkbox"
                   checked={included}
-                  disabled={locked}
+                  disabled={locked || readOnly}
                   onChange={(e) => toggleInclude(field, e.target.checked)}
                   aria-label={t('editor.section.fieldsColInclude')}
                 />
@@ -237,7 +294,7 @@ function FieldPickerTable({
                 <input
                   type="checkbox"
                   checked={required}
-                  disabled={!included || locked}
+                  disabled={!included || locked || readOnly}
                   onChange={(e) => toggleRequired(field, e.target.checked)}
                   aria-label={t('editor.section.fieldsColRequired')}
                 />

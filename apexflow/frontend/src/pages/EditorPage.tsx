@@ -27,6 +27,23 @@ export default function EditorPage() {
     return <p className="page-placeholder">{t('common.loading')}</p>;
   }
 
+  // Task review fix #2: a row whose stored machine/steps JSON no longer
+  // parses (`app/api/designer.py`'s `_parse_or_422`) is a DISTINCT,
+  // recoverable state from a generic load failure — checked before
+  // `loadError` since both leave `store.definition` null.
+  if (store.parseError) {
+    return (
+      <div className="editor-parse-error" role="alert">
+        <h1 className="page-title">{t('editor.draftInvalid.heading')}</h1>
+        <p>{t('editor.draftInvalid.body')}</p>
+        <pre className="editor-parse-error-detail">{store.parseError}</pre>
+        <Button variant="secondary" size="sm" onClick={() => void store.reload()}>
+          {t('common.retry')}
+        </Button>
+      </div>
+    );
+  }
+
   if (store.loadError || !store.definition) {
     return (
       <div className="editor-load-error" role="alert">
@@ -120,6 +137,7 @@ export default function EditorPage() {
               models={store.models}
               states={store.machine.states}
               errors={store.validation.errors}
+              readOnly={store.readOnly}
             />
           )}
           {tab === 'machine' && <p className="page-placeholder">{t('editor.machineComingSoon')}</p>}

@@ -230,6 +230,15 @@
   color: var(--text-primary);
 }
 
+.section-conditional-notice {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--attn);
+  background: var(--attn-tint);
+  border-radius: var(--radius-xs);
+  padding: var(--space-1) var(--space-2);
+}
+
 .section-panel-row {
   display: flex;
   gap: var(--space-4);

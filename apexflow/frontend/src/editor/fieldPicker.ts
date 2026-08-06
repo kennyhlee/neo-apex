@@ -15,7 +15,30 @@
 // filtered here anyway as defense in depth, matching
 // `_engine_owned_field_errors` (`validate.py:630-637`), which checks the
 // same set against section field picks server-side.
-import type { EntityModelDef, EntityModelField, FieldPick } from '../types/designer.ts';
+//
+// Task review fix #1 (critical): a CONDITIONAL section (its owning step has
+// a `show_if`) may not pick a model-required field unless the model also
+// declares a `default` for it — `validate.py`'s `_coverage_errors`
+// conditional branch (`:733-748`) checks `fdef.get("required")` (the
+// MODEL's own flag, not the per-step `FieldPick.required` override) and
+// only exempts it via `_is_exempt_field`'s `"default" in fdef` /
+// `_is_link_or_id_field` checks — NOT via the committing-transition
+// `set_entity_field` exemption also present there, which needs full machine
+// analysis this section-level picker doesn't have. Mirroring only the
+// default-based exemption is therefore intentionally the STRICTER
+// subset of what the backend would ultimately accept — it can reject a
+// pick a sufficiently-configured machine would actually allow, but it can
+// never let through a pick the backend would reject. `pickableFields`'s
+// `conditional` flag threads this rule through: an unconditional
+// section keeps today's unrestricted "every non-engine-owned/id/link field"
+// menu.
+import type {
+  EntityModelDef,
+  EntityModelField,
+  EntityModelsMap,
+  FieldPick,
+  WorkflowSectionDef,
+} from '../types/designer.ts';
 
 export const ENGINE_OWNED_FIELDS: readonly string[] = [
   'instance_id',
@@ -39,24 +62,61 @@ function isLinkOrIdField(name: string): boolean {
   return name.endsWith('_id');
 }
 
+/** `"default" in fdef` equivalent — `validate.py`'s `_is_exempt_field`
+ * treats any field with a declared default as exempt from the
+ * required-field coverage rules, unconditional or conditional alike. */
+function hasModelDefault(field: EntityModelField): boolean {
+  return field.default !== undefined;
+}
+
 export function isPickableField(field: EntityModelField): boolean {
   return !ENGINE_OWNED_FIELDS.includes(field.name) && !isLinkOrIdField(field.name);
 }
 
-/** Every base+custom field of `model` a section may legally pick from,
- * base fields first (declaration order preserved within each group). */
-export function pickableFields(model: EntityModelDef | undefined): EntityModelField[] {
-  if (!model) return [];
-  return [...model.base_fields, ...model.custom_fields].filter(isPickableField);
+/**
+ * A model-required field with no declared default is forbidden inside a
+ * CONDITIONAL section (`validate.py`'s conditional coverage rule — see
+ * module doc comment). Fields that are optional at the model level, or
+ * required-but-defaulted, are unaffected.
+ */
+export function isForbiddenWhenConditional(field: EntityModelField): boolean {
+  return field.required && !hasModelDefault(field);
 }
 
 /**
- * Reconcile a section's current field picks against its model: every
- * pickable field the model marks `required` is force-included and
- * force-`required: true` (the "model-required fields auto-included and
- * un-loosenable" DECISION — task-7-brief.md) regardless of what the caller
- * passed in. Everything else in `fields` is preserved as-is (including
- * picks the caller already made for model-optional fields).
+ * Every base+custom field of `model` a section may legally pick from, base
+ * fields first (declaration order preserved within each group).
+ *
+ * `conditional` (default `false`) is whether the OWNING STEP has a
+ * `show_if` set — pass `true` from a section whose step is conditional to
+ * additionally drop model-required/no-default fields per the module doc
+ * comment's rule.
+ */
+export function pickableFields(
+  model: EntityModelDef | undefined,
+  conditional = false,
+): EntityModelField[] {
+  if (!model) return [];
+  return [...model.base_fields, ...model.custom_fields].filter(
+    (f) => isPickableField(f) && !(conditional && isForbiddenWhenConditional(f)),
+  );
+}
+
+/**
+ * Reconcile a section's current field picks against its model for an
+ * UNCONDITIONAL section: every pickable field the model marks `required` is
+ * force-included and force-`required: true` (the "model-required fields
+ * auto-included and un-loosenable" DECISION — task-7-brief.md) regardless
+ * of what the caller passed in. Everything else in `fields` is preserved
+ * as-is (including picks the caller already made for model-optional
+ * fields).
+ *
+ * NOT used for conditional sections — those never auto-include/lock
+ * anything (a model-required field is either forbidden outright, per
+ * `isForbiddenWhenConditional`, or — if it has a default — treated as a
+ * fully ordinary optional field, per the task review fix). Conditional
+ * sections use `dropForbiddenConditionalFields` instead, which only ever
+ * REMOVES picks, never forces one in.
  *
  * Order: existing picks keep their original position; newly-forced
  * model-required fields not already present are appended at the end.
@@ -71,6 +131,48 @@ export function syncModelRequiredFields(
     byName.set(name, { name, required: true });
   }
   return Array.from(byName.values());
+}
+
+/**
+ * Strip any field pick that `pickableFields(model, true)` would no longer
+ * offer — the picks a section must drop the moment its owning step becomes
+ * conditional (or whenever the resolved model changes underneath an
+ * already-conditional section). Pure/no side effects: callers decide what
+ * to do with the dropped names (e.g. `StepEditor.tsx`'s show_if transition
+ * handler surfaces them in a toast).
+ */
+export function dropForbiddenConditionalFields(
+  fields: FieldPick[],
+  model: EntityModelDef | undefined,
+): { fields: FieldPick[]; dropped: FieldPick[] } {
+  const allowed = new Set(pickableFields(model, true).map((f) => f.name));
+  const kept: FieldPick[] = [];
+  const dropped: FieldPick[] = [];
+  for (const pick of fields) {
+    (allowed.has(pick.name) ? kept : dropped).push(pick);
+  }
+  return { fields: kept, dropped };
+}
+
+/**
+ * Same as `dropForbiddenConditionalFields`, applied across every section of
+ * a (form-step-owned) section list at once — used both when a step's
+ * `show_if` transitions from unset to set, and defensively whenever the
+ * resolved model changes underneath an already-conditional section.
+ */
+export function dropForbiddenConditionalFieldsAcross(
+  sections: WorkflowSectionDef[],
+  models: EntityModelsMap,
+): { sections: WorkflowSectionDef[]; dropped: string[] } {
+  const dropped: string[] = [];
+  const nextSections = sections.map((section) => {
+    const model = models[section.entity_model];
+    const { fields, dropped: sectionDropped } = dropForbiddenConditionalFields(section.fields, model);
+    if (sectionDropped.length === 0) return section;
+    dropped.push(...sectionDropped.map((f) => `${section.section_id}.${f.name}`));
+    return { ...section, fields };
+  });
+  return { sections: nextSections, dropped };
 }
 
 /** True iff two `FieldPick[]` describe the same set of {name, required}

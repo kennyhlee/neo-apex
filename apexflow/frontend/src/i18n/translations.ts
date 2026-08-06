@@ -112,6 +112,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.versionLabel': 'Version {v}',
     'editor.loadError': "Couldn't load this workflow.",
     'editor.readonlyBanner': "This definition isn't a draft — changes here won't be saved automatically.",
+    'editor.draftInvalid.heading': "This draft's data can't be loaded",
+    'editor.draftInvalid.body':
+      "The saved machine/steps for this draft are invalid and can't be parsed for editing. This usually means it was corrupted by a bug — contact support if reloading doesn't fix it.",
 
     'editor.save.dirty': 'Unsaved changes',
     'editor.save.saving': 'Saving…',
@@ -171,6 +174,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.section.fieldsColField': 'Field',
     'editor.section.fieldsColRequired': 'Required',
     'editor.section.modelRequired': 'Required by model',
+    'editor.section.conditionalNotice':
+      "This step is conditional (has a show-if) — model-required fields without a default value can't be picked here.",
+    'editor.section.droppedForConditional':
+      'This step became conditional, so these picked fields were removed (model-required, no default): {fields}',
 
     'editor.docs.heading': 'Required documents',
     'editor.docs.add': '+ Add document',
@@ -209,7 +216,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.showIf.contextGroup': 'Context',
     'editor.showIf.nestedGroup': 'Nested group',
     'editor.showIf.editAsJson': 'Edit as JSON',
-    'editor.showIf.jsonInvalid': 'Invalid JSON — needs one of all/any/not as a list.',
+    'editor.showIf.jsonInvalid':
+      'Invalid JSON — needs EXACTLY ONE of all/any/not as a list (the other two must be null or omitted).',
 
     // Templates (gallery page — Task 6)
     'templates.title': 'Templates',
@@ -348,6 +356,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.versionLabel': '版本 {v}',
     'editor.loadError': '无法加载此工作流。',
     'editor.readonlyBanner': '此定义不是草稿 — 此处的更改不会自动保存。',
+    'editor.draftInvalid.heading': '无法加载此草稿的数据',
+    'editor.draftInvalid.body': '此草稿保存的状态机／步骤数据无效，无法解析以供编辑。这通常意味着存在缺陷导致数据损坏 — 如果重新加载无法解决，请联系支持。',
 
     'editor.save.dirty': '有未保存的更改',
     'editor.save.saving': '正在保存…',
@@ -407,6 +417,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.section.fieldsColField': '字段',
     'editor.section.fieldsColRequired': '必填',
     'editor.section.modelRequired': '模型要求必填',
+    'editor.section.conditionalNotice': '此步骤为条件步骤（设有显示条件）— 此处无法选取没有默认值的模型必填字段。',
+    'editor.section.droppedForConditional': '此步骤变为条件步骤，以下已选字段已被移除（模型必填且无默认值）：{fields}',
 
     'editor.docs.heading': '所需文件',
     'editor.docs.add': '+ 添加文件',
@@ -445,7 +457,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.showIf.contextGroup': '上下文',
     'editor.showIf.nestedGroup': '嵌套分组',
     'editor.showIf.editAsJson': '以 JSON 编辑',
-    'editor.showIf.jsonInvalid': 'JSON 无效 — 需要 all/any/not 三者之一为列表。',
+    'editor.showIf.jsonInvalid': 'JSON 无效 — 需要 all/any/not 三者中恰好一个为列表（其余两个必须为 null 或省略）。',
 
     // Templates (gallery page — Task 6)
     'templates.title': '模板',

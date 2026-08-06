@@ -4,11 +4,14 @@
 // anywhere in this codebase).
 import { useMemo, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { useToast } from '../hooks/useToast.ts';
 import SectionPanel from './SectionPanel.tsx';
 import ShowIfBuilder, { type SourceGroup } from './ShowIfBuilder.tsx';
 import { errorsForStep, errorsForSection } from './validationMatch.ts';
+import { dropForbiddenConditionalFieldsAcross } from './fieldPicker.ts';
 import type { StepsUpdater } from './draftStore.ts';
 import type {
+  ConditionGroupDef,
   EntityModelsMap,
   StateDef,
   WorkflowSectionDef,
@@ -22,6 +25,9 @@ interface StepEditorProps {
   models: EntityModelsMap;
   states: StateDef[];
   errors: string[];
+  /** True when the definition isn't a draft — disables every mutating
+   * control (task review fix #6). */
+  readOnly: boolean;
 }
 
 /** Short, non-cryptographic uniqueness suffix — same precedent as
@@ -82,8 +88,9 @@ function buildSourceGroups(steps: WorkflowStepDef[], contextLabel: string): Sour
   return groups;
 }
 
-export default function StepEditor({ steps, onChange, models, states, errors }: StepEditorProps) {
+export default function StepEditor({ steps, onChange, models, states, errors, readOnly }: StepEditorProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const sourceGroups = useMemo(
     () => buildSourceGroups(steps, t('editor.showIf.contextGroup')),
@@ -121,18 +128,54 @@ export default function StepEditor({ steps, onChange, models, states, errors }: 
     onChange((prev) => [...prev, newStep(type)]);
   }
 
+  /**
+   * show_if setter for one step — routed through here (rather than an
+   * inline lambda at the call site) specifically to catch the
+   * unconditional -> conditional transition: task review fix #1 requires
+   * that any already-picked field that becomes forbidden the moment this
+   * step gains a `show_if` (model-required, no default) is dropped
+   * immediately, with a toast naming what was dropped, rather than left in
+   * place to fail validation silently.
+   */
+  function updateStepShowIf(idx: number, step: WorkflowStepDef, next: ConditionGroupDef | null) {
+    const becameConditional = step.show_if == null && next != null;
+    if (becameConditional && step.type === 'form') {
+      const sections = getSections(step);
+      const { sections: nextSections, dropped } = dropForbiddenConditionalFieldsAcross(sections, models);
+      if (dropped.length > 0) {
+        toast({
+          message: t('editor.section.droppedForConditional').replace('{fields}', dropped.join(', ')),
+          tone: 'attn',
+        });
+      }
+      updateStepAt(idx, withSections({ ...step, show_if: next }, nextSections));
+      return;
+    }
+    updateStepAt(idx, { ...step, show_if: next });
+  }
+
   return (
     <div className="step-editor">
       <div className="step-editor-toolbar">
         <span className="step-editor-heading">{t('editor.steps.heading')}</span>
         <div className="step-editor-add-buttons">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => addStep('form')}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => addStep('form')} disabled={readOnly}>
             {t('editor.step.addForm')}
           </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => addStep('documents')}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => addStep('documents')}
+            disabled={readOnly}
+          >
             {t('editor.step.addDocuments')}
           </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => addStep('message')}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => addStep('message')}
+            disabled={readOnly}
+          >
             {t('editor.step.addMessage')}
           </button>
         </div>
@@ -164,13 +207,14 @@ export default function StepEditor({ steps, onChange, models, states, errors }: 
                   className="step-title-input"
                   value={step.title}
                   placeholder={t('editor.step.titlePlaceholder')}
+                  disabled={readOnly}
                   onChange={(e) => updateStepAt(idx, { ...step, title: e.target.value })}
                 />
                 <div className="step-card-actions">
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    disabled={idx === 0}
+                    disabled={readOnly || idx === 0}
                     onClick={() => moveStep(idx, -1)}
                     aria-label={t('editor.step.moveUp')}
                   >
@@ -179,13 +223,18 @@ export default function StepEditor({ steps, onChange, models, states, errors }: 
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    disabled={idx === steps.length - 1}
+                    disabled={readOnly || idx === steps.length - 1}
                     onClick={() => moveStep(idx, 1)}
                     aria-label={t('editor.step.moveDown')}
                   >
                     &darr;
                   </button>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => removeStepAt(idx)}>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    onClick={() => removeStepAt(idx)}
+                    disabled={readOnly}
+                  >
                     {t('editor.step.remove')}
                   </button>
                 </div>
@@ -208,6 +257,7 @@ export default function StepEditor({ steps, onChange, models, states, errors }: 
                       <input
                         type="checkbox"
                         checked={step.required}
+                        disabled={readOnly}
                         onChange={(e) => updateStepAt(idx, { ...step, required: e.target.checked })}
                       />
                       {t('editor.step.required')}
@@ -216,6 +266,7 @@ export default function StepEditor({ steps, onChange, models, states, errors }: 
                       <input
                         type="checkbox"
                         checked={step.blocking}
+                        disabled={readOnly}
                         onChange={(e) => updateStepAt(idx, { ...step, blocking: e.target.checked })}
                       />
                       {t('editor.step.blocking')}
@@ -224,6 +275,7 @@ export default function StepEditor({ steps, onChange, models, states, errors }: 
                       <span>{t('editor.step.review')}</span>
                       <select
                         value={step.review ?? ''}
+                        disabled={readOnly}
                         onChange={(e) =>
                           updateStepAt(idx, {
                             ...step,
@@ -251,6 +303,7 @@ export default function StepEditor({ steps, onChange, models, states, errors }: 
                             <input
                               type="checkbox"
                               checked={checked}
+                              disabled={readOnly}
                               onChange={(e) => {
                                 const next = e.target.checked
                                   ? [...step.available_in, s.state_id]
@@ -270,22 +323,24 @@ export default function StepEditor({ steps, onChange, models, states, errors }: 
                       step={step}
                       models={models}
                       errors={errors}
+                      readOnly={readOnly}
                       onChange={(next) => updateStepAt(idx, next)}
                     />
                   )}
                   {step.type === 'documents' && (
-                    <DocumentsStepPanel step={step} onChange={(next) => updateStepAt(idx, next)} />
+                    <DocumentsStepPanel step={step} readOnly={readOnly} onChange={(next) => updateStepAt(idx, next)} />
                   )}
                   {step.type === 'message' && (
-                    <MessageStepPanel step={step} onChange={(next) => updateStepAt(idx, next)} />
+                    <MessageStepPanel step={step} readOnly={readOnly} onChange={(next) => updateStepAt(idx, next)} />
                   )}
 
                   <div className="step-showif">
                     <span className="step-panel-label">{t('editor.step.showIf')}</span>
                     <ShowIfBuilder
                       value={step.show_if}
-                      onChange={(next) => updateStepAt(idx, { ...step, show_if: next })}
+                      onChange={(next) => updateStepShowIf(idx, step, next)}
                       sourceGroups={sourceGroups}
+                      readOnly={readOnly}
                     />
                   </div>
                 </div>
@@ -302,15 +357,18 @@ function FormStepPanel({
   step,
   models,
   errors,
+  readOnly,
   onChange,
 }: {
   step: WorkflowStepDef;
   models: EntityModelsMap;
   errors: string[];
+  readOnly: boolean;
   onChange: (next: WorkflowStepDef) => void;
 }) {
   const { t } = useTranslation();
   const sections = getSections(step);
+  const conditional = step.show_if != null;
 
   function updateSectionAt(idx: number, next: WorkflowSectionDef) {
     onChange(withSections(step, sections.map((s, i) => (i === idx ? next : s))));
@@ -326,7 +384,7 @@ function FormStepPanel({
     <div className="form-step-sections">
       <div className="form-step-sections-header">
         <h4>{t('editor.section.heading')}</h4>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={addSection}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={addSection} disabled={readOnly}>
           {t('editor.section.add')}
         </button>
       </div>
@@ -338,6 +396,8 @@ function FormStepPanel({
             section={section}
             models={models}
             errors={errorsForSection(errors, section.section_id)}
+            conditional={conditional}
+            readOnly={readOnly}
             onChange={(next) => updateSectionAt(idx, next)}
             onRemove={() => removeSectionAt(idx)}
           />
@@ -368,9 +428,11 @@ function newDoc(): DocEntry {
 
 function DocumentsStepPanel({
   step,
+  readOnly,
   onChange,
 }: {
   step: WorkflowStepDef;
+  readOnly: boolean;
   onChange: (next: WorkflowStepDef) => void;
 }) {
   const { t } = useTranslation();
@@ -390,7 +452,7 @@ function DocumentsStepPanel({
     <div className="documents-step-panel">
       <div className="documents-step-header">
         <h4>{t('editor.docs.heading')}</h4>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={addDoc}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={addDoc} disabled={readOnly}>
           {t('editor.docs.add')}
         </button>
       </div>
@@ -399,13 +461,19 @@ function DocumentsStepPanel({
         <div className="documents-step-row" key={idx}>
           <label className="doc-field">
             <span>{t('editor.docs.name')}</span>
-            <input type="text" value={doc.name} onChange={(e) => updateDocAt(idx, { ...doc, name: e.target.value })} />
+            <input
+              type="text"
+              value={doc.name}
+              disabled={readOnly}
+              onChange={(e) => updateDocAt(idx, { ...doc, name: e.target.value })}
+            />
           </label>
           <label className="doc-field">
             <span>{t('editor.docs.description')}</span>
             <input
               type="text"
               value={doc.description ?? ''}
+              disabled={readOnly}
               onChange={(e) => updateDocAt(idx, { ...doc, description: e.target.value })}
             />
           </label>
@@ -413,6 +481,7 @@ function DocumentsStepPanel({
             <input
               type="checkbox"
               checked={doc.sensitive}
+              disabled={readOnly}
               onChange={(e) => updateDocAt(idx, { ...doc, sensitive: e.target.checked })}
             />
             {t('editor.docs.sensitive')}
@@ -421,6 +490,7 @@ function DocumentsStepPanel({
             <input
               type="checkbox"
               checked={doc.blocking}
+              disabled={readOnly}
               onChange={(e) => updateDocAt(idx, { ...doc, blocking: e.target.checked })}
             />
             {t('editor.docs.blocking')}
@@ -431,6 +501,7 @@ function DocumentsStepPanel({
               type="number"
               min={0}
               value={doc.due_days_after_state ?? ''}
+              disabled={readOnly}
               onChange={(e) =>
                 updateDocAt(idx, {
                   ...doc,
@@ -439,7 +510,7 @@ function DocumentsStepPanel({
               }
             />
           </label>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeDocAt(idx)}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeDocAt(idx)} disabled={readOnly}>
             {t('editor.docs.remove')}
           </button>
         </div>
@@ -458,9 +529,11 @@ function getAck(step: WorkflowStepDef): boolean {
 
 function MessageStepPanel({
   step,
+  readOnly,
   onChange,
 }: {
   step: WorkflowStepDef;
+  readOnly: boolean;
   onChange: (next: WorkflowStepDef) => void;
 }) {
   const { t } = useTranslation();
@@ -471,6 +544,7 @@ function MessageStepPanel({
         <textarea
           rows={4}
           value={getBody(step)}
+          disabled={readOnly}
           onChange={(e) => onChange({ ...step, config: { ...step.config, body: e.target.value } })}
         />
       </label>
@@ -478,6 +552,7 @@ function MessageStepPanel({
         <input
           type="checkbox"
           checked={getAck(step)}
+          disabled={readOnly}
           onChange={(e) => onChange({ ...step, config: { ...step.config, ack: e.target.checked } })}
         />
         {t('editor.message.ack')}
