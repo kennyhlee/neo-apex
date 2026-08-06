@@ -34,7 +34,8 @@ exactly the errors publish would 409 with."
 """
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import ValidationError
 
 from app.auth import require_staff_tenant
 from app.config import settings
@@ -42,6 +43,7 @@ from app.templates.enrollment import template_catalog
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
 from app.workflows.primitives import EFFECTS, GUARDS
+from app.workflows.schema import MachineDef, StepDef
 from app.workflows.validate import PARAM_SPECS, definition_health, validate_definition
 
 router = APIRouter(prefix="/api/workflows")
@@ -61,6 +63,28 @@ def _health_for_row(row: dict, machine, steps, models: dict[str, Any]) -> str:
     if row.get("status") == "superseded":
         return "superseded"
     return definition_health(machine, steps, models)
+
+
+def _parse_or_422(row: dict) -> tuple[MachineDef, list[StepDef]]:
+    """`defs.parse_machine_steps` raises `pydantic.ValidationError` when a
+    row's stored `machine`/`steps` JSON no longer parses against the Task 3
+    schemas — e.g. a hand-authored (or bugged-editor-produced) `show_if`
+    with two non-null combinator keys, which `schema.py`'s `ConditionGroup`
+    validator (`_exactly_one_key`) rejects. Left uncaught, that surfaces as
+    FastAPI's default unhandled-exception 500 on EVERY future read of that
+    row, not just once — a single bad autosave bricks the draft permanently
+    (code-review follow-up: the editor's edit-as-JSON escape hatch could
+    write exactly this shape before its own stricter validation landed).
+
+    Every read route below that needs the parsed shape goes through this
+    wrapper instead of calling `defs.parse_machine_steps` directly, so a
+    corrupt row degrades to a machine-readable 422 (`{"parse_error": ...}`)
+    the editor can show as a distinct "this draft's data is invalid" state,
+    rather than an opaque 500."""
+    try:
+        return defs.parse_machine_steps(row)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail={"parse_error": str(exc)}) from exc
 
 
 def _family_url(tenant_id: str, row: dict) -> str | None:
@@ -127,7 +151,7 @@ def get_bundle(tenant_id: str, entity_id: str, user: dict = Depends(require_staf
     health, and the current dry-run validation errors."""
     token = user.get("_token")
     row = defs.require_definition_row(tenant_id, entity_id, token)
-    machine, steps = defs.parse_machine_steps(row)
+    machine, steps = _parse_or_422(row)
 
     model_types = defs.referenced_entity_models(steps) | set(STANDARD_BUNDLE_MODELS)
     models = defs.fetch_models(tenant_id, model_types, token)
@@ -163,7 +187,7 @@ def validate_definition_route(tenant_id: str, entity_id: str,
     """
     token = user.get("_token")
     row = defs.require_definition_row(tenant_id, entity_id, token)
-    machine, steps = defs.parse_machine_steps(row)
+    machine, steps = _parse_or_422(row)
     models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
 
     errors = validate_definition(machine, steps, models)

@@ -113,6 +113,24 @@ def _stale_steps():
     return steps
 
 
+def _malformed_show_if_steps():
+    """A `show_if` with TWO non-null combinator keys — `schema.py`'s
+    `ConditionGroup._exactly_one_key` model validator rejects this, so
+    `defs.parse_machine_steps`'s `StepDef.model_validate(s)` raises
+    `pydantic.ValidationError` (task review fix #2: this exact shape is what
+    a not-yet-hardened edit-as-JSON escape hatch could persist via
+    autosave, bricking every future bundle/validate fetch of the row with an
+    unhandled-exception 500 — `_parse_or_422` converts that into a 422 the
+    editor can recover from instead)."""
+    steps = _valid_steps()
+    steps[0]["show_if"] = {
+        "all": [{"source": "student_section.first_name", "op": "truthy"}],
+        "any": [{"source": "student_section.last_name", "op": "truthy"}],
+        "not": None,
+    }
+    return steps
+
+
 def _valid_models():
     return {
         "student": {
@@ -326,6 +344,23 @@ def test_bundle_404s_on_unknown_entity_id(client, fake_dc):
     assert resp.status_code == 404
 
 
+def test_bundle_422s_not_500s_on_malformed_stored_steps_json(client, fake_dc):
+    """Task review fix #2: a row whose stored `steps` JSON no longer parses
+    against the schema (e.g. a `show_if` with two non-null combinator keys)
+    must 422 with a machine-readable `parse_error`, never an unhandled-
+    exception 500 — a 500 here would mean the SAME row 500s on every future
+    fetch, permanently bricking the draft."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-bundle-malformed", status="draft",
+                           steps=_malformed_show_if_steps())
+
+    resp = client.get(f"/api/workflows/{TENANT}/definitions/{eid}/bundle")
+    assert resp.status_code == 422
+    body = resp.json()
+    assert isinstance(body["detail"]["parse_error"], str)
+    assert body["detail"]["parse_error"]  # non-empty
+
+
 # --- POST .../definitions/{entity_id}/validate ------------------------------
 
 
@@ -370,6 +405,23 @@ def test_validate_matches_publish_409_errors_exactly(client, fake_dc):
 def test_validate_404s_on_unknown_entity_id(client, fake_dc):
     resp = client.post(f"/api/workflows/{TENANT}/definitions/does-not-exist/validate")
     assert resp.status_code == 404
+
+
+def test_validate_422s_not_500s_on_malformed_stored_steps_json(client, fake_dc):
+    """Same hardening as the bundle route's equivalent test above, for the
+    validate route's own `_parse_or_422` call site."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-validate-malformed", status="draft",
+                           steps=_malformed_show_if_steps())
+
+    resp = client.post(f"/api/workflows/{TENANT}/definitions/{eid}/validate")
+    assert resp.status_code == 422
+    body = resp.json()
+    assert isinstance(body["detail"]["parse_error"], str)
+    assert body["detail"]["parse_error"]  # non-empty
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["status"] == "draft"  # untouched — 422 path never writes
 
 
 def test_validate_on_published_row_is_200_dry_run(client, fake_dc):
