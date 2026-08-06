@@ -33,9 +33,64 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.needAccount': 'Accounts are created by your school administrator.',
     'login.signingIn': 'Signing in…',
 
-    // Definitions (placeholder page — Task 5)
+    // Definitions (list page — Task 5)
     'definitions.title': 'Workflows',
-    'definitions.comingSoon': 'The definitions list is coming in Task 5.',
+    'definitions.lineageCount': '{n} workflow(s)',
+    'definitions.newWorkflow': 'New workflow',
+    'definitions.fromTemplate': 'From template',
+    'definitions.loadError': "Couldn't load workflows.",
+    'definitions.emptyTitle': 'No workflows yet',
+    'definitions.emptyBody': 'Start from a template, or build one from scratch.',
+
+    'definitions.columns.name': 'Name',
+    'definitions.columns.definitionId': 'Workflow ID',
+    'definitions.columns.version': 'Version',
+    'definitions.columns.status': 'Status',
+    'definitions.columns.lineageStatus': 'Lineage',
+    'definitions.columns.health': 'Health',
+    'definitions.columns.openInstances': 'Open instances',
+    'definitions.columns.channel': 'Channel',
+
+    'definitions.channel.staffOnly': 'Staff only',
+    'definitions.channel.family': 'Family',
+    'definitions.channel.familyLinkLabel': 'Open family link',
+
+    'definitions.actions.openEditor': 'Open editor',
+    'definitions.actions.newDraft': 'New draft',
+    'definitions.actions.deprecate': 'Deprecate',
+    'definitions.actions.reactivate': 'Reactivate',
+    'definitions.actions.retire': 'Retire',
+
+    'definitions.newWorkflowModalTitle': 'New workflow',
+    'definitions.newWorkflowNameLabel': 'Name',
+    'definitions.newWorkflowNamePlaceholder': 'e.g. Summer Camp Enrollment',
+    'definitions.newWorkflowNameRequired': 'Enter a name for the workflow.',
+    'definitions.newWorkflowCreating': 'Creating…',
+    'definitions.newWorkflowCreate': 'Create',
+    'definitions.newWorkflowError': "Couldn't create the workflow. Try again.",
+
+    'definitions.newDraftCreating': 'Creating…',
+    'definitions.newDraftToast': 'Draft v{v} created.',
+    'definitions.newDraftError': "Couldn't create a new draft. Try again.",
+
+    'definitions.deprecateConfirmTitle': 'Deprecate this workflow?',
+    'definitions.deprecateConfirmBody':
+      'Staff and families will no longer be able to start "{name}". Applications already in progress keep running.',
+    'definitions.reactivateConfirmTitle': 'Reactivate this workflow?',
+    'definitions.reactivateConfirmBody': 'People will be able to start "{name}" again.',
+    'definitions.deprecateToast': '"{name}" deprecated.',
+    'definitions.reactivateToast': '"{name}" reactivated.',
+    'definitions.lifecycleError': "Couldn't update the workflow. Try again.",
+
+    'definitions.retireConfirmTitle': 'Retire this workflow?',
+    'definitions.retireConfirmBody':
+      'Retiring is permanent. New applications can no longer be started for this workflow.',
+    'definitions.retireOpenInstances': '{n} application(s) are still open for this workflow.',
+    'definitions.retireForceCancel': 'Also cancel {n} open application(s).',
+    'definitions.retireConfirm': 'Retire',
+    'definitions.retiring': 'Retiring…',
+    'definitions.retireToast': '"{name}" retired.',
+    'definitions.retireBlockedToast': "Can't retire — {n} application(s) are still open.",
 
     // Editor (placeholder page — later tasks)
     'editor.title': 'Editor',
@@ -63,6 +118,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'common.to': 'to',
     'common.noResults': 'Nothing to show yet',
     'common.retry': 'Try again',
+    'common.rowsPerPage': 'Rows per page',
   },
   'zh-CN': {
     // Navbar
@@ -91,9 +147,62 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.needAccount': '账户由学校管理员创建。',
     'login.signingIn': '正在登录…',
 
-    // Definitions (placeholder page — Task 5)
+    // Definitions (list page — Task 5)
     'definitions.title': '工作流',
-    'definitions.comingSoon': '定义列表将在任务 5 中推出。',
+    'definitions.lineageCount': '{n} 个工作流',
+    'definitions.newWorkflow': '新建工作流',
+    'definitions.fromTemplate': '从模板创建',
+    'definitions.loadError': '无法加载工作流。',
+    'definitions.emptyTitle': '暂无工作流',
+    'definitions.emptyBody': '从模板开始，或从头创建一个。',
+
+    'definitions.columns.name': '名称',
+    'definitions.columns.definitionId': '工作流 ID',
+    'definitions.columns.version': '版本',
+    'definitions.columns.status': '状态',
+    'definitions.columns.lineageStatus': '生命周期',
+    'definitions.columns.health': '健康状态',
+    'definitions.columns.openInstances': '进行中的申请',
+    'definitions.columns.channel': '渠道',
+
+    'definitions.channel.staffOnly': '仅限员工',
+    'definitions.channel.family': '家庭端',
+    'definitions.channel.familyLinkLabel': '打开家庭端链接',
+
+    'definitions.actions.openEditor': '打开编辑器',
+    'definitions.actions.newDraft': '新建草稿',
+    'definitions.actions.deprecate': '停用',
+    'definitions.actions.reactivate': '重新启用',
+    'definitions.actions.retire': '淘汰',
+
+    'definitions.newWorkflowModalTitle': '新建工作流',
+    'definitions.newWorkflowNameLabel': '名称',
+    'definitions.newWorkflowNamePlaceholder': '例如：暑期营报名',
+    'definitions.newWorkflowNameRequired': '请输入工作流名称。',
+    'definitions.newWorkflowCreating': '正在创建…',
+    'definitions.newWorkflowCreate': '创建',
+    'definitions.newWorkflowError': '无法创建工作流，请重试。',
+
+    'definitions.newDraftCreating': '正在创建…',
+    'definitions.newDraftToast': '已创建草稿 v{v}。',
+    'definitions.newDraftError': '无法创建新草稿，请重试。',
+
+    'definitions.deprecateConfirmTitle': '停用此工作流？',
+    'definitions.deprecateConfirmBody': '员工和家庭将无法再发起"{name}"。已在进行中的申请不受影响。',
+    'definitions.reactivateConfirmTitle': '重新启用此工作流？',
+    'definitions.reactivateConfirmBody': '重新启用后，可再次发起"{name}"。',
+    'definitions.deprecateToast': '"{name}" 已停用。',
+    'definitions.reactivateToast': '"{name}" 已重新启用。',
+    'definitions.lifecycleError': '无法更新工作流，请重试。',
+
+    'definitions.retireConfirmTitle': '淘汰此工作流？',
+    'definitions.retireConfirmBody': '淘汰操作不可撤销，此后将无法为该工作流发起新的申请。',
+    'definitions.retireOpenInstances': '此工作流仍有 {n} 个进行中的申请。',
+    'definitions.retireForceCancel': '同时取消 {n} 个进行中的申请。',
+    'definitions.retireConfirm': '淘汰',
+    'definitions.retiring': '正在淘汰…',
+    'definitions.retireToast': '"{name}" 已淘汰。',
+    'definitions.retireBlockedToast': '无法淘汰 — 仍有 {n} 个进行中的申请。',
 
     // Editor (placeholder page — later tasks)
     'editor.title': '编辑器',
@@ -121,5 +230,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'common.to': '至',
     'common.noResults': '暂无内容',
     'common.retry': '重试',
+    'common.rowsPerPage': '每页行数',
   },
 };

@@ -326,7 +326,7 @@ export default function DataTable<T extends Record<string, any>>({
           </span>
           {pageSizeOptions && onPageSizeChange && (
             <span className="data-table-page-size">
-              <label htmlFor="data-table-page-size">Rows per page</label>{' '}
+              <label htmlFor="data-table-page-size">{t('common.rowsPerPage')}</label>{' '}
               <select
                 id="data-table-page-size"
                 value={pageSize}
