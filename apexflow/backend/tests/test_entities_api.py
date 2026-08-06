@@ -21,7 +21,10 @@ this test builds a small in-memory respx side_effect instead, the minimal
 extension the brief anticipates ("extend minimally if the query passthrough
 needs a fake").
 """
+import asyncio
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
@@ -206,3 +209,72 @@ def test_draft_write_round_trip(client):
     assert rows[0]["entity_id"] == entity_id
     assert rows[0]["name"] == "Enrollment Draft"
     assert rows[0]["status"] == "draft"
+
+
+# ── DataCore-unreachable -> 502 (Plan 2 browser-gate defect regression) ────
+#
+# Before the fix, `_proxy_to_datacore` called the *sync* `httpx.request()`
+# directly inside an `async def` route with no threadpool — every call
+# blocked Uvicorn's single asyncio event loop for the full DataCore
+# round-trip AND opened a brand-new unpooled connection each time. Under
+# concurrent browser load (CORS preflights + the actual request + other
+# tabs' polling, all serialized onto that one blocked thread) this
+# produced an intermittent, instant `httpx.RequestError` that a one-shot
+# curl never triggered. See gate-debug-report.md for the full narrative.
+
+
+@respx.mock
+def test_create_entity_returns_502_when_datacore_unreachable(client):
+    respx.post(f"{DATACORE}/api/entities/{TENANT}/workflow_definition").mock(
+        side_effect=httpx.ConnectError("connection refused")
+    )
+    resp = client.post(
+        f"/api/entities/{TENANT}/workflow_definition",
+        json={"base_data": {"name": "Draft"}, "custom_fields": {}},
+    )
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "DataCore is unreachable"
+
+
+@respx.mock
+def test_concurrent_creates_are_not_serialized_by_the_proxy(client):
+    """Regression test for the event-loop-blocking root cause: the proxy
+    must not hold Uvicorn's single event loop hostage for the full
+    DataCore round-trip. Simulate N concurrent requests each with a
+    non-trivial DataCore latency; if `_proxy_to_datacore` ever regresses
+    back to a blocking sync call made directly on the event loop (no
+    `run_in_threadpool`, no `await`), these requests serialize and the
+    total wall-clock time scales with N * per-request latency instead of
+    running concurrently.
+    """
+    per_request_delay = 0.2
+    concurrency = 6
+
+    async def slow_handler(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(per_request_delay)
+        return httpx.Response(200, json={"entity_id": "wd_slow"})
+
+    respx.post(f"{DATACORE}/api/entities/{TENANT}/workflow_definition").mock(
+        side_effect=slow_handler
+    )
+
+    def do_request() -> int:
+        resp = client.post(
+            f"/api/entities/{TENANT}/workflow_definition",
+            json={"base_data": {"name": "Draft"}, "custom_fields": {}},
+        )
+        return resp.status_code
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        statuses = list(pool.map(lambda _: do_request(), range(concurrency)))
+    elapsed = time.monotonic() - started
+
+    assert statuses == [200] * concurrency
+    # Fully serialized would take ~concurrency * per_request_delay (1.2s);
+    # true concurrency stays close to a single request's delay. Generous
+    # multiplier to keep this stable under CI/test-runner scheduling noise.
+    assert elapsed < per_request_delay * (concurrency / 2), (
+        f"proxy calls appear serialized: {elapsed:.2f}s for {concurrency} "
+        f"concurrent requests at {per_request_delay}s each"
+    )

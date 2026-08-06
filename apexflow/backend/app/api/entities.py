@@ -7,7 +7,26 @@ routes registered before the generic `/{entity_id}` catch-all). The only
 binding change is the tenant-match dependency: admindash's
 `require_tenant_match` is apexflow's `require_staff_tenant` (app.auth —
 see that module's `# ADJUST(bindings)` note).
+
+`_proxy_to_datacore` uses `httpx.AsyncClient` (awaited), NOT the sync
+`httpx.request()` helper this file (and admindash's copy of it) used to
+call. That sync call was a blocking, synchronous socket call made directly
+inside an `async def` route handler with no `run_in_threadpool` wrapper
+(contrast `app/api/designer.py`'s routes, which are plain `def` and so
+FastAPI dispatches them through the threadpool automatically) — it
+monopolized Uvicorn's single asyncio event loop for the full DataCore
+round-trip.
+Under real browser load (concurrent XHRs: CORS preflights, the actual
+request, other tabs' polling/autosave all arriving close together) every
+one of those gets serialized onto that one blocked thread, and the sync
+call additionally opens a brand-new unpooled TCP connection to DataCore on
+every single invocation — the two together are what produced the
+Plan 2 defect: an intermittent, instant `httpx.RequestError` that a
+one-shot curl (no contention) never triggers. See
+.superpowers/sdd/2026-08-06-apexflow-plan2-designer/gate-debug-report.md.
 """
+import logging
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
@@ -15,6 +34,8 @@ from app.auth import require_staff_tenant
 from app.config import settings
 
 router = APIRouter()
+
+logger = logging.getLogger("apexflow.entities.proxy_debug")
 
 
 async def _proxy_to_datacore(
@@ -24,17 +45,25 @@ async def _proxy_to_datacore(
     body = await request.body() if method in ("POST", "PUT", "PATCH") else None
     content_type = request.headers.get("content-type", "application/json")
     try:
-        resp = httpx.request(
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.request(
+                method,
+                f"{settings.datacore_url}{path}",
+                content=body,
+                headers={
+                    "Content-Type": content_type,
+                    "Authorization": token,
+                },
+            )
+    except httpx.RequestError as exc:
+        logger.error(
+            "PROXY_DEBUG method=%s path=%s exc_type=%s exc=%r cause=%r",
             method,
-            f"{settings.datacore_url}{path}",
-            content=body,
-            headers={
-                "Content-Type": content_type,
-                "Authorization": token,
-            },
-            timeout=30.0,
+            path,
+            type(exc).__name__,
+            exc,
+            exc.__cause__,
         )
-    except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="DataCore is unreachable",
