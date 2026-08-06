@@ -40,6 +40,36 @@ retarget didn't close any of them.
    `test-dup`, `test-fix`) reseeded and published cleanly; all three Task 13
    verification checks passed (below).
 
+1. **The final whole-branch review's three Important-severity items —
+   fixed pre-merge in this same fix wave, not deferred:**
+   - `familyhub_base_url`'s dev default pointed at a dead port (6000);
+     CLAUDE.md/services.json pin FamilyHub frontend to 5620.
+     `apexflow/backend/app/config.py`'s default and comment corrected; the
+     two tests that hard-coded `:6000`
+     (`apexflow/backend/tests/test_internal_api.py`,
+     `familyhub/backend/tests/test_registration_routes.py`) re-pinned.
+   - The family/token-scoped definition routes (`POST .../start`,
+     `GET .../config` in `apexflow/backend/app/api/internal.py`) never
+     checked `channel_access` — a `staff_only` definition was fully
+     readable/startable through the public family surface. Both routes now
+     404 (never 403, to avoid an existence oracle — same reasoning as
+     `resolve_token`'s uniform 401) via a new
+     `_require_family_channel_definition` helper.
+   - Publish-time validation (`app/workflows/validate.py`) only checked
+     that a guard/effect named a KNOWN primitive, never that its `params`
+     dict carried what that primitive needs — a malformed definition
+     (e.g. `items_in_status` with no `status`) passed `validate_definition`
+     cleanly and only failed with a raw `KeyError` at first execution.
+     Added a per-primitive required-param table
+     (`GUARD_PARAM_VALIDATORS`/`EFFECT_PARAM_VALIDATORS`) covering every
+     guard/effect primitive with a real param shape, plus the missing
+     positive regression test for `_unguarded_branch_errors` and the
+     missing `_capacity_summary` boundary test.
+
+   TDD throughout: every new/failing test confirmed red before its fix
+   landed; full suites green after (apexflow 374, familyhub backend 82,
+   `bash -n start-services.sh` clean).
+
 ## Live reseed verification (Task 13 gate)
 
 Ran against a locally started DataCore (`TRUST_ALL_IPS=1 uv run uvicorn
@@ -245,6 +275,96 @@ routes (`apexflow/backend/app/api/documents.py` for staff,
     progress.md:6), and the `unified_query` handler block runs 34→~77,
     matching the originally-cited range. No further action; recorded here
     only because it was an open citation-precision note in the ledger.
+
+## Accepted minors from the final whole-branch review
+
+The final whole-branch review's three Important items are fixed above
+(item 1, "Fixed during this gate"). These six Minor items were accepted
+rather than blocking the merge — tracked here per this doc's own
+convention, not fixed in this wave.
+
+19. **`start_due_clocks` writes `workflow_item` rows via bare
+    `entity_base_data`, silently retyping a real bool to its string form.**
+    (`apexflow/backend/app/workflows/primitives.py:554-574`, the
+    `entity_base_data(item)` call at line 571.) Unlike `engine.py`'s
+    `_item_base_data` (`engine.py:73-84`), which explicitly coerces
+    `blocking` via `as_bool()` before writing, `_effect_start_due_clocks`
+    round-trips `item` (already a flattened row, so a bool-typed field may
+    already read back as the string `"true"`/`"false"` — `shared.py`'s
+    `entity_base_data` docstring says plainly "No boolean-field coercion
+    here") straight back through `dc.dc_update` with no coercion. Readers
+    already tolerate either form via `as_bool()` (`engine.py:83`,
+    `primitives.py:174`), so nothing is broken today — but every item
+    writer should go through one coercing helper, not two with different
+    contracts. Normalize when item writers unify.
+20. **Family document uploads land as `sensitive: False` in practice, but
+    the gap is one hop upstream of where it first looks.** apexflow's own
+    token route (`TokenCreateDocumentRequest.sensitive: bool = False`,
+    `apexflow/backend/app/api/internal.py:119`) DOES accept and forward a
+    client-supplied value verbatim (`internal.py:396`) — no server-side
+    override exists there. Every family upload lands `False` today because
+    familyhub's thin proxy (`familyhub/backend/app/api/documents.py:22-28`)
+    has no `sensitive` field on its own request body at all and never
+    forwards one, by design: its docstring says the doc-metadata
+    (`config.blocks[].config.docs[].sensitive`) it used to read "no longer
+    exists on the facade's config bundle," pending the Phase 3 blocks
+    compiler. Tighten both ends once that compiler exists: familyhub should
+    forward the definition-declared per-doc sensitivity, and apexflow's
+    token route should stop trusting an unvalidated client-supplied value
+    once there's a real value to validate against.
+21. **The spec's "friendly closed page" (deprecated lineage) and "hides
+    ... from default lists" (retired lineage) are Phase 2/3 surfaces —
+    unreachable today, not a bug.** (Spec:
+    `docs/superpowers/specs/2026-08-05-apexflow-workflow-platform-design.md:59`.)
+    The backend enforces the underlying state correctly (`lineage_status`
+    transitions in `definitions.py:158-248`; staff-creation 409s via
+    `engine.py:181-185`'s `lineage_not_active`) but surfaces it as a raw
+    JSON 409 with no family-URL-specific handling — there is no
+    `apexflow/frontend` directory yet (Phase 2 placeholder per CLAUDE.md;
+    apexflow ships backend-only today) and `familyhub/frontend` has zero
+    references to `lineage_status`. Both display surfaces need building
+    once their host frontend exists; not this plan's scope (see item 16,
+    below).
+22. **Exactly 8 family-403 tests assert status only, no state-write
+    re-fetch.** `apexflow/backend/tests/test_enrollment_template.py`'s
+    "family-actor permission matrix" section (comment at line 344; tests at
+    lines 347, 371, 428, 437, 446, 455, 464, 473) each check only
+    `exc.value.status_code == 403` — none re-fetch the instance/item
+    afterward to confirm the blocked action produced no side effect. (The
+    same status-only pattern recurs elsewhere too —
+    `test_items.py:551,592`, `test_machine.py:131,256,450`,
+    `test_internal_api.py`'s parametrized
+    `test_blocked_staff_only_actions_403_via_token` — but the review's
+    "~8" count matches this one file's dedicated section exactly.) Worth a
+    follow-up pass adding a re-fetch assertion to at least the dedicated
+    permission-matrix section.
+23. **`workflow_item.status` declares `"in_progress"` in
+    `COMPLETABLE_STATUSES` but no code path ever writes it.**
+    (`apexflow/backend/app/workflows/engine.py:64`, also referenced in
+    docstrings at lines 455/500/506/509.) Every actual status write is one
+    of `"not_started"` (item creation, `engine.py:153`), `"submitted"`/
+    `"verified"` (`complete_item`, lines 488-491/511), `"rejected"` (521),
+    or `"waived"` (535) — `"in_progress"` is declared as a legal value (a
+    guard like `items_in_status` could reference it) but nothing in
+    `engine.py`/`primitives.py`/`machine.py` ever assigns it. Either a
+    future item-authority change needs to actually use it, or it should be
+    dropped from the declared set — a dead-but-declared status is a minor
+    trap for a future guard author who assumes it's reachable.
+24. **Process lesson: interface maps must also pin cross-service
+    CONFIGURATION facts (ports/URLs), not just code bindings.** The
+    6000-vs-5620 `familyhub_base_url` bug (item 1 above) came from the
+    plan's own stale constant — task-10-brief.md carried forward
+    FamilyHub's pre-Task-2 port (6000) after `CLAUDE.md`/`services.json`
+    had already moved to 5620/5630, and nothing in the `# ADJUST(bindings)`
+    discipline (which this plan otherwise used correctly and consistently
+    — see "Plan defects found in Plan 1" below) catches a stale
+    CONFIGURATION value the way it catches a stale code-binding name,
+    because no source-of-truth citation check exists for "does this
+    literal still match services.json today." Extend the interface-map
+    discipline to require citing `services.json`/`CLAUDE.md`'s Service
+    Ports table directly (with a line number) for any hard-coded port/URL
+    default, the same way it already requires citing a real source file
+    for a field/function name.
 
 ## Phase 2 / Phase 3 pointers (not this plan's scope)
 
