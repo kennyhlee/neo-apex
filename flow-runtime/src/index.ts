@@ -5,6 +5,10 @@ export { validateFlowField } from './validateField';
 export {
   formFields, docsOf, plansOf, planAmounts, messageBody,
   resolvePlanKind, paymentAmountFor,
-  defaultSchoolYear, hydratedFormFields, type ModelFieldSource,
+  defaultSchoolYear, hydratedFormFields, labelOf, type ModelFieldSource,
 } from './blockConfig';
 export { formatCents } from './money';
+export { sectionFields } from './sectionFields';
+export {
+  StepRenderer, evaluateCondition, type StepRendererProps, type WorkflowDraft,
+} from './StepRenderer';

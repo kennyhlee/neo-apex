@@ -41,6 +41,9 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     'status.verified': 'Verified',
     'status.rejected': 'Rejected',
     'status.waived': 'Waived',
+    addAnother: 'Add another',
+    removeRow: 'Remove',
+    acknowledgeMessage: 'I acknowledge this message.',
   },
   'zh-CN': {
     required: '必填',
@@ -79,6 +82,9 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     'status.verified': '已核验',
     'status.rejected': '已退回',
     'status.waived': '已豁免',
+    addAnother: '添加一项',
+    removeRow: '删除',
+    acknowledgeMessage: '我已知悉此消息。',
   },
 };
 

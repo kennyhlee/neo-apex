@@ -84,7 +84,7 @@ DECISIONS this task makes (surfaced in task-8-report.md for Task 9/10):
 7. **`retire_definition`'s bulk-cancel is wired via a caller-supplied
    `cancel_instance_fn` callback**, not a direct import of this module into
    `definitions.py`. `machine.py` imports `definitions.py` (for
-   `_parse_machine_steps`/`_fetch_models`/`_referenced_entity_models`/
+   `parse_machine_steps`/`fetch_models`/`referenced_entity_models`/
    `_as_int`) — a `definitions.py -> machine.py` import back would close a
    cycle. `app/api/definitions.py` (which already imports both) supplies
    the callback (`build_eval_context` + `cancel_instance`), keeping
@@ -236,14 +236,14 @@ def build_eval_context(tenant_id: str, instance_row: dict, *, actor: str,
     instance_entity_id = instance_row["entity_id"]
 
     def_row = _pinned_definition_row(tenant_id, instance_row, token)
-    machine_def, steps = defs._parse_machine_steps(def_row)
+    machine_def, steps = defs.parse_machine_steps(def_row)
 
     items = dc.list_entities(
         tenant_id, "workflow_item",
         f"instance_id = {dc.sql_literal(instance_entity_id)}", token,
     )
 
-    models = defs._fetch_models(tenant_id, defs._referenced_entity_models(steps), token)
+    models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
 
     definition = {
         "machine": machine_def,

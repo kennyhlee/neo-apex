@@ -1,0 +1,79 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--gutter);
+}
+
+/* --- Page furniture shared by every route -------------------------------- */
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.page-title {
+  font-family: var(--page-title-family);
+  font-size: var(--page-title-size);
+  font-weight: var(--page-title-weight);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.page-subtitle {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-weight: var(--weight-normal);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.page-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.page-placeholder {
+  max-width: 60ch;
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+}
+
+/* --- Not found ------------------------------------------------------------ */
+
+.not-found {
+  max-width: 46ch;
+  margin: var(--space-16) auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+.not-found h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+}
+.not-found p { color: var(--text-tertiary); font-size: var(--text-base); }
+
+@media (max-width: 768px) {
+  .page-header-actions { margin-left: 0; width: 100%; }
+  .page-header-actions .btn { flex: 1; }
+}

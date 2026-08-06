@@ -274,7 +274,7 @@ def _capacity_summary(tenant_id: str, lineage_definition_id: str, machine_def) -
 def workflow_config(tenant_id: str, definition_id: str):
     row = _require_family_channel_definition(tenant_id, definition_id)
 
-    machine_def, steps = defs._parse_machine_steps(row)
+    machine_def, steps = defs.parse_machine_steps(row)
     tenant_row = dc.get_entity(tenant_id, "tenant", tenant_id)
 
     return {

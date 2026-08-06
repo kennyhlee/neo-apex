@@ -461,6 +461,35 @@ def build_steps() -> list[dict]:
 # --- seeding ------------------------------------------------------------------
 
 
+def template_catalog() -> list[dict[str, Any]]:
+    """Read-only catalog for the designer's template gallery (Task 6) —
+    `[{template_id, name, description, definition: {machine, steps,
+    channel_access}}]`, one entry per shipped template (currently just this
+    module's own enrollment template). `definition.machine`/`.steps` are
+    plain nested dicts/lists here, NOT the JSON-encoded strings
+    `seed_enrollment_template` writes to a `workflow_definition` row's wire
+    format (map §3/§8) — the frontend does its own `JSON.stringify` at
+    instantiate time, the same boundary `DefinitionsPage.tsx`'s
+    `submitNewWorkflow`/`handleNewDraft` already draw (task-5). The catalog
+    itself is platform-wide, not tenant data — nothing here reads from or
+    writes to DataCore."""
+    return [
+        {
+            "template_id": DEFINITION_ID,
+            "name": DEFINITION_NAME,
+            "description": (
+                "Family self-serve enrollment: application form, staff review, "
+                "waitlist, required documents, and enrollment."
+            ),
+            "definition": {
+                "machine": build_machine(),
+                "steps": build_steps(),
+                "channel_access": "family",
+            },
+        },
+    ]
+
+
 def seed_enrollment_template(tenant_id: str, *, token: str | None = None) -> dict[str, Any]:
     """Write a DRAFT `workflow_definition` row for the enrollment template
     and publish it — through `app.workflows.definitions.publish_definition`,

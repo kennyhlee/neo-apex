@@ -15,7 +15,12 @@ Coverage:
 - ConditionGroup's "exactly one of all/any/not" model validator: zero keys
   set and two-plus keys set both raise.
 - ENGINE_OWNED_FIELDS exact contents (Global Constraints list, verbatim).
+- ENGINE_OWNED_FIELDS frontend-mirror drift (final-review fix wave, item 4):
+  set-equality against the two hand-maintained TS literal copies.
 """
+import re
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -447,3 +452,78 @@ def test_engine_owned_fields_exact_contents():
 
 def test_engine_owned_fields_is_frozenset():
     assert isinstance(ENGINE_OWNED_FIELDS, frozenset)
+
+
+# --- ENGINE_OWNED_FIELDS frontend-mirror drift guard --------------------------
+#
+# `ENGINE_OWNED_FIELDS` is hand-mirrored (not imported — Python/TS have no
+# shared module boundary) as two separate frontend TS literals rather than
+# one shared export (`apexflow/frontend/src/types/designer.ts`'s own doc
+# comment on `ENGINE_OWNED_INSTANCE_FIELDS`: "kept as two separate literals
+# rather than one shared export so neither call site's import graph is
+# coupled to the other's"). Two hand-maintained copies is exactly the drift
+# risk `admindash/backend/tests/test_tenancy.py::
+# test_guard_block_is_byte_identical_in_both_services` exists to catch for
+# the (unrelated) SQL-shape guard's three copies — this is that same mold
+# applied to this pair: set-equality (not byte-identity, since the TS
+# literals are formatted differently from the Python frozenset) against
+# schema.py's ENGINE_OWNED_FIELDS, with a failure message naming exactly
+# which file drifted rather than a bare set-inequality assertion.
+#
+# Deliberately EXCLUDES `@neoapex/flow-runtime`'s
+# `ENGINE_OWNED_APPLICATION_FIELDS` (`flow-runtime/src/types.ts`) —
+# `designer.ts`'s own doc comment: "Deliberately NOT
+# `@neoapex/flow-runtime`'s `ENGINE_OWNED_APPLICATION_FIELDS`... that
+# constant is the registration-era `registration_application`-scoped field
+# set (a completely different entity)". Folding it into this equality check
+# would be a permanent false positive, not real drift coverage.
+
+_FRONTEND_ENGINE_OWNED_MIRRORS = (
+    ("apexflow/frontend/src/editor/fieldPicker.ts", "ENGINE_OWNED_FIELDS"),
+    ("apexflow/frontend/src/types/designer.ts", "ENGINE_OWNED_INSTANCE_FIELDS"),
+)
+
+
+def _repo_root():
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "services.json").exists():
+            return parent
+    return None
+
+
+def _extract_ts_string_array(text: str, const_name: str) -> set[str]:
+    """Pull the quoted string literals out of `export const <const_name>:
+    readonly string[] = [...]`. Both mirrors are hand-written flat
+    single-quoted string-literal arrays (no computed/templated entries) —
+    this is a small, deliberately naive extractor good enough to catch
+    drift in exactly that shape, not a general TS parser."""
+    start = text.index(f"const {const_name}")
+    # Skip past the `: readonly string[]` type annotation's own `[]` — the
+    # array literal itself starts at the `[` immediately after the `=`.
+    eq = text.index("=", start)
+    body_start = text.index("[", eq)
+    body_end = text.index("]", body_start)
+    body = text[body_start + 1:body_end]
+    return set(re.findall(r"'([^']+)'", body))
+
+
+def test_engine_owned_fields_frontend_mirrors_match_backend():
+    root = _repo_root()
+    assert root is not None, "could not find repo root (no services.json found)"
+
+    backend_set = set(ENGINE_OWNED_FIELDS)
+    for rel_path, const_name in _FRONTEND_ENGINE_OWNED_MIRRORS:
+        path = root / rel_path
+        if not path.exists():
+            pytest.fail(
+                f"ENGINE_OWNED_FIELDS drift test: frontend mirror file "
+                f"missing: {path} — if it moved, update "
+                f"_FRONTEND_ENGINE_OWNED_MIRRORS in this test file"
+            )
+        frontend_set = _extract_ts_string_array(path.read_text(encoding="utf-8"), const_name)
+        assert frontend_set == backend_set, (
+            f"ENGINE_OWNED_FIELDS drift: {rel_path}'s `{const_name}` no "
+            f"longer matches app/workflows/schema.py's ENGINE_OWNED_FIELDS — "
+            f"only in {rel_path}: {sorted(frontend_set - backend_set)}; "
+            f"only in schema.py: {sorted(backend_set - frontend_set)}"
+        )

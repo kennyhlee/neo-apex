@@ -28,7 +28,7 @@ shared.py's own docstring for the full rationale).
 EvalContext.definition is `{"machine": MachineDef, "steps": list[StepDef],
 "definition_id": str, "version": int}` — the CALLER (Task 8's action
 dispatcher) is responsible for parsing `workflow_definition.machine`/
-`.steps` (via `app.workflows.definitions._parse_machine_steps`, which this
+`.steps` (via `app.workflows.definitions.parse_machine_steps`, which this
 module does not have access to) and populating `items`/`draft`/`context`/
 `models` before invoking a guard or effect. This module treats all of those
 as already-resolved, in-memory data.

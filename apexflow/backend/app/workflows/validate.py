@@ -399,6 +399,98 @@ GUARD_PARAM_VALIDATORS: dict[str, Callable[[dict], list[str]]] = {
 }
 
 
+class ParamSpec(NamedTuple):
+    """One primitive param's shape, for the Task 2 designer read API's
+    `/api/workflows/{tenant_id}/primitives` catalog — `{name, kind,
+    required, enum?, constraint?}` per the interface map's binding table
+    (§2h).
+
+    `kind` is a small closed vocabulary describing what the param above
+    actually accepts: "string", "list" (any non-empty list — element type
+    unconstrained), "string_or_list" (a single str OR a non-empty list of
+    str — only `items_in_status.status` needs this), "condition" (parses as
+    a `ConditionGroup`), "date" (a `YYYY-MM-DD` string).
+
+    `constraint` (code-review follow-up, task-2-report.md): a free-form,
+    machine-parseable note for cross-param rules a flat per-param
+    `required` flag can't express — currently only `date_window`'s "at
+    least one of start/end" (`"at_least_one_of:start,end"`, set on BOTH the
+    `start` and `end` entries so either param's catalog row alone tells the
+    frontend the rule). `None` for every param whose validity doesn't
+    depend on a sibling param. This is documentation surfaced through the
+    catalog for the frontend to render — `_guard_params_date_window` above
+    is the actual enforcement and is unchanged by this field.
+    """
+
+    name: str
+    kind: str
+    required: bool
+    enum: tuple[str, ...] | None = None
+    constraint: str | None = None
+
+
+# PARAM_SPECS (# ADJUST(bindings)): declarative param-shape metadata for the
+# Task 2 primitives catalog. The functions above (GUARD_PARAM_VALIDATORS /
+# EFFECT_PARAM_VALIDATORS / the start_due_clocks special case) are plain
+# imperative functions closing over conditional, cross-param, and
+# cross-referencing logic (date_window's "at least one of start/end";
+# data_condition's ConditionGroup parse; start_due_clocks's cross-check
+# against declared step ids) that doesn't reduce to a flat per-param table
+# without either losing precision or re-duplicating that logic here — so
+# this table is NOT introspected out of the validators (they are ordinary
+# closures-over-nothing functions, not data-driven from a spec object this
+# module could read back), per this task's brief allowance to add a
+# declarative structure in that situation. It IS the single source the
+# catalog reads (`api/designer.py`'s primitives endpoint iterates this dict,
+# never a second hand-written param table), and a cross-check test in
+# apexflow/backend/tests/test_designer_api.py calls each REAL validator with
+# every required param from its PARAM_SPECS entry omitted in turn and
+# asserts an error naming that param comes back — so this table cannot
+# silently drift from what the validators actually enforce without a test
+# failure. Keys here are exactly GUARD_PARAM_VALIDATORS/EFFECT_PARAM_VALIDATORS's
+# keys plus "start_due_clocks" (special-cased above, not in either dict);
+# `all_blocking_items_complete` and `issue_link` take no params to validate
+# and so have no entry (catalog renders `params: []` for both, from GUARDS/
+# EFFECTS membership alone).
+PARAM_SPECS: dict[str, list[ParamSpec]] = {
+    "items_in_status": [
+        ParamSpec("status", "string_or_list", True),
+        ParamSpec("quantifier", "string", False, ("all", "any")),
+        ParamSpec("step_ids", "list", False),
+    ],
+    "capacity_available": [
+        ParamSpec("count_states", "list", True),
+        ParamSpec("capacity_field", "string", True),
+    ],
+    "data_condition": [
+        ParamSpec("condition", "condition", True),
+    ],
+    "date_window": [
+        ParamSpec("start", "date", False, constraint="at_least_one_of:start,end"),
+        ParamSpec("end", "date", False, constraint="at_least_one_of:start,end"),
+    ],
+    "actor_role": [
+        ParamSpec("roles", "list", True),
+    ],
+    "commit_sections": [
+        ParamSpec("section_ids", "list", True),
+    ],
+    "set_entity_field": [
+        ParamSpec("ref", "string", True),
+        ParamSpec("field", "string", True),
+    ],
+    "send_email": [
+        ParamSpec("template", "string", True),
+    ],
+    "set_context": [
+        ParamSpec("key", "string", True),
+    ],
+    "start_due_clocks": [
+        ParamSpec("step_ids", "list", True),
+    ],
+}
+
+
 def _effect_params_commit_sections(params: dict) -> list[str]:
     section_ids = params.get("section_ids")
     if not section_ids or not isinstance(section_ids, list):

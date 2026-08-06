@@ -48,6 +48,17 @@ export function messageBody(block: FlowBlock): string {
 }
 
 /**
+ * `snake_case` field name -> "Title Case" display label.
+ *
+ * Shared by `FormBlock.tsx` (registration-era) and `StepRenderer.tsx`
+ * (apexflow-era) so the same field name reads identically in both
+ * renderers rather than risking two copies drifting apart.
+ */
+export function labelOf(name: string): string {
+  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
  * The plan actually in effect, or null when it cannot be determined.
  *
  * A single offered plan is implied and needs no explicit selection — this is

@@ -269,15 +269,6 @@ start_service() {
       cd "$SCRIPT_DIR"
       ;;
     apexflow-frontend)
-      # apexflow/frontend does not exist yet (scaffolded in a later task —
-      # see .superpowers/sdd/2026-08-05-apexflow-plan1-foundations/). Guard
-      # against it explicitly: under `set -euo pipefail`, a `cd` into a
-      # missing directory would abort this whole script, not just skip this
-      # one service.
-      if [ ! -d "$SCRIPT_DIR/apexflow/frontend" ]; then
-        warn "$name skipped — apexflow/frontend does not exist yet"
-        return 0
-      fi
       info "Starting $name on port $port..."
       cd "$SCRIPT_DIR/apexflow/frontend"
       npm run dev > "$log_file" 2>&1 &

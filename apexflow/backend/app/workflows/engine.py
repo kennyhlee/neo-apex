@@ -140,7 +140,7 @@ def _derive_item_specs(steps: list[StepDef]) -> list[dict]:
                     "title": step.title, "blocking": bool(step.blocking),
                 })
         # else: unknown step type -- StepDef's Literal already rejects this
-        # at parse time (_parse_machine_steps), unreachable here.
+        # at parse time (parse_machine_steps), unreachable here.
     return specs
 
 
@@ -184,8 +184,8 @@ def create_instance(tenant_id: str, lineage_definition_id: str, context: dict, c
             "lineage_status": row.get("lineage_status"),
         })
 
-    machine, steps = defs._parse_machine_steps(row)
-    models = defs._fetch_models(tenant_id, defs._referenced_entity_models(steps), token)
+    machine, steps = defs.parse_machine_steps(row)
+    models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
     health = definition_health(machine, steps, models)
     if health != "current":
         raise HTTPException(409, {"reason": f"definition_{health}"})
@@ -244,7 +244,7 @@ def _pinned_definition_row(tenant_id: str, instance_row: dict, token: str | None
 
 def _pinned_steps(tenant_id: str, instance_row: dict, token: str | None = None) -> list[StepDef]:
     row = _pinned_definition_row(tenant_id, instance_row, token)
-    _, steps = defs._parse_machine_steps(row)
+    _, steps = defs.parse_machine_steps(row)
     return steps
 
 
