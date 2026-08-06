@@ -115,6 +115,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.draftInvalid.heading': "This draft's data can't be loaded",
     'editor.draftInvalid.body':
       "The saved machine/steps for this draft are invalid and can't be parsed for editing. This usually means it was corrupted by a bug — contact support if reloading doesn't fix it.",
+    'editor.staleParseWarning.body':
+      'The saved copy of this draft failed to parse — your current edits look valid and will overwrite it on next save.',
 
     'editor.save.dirty': 'Unsaved changes',
     'editor.save.saving': 'Saving…',
@@ -445,6 +447,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.readonlyBanner': '此定义不是草稿 — 此处的更改不会自动保存。',
     'editor.draftInvalid.heading': '无法加载此草稿的数据',
     'editor.draftInvalid.body': '此草稿保存的状态机／步骤数据无效，无法解析以供编辑。这通常意味着存在缺陷导致数据损坏 — 如果重新加载无法解决，请联系支持。',
+    'editor.staleParseWarning.body': '此草稿已保存的副本解析失败 — 您当前的编辑内容看起来有效，将在下次保存时覆盖它。',
 
     'editor.save.dirty': '有未保存的更改',
     'editor.save.saving': '正在保存…',

@@ -32,6 +32,20 @@
 //   recoverable state (`parseError`) from a generic network/load failure
 //   (`loadError`), so the editor can show "this draft's data is invalid"
 //   rather than a blank/opaque error.
+// - Task 13 (Plan 2 follow-up item 8): a `parse_error` from the DIRECT load
+//   path (`load`/the mount effect's `run`) always means `parseError` — the
+//   full-page hijack is correct there, since there's no local edit session
+//   to fall back on yet. But a `parse_error` from the BACKGROUND debounced
+//   `runValidate` call is different: it means the SERVER-STORED row failed
+//   to parse as of that read, which can be a stale read racing this
+//   session's own in-flight/just-landed autosave rather than genuine
+//   corruption — the in-memory `machine`/`steps` the user is actively
+//   editing may be perfectly valid and about to overwrite the bad row on
+//   the next save. `runValidate` therefore checks `localStateParses()`
+//   first: if local state is fine, it sets `staleParseWarning` (a
+//   dismissable inline banner) instead of `parseError` (full-page). Only
+//   `runValidate`'s own catch branch makes this distinction — `load`/`run`
+//   keep setting `parseError` unconditionally, unchanged.
 // - Cross-definition race follow-up (re-review of fix #4): EditorPage does
 //   NOT remount when the route's `:entityId` param changes to a different
 //   definition (same component instance, `useDraftStore` just re-runs with
@@ -86,6 +100,18 @@ export interface DraftStore {
    * the row's stored machine/steps JSON no longer parses — holds the raw
    * backend `parse_error` detail string (task review fix #2). */
   parseError: string | null;
+  /** Task 13 (Plan 2 follow-up item 8): set instead of `parseError` when the
+   * background debounced `runValidate` call 422s with `parse_error` but the
+   * CURRENT in-memory `machine`/`steps` are still valid (`localStateParses`)
+   * — e.g. a stale read racing this session's own recent autosave, not
+   * genuine corruption. Renders as a dismissable inline banner rather than
+   * the full-page `parseError` replacement. Cleared on the next successful
+   * autosave or validate, via `dismissStaleParseWarning`, or on switching to
+   * a different definition. */
+  staleParseWarning: string | null;
+  /** Dismisses `staleParseWarning` without waiting for the next
+   * autosave/validate to clear it. */
+  dismissStaleParseWarning: () => void;
   /** Metadata (name, version, status, ...) of the loaded row — `null` until
    * the first successful load. */
   definition: DefinitionDetail | null;
@@ -139,10 +165,34 @@ function extractParseError(err: unknown): string | null {
   return 'Invalid draft data.';
 }
 
+/** Task 13: true if the given `machine`/`steps` are still valid,
+ * JSON-round-trippable objects — what `runValidate`'s catch branch uses
+ * to decide whether a background `parse_error` reflects genuine local
+ * corruption (full-page `parseError`) or just a stale server-side read
+ * (dismissable `staleParseWarning`, since these values are what the next
+ * autosave will write anyway). Deliberately takes the values as parameters
+ * rather than closing over store state, so callers control exactly which
+ * snapshot (e.g. the latest ref, not a stale closure) is being judged. */
+function localStateParses(machine: MachineDef, steps: WorkflowStepDef[]): boolean {
+  try {
+    const roundTrippedMachine: unknown = JSON.parse(JSON.stringify(machine));
+    const roundTrippedSteps: unknown = JSON.parse(JSON.stringify(steps));
+    return (
+      roundTrippedMachine !== null &&
+      typeof roundTrippedMachine === 'object' &&
+      roundTrippedSteps !== null &&
+      typeof roundTrippedSteps === 'object'
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function useDraftStore(tenantId: string, entityId: string | undefined): DraftStore {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [staleParseWarning, setStaleParseWarning] = useState<string | null>(null);
   const [definition, setDefinition] = useState<DefinitionDetail | null>(null);
   const [models, setModels] = useState<EntityModelsMap>({});
   const [machine, setMachineState] = useState<MachineDef>(EMPTY_MACHINE);
@@ -261,9 +311,28 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     try {
       const result = await validateDefinition(tenantId, entityId);
       setValidation({ errors: result.errors, health: result.health, validating: false });
+      // Task 13: a successful validate means the currently-loaded row is
+      // fine as of right now — clear any stale-parse banner left over from
+      // an earlier racy read.
+      setStaleParseWarning(null);
     } catch (err) {
       const parseMsg = extractParseError(err);
-      if (parseMsg) setParseError(parseMsg);
+      if (parseMsg) {
+        // Task 13 (Plan 2 follow-up item 8): only hijack the whole editor
+        // (`parseError`) if the LOCAL in-memory machine/steps are ALSO
+        // unparseable — read via refs (not the `machine`/`steps` state
+        // captured at hook-definition time; this callback isn't
+        // re-created on every edit, same reasoning as `runAutosave` using
+        // `machineRef`/`stepsRef` throughout). Otherwise this is just a
+        // stale server-side read (e.g. racing this session's own recent
+        // autosave) — show a dismissable banner instead, since the next
+        // autosave will overwrite the bad row with what's on screen.
+        if (localStateParses(machineRef.current, stepsRef.current)) {
+          setStaleParseWarning(parseMsg);
+        } else {
+          setParseError(parseMsg);
+        }
+      }
       // Leave the last-known errors/health in place otherwise — a failed
       // validate call is a transient network hiccup, not "this draft is
       // now valid".
@@ -366,6 +435,12 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
         setDirty(false);
       }
       setSavedAt(Date.now());
+      // Task 13: a successful autosave writes exactly what's in
+      // `machineRef`/`stepsRef` right now, which is by definition
+      // `localStateParses`-valid content — clear any stale-parse banner
+      // immediately rather than waiting for the validate call below to
+      // land (belt-and-suspenders; that call also clears it on success).
+      setStaleParseWarning(null);
       // Task review fix #5: the debounced typing-triggered validate reads
       // whatever's on the server as of ITS OWN timer firing, which can be
       // stale relative to what just got persisted here — the post-save
@@ -465,6 +540,7 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     setLoading(true);
     setLoadError(false);
     setParseError(null);
+    setStaleParseWarning(null);
     try {
       const bundle = await getBundle(tenantId, entityId);
       setDefinition(bundle.definition);
@@ -508,6 +584,11 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
       setLoading(true);
       setLoadError(false);
       setParseError(null);
+      // Task 13: `staleParseWarning` is per-definition, same as
+      // `parseError` on the line above — a banner surfaced for the
+      // definition being navigated away from must not linger over the
+      // next one.
+      setStaleParseWarning(null);
       try {
         const bundle = await getBundle(tenantId, entityId);
         if (cancelled) return;
@@ -605,10 +686,14 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
 
   const readOnly = definition ? definition.status !== 'draft' : false;
 
+  const dismissStaleParseWarning = useCallback(() => setStaleParseWarning(null), []);
+
   return {
     loading,
     loadError,
     parseError,
+    staleParseWarning,
+    dismissStaleParseWarning,
     definition,
     models,
     machine,
