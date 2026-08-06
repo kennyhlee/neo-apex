@@ -197,3 +197,24 @@ export async function postInstanceAction(
   );
   return parseOrThrow(resp);
 }
+
+// ---- Documents ---------------------------------------------------------
+
+/** GET /api/workflows/{tenant_id}/documents/{document_id}/url — Task 9's
+ * staff document-download proxy. `document_id` here is a `document` row's
+ * DataCore `entity_id` (DataCore assigns the sequential `document_id` value
+ * AS the row's `entity_id` at create time — `document_routes.py`'s
+ * `create_document`, `entity_id=document_id` — so a `document` row's own
+ * `entity_id`/`document_id` fields are always identical; either can be
+ * passed here). Relays apexflow's own `get_document_url` response shape
+ * unchanged: `{ download_url: string }`. */
+export async function getDocumentUrl(
+  tenantId: string,
+  documentId: string,
+): Promise<{ download_url: string }> {
+  const resp = await fetch(
+    `${API_BASE}/api/workflows/${tenantId}/documents/${documentId}/url`,
+    { headers: authHeaders() },
+  );
+  return parseOrThrow(resp);
+}

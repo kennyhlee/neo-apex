@@ -5,6 +5,11 @@ import {
   instanceSql,
   pinnedDefinitionSql,
   asNumber,
+  itemsSql,
+  documentsSql,
+  activitySql,
+  actionButtonsFor,
+  itemActionVisibility,
   type MachineStateView,
   type InstanceRow,
 } from '../workflowData.ts';
@@ -166,5 +171,85 @@ describe('asNumber', () => {
 
   it('falls back to a supplied default', () => {
     expect(asNumber('garbage', -1)).toBe(-1);
+  });
+});
+
+describe('itemsSql', () => {
+  it('builds the exact SELECT for an instance, including _status = active', () => {
+    expect(itemsSql('inst-1')).toBe(
+      "SELECT * FROM data WHERE entity_type = 'workflow_item' AND _status = 'active' AND instance_id = 'inst-1'",
+    );
+  });
+
+  it('escapes a single quote in the instance id', () => {
+    expect(itemsSql("o'brien")).toBe(
+      "SELECT * FROM data WHERE entity_type = 'workflow_item' AND _status = 'active' AND instance_id = 'o''brien'",
+    );
+  });
+});
+
+describe('documentsSql', () => {
+  it('builds the exact SELECT keyed on application_id (DataCore\'s fixed field name)', () => {
+    expect(documentsSql('inst-1')).toBe(
+      "SELECT * FROM data WHERE entity_type = 'document' AND _status = 'active' AND application_id = 'inst-1'",
+    );
+  });
+
+  it('escapes a single quote in the instance id', () => {
+    expect(documentsSql("o'brien")).toBe(
+      "SELECT * FROM data WHERE entity_type = 'document' AND _status = 'active' AND application_id = 'o''brien'",
+    );
+  });
+});
+
+describe('activitySql', () => {
+  it('builds the exact SELECT ordered by at ascending', () => {
+    expect(activitySql('inst-1')).toBe(
+      "SELECT * FROM data WHERE entity_type = 'workflow_activity' AND _status = 'active' AND instance_id = 'inst-1' ORDER BY at ASC",
+    );
+  });
+
+  it('escapes a single quote in the instance id', () => {
+    expect(activitySql("o'brien")).toBe(
+      "SELECT * FROM data WHERE entity_type = 'workflow_activity' AND _status = 'active' AND instance_id = 'o''brien' ORDER BY at ASC",
+    );
+  });
+});
+
+describe('actionButtonsFor', () => {
+  it('strips the five item built-ins out of the allowed list', () => {
+    expect(actionButtonsFor([
+      'save_draft', 'complete_item', 'verify_item', 'reject_item', 'waive_item',
+      'submit', 'cancel_instance',
+    ])).toEqual(['submit', 'cancel_instance']);
+  });
+
+  it('preserves order and passes through an empty list', () => {
+    expect(actionButtonsFor([])).toEqual([]);
+    expect(actionButtonsFor(['approve', 'reject'])).toEqual(['approve', 'reject']);
+  });
+});
+
+describe('itemActionVisibility', () => {
+  it('shows verify only for submitted/in_progress', () => {
+    expect(itemActionVisibility('submitted').verify).toBe(true);
+    expect(itemActionVisibility('in_progress').verify).toBe(true);
+    expect(itemActionVisibility('not_started').verify).toBe(false);
+    expect(itemActionVisibility('verified').verify).toBe(false);
+    expect(itemActionVisibility('waived').verify).toBe(false);
+    expect(itemActionVisibility('rejected').verify).toBe(false);
+  });
+
+  it('shows waive unless already verified', () => {
+    expect(itemActionVisibility('verified').waive).toBe(false);
+    for (const s of ['not_started', 'in_progress', 'submitted', 'rejected', 'waived']) {
+      expect(itemActionVisibility(s).waive).toBe(true);
+    }
+  });
+
+  it('always shows reject', () => {
+    for (const s of ['not_started', 'in_progress', 'submitted', 'verified', 'rejected', 'waived']) {
+      expect(itemActionVisibility(s).reject).toBe(true);
+    }
   });
 });

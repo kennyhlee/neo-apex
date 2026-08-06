@@ -12,6 +12,7 @@ import {
 } from '../utils/workflowData.ts';
 import { stageTone } from '../utils/tone.ts';
 import Button from '../components/ui/Button.tsx';
+import WorkflowInstanceDrawer from '../components/WorkflowInstanceDrawer.tsx';
 import './WorkflowPipelinePage.css';
 
 interface WorkflowPipelinePageProps {
@@ -53,8 +54,8 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
   const [machineJson, setMachineJson] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /** Seam for Task 11's instance detail drawer — a card click sets this;
-   * nothing consumes it yet beyond the visual "selected" state. */
+  /** A card click sets this; the instance detail drawer below reads it back
+   * against `instances` to render (Task 11). */
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -99,6 +100,7 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
 
   const publishedRow = lineageRows.find((d) => d.status === 'published');
   const name = publishedRow?.name ?? navEntry?.name ?? lineageRows[0]?.name ?? definitionId;
+  const selectedInstance = instances.find((row) => row.entity_id === selectedInstanceId) ?? null;
 
   function handleSelectInstance(row: InstanceRow) {
     setSelectedInstanceId(row.entity_id);
@@ -179,6 +181,16 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
           {orphans.length > 0 &&
             renderColumn('__orphans__', t('workflows.otherStates'), orphans, 'stage-5')}
         </div>
+      )}
+
+      {selectedInstance && (
+        <WorkflowInstanceDrawer
+          tenant={tenant}
+          instance={selectedInstance}
+          definition={machineJson}
+          onClose={() => setSelectedInstanceId(null)}
+          onChanged={() => void load()}
+        />
       )}
     </div>
   );

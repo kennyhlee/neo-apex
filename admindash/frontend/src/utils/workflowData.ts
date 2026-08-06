@@ -132,6 +132,86 @@ export function pinnedDefinitionSql(definitionId: string, version: number | stri
 }
 
 /**
+ * The `workflow_item` rows for one instance — Task 11's items checklist.
+ * `instance_id` on a `workflow_item` row IS the parent instance's DataCore
+ * `entity_id` (identifier convention confirmed by
+ * `apexflow/backend/app/workflows/engine.py::_create_item`).
+ */
+export function itemsSql(instanceEntityId: string): string {
+  return (
+    `SELECT * FROM data WHERE entity_type = 'workflow_item' AND _status = 'active' ` +
+    `AND instance_id = '${escapeSqlLiteral(instanceEntityId)}'`
+  );
+}
+
+/**
+ * The `document` rows for one instance. Keyed on `application_id` —
+ * DataCore's own FIXED field name for the owning application/instance on a
+ * document row (`apexflow/backend/app/api/documents.py:74`'s module
+ * docstring: apexflow's staff surface accepts `instance_id` from callers but
+ * still writes the outbound payload under DataCore's un-renameable
+ * `application_id` key).
+ */
+export function documentsSql(instanceEntityId: string): string {
+  return (
+    `SELECT * FROM data WHERE entity_type = 'document' AND _status = 'active' ` +
+    `AND application_id = '${escapeSqlLiteral(instanceEntityId)}'`
+  );
+}
+
+/**
+ * The `workflow_activity` rows for one instance, oldest first — the
+ * drawer's activity feed reads top-to-bottom as a timeline, same convention
+ * as `LeadDetailDrawer`'s activity list (which sorts client-side; this one
+ * sorts in SQL since `at` is always present on every activity row).
+ */
+export function activitySql(instanceEntityId: string): string {
+  return (
+    `SELECT * FROM data WHERE entity_type = 'workflow_activity' AND _status = 'active' ` +
+    `AND instance_id = '${escapeSqlLiteral(instanceEntityId)}' ORDER BY at ASC`
+  );
+}
+
+/** The five item built-in actions `machine.py::ITEM_BUILTIN_ACTIONS` handles
+ * itself — never rendered as generic transition buttons in the drawer's
+ * actions bar (items get their own per-row verify/reject/waive controls;
+ * `save_draft`/`complete_item` have no staff-assisted-entry UI in this
+ * task). Mirrors `apexflow/backend/app/workflows/machine.py`'s
+ * `_ITEM_BUILTINS_ALL` list verbatim. */
+const ITEM_BUILTIN_ACTIONS = new Set([
+  'save_draft', 'complete_item', 'verify_item', 'reject_item', 'waive_item',
+]);
+
+/**
+ * The advertised-actions bar's button list: `allowed` (from
+ * `getAllowedActions`) minus the five item built-ins, order preserved.
+ * `cancel_instance` is NOT special-cased here — it still passes through;
+ * the drawer itself renders it with a `danger` variant behind a confirm,
+ * same as every other name in the returned list gets a plain button.
+ */
+export function actionButtonsFor(allowed: string[]): string[] {
+  return allowed.filter((a) => !ITEM_BUILTIN_ACTIONS.has(a));
+}
+
+/**
+ * Per-item staff-button visibility for one `workflow_item.status` value —
+ * verbatim port of `engine.py`'s own source-status guards: `verify_item`
+ * only accepts `submitted`/`in_progress` (`engine.py:557`); `waive_item`
+ * 409s only when already `verified` (`engine.py:584`); `reject_item` has no
+ * source-status restriction at all (`engine.py:567-572`'s docstring: "staff
+ * may send an item back for correction from whatever state it's in").
+ */
+export function itemActionVisibility(
+  status: string,
+): { verify: boolean; reject: boolean; waive: boolean } {
+  return {
+    verify: status === 'submitted' || status === 'in_progress',
+    reject: true,
+    waive: status !== 'verified',
+  };
+}
+
+/**
  * Best-effort coercion for a numeric value that crossed DataCore's
  * flattened-row boundary — verbatim port of apexflow-frontend's
  * `utils/numeric.ts::asNumber` (interface map §8/task binding: "asNumber

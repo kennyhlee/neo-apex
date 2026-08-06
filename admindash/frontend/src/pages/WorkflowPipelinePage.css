@@ -151,3 +151,94 @@
   }
   .workflow-column { min-width: 0; }
 }
+
+/* --- Instance detail drawer (Task 11) --------------------------------------
+   Panel chrome comes from the shared Modal (variant="drawer"); the drawer
+   reuses lead-drawer-content/lead-detail-fields/activity-list from
+   LeadDetailDrawer.css for the facts dl and activity feed, and adds only the
+   items/documents/actions markup that has no equivalent there. */
+
+.workflow-drawer-empty {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.workflow-item-list,
+.workflow-document-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.workflow-item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xs);
+  background: var(--bg-card);
+}
+
+.workflow-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.workflow-item-main strong {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.workflow-item-main small {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.workflow-item-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.workflow-document-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+  color: var(--text-primary);
+}
+
+.workflow-document-list li small {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.workflow-document-list li > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Activity feed badge tones for the three `workflow_activity.type` values
+   LeadDetailDrawer.css's own badge set doesn't already cover
+   (`badge-note` there is reused as-is for the `note` type). */
+.badge-state_change { background: var(--info-tint); color: var(--info); }
+.badge-item_change   { background: var(--attn-tint); color: var(--attn); }
+.badge-email_sent    { background: var(--success-tint); color: var(--success); }
