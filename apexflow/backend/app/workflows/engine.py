@@ -29,27 +29,30 @@ only.
 """
 import json
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import HTTPException
 
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
-from app.workflows.conditions import evaluate_condition
 from app.workflows.schema import ENGINE_OWNED_FIELDS, SectionDef, StepDef
+from app.workflows.shared import ITEM_DONE_STATUSES, applicable_items, as_bool, is_family_actor
 from app.workflows.validate import definition_health
+
+# `is_family_actor`, `ITEM_DONE_STATUSES`, and `applicable_items` now live in
+# app.workflows.shared (code-review follow-up to Task 7 — this module,
+# definitions.py, and primitives.py each carried their own duplicate before;
+# see shared.py's module docstring for the import-cycle constraint that
+# forced the duplication in the first place). Imported by name above and
+# re-exported here (not just used internally) because Tasks 8-10 were told
+# to import these from `engine` — `from app.workflows.engine import
+# is_family_actor` / `engine.applicable_items(...)` call sites keep working
+# unchanged.
 
 # `review` defaults by step type (spec §3 "Steps and declared sections":
 # "review defaults: auto for form/message, staff for documents"). Exported —
 # Task 7's EvalContext / Task 8's dispatcher read this rather than
 # re-deriving it.
 REVIEW_DEFAULTS: dict[str, str] = {"form": "auto", "documents": "staff", "message": "auto"}
-
-# Statuses documents/other blocking-completeness checks treat as "done"
-# (mirrors enrollx's ITEM_DONE_STATUSES) — not consumed by this module
-# directly (Task 8's guards own blocking-completeness), exported for reuse
-# so a later task doesn't restate the set.
-ITEM_DONE_STATUSES = frozenset({"submitted", "verified", "waived"})
 
 # Source statuses complete_item may act from. Re-completing after a staff
 # rejection (resubmit) or re-submitting an already-submitted item
@@ -60,51 +63,24 @@ ITEM_DONE_STATUSES = frozenset({"submitted", "verified", "waived"})
 # do exactly that with no guard at all).
 COMPLETABLE_STATUSES = frozenset({"not_started", "in_progress", "submitted", "rejected"})
 
-_TRUTHY_STRINGS = {"true", "1", "yes"}
 _EMPTY_VALUES = (None, "", [], {})
-
-
-def is_family_actor(actor: str) -> bool:
-    """`actor` strings are exactly `"family"` or `"family:{...}"` on the
-    family channel, a staff `user_id` otherwise (task-6-brief's binding
-    convention) — BINDING name, Task 8's actor-gating and Task 10's internal
-    routes both call this.
-
-    Exact-prefix match on `"family:"` (plus the bare `"family"` channel
-    literal `create_instance` logs as an activity actor), NOT a bare
-    `startswith("family")` — the latter misclassifies a staff user_id that
-    happens to start with those letters (`"familyhub-svc"`,
-    `"family_advocate_007"`) as a family actor, which would let it dodge
-    every staff-only gate in this module (coordinator review finding)."""
-    return actor == "family" or actor.startswith("family:")
 
 
 def _now(now: datetime | None) -> datetime:
     return now or datetime.now(timezone.utc)
 
 
-def _as_bool(v: Any) -> bool:
-    """Coerce a DataCore-flattened value to a real bool — same rationale and
-    implementation as enrollx's `engine.as_bool` (interface map Gotcha C):
-    a bool `False` reads back from a flattened query row as the STRING
-    "false", which is truthy in Python."""
-    if isinstance(v, bool):
-        return v
-    if v is None:
-        return False
-    return str(v).strip().lower() in _TRUTHY_STRINGS
-
-
 def _item_base_data(item_row: dict) -> dict:
-    """`entity_base_data` (definitions.py) has no bool-coercion table since
-    `workflow_definition` declares no bool fields — `workflow_item.blocking`
-    IS bool-typed (base_model.json), so a round-trip through the bare helper
-    would permanently rewrite stored `blocking` from real bool to the string
-    "true"/"false" (interface map Gotcha C, and enrollx's own
-    BOOLEAN_FIELDS_BY_TYPE precedent for `application_item.blocking`)."""
+    """`entity_base_data` (definitions.py, re-exported from shared.py) has
+    no bool-coercion table since `workflow_definition` declares no bool
+    fields — `workflow_item.blocking` IS bool-typed (base_model.json), so a
+    round-trip through the bare helper would permanently rewrite stored
+    `blocking` from real bool to the string "true"/"false" (interface map
+    Gotcha C, and enrollx's own BOOLEAN_FIELDS_BY_TYPE precedent for
+    `application_item.blocking`)."""
     base = defs.entity_base_data(item_row)
     if "blocking" in base:
-        base["blocking"] = _as_bool(base["blocking"])
+        base["blocking"] = as_bool(base["blocking"])
     return base
 
 
@@ -560,53 +536,6 @@ def waive_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: s
 
 
 # --- applicability (show_if, dynamic — items are never mutated) ------------
-
-
-def _condition_data(draft_data: dict, context: dict) -> dict:
-    """Flatten `draft_data`/`context` into the `"{section_id}.{field}"` /
-    `"context.{key}"` lookup keys `evaluate_condition` expects.
-
-    Repeat sections contribute NOTHING here: their staged answer is a LIST
-    (one dict per entry), not a `{field: value}` dict, and `show_if`'s
-    expression language has no "which entry" concept — a condition can't
-    meaningfully read `contacts_section.phone` when there may be zero, one,
-    or several contacts. The `isinstance(fields, dict)` guard below is what
-    skips them (a list fails it and is silently dropped), so a `show_if`
-    that names a field of a repeat section always evaluates as if that
-    source were absent (missing -> `None` for eq/ne/in, `False` for
-    truthy/not_empty, `True` for empty) rather than raising.
-    """
-    data: dict[str, Any] = {}
-    for section_id, fields in (draft_data or {}).items():
-        if not isinstance(fields, dict):
-            continue
-        for field, value in fields.items():
-            data[f"{section_id}.{field}"] = value
-    for key, value in (context or {}).items():
-        data[f"context.{key}"] = value
-    return data
-
-
-def applicable_items(definition_steps: list[StepDef], items: list[dict], draft_data: dict,
-                     context: dict) -> list[dict]:
-    """Filter `items` to those whose owning step is currently applicable:
-    steps without a `show_if` are always included; steps with one are
-    included iff it evaluates true against the flat
-    `{section.field: value} | {context.key: value}` view of `draft_data`/
-    `context` (spec §3: "computed dynamically from current draft data —
-    items are not mutated as answers change"). Purely a read-time filter;
-    never writes anything. See `_condition_data` for how repeat-section
-    answers (list-shaped) are handled — they never contribute condition
-    data.
-    """
-    data = _condition_data(draft_data, context)
-    steps_by_id = {s.step_id: s for s in definition_steps}
-    result = []
-    for item in items:
-        step = steps_by_id.get(item.get("step_id"))
-        if step is None or step.show_if is None:
-            result.append(item)
-            continue
-        if evaluate_condition(step.show_if, data):
-            result.append(item)
-    return result
+#
+# `applicable_items` (and its `_condition_data` helper) now live in
+# app.workflows.shared — imported and re-exported at the top of this module.

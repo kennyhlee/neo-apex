@@ -162,6 +162,23 @@ def test_capacity_available_scoped_by_context_key(fake_dc):
     ) is True
 
 
+def test_capacity_available_excludes_own_instance_row(fake_dc):
+    """A guard evaluated while the EVALUATING instance's own current state is
+    already one of count_states (e.g. re-evaluating a transition out of an
+    approved-like state) must not have that row inflate the count it's being
+    measured against — capacity 1, no OTHER rows, self already 'approved'
+    -> still available."""
+    _seed_tenant_capacity(fake_dc, 1)
+    created = fake_dc.dc_create(TENANT, "workflow_instance", {
+        "definition_id": "wf-lineage-1", "state": "approved", "context": "{}",
+    })
+    self_row = fake_dc.get_entity(TENANT, "workflow_instance", created["entity_id"])
+    ctx = _ctx(instance=self_row)
+    assert GUARDS["capacity_available"](
+        ctx, {"count_states": ["approved"], "capacity_field": "capacity"}
+    ) is True
+
+
 # --- guards: data_condition -------------------------------------------
 
 

@@ -16,12 +16,14 @@ brief). Both `app.workflows.engine` and `app.workflows.definitions` import
 `app.workflows.validate` (for `definition_health`/`validate_definition`).
 So importing either of those two modules from here would close a cycle:
 primitives -> engine -> validate -> primitives. This module therefore only
-imports `schema`, `conditions`, `datacore`, `tokens`, `emails`, `config` —
-none of which import `validate` — and reimplements the handful of small
-helpers it needs that otherwise live on `engine`/`definitions`
-(`is_family_actor`, item "done" statuses, `applicable_items`'s condition-data
-flattening, and flattened-row -> base_data stripping). Each duplicate is
-commented at its definition with the canonical copy it mirrors.
+imports `schema`, `conditions`, `datacore`, `tokens`, `emails`, `shared` —
+none of which import `validate` — and gets the handful of small helpers it
+needs that otherwise live on `engine`/`definitions` (`is_family_actor`, item
+"done" statuses, `applicable_items`, flattened-row -> base_data stripping)
+from `app.workflows.shared`, a leaf module built specifically so these
+helpers have exactly one implementation instead of being hand-duplicated
+per module (code-review follow-up to this task's first pass — see
+shared.py's own docstring for the full rationale).
 
 EvalContext.definition is `{"machine": MachineDef, "steps": list[StepDef],
 "definition_id": str, "version": int}` — the CALLER (Task 8's action
@@ -80,20 +82,19 @@ from app.workflows import datacore as dc
 from app.workflows.conditions import evaluate_condition
 from app.workflows.emails import send_email
 from app.workflows.schema import ConditionGroup, ENGINE_OWNED_FIELDS, SectionDef, StepDef
+from app.workflows.shared import (
+    ITEM_DONE_STATUSES,
+    applicable_items,
+    as_bool,
+    condition_data,
+    entity_base_data,
+    is_family_actor,
+)
 from app.workflows.tokens import make_link_token
 
 logger = logging.getLogger("apexflow.primitives")
 
 _EMPTY_VALUES = (None, "", [], {})
-_TRUTHY_STRINGS = {"true", "1", "yes"}
-
-# Mirrors engine.ITEM_DONE_STATUSES exactly (duplicated, not imported — see
-# module docstring's import-cycle note).
-ITEM_DONE_STATUSES = frozenset({"submitted", "verified", "waived"})
-
-# Flattened-row columns that are never part of base_data — mirrors
-# definitions.py's SYSTEM_COLS (duplicated for the same reason).
-_SYSTEM_COLS = {"entity_id", "entity_type", "base_data", "custom_fields", "vector", "_tenant"}
 
 
 # --- EvalContext -------------------------------------------------------
@@ -132,61 +133,14 @@ class EvalContext:
     issued_link: str | None = None
 
 
-# --- small local duplicates of engine.py/definitions.py helpers --------
-# (see module docstring for why these are copies, not imports)
-
-
-def _is_family_actor(actor: str) -> bool:
-    """Duplicate of engine.is_family_actor — same exact-prefix contract."""
-    return actor == "family" or actor.startswith("family:")
-
-
-def _as_bool(v: Any) -> bool:
-    """Duplicate of engine._as_bool (interface map Gotcha C: a flattened
-    query row's bool field reads back as the STRING "false"/"true")."""
-    if isinstance(v, bool):
-        return v
-    if v is None:
-        return False
-    return str(v).strip().lower() in _TRUTHY_STRINGS
-
-
-def _base_data(row: dict) -> dict:
-    """Duplicate of definitions.entity_base_data — flattened row -> a dict
-    safe to hand to `dc.dc_update` as a full-replace `base_data` payload."""
-    return {k: v for k, v in row.items()
-            if k not in _SYSTEM_COLS and not k.startswith("_") and v is not None}
-
-
-def _condition_data(draft: dict, context: dict) -> dict[str, Any]:
-    """Duplicate of engine._condition_data. Repeat sections (list-shaped
-    draft answers) contribute nothing — see that function's docstring for
-    the full rationale; unchanged here."""
-    data: dict[str, Any] = {}
-    for section_id, fields in (draft or {}).items():
-        if not isinstance(fields, dict):
-            continue
-        for field, value in fields.items():
-            data[f"{section_id}.{field}"] = value
-    for key, value in (context or {}).items():
-        data[f"context.{key}"] = value
-    return data
+# --- small EvalContext-flavored wrappers around app.workflows.shared -----
 
 
 def _applicable_items(ctx: EvalContext) -> list[dict]:
-    """Duplicate of engine.applicable_items, specialized to read straight
-    off an EvalContext."""
-    data = _condition_data(ctx.draft, ctx.context)
-    steps_by_id = {s.step_id: s for s in ctx.definition["steps"]}
-    result = []
-    for item in ctx.items:
-        step = steps_by_id.get(item.get("step_id"))
-        if step is None or step.show_if is None:
-            result.append(item)
-            continue
-        if evaluate_condition(step.show_if, data):
-            result.append(item)
-    return result
+    """Thin wrapper: `shared.applicable_items` takes its four inputs
+    explicitly (engine.py's original signature); here they all live on one
+    `EvalContext`."""
+    return applicable_items(ctx.definition["steps"], ctx.items, ctx.draft, ctx.context)
 
 
 def _parse_json(raw: Any) -> dict:
@@ -206,7 +160,7 @@ def _parse_json(raw: Any) -> dict:
 
 def _guard_all_blocking_items_complete(ctx: EvalContext, params: dict) -> bool:
     items = _applicable_items(ctx)
-    blocking = [i for i in items if _as_bool(i.get("blocking"))]
+    blocking = [i for i in items if as_bool(i.get("blocking"))]
     return all(i.get("status") in ITEM_DONE_STATUSES for i in blocking)
 
 
@@ -235,10 +189,18 @@ def _guard_capacity_available(ctx: EvalContext, params: dict) -> bool:
     scope_key = params.get("scope_context_key")
     scope_value = ctx.context.get(scope_key) if scope_key else None
     lineage_id = ctx.definition["definition_id"]
+    self_entity_id = ctx.instance.get("entity_id")
 
     rows = dc.list_entities(ctx.tenant_id, "workflow_instance", "", ctx.token)
     count = 0
     for row in rows:
+        if row.get("entity_id") == self_entity_id:
+            # The evaluating instance never counts against its own capacity
+            # check — a guard invoked while the instance's OWN current state
+            # is already one of count_states (e.g. re-evaluating a
+            # transition out of an approved-like state) must not have that
+            # row inflate the count it's being measured against.
+            continue
         if str(row.get("definition_id", "")) != str(lineage_id):
             continue
         if row.get("state") not in count_states:
@@ -253,7 +215,7 @@ def _guard_capacity_available(ctx: EvalContext, params: dict) -> bool:
 
 def _guard_data_condition(ctx: EvalContext, params: dict) -> bool:
     group = ConditionGroup.model_validate(params.get("condition"))
-    data = _condition_data(ctx.draft, ctx.context)
+    data = condition_data(ctx.draft, ctx.context)
     return evaluate_condition(group, data)
 
 
@@ -282,7 +244,7 @@ def _guard_actor_role(ctx: EvalContext, params: dict) -> bool:
     with `actor_role{roles:["admin"]}` will currently pass for ANY staff
     user_id, not just admins."""
     roles = params.get("roles") or []
-    is_family = _is_family_actor(ctx.actor)
+    is_family = is_family_actor(ctx.actor)
     for role in roles:
         if role == "family" and is_family:
             return True
@@ -410,7 +372,7 @@ def _write_section_entity(tenant_id: str, entity_model: str, mode: str, payload:
 
 def _persist_subject_refs(ctx: EvalContext, resolved: dict) -> None:
     encoded = json.dumps(resolved)
-    base = _base_data(ctx.instance)
+    base = entity_base_data(ctx.instance)
     base["subject_refs"] = encoded
     dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base, ctx.token)
     ctx.instance["subject_refs"] = encoded
@@ -471,7 +433,7 @@ def _effect_set_entity_field(ctx: EvalContext, params: dict) -> None:
     value = params.get("value")
 
     if ref == "instance":
-        base = _base_data(ctx.instance)
+        base = entity_base_data(ctx.instance)
         base[field] = value
         dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base, ctx.token)
         ctx.instance[field] = value
@@ -487,7 +449,7 @@ def _effect_set_entity_field(ctx: EvalContext, params: dict) -> None:
         raise HTTPException(409, {
             "error": f"set_entity_field: resolved entity {entity_id!r} for ref {ref!r} not found",
         })
-    base = _base_data(row)
+    base = entity_base_data(row)
     base[field] = value
     dc.dc_update(ctx.tenant_id, ref, entity_id, base, ctx.token)
 
@@ -572,7 +534,7 @@ def _effect_start_due_clocks(ctx: EvalContext, params: dict) -> None:
         except (TypeError, ValueError):
             continue
         due_at = (ctx.now + timedelta(days=days)).isoformat()
-        base = _base_data(item)
+        base = entity_base_data(item)
         base["due_at"] = due_at
         dc.dc_update(ctx.tenant_id, "workflow_item", item["entity_id"], base, ctx.token)
         item["due_at"] = due_at
@@ -584,7 +546,7 @@ def _effect_set_context(ctx: EvalContext, params: dict) -> None:
     context = dict(ctx.context)
     context[key] = value
     encoded = json.dumps(context)
-    base = _base_data(ctx.instance)
+    base = entity_base_data(ctx.instance)
     base["context"] = encoded
     dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base, ctx.token)
     ctx.context[key] = value

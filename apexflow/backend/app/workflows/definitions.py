@@ -24,29 +24,17 @@ from fastapi import HTTPException
 
 from app.workflows import datacore as dc
 from app.workflows.schema import ConditionGroup, MachineDef, SectionDef, StepDef
+from app.workflows.shared import entity_base_data
 from app.workflows.validate import validate_definition
 
-# Columns a flattened DataCore query row carries that are NOT part of
-# base_data — same set enrollx/backend/app/registration/engine.py's
-# entity_base_data strips (interface map's "entity_base_data" precedent).
-SYSTEM_COLS = {"entity_id", "entity_type", "base_data", "custom_fields", "vector", "_tenant"}
-
-
-def entity_base_data(row: dict) -> dict:
-    """Rebuild a full base_data dict from a flattened query row, dropping
-    system columns, other-entity-type null padding, and any `_`-prefixed
-    column — precedent: enrollx engine.py::entity_base_data. DataCore's PUT
-    is a full replace, so any caller writing back ONE changed field must
-    round-trip every other field through this helper first, or lose them.
-
-    No boolean-field coercion table here (unlike the enrollx precedent):
-    every workflow_definition base field is str/number/selection per
-    launchpad's base_model.json — none are declared `"type": "bool"` — so
-    there is nothing to coerce back from the flattened "true"/"false" string
-    representation.
-    """
-    return {k: v for k, v in row.items()
-            if k not in SYSTEM_COLS and not k.startswith("_") and v is not None}
+# `entity_base_data` now lives in app.workflows.shared (code-review follow-up
+# to Task 7 — was duplicated between here and engine.py/primitives.py; see
+# shared.py's module docstring for why it's a leaf module none of the other
+# workflows modules can safely have duplicated instead). Imported by name
+# above so this module's own `entity_base_data(...)` call sites, and
+# `defs.entity_base_data(...)` as called from engine.py, keep working
+# unchanged. (`SYSTEM_COLS` itself has no consumer outside shared.py/this
+# module's old body, so it isn't re-imported here.)
 
 
 def _parse_machine_steps(row: dict) -> tuple[MachineDef, list[StepDef]]:
