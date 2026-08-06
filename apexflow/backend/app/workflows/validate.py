@@ -23,6 +23,7 @@ creation-time refusal); neither talks to DataCore itself.
 """
 from typing import Any, Literal, NamedTuple
 
+from app.workflows.primitives import EFFECTS, GUARDS
 from app.workflows.schema import (
     ENGINE_OWNED_FIELDS,
     ConditionGroup,
@@ -31,33 +32,15 @@ from app.workflows.schema import (
     StepDef,
 )
 
-# ADJUST(bindings): Task 7 builds the real guard/effect primitive registries.
-# Until that module exists, this validator carries its own copy of the v1
-# primitive NAME sets (spec §4) so guard/effect ref resolution has something
-# to check against. Once the registry lands, replace these two constants
-# with an import from it instead of redefining them here — single source of
-# truth for primitive names.
-GUARD_PRIMITIVES: frozenset[str] = frozenset(
-    {
-        "all_blocking_items_complete",
-        "items_in_status",
-        "capacity_available",
-        "data_condition",
-        "date_window",
-        "actor_role",
-    }
-)
+# Task 7 landed the real guard/effect primitive registries in
+# app.workflows.primitives — these two constants are now DERIVED from the
+# registries' own keys rather than a hand-maintained copy, so the two can
+# never drift apart. `app.workflows.primitives` deliberately does not import
+# this module (or engine.py/definitions.py, which do) — see primitives.py's
+# module docstring for the import-cycle constraint that shapes that choice.
+GUARD_PRIMITIVES: frozenset[str] = frozenset(GUARDS)
 
-EFFECT_PRIMITIVES: frozenset[str] = frozenset(
-    {
-        "commit_sections",
-        "set_entity_field",
-        "send_email",
-        "issue_link",
-        "start_due_clocks",
-        "set_context",
-    }
-)
+EFFECT_PRIMITIVES: frozenset[str] = frozenset(EFFECTS)
 
 
 class _SectionEntry(NamedTuple):
@@ -118,12 +101,14 @@ def _committing_transition_set_fields(
     transition here, not any transition that happens to set the field.
 
     # ADJUST(bindings): `set_entity_field.params` is `{ref, field, value}`
-    (spec §4); Task 7 owns `ref`'s exact resolution semantics (entity_model
-    name vs section_id vs subject_refs key). This reads `ref` as naming the
-    entity_model directly (matching the spec's worked example
-    `set_entity_field(student.status)`), and treats an absent/None `ref` as
-    "applies regardless of model" rather than guessing. Revisit once Task 7
-    pins `ref` down for real.
+    (spec §4). Task 7 (app.workflows.primitives._effect_set_entity_field)
+    confirmed this reading: `ref == "instance"` targets the workflow_instance
+    row itself; any other `ref` names an entity_model directly and is
+    resolved against the instance's `subject_refs[f"{ref}_id"]` (a DataCore
+    entity_id — see primitives.py's module docstring, decision 1, for why
+    entity_id rather than the business id). This function's existing
+    treatment of an absent/None `ref` as "applies regardless of model" is
+    unaffected by that — it was never one of the two real forms.
     """
     exempt: set[str] = set()
     for t in machine.transitions:
