@@ -230,9 +230,17 @@ def retire_definition(tenant_id: str, entity_id: str, force_cancel: bool = False
     if open_rows:
         if not force_cancel:
             raise HTTPException(409, {"open_instances": len(open_rows)})
-        assert cancel_instance_fn is not None and actor, (
-            "retire_definition(force_cancel=True) requires both actor and cancel_instance_fn"
-        )
+        if cancel_instance_fn is None or not actor:
+            # Explicit raise rather than a bare `assert`: asserts strip under
+            # `python -O`, which would silently skip bulk-cancel entirely in
+            # that mode and fall straight through to retiring the lineage
+            # with its open instances never cancelled. This is a programming
+            # error in the caller (the API layer failing to wire its
+            # collaborator), not a request error -- RuntimeError, not
+            # HTTPException.
+            raise RuntimeError(
+                "retire_definition(force_cancel=True) requires both actor and cancel_instance_fn"
+            )
         for instance_row in open_rows:
             cancel_instance_fn(tenant_id, instance_row, actor, token)
 

@@ -66,12 +66,43 @@ def create_instance_route(tenant_id: str, definition_id: str, body: CreateInstan
     "staff-assisted entry mounts flow-runtime in staff mode"). The
     unauthenticated family self-serve path is Task 10's internal/token-scoped
     `/internal/workflows/{tenant_id}/{definition_id}/start` route.
+
+    DECISION (Task 8, code-review follow-up): `engine.create_instance` never
+    ran system auto-advance — a machine whose INITIAL state already
+    satisfies a `system` transition's guard (e.g. a `data_condition` on a
+    creation-time `context` value) would sit un-advanced until the first
+    item mutation triggered `run_system_transitions` from inside
+    `execute_action`. `engine.py` cannot fix this itself without an
+    `engine.py -> machine.py` import (machine.py already imports engine.py
+    for the item built-ins — a reverse import would cycle), so this route
+    does it: re-fetch the FLATTENED instance row `engine.create_instance`'s
+    own envelope-shaped return can't be fed straight into
+    `machine.build_eval_context` (see engine.py's row-shape convention
+    note), build a `ctx`, and run `run_system_transitions` once before
+    responding. `result["instance"]` is replaced with `ctx.instance` (the
+    flattened, possibly-advanced row) — this deliberately changes the
+    response's `"instance"` shape from the create envelope
+    (`{"entity_id", "entity_type", "base_data": {...}}`) to the same
+    flattened shape the actions route (`instance_action_route`, below)
+    already returns, for one consistent contract across both routes.
+    `"items"` is left as `engine.create_instance` derived it — no seed
+    machine in this codebase has a creation-time system transition with an
+    item-mutating effect, and re-querying items unconditionally here would
+    be speculative scope beyond what triggered this fix.
     """
     token = user.get("_token")
-    return engine.create_instance(
+    actor = user.get("user_id", "staff")
+    result = engine.create_instance(
         tenant_id, definition_id, body.context, body.channel,
         applicant_email=body.applicant_email, token=token,
     )
+
+    instance_entity_id = result["instance"]["entity_id"]
+    instance_row = dc.get_entity(tenant_id, "workflow_instance", instance_entity_id, token)
+    ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
+    machine.run_system_transitions(ctx)
+    result["instance"] = ctx.instance
+    return result
 
 
 class ActionRequest(BaseModel):

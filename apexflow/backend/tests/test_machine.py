@@ -329,6 +329,46 @@ def test_system_auto_advance_fires_after_verify_item_satisfies_guard(fake_dc):
     assert activities[-1]["to_value"] == "done"
 
 
+# --- closed_at auto-set on ANY terminal landing (machine.py decision 5) -----
+
+
+def test_staff_transition_landing_on_terminal_state_sets_closed_at(fake_dc):
+    """`_write_state` sets `closed_at` whenever a transition (explicit here)
+    lands on a `kind: "terminal"` state -- not only via `cancel_instance`."""
+    _seed_definition(fake_dc, definition_id="wd-closed-1", machine_def=_cancel_machine())
+    instance_row = _create_instance(fake_dc, "wd-closed-1")
+    assert not instance_row.get("closed_at")
+
+    ctx = machine.build_eval_context(TENANT, instance_row, actor="staff-u1")
+    updated = machine.execute_action(ctx, "finish", {})
+
+    assert updated["state"] == "done"
+    assert updated["closed_at"]
+    refreshed = _refresh(fake_dc, instance_row)
+    assert refreshed["closed_at"] == updated["closed_at"]
+
+
+def test_system_auto_advance_landing_on_terminal_state_sets_closed_at(fake_dc):
+    """Same as above, but for the SYSTEM-auto-advance path specifically
+    (run_system_transitions -> `_apply_transition` -> `_write_state`), not
+    just an explicit user-invoked transition."""
+    fake_dc.set_model(TENANT, "student", _student_model())
+    _seed_definition(fake_dc, definition_id="wd-closed-2", machine_def=_auto_advance_machine(),
+                     steps=_form_step_fixture())
+    instance_row = _create_instance(fake_dc, "wd-closed-2")
+    item_eid = _form_item_entity_id(fake_dc, instance_row)
+    assert not instance_row.get("closed_at")
+
+    ctx = machine.build_eval_context(TENANT, instance_row, actor="staff-u1")
+    machine.execute_action(ctx, "complete_item", {"item_id": item_eid})
+    updated = machine.execute_action(ctx, "verify_item", {"item_id": item_eid})  # triggers auto-advance
+
+    assert updated["state"] == "done"
+    assert updated["closed_at"]
+    refreshed = _refresh(fake_dc, instance_row)
+    assert refreshed["closed_at"] == updated["closed_at"]
+
+
 # --- auto-advance cycle guard terminates ------------------------------------
 
 

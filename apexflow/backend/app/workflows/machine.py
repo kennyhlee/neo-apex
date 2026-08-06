@@ -122,6 +122,25 @@ DECISIONS this task makes (surfaced in task-8-report.md for Task 9/10):
     it) — e.g. family attempting a `actor: staff`-only transition. If
     actor-gated candidates exist but none guard-pass, that's a 409 again
     (actor-permitted but not yet satisfiable reads the same as "no match").
+
+11. **Code-review follow-up: creation-time auto-advance is wired at the API
+    layer (`app/api/instances.py::create_instance_route`), NOT inside
+    `engine.create_instance`.** A machine whose INITIAL state already
+    satisfies an `actor: system` transition's guard (e.g. a `data_condition`
+    on a creation-time `context` value) previously sat un-advanced until the
+    first item mutation ran `execute_action` (which is the only thing that
+    was calling `run_system_transitions`). `engine.py` cannot fix this
+    itself without importing `machine.py` — `machine.py` already imports
+    `engine.py` for the item built-ins, so a reverse import would cycle, the
+    same reason `definitions.py`'s bulk-cancel is dependency-injected
+    (decision 7). The API route already imports both modules, so it re-
+    fetches the flattened instance row after `engine.create_instance`
+    returns, builds a `ctx`, and calls `run_system_transitions` once before
+    responding — same pattern as `api/definitions.py`'s `_cancel_one`.
+    This also changes the creation route's `"instance"` response shape from
+    the create envelope (`{"entity_id","entity_type","base_data":{...}}`)
+    to the flattened row `ctx.instance` ends up as, matching the actions
+    route's shape for one consistent contract across both routes.
 """
 import json
 from datetime import datetime, timezone

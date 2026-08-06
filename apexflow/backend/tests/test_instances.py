@@ -277,7 +277,10 @@ def test_create_instance_route_201(client, fake_dc):
     )
     assert resp.status_code == 201
     body = resp.json()
-    assert body["instance"]["base_data"]["state"] == "draft"
+    # Flattened row shape (not the create envelope) -- code-review follow-up
+    # to Task 8: the route now re-fetches + runs run_system_transitions
+    # before responding, so "instance" matches the actions route's shape.
+    assert body["instance"]["state"] == "draft"
     assert len(body["items"]) == 4
 
 
@@ -308,3 +311,77 @@ def test_create_instance_route_rejects_bad_channel_422(client, fake_dc):
         json={"context": {}, "channel": "parent"},
     )
     assert resp.status_code == 422
+
+
+# --- route: system auto-advance fires at creation time (code-review follow-up) --
+
+
+def _auto_confirm_machine():
+    return {
+        "states": [
+            {"state_id": "draft", "name": "Draft", "kind": "initial"},
+            {"state_id": "confirmed", "name": "Confirmed", "kind": "terminal"},
+        ],
+        "transitions": [
+            {
+                "transition_id": "t_auto_confirm",
+                "from": "draft", "to": "confirmed", "action": "auto_confirm", "actor": "system",
+                "guards": [{
+                    "primitive": "data_condition",
+                    "params": {"condition": {
+                        "all": [{"source": "context.auto_confirm", "op": "eq", "value": True}]
+                    }},
+                }],
+                "effects": [],
+            },
+        ],
+    }
+
+
+def _seed_auto_confirm_definition(fake_dc, *, definition_id):
+    base = {
+        "definition_id": definition_id,
+        "name": "Auto confirm",
+        "version": 1,
+        "status": "published",
+        "lineage_status": "active",
+        "channel_access": "staff_only",
+        "machine": json.dumps(_auto_confirm_machine()),
+        "steps": json.dumps([]),
+    }
+    fake_dc.dc_create(TENANT, "workflow_definition", base)
+
+
+def test_create_instance_route_runs_system_transitions_at_creation(client, fake_dc):
+    """Code-review follow-up (Task 8): a system transition already
+    satisfiable at the INITIAL state (guarded on a context value set at
+    creation time) must fire before the create route responds -- not sit
+    un-advanced until the first item mutation triggers
+    `run_system_transitions` from inside `execute_action`."""
+    _seed_auto_confirm_definition(fake_dc, definition_id="wd-auto-confirm-1")
+
+    resp = client.post(
+        f"/api/workflows/{TENANT}/definitions/wd-auto-confirm-1/instances",
+        json={"context": {"auto_confirm": True}, "channel": "staff"},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["instance"]["state"] == "confirmed"
+    assert body["instance"]["closed_at"]  # terminal-landing closed_at (machine.py decision 5)
+
+    activities = fake_dc.find("workflow_activity", instance_id=body["instance"]["entity_id"])
+    types_in_order = [a["type"] for a in activities]
+    assert types_in_order == ["state_change", "state_change"]  # create's own, then the auto-advance hop
+
+
+def test_create_instance_route_no_advance_when_guard_unsatisfied(fake_dc, client):
+    """Sanity check for the same fixture: without the context flag, the
+    instance is returned still in its initial state."""
+    _seed_auto_confirm_definition(fake_dc, definition_id="wd-auto-confirm-2")
+
+    resp = client.post(
+        f"/api/workflows/{TENANT}/definitions/wd-auto-confirm-2/instances",
+        json={"context": {}, "channel": "staff"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["instance"]["state"] == "draft"
