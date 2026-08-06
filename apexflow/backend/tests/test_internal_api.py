@@ -66,7 +66,7 @@ def _steps():
     ]
 
 
-def _seed_definition(fake_dc, *, definition_id="wd-1"):
+def _seed_definition(fake_dc, *, definition_id="wd-1", channel_access="family"):
     fake_dc.set_model(TENANT, "student", {
         "base_fields": [
             {"name": "student_id", "type": "str", "required": True},
@@ -80,7 +80,7 @@ def _seed_definition(fake_dc, *, definition_id="wd-1"):
         "version": 1,
         "status": "published",
         "lineage_status": "active",
-        "channel_access": "family",
+        "channel_access": channel_access,
         "machine": json.dumps(_machine()),
         "steps": json.dumps(_steps()),
     }
@@ -121,12 +121,27 @@ def test_start_workflow_returns_instance_items_token_link(client, fake_dc):
     assert body["instance"]["state"] == "draft"
     assert len(body["items"]) == 1
     assert body["token"]
-    assert body["link"] == f"http://localhost:6000/w/{TENANT}/wd-1?token={body['token']}"
+    assert body["link"] == f"http://localhost:5620/w/{TENANT}/wd-1?token={body['token']}"
 
 
 def test_start_workflow_404_unknown_lineage(client, fake_dc):
     resp = client.post(
         f"/internal/workflows/{TENANT}/does-not-exist/start",
+        json={"context": {}, "applicant_email": "p@example.com"},
+        headers=HEADERS,
+    )
+    assert resp.status_code == 404
+
+
+def test_start_workflow_404_for_staff_only_definition(client, fake_dc):
+    """A published definition with channel_access != "family" must 404 on
+    the family/token-scoped start route -- 404, not 403, so an
+    unauthenticated caller on the public surface can't tell "staff-only
+    definition exists" apart from "no such lineage" (same anti-oracle
+    reasoning as resolve_token's uniform 401)."""
+    _seed_definition(fake_dc, definition_id="wd-staff-only", channel_access="staff_only")
+    resp = client.post(
+        f"/internal/workflows/{TENANT}/wd-staff-only/start",
         json={"context": {}, "applicant_email": "p@example.com"},
         headers=HEADERS,
     )
@@ -151,6 +166,15 @@ def test_config_route_returns_definition_tenant_capacity(client, fake_dc):
 
 def test_config_route_404_for_unpublished_lineage(client, fake_dc):
     resp = client.get(f"/internal/workflows/{TENANT}/nope/config", headers=HEADERS)
+    assert resp.status_code == 404
+
+
+def test_config_route_404_for_staff_only_definition(client, fake_dc):
+    """Same anti-oracle reasoning as the start route above: a staff-only
+    definition must 404 on the family/token-scoped config route, not reveal
+    its existence via a 403."""
+    _seed_definition(fake_dc, definition_id="wd-cfg-staff-only", channel_access="staff_only")
+    resp = client.get(f"/internal/workflows/{TENANT}/wd-cfg-staff-only/config", headers=HEADERS)
     assert resp.status_code == 404
 
 
@@ -186,6 +210,42 @@ def test_config_route_capacity_from_guard_and_tenant_field(client, fake_dc):
     resp = client.get(f"/internal/workflows/{TENANT}/wd-cap/config", headers=HEADERS)
     assert resp.status_code == 200
     assert resp.json()["capacity"] == {"capacity": 2, "admitted": 1, "full": False}
+
+
+def test_config_route_capacity_full_when_admitted_equals_capacity(client, fake_dc):
+    """Boundary: `_capacity_summary` must report `full: True` once admitted
+    reaches (not just exceeds) capacity -- admitted >= capacity, not >."""
+    machine = {
+        "states": [
+            {"state_id": "draft", "name": "Draft", "kind": "initial"},
+            {"state_id": "approved", "name": "Approved", "kind": "terminal"},
+        ],
+        "transitions": [
+            {
+                "transition_id": "t_submit", "from": "draft", "to": "approved", "action": "submit",
+                "actor": "family",
+                "guards": [{
+                    "primitive": "capacity_available",
+                    "params": {"capacity_field": "capacity", "count_states": ["approved"]},
+                }],
+                "effects": [],
+            },
+        ],
+    }
+    base = {
+        "definition_id": "wd-cap-full", "name": "Capacity Full", "version": 1, "status": "published",
+        "lineage_status": "active", "channel_access": "family",
+        "machine": json.dumps(machine), "steps": json.dumps([]),
+    }
+    fake_dc.dc_create(TENANT, "workflow_definition", base)
+    fake_dc.rows.append(fake_dc._store_row(TENANT, "tenant", TENANT, {"capacity": 1}))
+    fake_dc.rows.append(fake_dc._store_row("other-eid", "workflow_instance", TENANT, {
+        "definition_id": "wd-cap-full", "state": "approved",
+    }))
+
+    resp = client.get(f"/internal/workflows/{TENANT}/wd-cap-full/config", headers=HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["capacity"] == {"capacity": 1, "admitted": 1, "full": True}
 
 
 # --- request-link (anti-enumeration) -----------------------------------

@@ -122,7 +122,7 @@ def test_start_returns_token_and_hub_url(client, fake_http):
             "instance": {"entity_id": "wi-1", "state": "draft", "definition_id": DEFINITION_ID},
             "items": [{"entity_id": "item-1", "entity_type": "workflow_item",
                       "base_data": {"kind": "form"}}],
-            "token": "tok123", "link": "http://localhost:6000/w/acme/enrollment?token=tok123",
+            "token": "tok123", "link": "http://localhost:5620/w/acme/enrollment?token=tok123",
         }),
     )
     resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",

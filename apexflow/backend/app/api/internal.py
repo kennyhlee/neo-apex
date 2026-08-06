@@ -156,6 +156,25 @@ def _family_actor(instance_row: dict) -> str:
     return f"family:{instance_row['entity_id']}"
 
 
+_NO_PUBLISHED_DEFINITION_DETAIL = "No published workflow_definition for this lineage"
+
+
+def _require_family_channel_definition(tenant_id: str, definition_id: str,
+                                        token: str | None = None) -> dict:
+    """The published row for `definition_id`, but ONLY if its
+    `channel_access` is `"family"` -- 404 (never 403) otherwise, identical
+    detail/status to "no published row at all". This is the same
+    existence-oracle concern `resolve_token` guards against (module
+    docstring): the family/token-scoped surface must not let an
+    unauthenticated caller distinguish "this lineage doesn't exist/isn't
+    published" from "this lineage exists but is staff_only" -- a 403 would
+    leak that a staff-only definition (and its definition_id) exists."""
+    row = defs.get_published_definition(tenant_id, definition_id, token)
+    if row is None or row.get("channel_access") != "family":
+        raise HTTPException(404, _NO_PUBLISHED_DEFINITION_DETAIL)
+    return row
+
+
 def _link_for(tenant_id: str, definition_id: str, link_token: str) -> str:
     return f"{settings.familyhub_base_url}/w/{tenant_id}/{definition_id}?token={link_token}"
 
@@ -185,7 +204,13 @@ def start_workflow(tenant_id: str, definition_id: str, body: StartRequest):
     """Create a workflow_instance on the family channel, run creation-time
     system auto-advance (same pattern as `app.api.instances.create_instance_route`
     -- see that route's docstring), then mint + email a magic link scoped to
-    the instance's resulting token_version."""
+    the instance's resulting token_version.
+
+    404s (never 403s -- see `_require_family_channel_definition`) if the
+    lineage has no published `channel_access: "family"` row, BEFORE
+    `engine.create_instance` (which has no channel_access concept of its own
+    -- it also backs the staff-side create path) ever runs."""
+    _require_family_channel_definition(tenant_id, definition_id)
     result = engine.create_instance(
         tenant_id, definition_id, body.context, "family",
         applicant_email=body.applicant_email,
@@ -247,9 +272,7 @@ def _capacity_summary(tenant_id: str, lineage_definition_id: str, machine_def) -
 
 @router.get("/internal/workflows/{tenant_id}/{definition_id}/config")
 def workflow_config(tenant_id: str, definition_id: str):
-    row = defs.get_published_definition(tenant_id, definition_id)
-    if row is None:
-        raise HTTPException(404, "No published workflow_definition for this lineage")
+    row = _require_family_channel_definition(tenant_id, definition_id)
 
     machine_def, steps = defs._parse_machine_steps(row)
     tenant_row = dc.get_entity(tenant_id, "tenant", tenant_id)
