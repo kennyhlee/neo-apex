@@ -7,6 +7,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'nav.lead': 'Leads',
     'nav.student': 'Students',
     'nav.program': 'Programs',
+    'nav.workflows': 'Workflows',
     'nav.teacher': 'Teachers',
     'nav.report': 'Reports',
     'nav.currentSite': 'Current Campus',
@@ -272,6 +273,23 @@ export const translations: Record<Locale, Record<string, string>> = {
     'leads.confirm': 'Confirm',
     'leads.cancel': 'Cancel',
 
+    // Workflows
+    'workflows.title': 'Workflows',
+    'workflows.empty': 'No workflows defined yet',
+    'workflows.columnEmpty': 'Nothing here',
+    'workflows.otherStates': 'Other',
+    'workflows.startEntry': 'Start staff entry',
+    'workflows.openInstances': 'Open Instances',
+    'workflows.colName': 'Name',
+    'workflows.colVersion': 'Version',
+    'workflows.colStatus': 'Status',
+    'workflows.colLineageStatus': 'Lineage Status',
+    'workflows.colHealth': 'Health',
+    'workflows.colChannelAccess': 'Channel Access',
+    'workflows.notPublished': 'This workflow has no published version yet, so there are no pipeline stages to show.',
+    'workflows.noApplicantEmail': 'No applicant email',
+    'workflows.newInstanceComingSoon': 'Staff entry is coming soon.',
+
     // Bulk Add Students
     'bulkAdd.entryButton': 'Bulk add',
     'bulkAdd.title': 'Bulk Add Students',
@@ -475,6 +493,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'nav.lead': '\u5ba2\u6237',
     'nav.student': '\u5b66\u751f',
     'nav.program': '\u8bfe\u7a0b',
+    'nav.workflows': '\u5de5\u4f5c\u6d41',
     'nav.teacher': '\u6559\u5e08',
     'nav.report': '\u62a5\u8868',
     'nav.currentSite': '\u5f53\u524d\u6821\u533a',
@@ -725,6 +744,23 @@ export const translations: Record<Locale, Record<string, string>> = {
     'leads.confirmStagePrompt': '\u786e\u5b9a\u66f4\u6539\u8be5\u5ba2\u6237\u7684\u9636\u6bb5\uff1f\u6b64\u66f4\u6539\u5c06\u8bb0\u5f55\u5728\u6d3b\u52a8\u65e5\u5fd7\u4e2d\u3002',
     'leads.confirm': '\u786e\u8ba4',
     'leads.cancel': '\u53d6\u6d88',
+
+    // Workflows
+    'workflows.title': '\u5de5\u4f5c\u6d41',
+    'workflows.empty': '\u5c1a\u672a\u5b9a\u4e49\u5de5\u4f5c\u6d41',
+    'workflows.columnEmpty': '\u6682\u65e0',
+    'workflows.otherStates': '\u5176\u4ed6',
+    'workflows.startEntry': '\u53d1\u8d77\u5458\u5de5\u5f55\u5165',
+    'workflows.openInstances': '\u8fdb\u884c\u4e2d\u5b9e\u4f8b',
+    'workflows.colName': '\u540d\u79f0',
+    'workflows.colVersion': '\u7248\u672c',
+    'workflows.colStatus': '\u72b6\u6001',
+    'workflows.colLineageStatus': '\u6d41\u7a0b\u72b6\u6001',
+    'workflows.colHealth': '\u5065\u5eb7\u72b6\u6001',
+    'workflows.colChannelAccess': '\u6e20\u9053\u6743\u9650',
+    'workflows.notPublished': '\u6b64\u5de5\u4f5c\u6d41\u5c1a\u65e0\u5df2\u53d1\u5e03\u7248\u672c\uff0c\u6682\u65e0\u53ef\u663e\u793a\u7684\u6d41\u7a0b\u9636\u6bb5\u3002',
+    'workflows.noApplicantEmail': '\u65e0\u7533\u8bf7\u4eba\u90ae\u7bb1',
+    'workflows.newInstanceComingSoon': '\u5458\u5de5\u5f55\u5165\u529f\u80fd\u5373\u5c06\u63a8\u51fa\u3002',
 
     // Bulk Add Students
     'bulkAdd.entryButton': '\u6279\u91cf\u6dfb\u52a0',

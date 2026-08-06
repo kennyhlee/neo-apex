@@ -14,8 +14,27 @@ import BulkAddStudentsPage from './pages/BulkAddStudentsPage.tsx';
 import LeadPage from './pages/LeadPage.tsx';
 import ProgramPage from './pages/ProgramPage.tsx';
 import FamiliesPage from './pages/FamiliesPage.tsx';
+import WorkflowsPage from './pages/WorkflowsPage.tsx';
+import WorkflowPipelinePage from './pages/WorkflowPipelinePage.tsx';
 import { useTranslation } from './hooks/useTranslation.ts';
 import './App.css';
+
+/**
+ * TASK 12 REPLACES THIS. Staff instance-creation form for a definition
+ * (`/workflows/:definitionId/new`) — registered here only so the route
+ * compiles and "Start staff entry" (WorkflowPipelinePage) has somewhere to
+ * land; Task 10's scope is the definitions list + pipeline board, not the
+ * creation form itself.
+ */
+function WorkflowNewInstancePlaceholder() {
+  const { t } = useTranslation();
+  return (
+    <div className="not-found">
+      <h1>{t('workflows.startEntry')}</h1>
+      <p>{t('workflows.newInstanceComingSoon')}</p>
+    </div>
+  );
+}
 
 /**
  * Unknown URLs previously redirected to /home, so a typo looked like a
@@ -68,6 +87,15 @@ function AppRoutes() {
                       <Route path="/leads" element={<LeadPage tenant={tenant} />} />
                       <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
                       <Route path="/families" element={<FamiliesPage tenant={tenant} />} />
+                      <Route path="/workflows" element={<WorkflowsPage tenant={tenant} />} />
+                      <Route
+                        path="/workflows/:definitionId"
+                        element={<WorkflowPipelinePage tenant={tenant} />}
+                      />
+                      <Route
+                        path="/workflows/:definitionId/new"
+                        element={<WorkflowNewInstancePlaceholder />}
+                      />
                       <Route path="/" element={<Navigate to="/home" replace />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
