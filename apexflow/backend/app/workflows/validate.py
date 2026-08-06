@@ -21,7 +21,8 @@ to classify an *already published* definition against the *current* models
 Both are consumed by later tasks (Task 5's model-impact endpoint, Task 6's
 creation-time refusal); neither talks to DataCore itself.
 """
-from typing import Any, Literal, NamedTuple
+from datetime import datetime
+from typing import Any, Callable, Literal, NamedTuple
 
 from app.workflows.primitives import EFFECTS, GUARDS
 from app.workflows.schema import (
@@ -183,7 +184,16 @@ def _condition_source_field_errors(
 
 def _data_condition_groups(machine: MachineDef):
     """Yield (context_label, ConditionGroup) for every `data_condition`
-    guard's `params.condition` that parses cleanly."""
+    guard's `params.condition` that parses cleanly.
+
+    A missing/malformed `condition` is deliberately, NOT silently, skipped
+    here: `_guard_params_data_condition` (this module's guard-param table)
+    already reports a missing `condition` or a `ConditionGroup.model_validate`
+    failure as its own validation error, elsewhere in `validate_definition`'s
+    accumulated error list. This generator's job is narrower -- collecting
+    WELL-FORMED conditions to check their `source` refs against declared
+    sections (`_broken_errors`) -- so re-reporting the same parse failure a
+    second time here would just be a duplicate, not a second real check."""
     for t in machine.transitions:
         for g in t.guards:
             if g.primitive != "data_condition":
@@ -278,7 +288,200 @@ def _unguarded_branch_errors(machine: MachineDef) -> list[str]:
     return errors
 
 
-def _guard_effect_ref_errors(machine: MachineDef) -> list[str]:
+# --- Guard/effect PARAM validation (spec §3 "refs resolve with valid
+# params") -----------------------------------------------------------------
+#
+# `_guard_effect_ref_errors` (below) already rejects an unknown primitive
+# NAME; these per-primitive tables additionally check that a KNOWN
+# primitive's `params` dict actually carries what that primitive needs to
+# run without raising at execution time (`app.workflows.primitives`'s own
+# `params["..."]` KeyErrors are exactly what this is meant to catch at
+# publish time instead of at first-execution time). Only primitives with a
+# real required-param shape get an entry; a primitive absent from a table
+# below (`all_blocking_items_complete`, `issue_link`) takes no params to
+# validate.
+
+
+def _param_missing(primitive: str, param: str) -> str:
+    return f"'{primitive}' is missing required param '{param}'"
+
+
+def _guard_params_items_in_status(params: dict) -> list[str]:
+    errors: list[str] = []
+    if "status" not in params or params.get("status") in (None, "", []):
+        errors.append(_param_missing("items_in_status", "status"))
+    else:
+        status = params["status"]
+        if isinstance(status, list):
+            if not status or not all(isinstance(v, str) for v in status):
+                errors.append(
+                    "'items_in_status' param 'status' list must be non-empty and contain only strings"
+                )
+        elif not isinstance(status, str):
+            errors.append(
+                f"'items_in_status' param 'status' must be a string or list of strings, "
+                f"got {type(status).__name__}"
+            )
+    quantifier = params.get("quantifier")
+    if quantifier is not None and quantifier not in ("all", "any"):
+        errors.append(
+            f"'items_in_status' param 'quantifier' must be 'all' or 'any', got {quantifier!r}"
+        )
+    step_ids = params.get("step_ids")
+    if step_ids is not None and not isinstance(step_ids, list):
+        errors.append("'items_in_status' param 'step_ids' must be a list")
+    return errors
+
+
+def _guard_params_capacity_available(params: dict) -> list[str]:
+    errors: list[str] = []
+    count_states = params.get("count_states")
+    if not count_states or not isinstance(count_states, list):
+        errors.append(
+            "'capacity_available' param 'count_states' must be a non-empty list"
+            if count_states is not None
+            else _param_missing("capacity_available", "count_states")
+        )
+    capacity_field = params.get("capacity_field")
+    if not capacity_field or not isinstance(capacity_field, str):
+        errors.append(_param_missing("capacity_available", "capacity_field"))
+    return errors
+
+
+def _guard_params_data_condition(params: dict) -> list[str]:
+    condition = params.get("condition")
+    if condition is None:
+        return [_param_missing("data_condition", "condition")]
+    try:
+        ConditionGroup.model_validate(condition)
+    except Exception as exc:
+        return [f"'data_condition' param 'condition' failed to parse: {exc}"]
+    return []
+
+
+def _parseable_date(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
+def _guard_params_date_window(params: dict) -> list[str]:
+    start = params.get("start")
+    end = params.get("end")
+    errors: list[str] = []
+    if start is None and end is None:
+        errors.append("'date_window' requires at least one of 'start'/'end'")
+    for label, value in (("start", start), ("end", end)):
+        if value is not None and not _parseable_date(value):
+            errors.append(
+                f"'date_window' param '{label}' is not a valid YYYY-MM-DD date: {value!r}"
+            )
+    return errors
+
+
+def _guard_params_actor_role(params: dict) -> list[str]:
+    roles = params.get("roles")
+    if not roles or not isinstance(roles, list):
+        return ["'actor_role' param 'roles' must be a non-empty list"]
+    return []
+
+
+GUARD_PARAM_VALIDATORS: dict[str, Callable[[dict], list[str]]] = {
+    "items_in_status": _guard_params_items_in_status,
+    "capacity_available": _guard_params_capacity_available,
+    "data_condition": _guard_params_data_condition,
+    "date_window": _guard_params_date_window,
+    "actor_role": _guard_params_actor_role,
+}
+
+
+def _effect_params_commit_sections(params: dict) -> list[str]:
+    section_ids = params.get("section_ids")
+    if not section_ids or not isinstance(section_ids, list):
+        return ["'commit_sections' param 'section_ids' must be a non-empty list"]
+    return []
+
+
+def _effect_params_set_entity_field(params: dict) -> list[str]:
+    errors: list[str] = []
+    ref = params.get("ref")
+    field = params.get("field")
+    if not ref or not isinstance(ref, str):
+        errors.append(_param_missing("set_entity_field", "ref"))
+    if not field or not isinstance(field, str):
+        errors.append(_param_missing("set_entity_field", "field"))
+    # Effect-level analogue of `_engine_owned_field_errors`'s section-content
+    # ban: `ref == "instance"` targets the workflow_instance row itself
+    # (primitives.py's `_effect_set_entity_field`), so it is subject to the
+    # exact same ENGINE_OWNED_FIELDS ban a section field pick is. Any other
+    # `ref` targets an unrelated entity_model, which has no such ban.
+    if ref == "instance" and isinstance(field, str) and field in ENGINE_OWNED_FIELDS:
+        errors.append(
+            f"'set_entity_field' targets engine-owned field '{field}' on ref 'instance'"
+        )
+    return errors
+
+
+def _effect_params_send_email(params: dict) -> list[str]:
+    template = params.get("template")
+    if not template or not isinstance(template, str):
+        return [_param_missing("send_email", "template")]
+    return []
+
+
+def _effect_params_set_context(params: dict) -> list[str]:
+    if not params.get("key"):
+        return [_param_missing("set_context", "key")]
+    return []
+
+
+EFFECT_PARAM_VALIDATORS: dict[str, Callable[[dict], list[str]]] = {
+    "commit_sections": _effect_params_commit_sections,
+    "set_entity_field": _effect_params_set_entity_field,
+    "send_email": _effect_params_send_email,
+    "set_context": _effect_params_set_context,
+}
+
+
+def _effect_params_start_due_clocks(params: dict, declared_step_ids: set[str]) -> list[str]:
+    """Special-cased rather than living in `EFFECT_PARAM_VALIDATORS`: unlike
+    every other effect, `start_due_clocks`'s step_ids need cross-referencing
+    against the definition's DECLARED steps (`StepDef.step_id`), not just
+    shape-checked in isolation -- same "actionable, not generic" standard
+    `_commit_sections_ref_errors` already holds `section_ids` to."""
+    step_ids = params.get("step_ids")
+    if not step_ids or not isinstance(step_ids, list):
+        return ["'start_due_clocks' param 'step_ids' must be a non-empty list"]
+    errors = [
+        f"'start_due_clocks' step_ids references undeclared step '{sid}'"
+        for sid in step_ids
+        if sid not in declared_step_ids
+    ]
+    return errors
+
+
+def _guard_param_errors(primitive: str, params: dict) -> list[str]:
+    validator = GUARD_PARAM_VALIDATORS.get(primitive)
+    if validator is None:
+        return []
+    return validator(params)
+
+
+def _effect_param_errors(primitive: str, params: dict, declared_step_ids: set[str]) -> list[str]:
+    if primitive == "start_due_clocks":
+        return _effect_params_start_due_clocks(params, declared_step_ids)
+    validator = EFFECT_PARAM_VALIDATORS.get(primitive)
+    if validator is None:
+        return []
+    return validator(params)
+
+
+def _guard_effect_ref_errors(machine: MachineDef, steps: list[StepDef]) -> list[str]:
+    declared_step_ids = {s.step_id for s in steps}
     errors: list[str] = []
     for t in machine.transitions:
         for g in t.guards:
@@ -286,11 +489,17 @@ def _guard_effect_ref_errors(machine: MachineDef) -> list[str]:
                 errors.append(
                     f"transition '{t.transition_id}' guard references unknown primitive '{g.primitive}'"
                 )
+                continue
+            for msg in _guard_param_errors(g.primitive, g.params):
+                errors.append(f"transition '{t.transition_id}' guard {msg}")
         for e in t.effects:
             if e.primitive not in EFFECT_PRIMITIVES:
                 errors.append(
                     f"transition '{t.transition_id}' effect references unknown primitive '{e.primitive}'"
                 )
+                continue
+            for msg in _effect_param_errors(e.primitive, e.params, declared_step_ids):
+                errors.append(f"transition '{t.transition_id}' effect {msg}")
     return errors
 
 
@@ -463,7 +672,7 @@ def validate_definition(
     errors += _reachability_errors(machine)
     errors += _outgoing_transition_errors(machine)
     errors += _unguarded_branch_errors(machine)
-    errors += _guard_effect_ref_errors(machine)
+    errors += _guard_effect_ref_errors(machine, steps)
     errors += _commit_sections_ref_errors(machine, declared_section_ids)
     errors += _state_ref_errors(machine, steps)
     errors += _engine_owned_field_errors(section_entries)

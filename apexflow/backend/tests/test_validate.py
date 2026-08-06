@@ -134,6 +134,37 @@ def test_valid_definition_health_is_current():
     assert definition_health(machine, steps, models) == "current"
 
 
+def test_guarded_transition_plus_unguarded_last_in_same_group_is_valid():
+    """Regression guard for `_unguarded_branch_errors` false positives: a
+    (from, action) group with ONE guarded transition followed by ONE
+    unguarded transition declared LAST is legal ("at most one unguarded,
+    and if present it must be last" -- not "zero unguarded allowed"). This
+    is exactly the enrollment template's waitlist-branch shape (module
+    docstring's decision 2, generalized here to a minimal fixture) and must
+    not trip any validate_definition rule."""
+    m = _base_machine_dict()
+    s = _base_steps_list()
+    md = _base_models()
+    # Insert a GUARDED alternative for (from="draft", action="submit")
+    # BEFORE the existing unguarded t_submit -- t_submit (unguarded) stays
+    # declared last, so this must publish clean.
+    m["states"].append({"state_id": "waitlisted", "name": "Waitlisted", "kind": "terminal"})
+    m["transitions"].insert(
+        0,
+        {
+            "transition_id": "t_submit_waitlisted",
+            "from": "draft",
+            "to": "waitlisted",
+            "action": "submit",
+            "actor": "system",
+            "guards": [{"primitive": "actor_role", "params": {"roles": ["staff", "admin"]}}],
+            "effects": [],
+        },
+    )
+    machine, steps, models = _build(m, s, md)
+    assert validate_definition(machine, steps, models) == []
+
+
 # --- validate_definition: one row per spec rule -----------------------------
 
 
@@ -394,6 +425,223 @@ def test_validate_definition_rule_violation(name, mutate, expected_substring):
     assert any(expected_substring in e for e in errors), (
         f"{name}: expected an error containing {expected_substring!r}, got {errors}"
     )
+
+
+# --- Guard/effect PARAM validation (spec §3 "refs resolve with valid
+# params") ---------------------------------------------------------------
+#
+# Each case is a minimal 2-state/1-transition machine carrying exactly one
+# guard or effect with broken params -- isolated from the base fixture's
+# other rules (no sections/steps needed unless the primitive under test
+# references one, e.g. start_due_clocks) so a failure here can only be
+# about the param rule being tested.
+
+
+def _minimal_machine(guards=None, effects=None):
+    return {
+        "states": [
+            {"state_id": "draft", "name": "Draft", "kind": "initial"},
+            {"state_id": "done", "name": "Done", "kind": "terminal"},
+        ],
+        "transitions": [
+            {
+                "transition_id": "t1",
+                "from": "draft",
+                "to": "done",
+                "action": "go",
+                "actor": "staff",
+                "guards": guards or [],
+                "effects": effects or [],
+            }
+        ],
+    }
+
+
+def _case_items_in_status_missing_status():
+    return _minimal_machine(guards=[{"primitive": "items_in_status", "params": {}}]), [], {}
+
+
+def _case_items_in_status_bad_quantifier():
+    return _minimal_machine(guards=[{
+        "primitive": "items_in_status",
+        "params": {"status": "verified", "quantifier": "most"},
+    }]), [], {}
+
+
+def _case_items_in_status_step_ids_not_list():
+    return _minimal_machine(guards=[{
+        "primitive": "items_in_status",
+        "params": {"status": "verified", "step_ids": "not-a-list"},
+    }]), [], {}
+
+
+def _case_capacity_available_missing_count_states():
+    return _minimal_machine(guards=[{
+        "primitive": "capacity_available",
+        "params": {"capacity_field": "capacity"},
+    }]), [], {}
+
+
+def _case_capacity_available_missing_capacity_field():
+    return _minimal_machine(guards=[{
+        "primitive": "capacity_available",
+        "params": {"count_states": ["approved"]},
+    }]), [], {}
+
+
+def _case_data_condition_missing_condition():
+    return _minimal_machine(guards=[{"primitive": "data_condition", "params": {}}]), [], {}
+
+
+def _case_data_condition_invalid_condition():
+    return _minimal_machine(guards=[{
+        "primitive": "data_condition",
+        "params": {"condition": "not-a-condition-group"},
+    }]), [], {}
+
+
+def _case_date_window_neither_bound():
+    return _minimal_machine(guards=[{"primitive": "date_window", "params": {}}]), [], {}
+
+
+def _case_date_window_malformed_date():
+    return _minimal_machine(guards=[{
+        "primitive": "date_window",
+        "params": {"start": "not-a-date"},
+    }]), [], {}
+
+
+def _case_actor_role_empty_roles():
+    return _minimal_machine(guards=[{"primitive": "actor_role", "params": {"roles": []}}]), [], {}
+
+
+def _case_commit_sections_empty_section_ids():
+    return _minimal_machine(effects=[{
+        "primitive": "commit_sections", "params": {"section_ids": []},
+    }]), [], {}
+
+
+def _case_set_entity_field_missing_ref():
+    return _minimal_machine(effects=[{
+        "primitive": "set_entity_field",
+        "params": {"field": "status", "value": "x"},
+    }]), [], {}
+
+
+def _case_set_entity_field_missing_field():
+    return _minimal_machine(effects=[{
+        "primitive": "set_entity_field",
+        "params": {"ref": "student", "value": "x"},
+    }]), [], {}
+
+
+def _case_set_entity_field_instance_engine_owned():
+    return _minimal_machine(effects=[{
+        "primitive": "set_entity_field",
+        "params": {"ref": "instance", "field": "state", "value": "x"},
+    }]), [], {}
+
+
+def _case_send_email_missing_template():
+    return _minimal_machine(effects=[{"primitive": "send_email", "params": {}}]), [], {}
+
+
+def _case_start_due_clocks_empty_step_ids():
+    return _minimal_machine(effects=[{
+        "primitive": "start_due_clocks", "params": {"step_ids": []},
+    }]), [], {}
+
+
+def _case_start_due_clocks_undeclared_step():
+    return _minimal_machine(effects=[{
+        "primitive": "start_due_clocks", "params": {"step_ids": ["ghost_step"]},
+    }]), [], {}
+
+
+def _case_set_context_missing_key():
+    return _minimal_machine(effects=[{"primitive": "set_context", "params": {}}]), [], {}
+
+
+PARAM_VALIDATION_CASES = [
+    ("items_in_status: missing status", _case_items_in_status_missing_status,
+     "missing required param 'status'"),
+    ("items_in_status: invalid quantifier", _case_items_in_status_bad_quantifier,
+     "param 'quantifier' must be 'all' or 'any'"),
+    ("items_in_status: step_ids not a list", _case_items_in_status_step_ids_not_list,
+     "param 'step_ids' must be a list"),
+    ("capacity_available: missing count_states", _case_capacity_available_missing_count_states,
+     "missing required param 'count_states'"),
+    ("capacity_available: missing capacity_field", _case_capacity_available_missing_capacity_field,
+     "missing required param 'capacity_field'"),
+    ("data_condition: missing condition", _case_data_condition_missing_condition,
+     "missing required param 'condition'"),
+    ("data_condition: invalid condition", _case_data_condition_invalid_condition,
+     "param 'condition' failed to parse"),
+    ("date_window: neither start nor end", _case_date_window_neither_bound,
+     "requires at least one of 'start'/'end'"),
+    ("date_window: malformed date", _case_date_window_malformed_date,
+     "not a valid YYYY-MM-DD date"),
+    ("actor_role: empty roles", _case_actor_role_empty_roles,
+     "param 'roles' must be a non-empty list"),
+    ("commit_sections: empty section_ids", _case_commit_sections_empty_section_ids,
+     "param 'section_ids' must be a non-empty list"),
+    ("set_entity_field: missing ref", _case_set_entity_field_missing_ref,
+     "missing required param 'ref'"),
+    ("set_entity_field: missing field", _case_set_entity_field_missing_field,
+     "missing required param 'field'"),
+    ("set_entity_field: instance + engine-owned field", _case_set_entity_field_instance_engine_owned,
+     "targets engine-owned field 'state' on ref 'instance'"),
+    ("send_email: missing template", _case_send_email_missing_template,
+     "missing required param 'template'"),
+    ("start_due_clocks: empty step_ids", _case_start_due_clocks_empty_step_ids,
+     "param 'step_ids' must be a non-empty list"),
+    ("start_due_clocks: undeclared step", _case_start_due_clocks_undeclared_step,
+     "references undeclared step 'ghost_step'"),
+    ("set_context: missing key", _case_set_context_missing_key,
+     "missing required param 'key'"),
+]
+
+
+@pytest.mark.parametrize(
+    "name,case_fn,expected_substring",
+    PARAM_VALIDATION_CASES,
+    ids=[c[0] for c in PARAM_VALIDATION_CASES],
+)
+def test_guard_effect_param_validation(name, case_fn, expected_substring):
+    m, s, md = case_fn()
+    machine, steps, models = _build(m, s, md)
+    errors = validate_definition(machine, steps, models)
+    assert errors, f"{name}: expected at least one error, got none"
+    assert any(expected_substring in e for e in errors), (
+        f"{name}: expected an error containing {expected_substring!r}, got {errors}"
+    )
+
+
+def test_set_entity_field_non_instance_ref_not_subject_to_engine_owned_ban():
+    # ENGINE_OWNED_FIELDS (e.g. "state") is an instance-only concept -- a
+    # set_entity_field targeting a non-instance ref (e.g. "student") is
+    # never subject to this ban, even if the field name happens to collide.
+    m = _minimal_machine(effects=[{
+        "primitive": "set_entity_field",
+        "params": {"ref": "student", "field": "state", "value": "x"},
+    }])
+    machine, steps, models = _build(m, [], {})
+    errors = validate_definition(machine, steps, models)
+    assert not any("engine-owned" in e for e in errors)
+
+
+def test_start_due_clocks_step_ids_referencing_declared_step_is_valid():
+    step = {
+        "step_id": "docs_step", "type": "documents", "title": "Docs",
+        "required": True, "blocking": True, "available_in": ["draft"],
+        "show_if": None, "review": None, "config": {"docs": []},
+    }
+    m = _minimal_machine(effects=[{
+        "primitive": "start_due_clocks", "params": {"step_ids": ["docs_step"]},
+    }])
+    machine, steps, models = _build(m, [step], {})
+    errors = validate_definition(machine, steps, models)
+    assert not any("start_due_clocks" in e for e in errors)
 
 
 # --- Coverage exemptions: these must NOT produce errors ---------------------
