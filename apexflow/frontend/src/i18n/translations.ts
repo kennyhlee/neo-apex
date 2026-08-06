@@ -124,7 +124,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.tabs.steps': 'Steps',
     'editor.tabs.machine': 'Machine',
     'editor.tabs.preview': 'Preview',
-    'editor.previewComingSoon': 'The live preview is coming in a later task.',
+
+    'editor.preview.stateLabel': 'Preview as state',
+    'editor.preview.stepCount': '{n} of {m} steps available in this state',
+    'editor.preview.resetAnswers': 'Reset answers',
+    'editor.preview.noStepsForState': 'No steps are available in this state.',
 
     'editor.rail.heading': 'Validation',
     'editor.rail.validating': 'Checking…',
@@ -428,7 +432,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.tabs.steps': '步骤',
     'editor.tabs.machine': '状态机',
     'editor.tabs.preview': '预览',
-    'editor.previewComingSoon': '实时预览将在后续任务中推出。',
+
+    'editor.preview.stateLabel': '以此状态预览',
+    'editor.preview.stepCount': '此状态下共 {m} 个步骤中的 {n} 个可用',
+    'editor.preview.resetAnswers': '重置答案',
+    'editor.preview.noStepsForState': '此状态下没有可用的步骤。',
 
     'editor.rail.heading': '校验',
     'editor.rail.validating': '正在检查…',

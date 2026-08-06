@@ -1014,9 +1014,50 @@
   padding: var(--space-1) var(--space-2);
 }
 
+/* --- PreviewPane (Task 9) ------------------------------------------------- */
+
+.preview-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.preview-pane-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  padding: var(--space-3) var(--space-4);
+}
+
+.preview-pane-state-select {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+}
+
+.preview-pane-state-select .step-panel-label {
+  margin-bottom: var(--space-1);
+}
+
+.preview-pane-count {
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.preview-pane-empty {
+  color: var(--ink-faint);
+  font-size: var(--text-base);
+}
+
 @media (max-width: 768px) {
   .step-card-header { flex-wrap: wrap; }
   .step-title-input { order: 3; flex-basis: 100%; }
   .machine-state-row-fields { flex-direction: column; align-items: stretch; }
   .transition-group-header { flex-wrap: wrap; }
+  .preview-pane-toolbar { align-items: stretch; }
 }

@@ -1,8 +1,7 @@
 // Step editor page (Task 7) — loads the draft via `useDraftStore`, renders
-// the ordered step list (`StepEditor`, this task) plus a right rail of
-// validation errors, and a tab strip leaving room for Task 8's machine
-// editor and Task 9's preview pane (stub panes here). Route:
-// `/definitions/:entityId`.
+// the ordered step list (`StepEditor`), a tab strip for Task 8's machine
+// editor and Task 9's live preview pane, plus a right rail of validation
+// errors. Route: `/definitions/:entityId`.
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
@@ -10,6 +9,7 @@ import { useAuth } from '../hooks/useAuth.ts';
 import { useDraftStore } from '../editor/draftStore.ts';
 import StepEditor from '../editor/StepEditor.tsx';
 import MachineEditor from '../editor/MachineEditor.tsx';
+import PreviewPane from '../editor/PreviewPane.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import './EditorPage.css';
@@ -152,7 +152,9 @@ export default function EditorPage() {
               readOnly={store.readOnly}
             />
           )}
-          {tab === 'preview' && <p className="page-placeholder">{t('editor.previewComingSoon')}</p>}
+          {tab === 'preview' && (
+            <PreviewPane steps={store.steps} machine={store.machine} models={store.models} />
+          )}
         </div>
 
         <aside className="editor-rail">
