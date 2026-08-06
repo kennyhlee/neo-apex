@@ -16,7 +16,11 @@ export default function App() {
         <main className="app-main" id="main-content" tabIndex={-1}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
-            <Route path="/register/:tenantId" element={<RegisterPage />} />
+            {/* Task 10: renamed from /register/:tenantId -- spec §6's route
+                shape is /w/{tenant_id}/{definition_id}, matching apexflow's
+                magic-link "link" field
+                (apexflow/backend/app/api/internal.py's _link_for). */}
+            <Route path="/w/:tenantId/:definitionId" element={<RegisterPage />} />
             <Route path="/application/:token" element={<HubPage />} />
             <Route path="/request-link" element={<RequestLinkPage />} />
             <Route path="*" element={<LandingPage />} />

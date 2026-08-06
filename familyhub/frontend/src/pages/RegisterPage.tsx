@@ -116,7 +116,9 @@ function parseDraft(applicationRow: EntityRecord): Record<string, unknown> {
 }
 
 export default function RegisterPage() {
-  const { tenantId = '' } = useParams();
+  // Task 10: route is now /w/:tenantId/:definitionId (spec §6), renamed
+  // from /register/:tenantId -- see App.tsx.
+  const { tenantId = '', definitionId = '' } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t, locale } = useTranslation();
@@ -143,7 +145,7 @@ export default function RegisterPage() {
   // inside the effect body itself.)
   useEffect(() => {
     let cancelled = false;
-    fetchRegistrationBundle(tenantId)
+    fetchRegistrationBundle(tenantId, definitionId)
       .then((b) => {
         if (cancelled) return;
         setBundle(b);
@@ -155,7 +157,7 @@ export default function RegisterPage() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId]);
+  }, [tenantId, definitionId]);
 
   // Resume path: `?token=` present -> load the application directly and
   // skip the email-capture phase entirely, once the config bundle is also
@@ -214,7 +216,7 @@ export default function RegisterPage() {
     setFormError(null);
     setStarting(true);
     try {
-      const started = await startRegistration(tenantId, value);
+      const started = await startRegistration(tenantId, definitionId, value);
       // Must be set before `setToken` -- otherwise the resume effect's
       // guard is not yet in place on the very next render.
       startedLocallyRef.current = true;

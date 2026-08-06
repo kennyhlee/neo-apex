@@ -84,6 +84,12 @@ function asBool(v: unknown): boolean {
 interface ApplicationView {
   application_id: string;
   status: ApplicationStatus;
+  /** Task 10: apexflow's workflow lineage id (`instance.definition_id`,
+   *  passed through unchanged by familyhub-backend's reshape) -- needed to
+   *  build the /w/{tenantId}/{definitionId} continue-form link below, since
+   *  that route segment no longer exists implicitly the way the old
+   *  single-registration-per-school /register/:tenantId path did. */
+  definition_id: string;
 }
 
 /**
@@ -96,6 +102,7 @@ function toApplicationView(row: EntityRecord): ApplicationView {
   return {
     application_id: String(d.application_id ?? ''),
     status: asStatus(d.status),
+    definition_id: String(d.definition_id ?? ''),
   };
 }
 
@@ -364,11 +371,11 @@ export default function HubPage() {
         </>
       );
     }
-    if (item.kind === 'form' && decoded) {
+    if (item.kind === 'form' && decoded && app.definition_id) {
       return (
         <Link
           className="hub-action link"
-          to={`/register/${decoded.tenantId}?token=${encodeURIComponent(token)}`}
+          to={`/w/${decoded.tenantId}/${app.definition_id}?token=${encodeURIComponent(token)}`}
         >
           {t('hub.continueForm')}
         </Link>

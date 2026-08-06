@@ -2,24 +2,33 @@
 """Public registration facade routes.
 
 No credential at all on these two routes -- the config bundle is public
-data, and start creates a draft application + issues the magic link. start
-is rate limited per IP because it sends email and creates a row per hit.
+data, and start creates a draft workflow_instance + issues the magic link.
+start is rate limited per IP because it sends email and creates a row per
+hit.
 
-Scope: registration is admission to the SCHOOL as a whole for one school
-year (spec §1), so both routes are keyed on tenant_id alone. There is no
-program segment anywhere in this module.
+Task 10: retargeted from enrollx's `/internal/registration/{tenant_id}/*` to
+apexflow's `/internal/workflows/{tenant_id}/{definition_id}/*` (interface
+map §7, task-10-brief.md's familyhub retarget). Registration is now scoped
+by BOTH tenant_id AND a `definition_id` lineage id (spec §6's route shape,
+`/w/{tenant_id}/{definition_id}`) -- apexflow's workflow platform is
+multi-definition per tenant, unlike enrollx's one-registration-per-school
+model.
 
-Upstream-error policy (applies to every route in this module):
-- 4xx from enrollx is passed through verbatim. These are meaningful,
-  parent-safe states -- "this school isn't open for registration" (404),
-  a validation complaint -- not internal detail. A parent hitting a closed
-  registration link deserves the real 404, not a generic error.
-- 5xx from enrollx (or anything else >= 500) is NEVER passed through.
-  call_upstream already collapses network-level failures (httpx.RequestError)
-  to a generic 502; an application-level 5xx from enrollx can carry a raw
-  exception string or DataCore internals in its body, so it gets the exact
-  same treatment here -- masked to a fixed, non-diagnostic 502. The parent
-  never sees why; the "why" belongs in enrollx's own logs.
+Response reshaping (deliberately minimal, per task-10-brief.md: "response
+reshaping minimal"): apexflow's config/start responses use a fundamentally
+different content model (`machine`/`steps`/sections) than enrollx's
+`registration_config.blocks` (`FlowBlock[]`) that `@neoapex/flow-runtime`'s
+`FlowRenderer` renders. There is no steps/sections -> blocks compiler yet
+(that bridge is explicitly out of scope -- task-10-brief.md: "deeper
+generalization is Phase 3"), so `_config_bundle_from_apexflow` below keeps
+the WIRE CONTRACT shape (`{config: {config_id, version, status, blocks}, ...}`)
+stable for the frontend but ships `blocks: []` until that compiler exists.
+`tenant`/`capacity` reshape losslessly (apexflow's shapes already match).
+
+Upstream-error policy (applies to every route in this module): 4xx from
+apexflow is passed through verbatim (parent-safe, e.g. "no published
+workflow_definition" -> 404). 5xx (or anything else >= 500) is NEVER passed
+through -- masked to a fixed, non-diagnostic 502 via `app.relay`.
 """
 import datetime
 
@@ -29,26 +38,47 @@ from pydantic import BaseModel, field_validator
 
 from app.ratelimit import limit_start
 from app.relay import relay as _relay
-from app.upstream import call_upstream, enrollx, internal_headers
+from app.relay import upstream_unavailable
+from app.upstream import apexflow, apexflow_headers, call_upstream
 
 router = APIRouter()
 
 
-@router.get("/registration/{tenant_id}")
-def get_registration_bundle(tenant_id: str) -> Response:
-    """The public config bundle: `{config, tenant, capacity}`.
+def _config_bundle_from_apexflow(data: dict) -> dict:
+    definition = data.get("definition") if isinstance(data.get("definition"), dict) else {}
+    return {
+        "config": {
+            "config_id": definition.get("definition_id", ""),
+            "version": definition.get("version", 1),
+            "status": "published",
+            # Placeholder pending the steps/sections -> FlowBlock[] compiler
+            # (Phase 3, see module docstring). Keeps the wire contract stable
+            # in the meantime -- real form rendering needs that compiler.
+            "blocks": [],
+        },
+        "tenant": data.get("tenant") or {},
+        "capacity": data.get("capacity") or {"capacity": None, "admitted": 0, "full": False},
+    }
 
-    The `config.blocks` enrollx returns are already MODEL-HYDRATED (its
-    `engine.hydrate_config_blocks`): familyhub holds no DataCore credential,
-    so an entity-sourced form block would otherwise render with no fields at
-    all. Do not attempt to resolve model fields here.
-    """
+
+@router.get("/registration/{tenant_id}/{definition_id}")
+def get_registration_bundle(tenant_id: str, definition_id: str) -> Response:
+    """The public config bundle: `{config, tenant, capacity}` -- see module
+    docstring for the reshaping this performs."""
     resp = call_upstream(
         "GET",
-        enrollx(f"/internal/registration/{tenant_id}/config"),
-        headers=internal_headers(),
+        apexflow(f"/internal/workflows/{tenant_id}/{definition_id}/config"),
+        headers=apexflow_headers(),
     )
-    return _relay(resp)
+    if resp.status_code >= 400:
+        return _relay(resp)
+    try:
+        data = resp.json()
+    except ValueError:
+        return upstream_unavailable()
+    if not isinstance(data, dict):
+        return upstream_unavailable()
+    return JSONResponse(_config_bundle_from_apexflow(data), status_code=200)
 
 
 class StartBody(BaseModel):
@@ -72,50 +102,61 @@ def _today() -> datetime.date:
 def _school_year_for_date(ref: datetime.date) -> str:
     """Academic year straddling `ref`, rolling over each July --
     `${y}-${y+1}` where `y` is `ref`'s year if `ref.month >= 7` else
-    `ref.year - 1`.
-
-    Restates flow-runtime's `defaultSchoolYear()` (its JS `getMonth() >= 6`
-    is the same July boundary, 0-indexed) and enrollx's
-    `engine.default_school_year`. All three must agree: the parent sees this
-    value on the start page, enrollx computes its capacity snapshot for it,
-    and the staff form prefills the same string.
-
-    Wall-clock is now the only source, and correctly so. The former
-    program-`start_date` derivation existed because a program could span a
-    year other than the current one -- a whole-school application has no such
-    anchor, so the school year being registered for IS the one straddling
-    today.
+    `ref.year - 1`. Threaded into apexflow's `start` body as
+    `context.school_year` -- apexflow's `capacity_available` guard
+    (enrollment template) scopes on exactly this context key. All three
+    channels (this rule, flow-runtime's `defaultSchoolYear()`, apexflow's
+    enrollment template) must agree.
     """
     start_year = ref.year if ref.month >= 7 else ref.year - 1
     return f"{start_year}-{start_year + 1}"
 
 
+def _application_view_from_instance(instance: dict) -> dict:
+    """Minimal reshape (module docstring): apexflow's instance row uses
+    `state`, the old wire contract (and flow-runtime's `ApplicationStatus`)
+    used `status` -- the two vocabularies happen to be IDENTICAL string sets
+    (apexflow's enrollment template was modeled on enrollx's own status
+    lifecycle), so this is a pure rename, not a translation. Every other
+    field is passed through unchanged (already a flattened row, which
+    `EntityRecord`/`entityData()` on the frontend already tolerates)."""
+    view = dict(instance)
+    if "state" in view:
+        view["status"] = view["state"]
+    return view
+
+
 @router.post(
-    "/registration/{tenant_id}/start",
+    "/registration/{tenant_id}/{definition_id}/start",
     dependencies=[Depends(limit_start)],
 )
-def start_registration(tenant_id: str, body: StartBody) -> Response:
-    # No pre-flight config fetch: it existed only to read program.start_date,
-    # and only enrollx can answer "is this school open" -- which the start
-    # call itself already does, with the same 4xx-through/5xx-masked policy.
+def start_registration(tenant_id: str, definition_id: str, body: StartBody) -> Response:
     resp = call_upstream(
         "POST",
-        enrollx(f"/internal/registration/{tenant_id}/start"),
+        apexflow(f"/internal/workflows/{tenant_id}/{definition_id}/start"),
         json_body={
-            "school_year": _school_year_for_date(_today()),
+            "context": {"school_year": _school_year_for_date(_today())},
             "applicant_email": body.applicant_email,
         },
-        headers=internal_headers(),
+        headers=apexflow_headers(),
     )
     if resp.status_code >= 400:
         return _relay(resp)
-    data = resp.json()
-    # ADJUST(bindings): key holding the magic-link token in the start response
+    try:
+        data = resp.json()
+    except ValueError:
+        return upstream_unavailable()
     token = data.get("token")
     if not token:
-        # Latent defense only -- the binding is confirmed correct today
-        # (internal.py always sets "token"). If it ever didn't, silently
-        # building "/application/" would hand the parent a broken link.
+        # Latent defense only -- confirmed correct today (apexflow's
+        # internal.py always sets "token"). Silently building "/application/"
+        # would hand the parent a broken link if it ever didn't.
         raise HTTPException(502, "Upstream did not return a magic-link token")
-    data["hub_url"] = f"/application/{token}"
-    return JSONResponse(data, status_code=resp.status_code)
+    body_out = {
+        "application": _application_view_from_instance(data.get("instance") or {}),
+        "items": data.get("items") or [],
+        "token": token,
+        "link": data.get("link", ""),
+        "hub_url": f"/application/{token}",
+    }
+    return JSONResponse(body_out, status_code=resp.status_code)

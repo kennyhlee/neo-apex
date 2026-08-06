@@ -11,10 +11,26 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     datacore_url: str = "http://localhost:5800"
+
+    # Task 10: registration/config/actions/documents/request-link all
+    # retarget from enrollx to apexflow-backend's token-scoped internal API
+    # (docs/superpowers/plans/2026-08-05-apexflow-plan1-interface-map.md §7,
+    # task-10-brief.md's familyhub retarget). Must equal apexflow's
+    # APEXFLOW_INTERNAL_KEY. Dev default below must match apexflow's dev
+    # default (apexflow/backend/app/config.py DEV_INTERNAL_KEY).
+    apexflow_url: str = "http://localhost:5910"
+    apexflow_internal_key: str = "dev-internal-key-change-in-prod"  # ADJUST(bindings): apexflow dev default
+
+    # enrollx still exists (deleted in Task 12) and is kept ONLY for the one
+    # call site this task does not retarget: `POST
+    # /api/application/{token}/checkout` (application.py) -- apexflow-backend
+    # has no payments/checkout surface yet (dropped in Task 1's port, see
+    # apexflow/backend/app/config.py's module docstring). Task 12's own
+    # grep-and-resolve step is expected to finish this off when enrollx is
+    # deleted.
     enrollx_url: str = "http://localhost:5910"
-    # Must equal enrollx's ENROLLX_INTERNAL_KEY. Dev default below must match
-    # enrollx's dev default:
     enrollx_internal_key: str = "dev-internal-key-change-in-prod"  # ADJUST(bindings): enrollx dev default
+
     cors_allowed_origins: Union[Optional[str], List[str]] = None
     port: int = 5630
 
@@ -36,6 +52,10 @@ class Settings(BaseSettings):
             if "*" in origins:
                 raise ValueError(
                     "wildcard '*' in FAMILYHUB_CORS_ALLOWED_ORIGINS is not permitted in production"
+                )
+            if not self.apexflow_internal_key or self.apexflow_internal_key == "dev-internal-key-change-in-prod":
+                raise ValueError(
+                    "FAMILYHUB_APEXFLOW_INTERNAL_KEY must be set to a real secret in production"
                 )
             if not self.enrollx_internal_key or self.enrollx_internal_key == "dev-internal-key-change-in-prod":
                 raise ValueError(

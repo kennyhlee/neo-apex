@@ -89,40 +89,47 @@ interface RawConfigBundle {
 }
 
 /**
- * GET /api/registration/{tenant_id} -> `{config, tenant, capacity}`.
+ * GET /api/registration/{tenant_id}/{definition_id} -> `{config, tenant, capacity}`.
  *
- * Registration is admission to the school as a whole for one school year
- * (spec §1) -- there is no program segment. Fullness comes from
- * `capacity.full` (a freshly-computed boolean, no coercion needed) and is
- * school-wide for the current school year; there is no fullness field
- * anywhere else, so do not invent one.
+ * Task 10: `definition_id` (the workflow lineage id, e.g. `"enrollment"`)
+ * is now part of the path -- apexflow's workflow platform is
+ * multi-definition per tenant, unlike enrollx's one-registration-per-school
+ * model (spec §6's route shape, `/w/{tenant_id}/{definition_id}`).
+ * Fullness comes from `capacity.full` (a freshly-computed boolean, no
+ * coercion needed) -- there is no fullness field anywhere else, so do not
+ * invent one.
  *
- * The `config.blocks` this returns are already MODEL-HYDRATED by enrollx --
- * familyhub holds no DataCore credential, so an entity-sourced form block
- * would otherwise render with no fields at all. Never try to resolve model
- * fields client-side.
+ * `config.blocks` is currently ALWAYS `[]`: apexflow's definitions are
+ * steps/sections, not enrollx's `blocks` -- there is no compiler bridging
+ * the two yet (Phase 3, out of scope for Plan 1's backend-only engine
+ * work). This is a documented, deliberate gap -- see
+ * `familyhub/backend/app/api/registration.py`'s module docstring -- not a
+ * bug in this client.
  */
 export async function fetchRegistrationBundle(
   tenantId: string,
+  definitionId: string,
 ): Promise<RegistrationBundle> {
   const resp = await fetch(
-    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}`,
+    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/${encodeURIComponent(definitionId)}`,
   );
   const raw = await jsonOrThrow<RawConfigBundle>(resp);
   return { config: normalizeConfig(raw.config), tenant: raw.tenant, capacity: raw.capacity };
 }
 
 /**
- * POST /api/registration/{tenant_id}/start -> enrollx's start response
- * (`{application, items, token, link}`) plus familyhub's own `hub_url`
+ * POST /api/registration/{tenant_id}/{definition_id}/start -> apexflow's
+ * start response reshaped by familyhub-backend into the old
+ * `{application, items, token, link}` shape, plus familyhub's own `hub_url`
  * (a relative in-app path, see `StartResponse.hub_url`).
  */
 export async function startRegistration(
   tenantId: string,
+  definitionId: string,
   applicantEmail: string,
 ): Promise<StartResponse> {
   const resp = await fetch(
-    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/start`,
+    `${API_BASE}/api/registration/${encodeURIComponent(tenantId)}/${encodeURIComponent(definitionId)}/start`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

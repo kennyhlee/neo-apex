@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     link_secret: str = DEV_LINK_SECRET
     internal_key: str = DEV_INTERNAL_KEY
 
+    # Base URL of familyhub-frontend (the family/token-scoped channel this
+    # task's magic-link "link" field points at) -- task-10-brief.md:
+    # "link" = familyhub base URL pattern from env APEXFLOW_FAMILYHUB_BASE_URL
+    # (default http://localhost:6000) + "/w/{tenant_id}/{definition_id}?token={token}".
+    # Matches CLAUDE.md's FamilyHub frontend port (6000).
+    familyhub_base_url: str = "http://localhost:6000"
+
     # Outbound email (app/workflows/emails.py's generic Resend client only —
     # the registration-specific send_application_email/v1 templates were not
     # ported, see that module's docstring).

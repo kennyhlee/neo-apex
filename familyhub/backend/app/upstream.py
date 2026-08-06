@@ -37,11 +37,23 @@ def call_upstream(
 
 
 def internal_headers() -> dict:
+    """enrollx's internal-key header -- kept ONLY for the one remaining
+    enrollx call site (application.py's checkout proxy). Every other route
+    module has moved to `apexflow_headers()`/`apexflow()` below (Task 10)."""
     return {"X-Internal-Key": settings.enrollx_internal_key}
 
 
 def enrollx(path: str) -> str:
+    """Kept ONLY for the checkout call site -- see `internal_headers()`."""
     return f"{settings.enrollx_url}{path}"
+
+
+def apexflow_headers() -> dict:
+    return {"X-Internal-Key": settings.apexflow_internal_key}
+
+
+def apexflow(path: str) -> str:
+    return f"{settings.apexflow_url}{path}"
 
 
 def datacore(path: str) -> str:
