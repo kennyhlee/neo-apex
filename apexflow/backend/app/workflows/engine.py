@@ -51,15 +51,32 @@ REVIEW_DEFAULTS: dict[str, str] = {"form": "auto", "documents": "staff", "messag
 # so a later task doesn't restate the set.
 ITEM_DONE_STATUSES = frozenset({"submitted", "verified", "waived"})
 
+# Source statuses complete_item may act from. Re-completing after a staff
+# rejection (resubmit) or re-submitting an already-submitted item
+# (idempotent-ok) are both legitimate; completing an already-verified or
+# already-waived item is not — the latter would silently regress a
+# confirmed/waived item back to submitted/verified (coordinator review
+# finding, Critical: a second complete_item call on a verified item used to
+# do exactly that with no guard at all).
+COMPLETABLE_STATUSES = frozenset({"not_started", "in_progress", "submitted", "rejected"})
+
 _TRUTHY_STRINGS = {"true", "1", "yes"}
 _EMPTY_VALUES = (None, "", [], {})
 
 
 def is_family_actor(actor: str) -> bool:
-    """`actor` strings are `"family:{...}"` on the family channel, a staff
-    `user_id` otherwise (task-6-brief's binding convention) — BINDING name,
-    Task 8's actor-gating and Task 10's internal routes both call this."""
-    return actor.startswith("family")
+    """`actor` strings are exactly `"family"` or `"family:{...}"` on the
+    family channel, a staff `user_id` otherwise (task-6-brief's binding
+    convention) — BINDING name, Task 8's actor-gating and Task 10's internal
+    routes both call this.
+
+    Exact-prefix match on `"family:"` (plus the bare `"family"` channel
+    literal `create_instance` logs as an activity actor), NOT a bare
+    `startswith("family")` — the latter misclassifies a staff user_id that
+    happens to start with those letters (`"familyhub-svc"`,
+    `"family_advocate_007"`) as a family actor, which would let it dodge
+    every staff-only gate in this module (coordinator review finding)."""
+    return actor == "family" or actor.startswith("family:")
 
 
 def _now(now: datetime | None) -> datetime:
@@ -262,18 +279,46 @@ def _require_step(steps: list[StepDef], step_id: str) -> StepDef:
     raise HTTPException(404, f"step {step_id!r} not found on the instance's pinned definition")
 
 
+def _section_map(steps: list[StepDef]) -> dict[str, SectionDef]:
+    """Every declared section across all `form` steps, keyed by
+    `section_id` — used to validate `save_draft` answers against what the
+    pinned definition actually declares (shape per section: repeat vs.
+    single, which fields exist)."""
+    section_map: dict[str, SectionDef] = {}
+    for step in steps:
+        if step.type != "form":
+            continue
+        for raw in step.config.get("sections", []) or []:
+            section = SectionDef.model_validate(raw)
+            section_map[section.section_id] = section
+    return section_map
+
+
 # --- draft answers --------------------------------------------------------
 
 
 def save_draft(tenant_id: str, instance_row: dict, section_answers: dict, actor: str, *,
                token: str | None = None, now: datetime | None = None) -> dict:
-    """Shallow-merge `section_answers` (`{section_id: {field: value}}`) into
-    `draft_data`. `"context"` is NOT a writable section — context is
-    creation-time only (spec §3) — and any field named in
-    `ENGINE_OWNED_FIELDS`, wherever it appears, is rejected with 400 naming
-    it (spec: "Engine-owned instance fields are never section-writable").
-    Writes no activity (registration's autosave-noise-avoidance precedent —
-    a save_draft on every keystroke/blur would flood the activity log).
+    """Merge `section_answers` into `draft_data`, one entry per declared
+    section:
+
+    - Non-repeat sections: `{section_id: {field: value}}`, shallow-merged
+      into whatever's already staged for that section. A list-shaped answer
+      for a non-repeat section is rejected with 400.
+    - Repeat sections (`SectionDef.repeat` set): `{section_id: [{field:
+      value}, ...]}` — REPLACE-list semantics (the whole list overwrites
+      whatever was staged, no per-entry merge — add-another lists don't have
+      a stable per-entry identity to merge against). A dict-shaped answer
+      for a repeat section is rejected with 400.
+
+    `"context"` is NOT a writable section — context is creation-time only
+    (spec §3). An answer naming a `section_id` the pinned definition doesn't
+    declare -> 400 naming it. Any field named in `ENGINE_OWNED_FIELDS`,
+    wherever it appears (including inside every entry of a repeat section),
+    is rejected with 400 naming it (spec: "Engine-owned instance fields are
+    never section-writable"). Writes no activity (registration's
+    autosave-noise-avoidance precedent — a save_draft on every
+    keystroke/blur would flood the activity log).
     """
     _now(now)  # validated/normalized even though unused below, for signature symmetry
     if "context" in section_answers:
@@ -281,28 +326,53 @@ def save_draft(tenant_id: str, instance_row: dict, section_answers: dict, actor:
             "error": "context is not writable via save_draft (creation-time only)",
         })
 
-    owned = sorted({
-        field
-        for fields in section_answers.values()
-        if isinstance(fields, dict)
-        for field in fields
-        if field in ENGINE_OWNED_FIELDS
-    })
-    if owned:
+    steps = _pinned_steps(tenant_id, instance_row, token)
+    section_map = _section_map(steps)
+
+    owned_fields: set[str] = set()
+    for section_id, answer in section_answers.items():
+        section = section_map.get(section_id)
+        if section is None:
+            raise HTTPException(400, {
+                "error": f"section {section_id!r} is not declared by the pinned definition",
+            })
+        if section.repeat is not None:
+            if not isinstance(answer, list):
+                raise HTTPException(400, {
+                    "error": f"section {section_id!r} is a repeat section; "
+                             "answer must be a list of objects",
+                })
+            for entry in answer:
+                if not isinstance(entry, dict):
+                    raise HTTPException(400, {
+                        "error": f"section {section_id!r} repeat entries must be objects",
+                    })
+                owned_fields |= {f for f in entry if f in ENGINE_OWNED_FIELDS}
+        else:
+            if not isinstance(answer, dict):
+                raise HTTPException(400, {
+                    "error": f"section {section_id!r} is not a repeat section; "
+                             "answer must be an object",
+                })
+            owned_fields |= {f for f in answer if f in ENGINE_OWNED_FIELDS}
+
+    if owned_fields:
         raise HTTPException(400, {
             "error": "engine-owned fields cannot be written via save_draft",
-            "fields": owned,
+            "fields": sorted(owned_fields),
         })
 
     try:
         draft = json.loads(instance_row.get("draft_data") or "{}")
     except json.JSONDecodeError:
         draft = {}
-    for section_id, fields in section_answers.items():
-        if not isinstance(fields, dict):
-            continue
-        section = draft.setdefault(section_id, {})
-        section.update(fields)
+    for section_id, answer in section_answers.items():
+        section = section_map[section_id]
+        if section.repeat is not None:
+            draft[section_id] = answer  # replace-list, no per-entry merge
+        else:
+            existing = draft.setdefault(section_id, {})
+            existing.update(answer)
 
     base = defs.entity_base_data(instance_row)
     base["draft_data"] = json.dumps(draft)
@@ -339,20 +409,50 @@ def _require_staff_actor(actor: str) -> None:
 # --- complete_item (family or staff; per-kind validation) ------------------
 
 
+def _entries_word(n: int) -> str:
+    return "entry" if n == 1 else "entries"
+
+
 def _missing_required_fields(step: StepDef, draft: dict) -> list[str]:
-    """`"{section_id}.{field}"` for every required FieldPick on `step`'s
-    declared sections whose draft answer is absent/empty (spec §3:
-    "complete_item ... re-validate required fields server-side against the
-    pinned definition version")."""
+    """Missing-field/entry markers for every declared section on `step`,
+    checked against `draft` (spec §3: "complete_item ... re-validate
+    required fields server-side against the pinned definition version").
+
+    Non-repeat sections: `"{section_id}.{field}"` for every required
+    FieldPick whose draft answer is absent/empty.
+
+    Repeat sections (`SectionDef.repeat` set): each STAGED entry is checked
+    the same way (required fields per entry); additionally, when
+    `repeat.min >= 1` and fewer than `min` entries are staged, that itself
+    is reported as `"{section_id} requires at least {min} entry/entries"`
+    (both problems can be reported together — a too-short repeat section
+    whose few entries are also incomplete lists both).
+    """
     missing: list[str] = []
     for raw in step.config.get("sections", []) or []:
         section = SectionDef.model_validate(raw)
-        section_draft = draft.get(section.section_id) or {}
-        for pick in section.fields:
-            if not pick.required:
-                continue
-            if section_draft.get(pick.name) in _EMPTY_VALUES:
-                missing.append(f"{section.section_id}.{pick.name}")
+        if section.repeat is not None:
+            entries = draft.get(section.section_id)
+            entries = entries if isinstance(entries, list) else []
+            if section.repeat.min >= 1 and len(entries) < section.repeat.min:
+                missing.append(
+                    f"{section.section_id} requires at least {section.repeat.min} "
+                    f"{_entries_word(section.repeat.min)}"
+                )
+            for entry in entries:
+                entry_dict = entry if isinstance(entry, dict) else {}
+                for pick in section.fields:
+                    if not pick.required:
+                        continue
+                    if entry_dict.get(pick.name) in _EMPTY_VALUES:
+                        missing.append(f"{section.section_id}.{pick.name}")
+        else:
+            section_draft = draft.get(section.section_id) or {}
+            for pick in section.fields:
+                if not pick.required:
+                    continue
+                if section_draft.get(pick.name) in _EMPTY_VALUES:
+                    missing.append(f"{section.section_id}.{pick.name}")
     return missing
 
 
@@ -374,9 +474,24 @@ def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor
     (`step.review` or `REVIEW_DEFAULTS[step.type]`) is `"auto"`, else
     `"submitted"`. Sets `completed_by = actor` and logs an `item_change`
     activity either way.
+
+    Source-status guard: only callable from `COMPLETABLE_STATUSES`
+    (`not_started`/`in_progress`/`submitted`/`rejected`) -> 409 otherwise.
+    Re-completing a `submitted` item is idempotent-ok (re-answering the same
+    form and resubmitting), and completing a `rejected` item is the resubmit
+    path after staff sends it back. `verified`/`waived` are terminal from
+    complete_item's point of view — re-completing either would silently
+    regress a confirmed/waived item, which only `verify_item`/`reject_item`/
+    `waive_item` (staff-only) may ever move away from.
     """
     now = _now(now)
     item = _require_item(tenant_id, instance_row, item_entity_id, token)
+    current = item.get("status", "not_started")
+    if current not in COMPLETABLE_STATUSES:
+        raise HTTPException(409, {
+            "error": f"cannot complete item from status {current!r}",
+            "allowed": sorted(COMPLETABLE_STATUSES),
+        })
     steps = _pinned_steps(tenant_id, instance_row, token)
     step = _require_step(steps, item.get("step_id"))
 
@@ -448,6 +563,19 @@ def waive_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: s
 
 
 def _condition_data(draft_data: dict, context: dict) -> dict:
+    """Flatten `draft_data`/`context` into the `"{section_id}.{field}"` /
+    `"context.{key}"` lookup keys `evaluate_condition` expects.
+
+    Repeat sections contribute NOTHING here: their staged answer is a LIST
+    (one dict per entry), not a `{field: value}` dict, and `show_if`'s
+    expression language has no "which entry" concept — a condition can't
+    meaningfully read `contacts_section.phone` when there may be zero, one,
+    or several contacts. The `isinstance(fields, dict)` guard below is what
+    skips them (a list fails it and is silently dropped), so a `show_if`
+    that names a field of a repeat section always evaluates as if that
+    source were absent (missing -> `None` for eq/ne/in, `False` for
+    truthy/not_empty, `True` for empty) rather than raising.
+    """
     data: dict[str, Any] = {}
     for section_id, fields in (draft_data or {}).items():
         if not isinstance(fields, dict):
@@ -467,7 +595,9 @@ def applicable_items(definition_steps: list[StepDef], items: list[dict], draft_d
     `{section.field: value} | {context.key: value}` view of `draft_data`/
     `context` (spec §3: "computed dynamically from current draft data —
     items are not mutated as answers change"). Purely a read-time filter;
-    never writes anything.
+    never writes anything. See `_condition_data` for how repeat-section
+    answers (list-shaped) are handled — they never contribute condition
+    data.
     """
     data = _condition_data(draft_data, context)
     steps_by_id = {s.step_id: s for s in definition_steps}
