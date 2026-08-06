@@ -321,8 +321,12 @@ def test_guard_block_is_byte_identical_in_both_services():
     if root is None:
         pytest.skip("repo root (services.json) not found")
     paths = [root / f for f in _GUARD_FILES]
-    if not all(p.exists() for p in paths):
-        pytest.skip("not a full-suite checkout")
+    for p in paths:
+        if not p.exists():
+            pytest.fail(
+                f"SQL-guard drift test: guard file missing: {p} — "
+                "if it moved, update _GUARD_FILES"
+            )
     blocks = []
     for p in paths:
         text = p.read_text(encoding="utf-8")
