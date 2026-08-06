@@ -181,6 +181,32 @@ def _seed_definition(fake_dc, *, definition_id, version=1, status="draft",
     return created["entity_id"]
 
 
+def _seed_definition_with_raw_machine(fake_dc, *, definition_id, raw_machine,
+                                      version=1, status="draft",
+                                      lineage_status="active",
+                                      channel_access="staff_only", name="Direct"):
+    """Like `_seed_definition`, but writes `raw_machine` verbatim as the
+    stored `machine` string instead of `json.dumps`-ing a dict — the shape a
+    row with genuinely INVALID JSON (not just JSON that fails schema
+    validation) takes, e.g. `machine="not json"`. This is writable through
+    the generic entities proxy today (no schema enforcement there), and
+    `defs.parse_machine_steps`'s `json.loads(machine_raw)` raises
+    `json.JSONDecodeError` on it — a `ValueError` subclass, not a
+    `pydantic.ValidationError` (final-review fix wave regression test)."""
+    base = {
+        "definition_id": definition_id,
+        "name": name,
+        "version": version,
+        "status": status,
+        "lineage_status": lineage_status,
+        "channel_access": channel_access,
+        "machine": raw_machine,
+        "steps": json.dumps(_valid_steps()),
+    }
+    created = fake_dc.dc_create(TENANT, "workflow_definition", base)
+    return created["entity_id"]
+
+
 def _seed_instance(fake_dc, *, definition_id, closed_at=""):
     base = {
         "instance_id": fake_dc.next_id(TENANT, "workflow_instance"),
@@ -268,10 +294,31 @@ def test_list_definitions_malformed_row_degrades_to_broken_not_500(client, fake_
     assert rows[bad_id]["health"] == "broken"
     assert isinstance(rows[bad_id].get("parse_error"), str)
     assert rows[bad_id]["parse_error"]
-    # Still fully addressable — name/status/etc. come straight off the raw
-    # row, not the (unparseable) machine/steps.
-    assert rows[bad_id]["name"] == "Direct"
-    assert rows[bad_id]["definition_id"] == "wd-bad-1"
+
+
+def test_list_definitions_invalid_json_machine_degrades_to_broken_not_500(client, fake_dc):
+    """Final-review fix wave regression test: a row whose stored `machine`
+    string isn't valid JSON AT ALL (e.g. `machine: "not json"`, distinct
+    from the malformed-but-parseable-JSON case above) makes
+    `defs.parse_machine_steps`'s `json.loads()` raise
+    `json.JSONDecodeError` — a `ValueError`, not a `pydantic.ValidationError`
+    — which the pre-fix `except ValidationError` in `list_definitions` let
+    through unhandled, 500ing the whole list. Must degrade to health
+    "broken" for that row alone, same as the ValidationError case."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    good_id = _seed_definition(fake_dc, definition_id="wd-good-2", status="draft")
+    bad_id = _seed_definition_with_raw_machine(
+        fake_dc, definition_id="wd-bad-2", raw_machine="not json")
+
+    resp = client.get(f"/api/workflows/{TENANT}/definitions")
+    assert resp.status_code == 200
+    rows = {r["entity_id"]: r for r in resp.json()["definitions"]}
+
+    assert rows[good_id]["health"] == "current"
+
+    assert rows[bad_id]["health"] == "broken"
+    assert isinstance(rows[bad_id].get("parse_error"), str)
+    assert rows[bad_id]["parse_error"]
 
 
 def test_list_definitions_superseded_row_health_is_literal_no_computation(client, fake_dc):
@@ -393,6 +440,22 @@ def test_bundle_422s_not_500s_on_malformed_stored_steps_json(client, fake_dc):
     assert body["detail"]["parse_error"]  # non-empty
 
 
+def test_bundle_422s_not_500s_on_invalid_json_machine(client, fake_dc):
+    """Final-review fix wave regression test: same hardening as the
+    malformed-steps test above, for a `machine` string that isn't valid JSON
+    at all (`json.JSONDecodeError`, not `pydantic.ValidationError`) —
+    `_parse_or_422`'s widened except clause must still 422, not 500."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition_with_raw_machine(
+        fake_dc, definition_id="wd-bundle-invalid-json", raw_machine="not json")
+
+    resp = client.get(f"/api/workflows/{TENANT}/definitions/{eid}/bundle")
+    assert resp.status_code == 422
+    body = resp.json()
+    assert isinstance(body["detail"]["parse_error"], str)
+    assert body["detail"]["parse_error"]  # non-empty
+
+
 # --- POST .../definitions/{entity_id}/validate ------------------------------
 
 
@@ -445,6 +508,24 @@ def test_validate_422s_not_500s_on_malformed_stored_steps_json(client, fake_dc):
     fake_dc.set_model(TENANT, "student", _valid_models()["student"])
     eid = _seed_definition(fake_dc, definition_id="wd-validate-malformed", status="draft",
                            steps=_malformed_show_if_steps())
+
+    resp = client.post(f"/api/workflows/{TENANT}/definitions/{eid}/validate")
+    assert resp.status_code == 422
+    body = resp.json()
+    assert isinstance(body["detail"]["parse_error"], str)
+    assert body["detail"]["parse_error"]  # non-empty
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["status"] == "draft"  # untouched — 422 path never writes
+
+
+def test_validate_422s_not_500s_on_invalid_json_machine(client, fake_dc):
+    """Final-review fix wave regression test: same hardening as the
+    validate route's malformed-steps test above, for a `machine` string
+    that isn't valid JSON at all."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition_with_raw_machine(
+        fake_dc, definition_id="wd-validate-invalid-json", raw_machine="not json")
 
     resp = client.post(f"/api/workflows/{TENANT}/definitions/{eid}/validate")
     assert resp.status_code == 422

@@ -8,6 +8,19 @@ verbatim. `assert_query_tenant_match`/`assert_sql_is_safe_read` come from
 this service's own app.tenancy (Task 1 — see that module's docstring for
 why /api/query, unlike app/api/entities.py's routes, has no {tenant_id}
 path param to check against).
+
+Final-review fix wave: this route used to call the SYNC `httpx.post()`
+directly inside this `async def` handler with no `run_in_threadpool`
+wrapper — the exact event-loop-blocking bug root-caused and fixed in
+`app/api/entities.py`'s `_proxy_to_datacore` (commit `dd1ee6d`; see that
+module's docstring and
+`.superpowers/sdd/2026-08-06-apexflow-plan2-designer/gate-debug-report.md`
+for the full narrative). Under concurrent browser load every such call
+monopolizes Uvicorn's single asyncio event loop for the full DataCore
+round-trip AND opens a brand-new unpooled TCP connection each time, which
+together produced the Plan 2 defect: an intermittent, instant
+`httpx.RequestError` a one-shot curl never reproduces. Fixed here with the
+same awaited `httpx.AsyncClient` pattern entities.py uses, for consistency.
 """
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -41,15 +54,15 @@ async def query(
     assert_sql_is_safe_read(payload.get("sql", ""))
     content_type = request.headers.get("content-type", "application/json")
     try:
-        resp = httpx.post(
-            f"{settings.datacore_url}/api/query",
-            content=body,
-            headers={
-                "Content-Type": content_type,
-                "Authorization": user["_token"],
-            },
-            timeout=30.0,
-        )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.datacore_url}/api/query",
+                content=body,
+                headers={
+                    "Content-Type": content_type,
+                    "Authorization": user["_token"],
+                },
+            )
     except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

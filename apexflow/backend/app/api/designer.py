@@ -76,6 +76,24 @@ def _parse_or_422(row: dict) -> tuple[MachineDef, list[StepDef]]:
     (code-review follow-up: the editor's edit-as-JSON escape hatch could
     write exactly this shape before its own stricter validation landed).
 
+    `parse_machine_steps` can ALSO raise `json.JSONDecodeError` (a
+    `ValueError` subclass) before it ever reaches pydantic — `machine`/
+    `steps` are stored as JSON-serialized strings, and `json.loads()` on a
+    row whose stored value isn't valid JSON at all (e.g. `machine: "not
+    json"`, writable through the generic entities proxy which enforces no
+    schema) raises that, not `ValidationError` (final-review fix wave: this
+    exact gap 500'd the same "corrupt row" case the `ValidationError` catch
+    above was already built to handle). `TypeError` is included too, as
+    defense in depth for a stored value of an unexpected type that neither
+    `json.loads` nor pydantic's `model_validate` rejects the way a `dict`/
+    `ValidationError` would. Widening the `except` here (rather than making
+    `parse_machine_steps` itself normalize `JSONDecodeError` into a
+    `ValidationError`-compatible shape) keeps this degrade-to-422 behavior
+    scoped to this READ-only module's call sites — `parse_machine_steps`'s
+    other caller, `publish_definition` (app/workflows/definitions.py), is a
+    WRITE path with its own error-handling shape that this task does not
+    touch.
+
     Every read route below that needs the parsed shape goes through this
     wrapper instead of calling `defs.parse_machine_steps` directly, so a
     corrupt row degrades to a machine-readable 422 (`{"parse_error": ...}`)
@@ -83,7 +101,7 @@ def _parse_or_422(row: dict) -> tuple[MachineDef, list[StepDef]]:
     rather than an opaque 500."""
     try:
         return defs.parse_machine_steps(row)
-    except ValidationError as exc:
+    except (ValidationError, ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail={"parse_error": str(exc)}) from exc
 
 
@@ -111,10 +129,11 @@ def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant))
     enforcement of its own), so a single malformed row is always reachable
     in practice, not just a theoretical edge case. Per-row parse is wrapped
     so ONE bad row degrades to health "broken" (with a `parse_error` detail)
-    for that row alone, rather than an unhandled `ValidationError` 500ing
-    every other (valid) row out of the list too — see `_parse_or_422`'s
-    docstring for the same "corrupt row bricks reads" failure mode this
-    mirrors, one route up."""
+    for that row alone, rather than an unhandled `ValidationError` (or, per
+    `_parse_or_422`'s docstring, `json.JSONDecodeError`/`TypeError` — widened
+    here too, same reasoning) 500ing every other (valid) row out of the list
+    too — see `_parse_or_422`'s docstring for the same "corrupt row bricks
+    reads" failure mode this mirrors, one route up."""
     token = user.get("_token")
     rows = dc.list_entities(tenant_id, "workflow_definition", "", token)
 
@@ -133,7 +152,15 @@ def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant))
             machine, steps = defs.parse_machine_steps(row)
             models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
             health = _health_for_row(row, machine, steps, models)
-        except ValidationError as exc:
+        # Widened past ValidationError (final-review fix wave): a row whose
+        # stored `machine`/`steps` string isn't even valid JSON (e.g.
+        # machine="not json") makes parse_machine_steps's json.loads raise
+        # json.JSONDecodeError — a ValueError subclass, not a
+        # ValidationError — which this except previously let through
+        # unhandled, 500ing the whole list. Same reasoning as
+        # _parse_or_422's docstring, applied to this route's own inline
+        # try/except.
+        except (ValidationError, ValueError, TypeError) as exc:
             health = "broken"
             parse_error = str(exc)
 

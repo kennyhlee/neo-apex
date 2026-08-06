@@ -1,15 +1,20 @@
 # ApexFlow Plan 2 (Workflow Designer) — follow-ups
 
-Plan 2 lands on `feat/apexflow-plan2-designer`, 21 commits on top of Plan 1's
-base (`cae062b..72f3f0f`), taking apexflow's backend suite from 350 to 456
-tests and standing up `apexflow/frontend` (templates gallery, definitions
-list, step editor, machine editor, live preview, publish flow) plus
-`flow-runtime` (the shared preview-renderer package). Task 11's live browser
-gate passed end-to-end against a real DataCore (login → instantiate →
-edit → autosave → break machine → inline validation → fix → publish →
-verify `status="published"` by direct DataCore query → deprecate → 409 on
-familyhub → reactivate → retire), after two fix waves closed two gate
-defects and one live-debugged event-loop bug plus a corrupt-row 500.
+Plan 2 lands on `feat/apexflow-plan2-designer`, 26+ commits on top of Plan 1's
+base (`cae062b..HEAD`), taking apexflow's backend suite from 350 to 456 (462
+after the final-review fix wave below) tests and standing up
+`apexflow/frontend` (templates gallery, definitions list, step editor,
+machine editor, live preview, publish flow) plus `flow-runtime` (the shared
+preview-renderer package). Task 11's live browser gate passed end-to-end
+against a real DataCore (login → instantiate → edit → autosave → break
+machine → inline validation → fix → publish → verify `status="published"`
+by direct DataCore query → deprecate → 409 on familyhub → reactivate →
+retire), after two fix waves closed two gate defects and one live-debugged
+event-loop bug plus a corrupt-row 500. A final-review pass afterward found
+two more Majors in the same two families (query.py's own copy of the
+event-loop-blocking bug; the corrupt-row degrade-to-broken catch not
+widening to `json.JSONDecodeError`) — both fixed pre-merge in that same
+fix wave; see the note at the end of item 15 and item 16 below.
 
 ## Full suite gate (Task 12)
 
@@ -255,29 +260,47 @@ pass in admindash's own lane.
 
 ## Gate findings (Task 11/12)
 
-15. **Sync `httpx.request()` called directly inside `async def` route
-    handlers blocks Uvicorn's single event loop — fixed in apexflow's
-    `entities.py`, the identical pattern still exists in FOUR other
-    apexflow files plus admindash's own copy of `entities.py`.** Root
-    cause and fix are in `apexflow/backend/app/api/entities.py`
-    (commit `dd1ee6d`, full root-cause writeup in
+15. **Sync `httpx.request()`/`httpx.post()` called directly inside
+    `async def` route handlers blocks Uvicorn's single event loop — fixed
+    in apexflow's `entities.py`, and (final-review fix wave) in
+    apexflow's `query.py`, the ONE other apexflow file that actually had
+    this bug.** Root cause and fix are in
+    `apexflow/backend/app/api/entities.py` (commit `dd1ee6d`, full
+    root-cause writeup in
     `.superpowers/sdd/2026-08-06-apexflow-plan2-designer/
     gate-debug-report.md`): a bare, unpooled, blocking `httpx.request()`
     call inside `async def _proxy_to_datacore`, with no
     `run_in_threadpool` wrapper, monopolized the event loop under
     concurrent browser load and produced an intermittent instant 502 that
     a one-shot curl never reproduced. Fixed there with an awaited
-    `httpx.AsyncClient`. Two things remain:
-    - **The debug report itself flags four more apexflow files with the
-      identical pattern, deliberately left alone as out of scope for that
-      task:** `apexflow/backend/app/api/query.py`,
-      `apexflow/backend/app/api/documents.py`,
-      `apexflow/backend/app/api/internal.py`, and
-      `apexflow/backend/app/workflows/datacore.py` (the last one's own
-      docstring says the sync call is intentional, "so tests can
-      monkeypatch httpx.request," mirroring admindash's `leads.py` — that
-      trade-off needs re-examining now that the concurrency cost is
-      proven, not assumed).
+    `httpx.AsyncClient`.
+
+    **Corrected classification (final-review fix wave):** the debug
+    report's original sweep named four more apexflow files as carrying
+    "the identical pattern" — that overstated it. The bug is specifically
+    a SYNC httpx call inside an `async def` route with no threadpool
+    offload; of the four, only `apexflow/backend/app/api/query.py`'s
+    `POST /api/query` route (`async def query(...)` calling sync
+    `httpx.post()`) actually had that shape, and it is now fixed the same
+    way as `entities.py` (awaited `httpx.AsyncClient`), with the same two
+    regression-test shapes (`test_query_returns_502_when_datacore_unreachable`,
+    `test_concurrent_queries_are_not_serialized_by_the_proxy`) ported into
+    `apexflow/backend/tests/test_query_api.py`. The other three —
+    `apexflow/backend/app/api/documents.py`,
+    `apexflow/backend/app/api/internal.py`, and
+    `apexflow/backend/app/workflows/datacore.py` — call sync `httpx`
+    (`httpx.request`) too, but every route that reaches them is a plain
+    `def`, not `async def`; FastAPI already dispatches those through
+    Starlette's threadpool automatically, so they never block the event
+    loop the way `entities.py`/`query.py` did. `apexflow/backend/app/api/
+    auth_proxy.py` (`login`/`me`) is the same plain-`def`/threadpooled
+    shape. These four are a connection-pooling/style question — no
+    unpooled-connection-per-call event-loop-blocking bug, just the general
+    cost of a fresh TCP connection per request and worth revisiting for
+    that reason alone (`workflows/datacore.py`'s own docstring already
+    flags its sync choice as deliberate, "so tests can monkeypatch
+    httpx.request," mirroring admindash's `leads.py`) — not the Major this
+    item originally implied.
     - **Admindash's `entities.py` has the IDENTICAL blocking pattern**
       (`admindash/backend/app/api/entities.py:11-37`,
       `_proxy_to_datacore`'s `httpx.request(...)` at line 18, same
@@ -291,7 +314,9 @@ pass in admindash's own lane.
       under concurrent load. Needs its own ticket in admindash's lane —
       same fix shape (awaited `httpx.AsyncClient`), same regression-test
       pattern (`test_concurrent_creates_are_not_serialized_by_the_proxy`
-      style) apexflow's fix already established.
+      style) apexflow's fix already established. Out of scope for
+      apexflow's final-review fix wave (different service/lane); this
+      note stands unchanged.
 16. **Corrupt-row list resilience is fixed; the write path that creates
     such rows is not — designer-side quarantine UX is Phase 3.**
     `list_definitions` (`apexflow/backend/app/api/designer.py`, fixed in
@@ -310,6 +335,23 @@ pass in admindash's own lane.
     reappear. A designer-side quarantine flow — see it in the list, see
     why it's broken, and retire/archive it from the UI without needing raw
     DataCore access — is explicitly Phase 3 scope, not this plan's.
+
+    **Follow-up fix (final-review fix wave):** the `72f3f0f` fix above only
+    caught `pydantic.ValidationError` — a row with unparseable-but-JSON
+    `machine`/`steps` (e.g. `machine: "{}"`). It did NOT catch a row whose
+    stored `machine`/`steps` string is not valid JSON at all (e.g.
+    `machine: "not json"`), which makes `parse_machine_steps`
+    (`app/workflows/definitions.py:46-47`) raise `json.JSONDecodeError` — a
+    `ValueError` subclass, not a `ValidationError` — and 500 the list/bundle
+    again, the exact same failure mode the original fix was built to close.
+    Both call sites (`designer.py`'s `_parse_or_422` and `list_definitions`'s
+    inline per-row `try`/`except`) now widen to
+    `except (ValidationError, ValueError, TypeError)`, with new tests
+    (`test_list_definitions_invalid_json_machine_degrades_to_broken_not_500`,
+    `test_bundle_422s_not_500s_on_invalid_json_machine`,
+    `test_validate_422s_not_500s_on_invalid_json_machine`) covering the
+    invalid-JSON shape the same way the existing tests cover the
+    invalid-schema shape.
 17. **`POST /api/query`'s raw SQL runs over ALL row versions, not just the
     latest — bit the coordinator once during live verification; worth a
     latest-only query helper.** `unified_query`

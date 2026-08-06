@@ -35,7 +35,7 @@ from app.config import settings
 
 router = APIRouter()
 
-logger = logging.getLogger("apexflow.entities.proxy_debug")
+logger = logging.getLogger("apexflow.entities.proxy")
 
 
 async def _proxy_to_datacore(
@@ -56,8 +56,13 @@ async def _proxy_to_datacore(
                 },
             )
     except httpx.RequestError as exc:
-        logger.error(
-            "PROXY_DEBUG method=%s path=%s exc_type=%s exc=%r cause=%r",
+        # logger.warning, not .error: DataCore being unreachable is an
+        # expected, handled outcome (the caller gets a clean 502) — not an
+        # unhandled application fault. Message/fields kept stable (no
+        # "PROXY_DEBUG" branding) so this is safe to leave permanently
+        # enabled, not scaffolding to strip out later.
+        logger.warning(
+            "datacore proxy request failed: method=%s path=%s exc_type=%s exc=%r cause=%r",
             method,
             path,
             type(exc).__name__,
