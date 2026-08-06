@@ -43,13 +43,19 @@ router = APIRouter()
 # reject_item/waive_item, which are staff-only regardless of actor). The
 # enrollment template (apexflow/backend/app/templates/enrollment.py) gives
 # families `save_draft`, `complete_item`, `submit`, `withdraw`, and
-# `resubmit` as `actor: "family"` transitions/built-ins -- `withdraw` was
-# missing here (a real regression: apexflow allows it, but this facade 403'd
-# it before the request ever left familyhub). `resubmit` is template-
-# specific (only meaningful once `pending_items` exists) and is deliberately
-# NOT added here yet -- add it, and audit this list generally, the next time
-# a template's family-facing action set changes.
-PARENT_ACTIONS = {"save_draft", "complete_item", "submit", "withdraw"}
+# `resubmit` as `actor: "family"` transitions/built-ins.
+#
+# `withdraw` and `resubmit` were BOTH missing on a first pass (a real
+# regression: apexflow allows them, but this facade 403'd them before the
+# request ever left familyhub). `resubmit` in particular is the parent's
+# ONLY path back from `pending_items` to `in_review` after fixing a
+# rejected item (`t_resubmit` in the enrollment template) -- without it a
+# parent who corrects a rejected item has no way to return the application
+# to review and is stuck until staff manually intervenes, so it cannot be
+# deferred the way a template-specific-but-non-critical action might be.
+# Audit this list again the next time a template's family-facing action
+# set changes.
+PARENT_ACTIONS = {"save_draft", "complete_item", "submit", "withdraw", "resubmit"}
 
 
 @router.get("/application/{token}")

@@ -148,6 +148,20 @@ def test_withdraw_action_is_proxied(client, fake_http):
     assert fake_http.calls[0]["json"]["action"] == "withdraw"
 
 
+def test_resubmit_action_is_proxied(client, fake_http):
+    """Coordinator review fix (second pass): `resubmit` is the parent's ONLY
+    path back from `pending_items` to `in_review` after fixing a rejected
+    item (`t_resubmit` in the enrollment template, `actor: "family"`).
+    PARENT_ACTIONS was missing it too -- without this, a parent who
+    corrected a rejected item had no way to return the application to
+    review and would be stuck until staff manually intervened."""
+    fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
+                  FakeResponse(200, {"instance": {"state": "in_review"}}))
+    resp = client.put(f"/api/application/{TOKEN}", json={"action": "resubmit"})
+    assert resp.status_code == 200
+    assert fake_http.calls[0]["json"]["action"] == "resubmit"
+
+
 def test_action_masks_upstream_500(client, fake_http):
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
                   FakeResponse(500, {"detail": "DataCore write failed: connection reset by peer"}))
