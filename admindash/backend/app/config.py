@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     environment: str = "development"
     datacore_url: str = "http://localhost:5800"
     papermite_backend_url: str = "http://localhost:5710"
+    # apexflow-backend port default per services.json:13
+    apexflow_backend_url: str = "http://localhost:5910"
     # Read as Optional[str] to bypass pydantic-settings' JSON-decode of List
     # fields, then converted to list[str] inside the model_validator below.
     # At runtime, callers should treat this as list[str].

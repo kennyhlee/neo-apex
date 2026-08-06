@@ -14,6 +14,9 @@ import BulkAddStudentsPage from './pages/BulkAddStudentsPage.tsx';
 import LeadPage from './pages/LeadPage.tsx';
 import ProgramPage from './pages/ProgramPage.tsx';
 import FamiliesPage from './pages/FamiliesPage.tsx';
+import WorkflowsPage from './pages/WorkflowsPage.tsx';
+import WorkflowPipelinePage from './pages/WorkflowPipelinePage.tsx';
+import StaffEntryPage from './pages/StaffEntryPage.tsx';
 import { useTranslation } from './hooks/useTranslation.ts';
 import './App.css';
 
@@ -68,6 +71,15 @@ function AppRoutes() {
                       <Route path="/leads" element={<LeadPage tenant={tenant} />} />
                       <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
                       <Route path="/families" element={<FamiliesPage tenant={tenant} />} />
+                      <Route path="/workflows" element={<WorkflowsPage tenant={tenant} />} />
+                      <Route
+                        path="/workflows/:definitionId"
+                        element={<WorkflowPipelinePage tenant={tenant} />}
+                      />
+                      <Route
+                        path="/workflows/:definitionId/new"
+                        element={<StaffEntryPage tenant={tenant} />}
+                      />
                       <Route path="/" element={<Navigate to="/home" replace />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>

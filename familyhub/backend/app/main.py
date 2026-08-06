@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import application, documents, health, registration
+from app.api import documents, health, instance, workflows
 from app.config import settings
 from app.middleware.cloudflare_ip import CloudflareIPMiddleware
 
@@ -34,6 +34,6 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/api", tags=["health"])
-app.include_router(registration.router, prefix="/api", tags=["registration"])
-app.include_router(application.router, prefix="/api", tags=["application"])
+app.include_router(workflows.router, prefix="/api", tags=["workflows"])
+app.include_router(instance.router, prefix="/api", tags=["instance"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])

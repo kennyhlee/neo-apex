@@ -143,3 +143,22 @@ def instance_action_route(tenant_id: str, instance_entity_id: str, body: ActionR
     if ctx.item_result is not None:
         response["item"] = ctx.item_result
     return response
+
+
+@router.get("/{tenant_id}/instances/{instance_entity_id}/allowed-actions")
+def allowed_actions_route(tenant_id: str, instance_entity_id: str,
+                          user: dict = Depends(require_staff_tenant)):
+    """Plan 3 Task 3: the same `allowed` list `instance_action_route`'s 409
+    advertises, exposed as its own read — AdminDash tracking (and the
+    family token-bundle route's `"allowed"` field, `app/api/internal.py`)
+    consume this to render available actions without provoking a failed
+    action first. Actor = the calling staff user, same derivation as
+    `instance_action_route` above."""
+    token = user.get("_token")
+    instance_row = dc.get_entity(tenant_id, "workflow_instance", instance_entity_id, token)
+    if instance_row is None:
+        raise HTTPException(404, "workflow_instance not found")
+
+    ctx = machine.build_eval_context(tenant_id, instance_row,
+                                     actor=user.get("user_id", "staff"), token=token)
+    return {"state": ctx.instance.get("state"), "allowed": machine.allowed_actions(ctx)}

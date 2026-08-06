@@ -75,6 +75,15 @@ GLOBAL_SCHEMA = pa.schema([
 ])
 
 
+class VersionConflictError(Exception):
+    """expected_version precondition failed on put_entity."""
+
+    def __init__(self, expected: int, actual: int):
+        self.expected = expected
+        self.actual = actual
+        super().__init__(f"version conflict: expected {expected}, found {actual}")
+
+
 class Store:
     """Tenant-scoped LanceDB storage with versioning.
 
@@ -312,14 +321,23 @@ class Store:
         base_data: dict,
         custom_fields: dict | None = None,
         change_id: str | None = None,
+        expected_version: int | None = None,
     ) -> dict:
         """Store an entity record.
 
         Archives the current active version and inserts a new one.
         Custom fields are stored as a TOON document in custom_fields.
 
+        Args:
+            expected_version: if provided, the write only proceeds when the
+                entity's current max version matches. Opt-in optimistic
+                concurrency precondition; omitting it (None) preserves
+                last-write-wins behavior.
+
         Raises:
             ValueError: if custom_fields keys overlap with base_data keys
+            VersionConflictError: if expected_version is provided and does
+                not match the entity's current max version
         """
         # Validate no key conflicts between base_data and custom_fields
         if custom_fields and base_data:
@@ -339,6 +357,10 @@ class Store:
 
         where = f"entity_type = '{entity_type}' AND entity_id = '{entity_id}'"
         current_version = self._get_max_version(table, where)
+
+        if expected_version is not None and current_version != expected_version:
+            raise VersionConflictError(expected_version, current_version)
+
         next_version = current_version + 1
 
         # Archive current active

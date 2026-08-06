@@ -180,3 +180,25 @@ def test_cancel_instance_action_returns_200(client, fake_dc):
     resp = act(client, instance_eid, "cancel_instance")
     assert resp.status_code == 200
     assert resp.json()["instance"]["state"] == "cancelled"
+
+
+# --- allowed-actions (Plan 3 Task 3) ----------------------------------------
+
+
+def test_allowed_actions_route_matches_409_advertisement(client, fake_dc):
+    _seed_definition(fake_dc, definition_id="wd-route-6")
+    instance_eid, _ = _create_instance(fake_dc, "wd-route-6")
+
+    ok = client.get(f"/api/workflows/{TENANT}/instances/{instance_eid}/allowed-actions")
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["state"] == "draft"
+
+    bogus = act(client, instance_eid, "definitely_not_an_action")
+    assert bogus.status_code == 409
+    assert bogus.json()["detail"]["allowed"] == body["allowed"]
+
+
+def test_allowed_actions_route_404_on_unknown_instance(client, fake_dc):
+    resp = client.get(f"/api/workflows/{TENANT}/instances/nope/allowed-actions")
+    assert resp.status_code == 404

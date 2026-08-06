@@ -154,6 +154,22 @@ def _applicable_items(ctx: EvalContext) -> list[dict]:
     return applicable_items(ctx.definition["steps"], ctx.items, ctx.draft, ctx.context)
 
 
+def _row_version(row: dict) -> int | None:
+    """Local duplicate of `engine.row_version` — see this module's docstring
+    (IMPORT-CYCLE CONSTRAINT) for why `engine.py` can't be imported here.
+    Every write below that round-trips `ctx.instance`/an item row passes
+    `expected_version=_row_version(row)` (Plan 3 Task 2's CAS precondition),
+    and refreshes the row's `_version` from the write's return envelope
+    afterward so a LATER write in the same transition (e.g. `_write_state`
+    after an effect's own instance write) uses the current version, not a
+    stale one from context-assembly time."""
+    raw = row.get("_version")
+    try:
+        return int(raw) if raw not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_json(raw: Any) -> dict:
     if isinstance(raw, dict):
         return raw
@@ -405,11 +421,18 @@ def _write_section_entity(tenant_id: str, entity_model: str, mode: str, payload:
 
 
 def _persist_subject_refs(ctx: EvalContext, resolved: dict) -> None:
+    """Called once per section inside `_effect_commit_sections`'s loop — each
+    call must precondition on and then refresh `ctx.instance["_version"]`
+    (not just once at the end), or the SECOND section's persist call would
+    409 against the FIRST section's already-applied write."""
     encoded = json.dumps(resolved)
     base = entity_base_data(ctx.instance)
     base["subject_refs"] = encoded
-    dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base, ctx.token)
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=_row_version(ctx.instance))
     ctx.instance["subject_refs"] = encoded
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
 
 
 def _effect_commit_sections(ctx: EvalContext, params: dict) -> None:
@@ -469,10 +492,19 @@ def _effect_set_entity_field(ctx: EvalContext, params: dict) -> None:
     if ref == "instance":
         base = entity_base_data(ctx.instance)
         base[field] = value
-        dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base, ctx.token)
+        updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                               ctx.token, expected_version=_row_version(ctx.instance))
         ctx.instance[field] = value
+        if "_version" in updated:
+            ctx.instance["_version"] = updated["_version"]
         return
 
+    # ref != "instance": writes an arbitrary resolved entity (student,
+    # family, ...) from `subject_refs`, NOT a workflow_instance/workflow_item
+    # row — out of Plan 3 Task 2's scope (its brief: "entity-model commits
+    # ... are NOT preconditioned"; this is the same category of write,
+    # a resolved-entity update rather than a commit_sections create, but
+    # still not an instance/item round-trip). Left unpreconditioned.
     resolved = _parse_json(ctx.instance.get("subject_refs"))
     entity_id = resolved.get(f"{ref}_id")
     if not entity_id or isinstance(entity_id, list):
@@ -570,11 +602,19 @@ def _effect_start_due_clocks(ctx: EvalContext, params: dict) -> None:
         due_at = (ctx.now + timedelta(days=days)).isoformat()
         base = entity_base_data(item)
         base["due_at"] = due_at
-        dc.dc_update(ctx.tenant_id, "workflow_item", item["entity_id"], base, ctx.token)
+        updated = dc.dc_update(ctx.tenant_id, "workflow_item", item["entity_id"], base, ctx.token,
+                               expected_version=_row_version(item))
         item["due_at"] = due_at
+        if "_version" in updated:
+            item["_version"] = updated["_version"]
 
 
 def _effect_set_context(ctx: EvalContext, params: dict) -> None:
+    """The canonical intra-transition sequencing-hazard effect (Plan 3 Task
+    2 brief): when this effect runs before `machine.py::_write_state` in the
+    SAME transition, this write's refreshed `_version` is what
+    `_write_state`'s own precondition must see, not the stale version
+    `ctx.instance` carried at context-assembly time."""
     key = params["key"]
     value = params.get("value")
     context = dict(ctx.context)
@@ -582,9 +622,12 @@ def _effect_set_context(ctx: EvalContext, params: dict) -> None:
     encoded = json.dumps(context)
     base = entity_base_data(ctx.instance)
     base["context"] = encoded
-    dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base, ctx.token)
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=_row_version(ctx.instance))
     ctx.context[key] = value
     ctx.instance["context"] = encoded
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
 
 
 EFFECTS: dict[str, Callable[[EvalContext, dict], None]] = {

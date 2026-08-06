@@ -282,6 +282,46 @@ def test_item_builtin_blocked_once_instance_terminal(fake_dc):
     assert exc.value.status_code == 409
 
 
+# --- complete_item threads payload_ref (Plan 3 Task 3 — the write-path gap
+# `docs/superpowers/plans/2026-08-06-apexflow-plan3-interface-map.md` §10
+# finding 2 identified: nothing forwarded params["payload_ref"] past this
+# dispatcher, so document-item completion was unreachable through either
+# channel) -------------------------------------------------------------
+
+
+def _docs_step_fixture():
+    return [
+        {
+            "step_id": "docs_step", "type": "documents", "title": "Docs", "required": True,
+            "blocking": True, "available_in": ["draft"], "show_if": None, "review": None,
+            "config": {"docs": [{"name": "ID"}]},
+        }
+    ]
+
+
+def test_complete_item_threads_payload_ref_writes_and_validates_document_ref(fake_dc):
+    fake_dc.set_model(TENANT, "student", _student_model())
+    _seed_definition(fake_dc, definition_id="wd-payload-ref", machine_def=_allowed_listing_machine(),
+                     steps=_docs_step_fixture())
+    instance_row = _create_instance(fake_dc, "wd-payload-ref", channel="family")
+    item_eid = _form_item_entity_id(fake_dc, instance_row)
+    fake_dc.rows.append(fake_dc._store_row("doc-1", "document", TENANT, {
+        "document_id": "DC-1", "application_id": instance_row["entity_id"], "filename": "id.pdf",
+        "uploaded_by": "family:tok1", "sensitive": False, "item_id": "",
+    }))
+
+    ctx = machine.build_eval_context(TENANT, instance_row, actor="family:tok1")
+    machine.execute_action(ctx, "complete_item", {"item_id": item_eid, "payload_ref": "doc-1"})
+    assert ctx.item_result["base_data"]["payload_ref"] == "doc-1"
+    assert ctx.item_result["base_data"]["status"] == "submitted"  # documents default review: staff
+
+    with pytest.raises(HTTPException) as exc:
+        machine.execute_action(ctx, "complete_item",
+                               {"item_id": item_eid, "payload_ref": "does-not-exist"})
+    assert exc.value.status_code == 409
+    assert exc.value.detail == {"reason": "payload_ref_invalid"}
+
+
 # --- system auto-advance: fires after the item mutation that satisfies it --
 
 

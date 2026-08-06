@@ -2,6 +2,7 @@
 
 import pytest
 from datacore import Store
+from datacore.store import VersionConflictError
 
 
 @pytest.fixture(autouse=True)
@@ -359,3 +360,60 @@ def test_entity_base_data_stored_as_toon(store):
     assert "{" not in raw_base
     # Should be TOON format: "key: value"
     assert "first_name: Alice" in raw_base
+
+
+# ── 19. expected_version CAS precondition ─────────────────────────────────────
+
+def test_put_entity_with_matching_expected_version_succeeds(store):
+    store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="e1",
+        base_data={"first_name": "A"},
+    )  # version 1
+    result = store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="e1",
+        base_data={"first_name": "B"}, expected_version=1,
+    )
+    assert result["_version"] == 2
+
+
+def test_put_entity_with_stale_expected_version_raises_conflict(store):
+    store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="e1",
+        base_data={"first_name": "A"},
+    )  # version 1
+    store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="e1",
+        base_data={"first_name": "B"},
+    )  # version 2
+    with pytest.raises(VersionConflictError) as exc:
+        store.put_entity(
+            tenant_id="t1", entity_type="student", entity_id="e1",
+            base_data={"first_name": "C"}, expected_version=1,
+        )
+    assert exc.value.expected == 1
+    assert exc.value.actual == 2
+    # And the losing write must not have landed:
+    row = store.get_active_entity("t1", "student", "e1")
+    assert row["base_data"]["first_name"] == "B"
+
+
+def test_put_entity_without_expected_version_keeps_last_write_wins(store):
+    store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="e1",
+        base_data={"first_name": "A"},
+    )
+    result = store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="e1",
+        base_data={"first_name": "C"},
+    )  # no precondition
+    assert result["_version"] == 2
+
+
+def test_put_entity_expected_version_on_missing_entity_conflicts(store):
+    with pytest.raises(VersionConflictError) as exc:
+        store.put_entity(
+            tenant_id="t1", entity_type="student", entity_id="e1",
+            base_data={"first_name": "A"}, expected_version=1,
+        )
+    assert exc.value.expected == 1
+    assert exc.value.actual == 0

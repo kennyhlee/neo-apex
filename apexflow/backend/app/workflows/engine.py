@@ -70,6 +70,24 @@ def _now(now: datetime | None) -> datetime:
     return now or datetime.now(timezone.utc)
 
 
+def row_version(row: dict) -> int | None:
+    """The _version a previously-read flattened row carries, or None.
+
+    DataCore flattens all scalars to strings; tolerate int or str. Every
+    write in this module that round-trips a previously-read
+    `workflow_instance`/`workflow_item` row passes
+    `expected_version=row_version(row)` to `dc.dc_update` (Plan 3 Task 2's
+    CAS precondition) so a lost-update race surfaces as a 409 conflict
+    instead of silently overwriting a concurrent write. `None` (row has no
+    `_version`, e.g. a freshly-created row this call never re-fetched) skips
+    the precondition — same as passing no `expected_version` at all."""
+    raw = row.get("_version")
+    try:
+        return int(raw) if raw not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _item_base_data(item_row: dict) -> dict:
     """`entity_base_data` (definitions.py, re-exported from shared.py) has
     no bool-coercion table since `workflow_definition` declares no bool
@@ -352,7 +370,8 @@ def save_draft(tenant_id: str, instance_row: dict, section_answers: dict, actor:
 
     base = defs.entity_base_data(instance_row)
     base["draft_data"] = json.dumps(draft)
-    return dc.dc_update(tenant_id, "workflow_instance", instance_row["entity_id"], base, token)
+    return dc.dc_update(tenant_id, "workflow_instance", instance_row["entity_id"], base, token,
+                        expected_version=row_version(instance_row))
 
 
 # --- item lookups + shared update path ------------------------------------
@@ -371,7 +390,8 @@ def _update_item(tenant_id: str, instance_row: dict, item_row: dict, changes: di
     base = _item_base_data(item_row)
     old_status = base.get("status", "not_started")
     base.update(changes)
-    updated = dc.dc_update(tenant_id, "workflow_item", item_row["entity_id"], base, token)
+    updated = dc.dc_update(tenant_id, "workflow_item", item_row["entity_id"], base, token,
+                           expected_version=row_version(item_row))
     _log_activity(tenant_id, instance_row.get("entity_id"), "item_change",
                  old_status, changes.get("status", old_status), actor, token, now)
     return updated
@@ -432,8 +452,24 @@ def _missing_required_fields(step: StepDef, draft: dict) -> list[str]:
     return missing
 
 
+def _document_belongs_to_instance(tenant_id: str, instance_row: dict, payload_ref: str,
+                                   token: str | None) -> bool:
+    """True iff `payload_ref` names a `document` row (by `entity_id`) whose
+    `application_id` equals THIS instance's `entity_id` (Plan 3 Task 3 — the
+    write path that closes the "payload_ref has no write path" gap: spec §4
+    "payload_ref must reference a document uploaded to this instance").
+    `dc.get_entity` returning `None` (unknown id, or an id belonging to a
+    different tenant — lookups are tenant-scoped) is treated the same as a
+    cross-instance document: both are "not a valid reference", 409
+    `payload_ref_invalid`, not a 404 — the caller supplied a value, it's
+    just not usable here."""
+    doc = dc.get_entity(tenant_id, "document", payload_ref, token)
+    return doc is not None and doc.get("application_id") == instance_row.get("entity_id")
+
+
 def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: str, *,
-                   token: str | None = None, now: datetime | None = None) -> dict:
+                   token: str | None = None, now: datetime | None = None,
+                   payload_ref: str | None = None) -> dict:
     """Family- or staff-completable for every kind (spec §4: "form:
     family/staff complete"; documents and message-ack items follow the same
     open authority — only `verify_item`/`reject_item`/`waive_item` are
@@ -442,8 +478,18 @@ def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor
     - `form`: every required field of the step's declared sections must be
       present+non-empty in `draft_data` -> 409 `{"missing": [...]}` naming
       each as `"{section_id}.{field}"`.
-    - `documents`: `payload_ref` must already be set on the item (upload
-      happens via Task 10's routes, before this is called) -> 409 if empty.
+    - `documents`: the caller-supplied `payload_ref` kwarg (Plan 3 Task 3;
+      threaded from `machine._run_item_builtin`'s `params.get("payload_ref")`)
+      OR an already-set `item.payload_ref` (pre-Task-3 callers, e.g. test
+      helpers that poke it directly) must be present -> 409
+      `{"reason": "payload_ref_missing"}` if both are empty. When the kwarg
+      IS supplied, it must resolve to a `document` row of THIS instance
+      (`_document_belongs_to_instance`) -> 409 `{"reason":
+      "payload_ref_invalid"}` otherwise; on success it is written onto the
+      item alongside the status change (same `_update_item` call, so it
+      shares that write's CAS precondition — no separate round trip). A
+      pre-existing `item.payload_ref` with no fresh kwarg is left as-is
+      (nothing new to validate or write).
     - `message-ack`: nothing to validate beyond the item existing.
 
     Resulting status: `"verified"` if the step's effective `review`
@@ -471,6 +517,8 @@ def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor
     steps = _pinned_steps(tenant_id, instance_row, token)
     step = _require_step(steps, item.get("step_id"))
 
+    changes = {"status": None, "completed_by": actor}  # status filled in below
+
     if step.type == "form":
         try:
             draft = json.loads(instance_row.get("draft_data") or "{}")
@@ -480,15 +528,18 @@ def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor
         if missing:
             raise HTTPException(409, {"missing": missing})
     elif step.type == "documents":
-        if not item.get("payload_ref"):
+        if not (payload_ref or item.get("payload_ref")):
             raise HTTPException(409, {"reason": "payload_ref_missing"})
-    # message-ack: no further validation.
+        if payload_ref is not None:
+            if not _document_belongs_to_instance(tenant_id, instance_row, payload_ref, token):
+                raise HTTPException(409, {"reason": "payload_ref_invalid"})
+            changes["payload_ref"] = payload_ref
+    # message-ack: no further validation. Non-documents kinds ignore payload_ref entirely.
 
     effective_review = step.review or REVIEW_DEFAULTS[step.type]
-    new_status = "verified" if effective_review == "auto" else "submitted"
+    changes["status"] = "verified" if effective_review == "auto" else "submitted"
 
-    return _update_item(tenant_id, instance_row, item,
-                        {"status": new_status, "completed_by": actor}, actor, token, now)
+    return _update_item(tenant_id, instance_row, item, changes, actor, token, now)
 
 
 # --- staff-only review actions ---------------------------------------------

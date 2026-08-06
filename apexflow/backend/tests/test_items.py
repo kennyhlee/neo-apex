@@ -485,6 +485,65 @@ def test_complete_item_documents_review_auto_verifies_after_payload_ref(fake_dc)
     assert updated["base_data"]["status"] == "verified"
 
 
+# --- complete_item: payload_ref write path (Plan 3 Task 3 — Task 0 finding:
+# nothing ever wrote payload_ref onto an item; document-item completion was
+# unreachable end-to-end through any channel) ---------------------------
+
+
+def _seed_document(fake_dc, doc_eid, *, application_id, filename="id.pdf"):
+    fake_dc.rows.append(fake_dc._store_row(doc_eid, "document", TENANT, {
+        "document_id": "DC-1", "application_id": application_id, "filename": filename,
+        "uploaded_by": "family:tok1", "sensitive": False, "item_id": "",
+    }))
+
+
+def test_complete_item_documents_valid_payload_ref_writes_ref_and_submits(fake_dc):
+    instance_row, items = _setup(fake_dc)
+    item_eid = items["docs_default"]["entity_id"]
+    _seed_document(fake_dc, "doc-valid", application_id=instance_row["entity_id"])
+
+    updated = engine.complete_item(TENANT, instance_row, item_eid, "family:tok1",
+                                    payload_ref="doc-valid")
+    assert updated["base_data"]["status"] == "submitted"
+    assert updated["base_data"]["payload_ref"] == "doc-valid"
+
+
+def test_complete_item_documents_payload_ref_from_other_instance_409(fake_dc):
+    instance_row, items = _setup(fake_dc)
+    item_eid = items["docs_default"]["entity_id"]
+    _seed_document(fake_dc, "doc-other", application_id="some-other-instance-eid")
+
+    with pytest.raises(HTTPException) as exc:
+        engine.complete_item(TENANT, instance_row, item_eid, "family:tok1",
+                             payload_ref="doc-other")
+    assert exc.value.status_code == 409
+    assert exc.value.detail == {"reason": "payload_ref_invalid"}
+
+
+def test_complete_item_documents_unknown_payload_ref_id_409(fake_dc):
+    instance_row, items = _setup(fake_dc)
+    item_eid = items["docs_default"]["entity_id"]
+
+    with pytest.raises(HTTPException) as exc:
+        engine.complete_item(TENANT, instance_row, item_eid, "family:tok1",
+                             payload_ref="does-not-exist")
+    assert exc.value.status_code == 409
+    assert exc.value.detail == {"reason": "payload_ref_invalid"}
+
+
+def test_complete_item_documents_no_payload_ref_still_409_missing(fake_dc):
+    """Absent payload_ref (neither the kwarg nor a pre-existing item field)
+    unchanged from the pre-Task-3 behavior — `payload_ref_missing`, not
+    `payload_ref_invalid`."""
+    instance_row, items = _setup(fake_dc)
+    item_eid = items["docs_default"]["entity_id"]
+
+    with pytest.raises(HTTPException) as exc:
+        engine.complete_item(TENANT, instance_row, item_eid, "family:tok1")
+    assert exc.value.status_code == 409
+    assert exc.value.detail == {"reason": "payload_ref_missing"}
+
+
 # --- complete_item: repeat sections (coordinator review finding #3) --------
 
 

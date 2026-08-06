@@ -360,6 +360,8 @@ def allowed_actions_route(tenant_id: str, instance_entity_id: str,
 
 In `internal.py`'s `instance_by_token`, add `"allowed": machine.allowed_actions(ctx)` to the returned dict (the family actor is already on `ctx`).
 
+**Additional scope (Task 0 finding — payload_ref has NO write path):** `engine.complete_item` 409s documents-kind items whose `payload_ref` is empty (`{"reason": "payload_ref_missing"}`), but nothing in production ever writes `payload_ref` to an item — document-item completion is unreachable through either channel. Fix here: `machine._run_item_builtin` threads `params.get("payload_ref")` through to `engine.complete_item(..., payload_ref=...)`; for documents-kind items, `complete_item` validates the supplied `payload_ref` references a `document` row of THIS instance (`application_id == instance entity_id` — spec §4's "payload_ref must reference a document uploaded to this instance"; 409 `{"reason": "payload_ref_invalid"}` otherwise) and writes it onto the item together with the status change. Non-documents kinds ignore the param. TDD: failing test first — complete a documents item with a valid uploaded document's id → status submitted + payload_ref stored; with a document id belonging to a DIFFERENT instance → 409; with none → existing 409 unchanged.
+
 - [ ] **Step 4: Run new tests → PASS. Step 5: full apexflow suite green. Step 6: Commit** — `feat(apexflow): promote allowed_actions; staff allowed-actions GET; token bundle advertises family actions`.
 
 ---

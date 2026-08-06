@@ -17,21 +17,113 @@ still 200 {}); uploaded_by derivation on the token-scoped document surface;
 and the internal-key gate itself (401 for missing/wrong key).
 """
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.main import app
+from app.templates import enrollment
+from app.workflows import definitions as defs
 from app.workflows.tokens import make_link_token
 
 TENANT = "acme"
 HEADERS = {"X-Internal-Key": settings.internal_key}
 
+# Real base_model.json fields for the enrollment template's referenced
+# models (Plan 3 Task 4's config-bundle tests) -- same source and pattern
+# test_enrollment_template.py uses ("Read base_model.json to bind field
+# picks exactly"), reused here rather than hand-rolled minimal models so
+# `enrollment.seed_enrollment_template`'s own `publish_definition` call
+# (which runs full `validate_definition`) actually succeeds.
+BASE_MODEL_PATH = (
+    Path(__file__).resolve().parents[3] / "launchpad" / "backend" / "app" / "data" / "base_model.json"
+)
+_TEMPLATE_ENTITY_TYPES = ("student", "family", "contact", "registration_application")
+
+
+def _load_base_models() -> dict:
+    all_models = json.loads(BASE_MODEL_PATH.read_text())
+    return {et: all_models[et] for et in _TEMPLATE_ENTITY_TYPES}
+
+
+def _seed_enrollment_models(fake_dc) -> None:
+    for entity_type, definition in _load_base_models().items():
+        fake_dc.set_model(TENANT, entity_type, definition)
+
 
 @pytest.fixture
 def client(fake_dc):
     return TestClient(app)
+
+
+@pytest.fixture
+def seeded_family_definition(fake_dc):
+    """A published, `active`, family-channel "enrollment" lineage (the REAL
+    template, not a hand-rolled stub) -- `enrollment.DEFINITION_ID ==
+    "enrollment"`, matching this task's route-path literal."""
+    _seed_enrollment_models(fake_dc)
+    return enrollment.seed_enrollment_template(TENANT)
+
+
+@pytest.fixture
+def deprecated_family_definition(fake_dc):
+    """Same lineage, but `lineage_status == "deprecated"` on its published
+    row -- `workflow_config` must still 200 with the full bundle (only
+    `channel_access` gates the 404, never `lineage_status`; see
+    `_require_family_channel_definition`)."""
+    _seed_enrollment_models(fake_dc)
+    published = enrollment.seed_enrollment_template(TENANT)
+    return defs.deprecate_definition(TENANT, published["entity_id"])
+
+
+@pytest.fixture
+def fake_documents_upstream(monkeypatch):
+    """Fakes the DataCore blob-create hop `create_document_by_token` calls
+    through `_blob_request` -- same monkeypatch seam every other document
+    test in this module uses (`app.api.internal.httpx.request`), wrapped in
+    an object so the test can read back the last captured create body."""
+
+    class FakeResp:
+        status_code = 201
+        text = ""
+
+        def json(self):
+            return {"document_id": "DC-1", "upload_url": "https://example/upload", "storage_key": "k"}
+
+    class FakeUpstream:
+        def __init__(self):
+            self.last_create = None
+
+        def request(self, method, url, json=None, headers=None, timeout=None):
+            self.last_create = json
+            return FakeResp()
+
+    fu = FakeUpstream()
+    monkeypatch.setattr("app.api.internal.httpx.request", fu.request)
+    return fu
+
+
+@pytest.fixture
+def token_with_sensitive_doc_item(client, fake_dc, seeded_family_definition):
+    """A started instance's token, plus the `entity_id` of the
+    `documents`-kind item bound to the template's sensitive "Immunization
+    Record" doc entry (`templates/enrollment.py`'s `documents` step) --
+    `_derive_item_specs` (engine.py) derives one item per `docs` entry for
+    EVERY step unconditionally at creation time, regardless of the item's
+    step's `available_in` (interface map §10 finding 3), so this item
+    exists immediately after `start`, before the instance ever reaches the
+    `documents` step's `approved` state."""
+    resp = client.post(
+        f"/internal/workflows/{TENANT}/{enrollment.DEFINITION_ID}/start",
+        json={"context": {"school_year": "2026-2027"}, "applicant_email": "parent@example.com"},
+        headers=HEADERS,
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    doc_item = next(i for i in body["items"] if i["base_data"]["title"] == "Immunization Record")
+    return body["token"], doc_item["entity_id"]
 
 
 # --- fixtures ----------------------------------------------------------
@@ -248,6 +340,24 @@ def test_config_route_capacity_full_when_admitted_equals_capacity(client, fake_d
     assert resp.json()["capacity"] == {"capacity": 1, "admitted": 1, "full": True}
 
 
+def test_workflow_config_includes_models_and_lineage_status(client, seeded_family_definition):
+    resp = client.get(f"/internal/workflows/{TENANT}/enrollment/config", headers=HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["lineage_status"] == "active"
+    assert "student" in body["models"]
+    assert any(f["name"] == "first_name" for f in body["models"]["student"]["base_fields"])
+    # Existing keys stay unchanged in shape.
+    assert body["definition"]["definition_id"] == "enrollment"
+    assert "tenant" in body and "capacity" in body
+
+
+def test_workflow_config_returns_bundle_for_deprecated_lineage(client, deprecated_family_definition):
+    resp = client.get(f"/internal/workflows/{TENANT}/enrollment/config", headers=HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["lineage_status"] == "deprecated"
+
+
 # --- request-link (anti-enumeration) -----------------------------------
 
 
@@ -286,6 +396,17 @@ def test_instance_by_token_returns_instance_items_definition(client, fake_dc):
     assert body["instance"]["entity_id"] == started["instance"]["entity_id"]
     assert len(body["items"]) == 1
     assert body["definition"]["definition_id"] == "wd-tok"
+
+
+def test_instance_by_token_includes_family_allowed_actions(client, fake_dc):
+    started = _start(client, fake_dc, definition_id="wd-tok-allowed")
+    token = started["token"]
+
+    resp = client.get(f"/internal/instance-by-token/{token}", headers=HEADERS)
+    assert resp.status_code == 200
+    allowed = resp.json()["allowed"]
+    assert "save_draft" in allowed and "complete_item" in allowed
+    assert "verify_item" not in allowed  # staff-only built-ins never appear for family
 
 
 def test_save_draft_and_submit_via_token(client, fake_dc):
@@ -443,6 +564,59 @@ def test_create_document_by_token_ignores_client_supplied_uploaded_by(client, fa
     assert resp.status_code == 201
     assert captured["json"]["uploaded_by"] == f"family:{started['instance']['entity_id']}"
     assert captured["json"]["application_id"] == started["instance"]["entity_id"]
+
+
+def test_token_document_sensitive_derived_from_definition_not_client(
+    client, token_with_sensitive_doc_item, fake_documents_upstream,
+):
+    """The point of this task: `sensitive` is no longer a client-trusted
+    field. Here the client explicitly lies (`sensitive: False`) about an
+    item that IS bound to the enrollment template's sensitive "Immunization
+    Record" doc entry -- the DataCore create call must still carry
+    `sensitive: True`, derived server-side from the pinned definition."""
+    token, item_eid = token_with_sensitive_doc_item
+
+    resp = client.post(
+        f"/internal/instance-by-token/{token}/documents", headers=HEADERS,
+        json={"item_id": item_eid, "filename": "shots.pdf",
+              "content_type": "application/pdf", "size": 100,
+              "sensitive": False},  # client lies; extra key ignored
+    )
+    assert resp.status_code == 201
+    assert fake_documents_upstream.last_create["sensitive"] is True
+
+
+def test_token_document_sensitive_defaults_false_when_item_unresolvable(
+    client, fake_dc, monkeypatch,
+):
+    """No `item_id` at all (a free-standing upload) -- `_derived_sensitive`
+    must default to `False`, not error, and must NOT trust a client-supplied
+    `sensitive: True` either."""
+    started = _start(client, fake_dc, definition_id="wd-doc-no-item")
+    token = started["token"]
+
+    captured = {}
+
+    class FakeResp:
+        status_code = 201
+        text = ""
+
+        def json(self):
+            return {"document_id": "DC-1", "upload_url": "https://example/upload", "storage_key": "k"}
+
+    def fake_request(method, url, json=None, headers=None, timeout=None):
+        captured["json"] = json
+        return FakeResp()
+
+    monkeypatch.setattr("app.api.internal.httpx.request", fake_request)
+
+    resp = client.post(
+        f"/internal/instance-by-token/{token}/documents", headers=HEADERS,
+        json={"filename": "x.pdf", "content_type": "application/pdf",
+              "size": 100, "sensitive": True},  # client lies the other way
+    )
+    assert resp.status_code == 201
+    assert captured["json"]["sensitive"] is False
 
 
 def test_document_create_by_token_masks_upstream_500_to_502(client, fake_dc, monkeypatch):

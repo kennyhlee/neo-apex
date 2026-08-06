@@ -57,6 +57,14 @@ export default function EditorPage() {
   // parses (`app/api/designer.py`'s `_parse_or_422`) is a DISTINCT,
   // recoverable state from a generic load failure — checked before
   // `loadError` since both leave `store.definition` null.
+  //
+  // Task 13 (Plan 2 follow-up item 8): this full-page hijack only fires for
+  // a DIRECT load failure (genuinely corrupt row, or `store.reload()`) or a
+  // background validate whose local in-memory state is ALSO unparseable —
+  // `draftStore`'s `runValidate` routes a background 422 with valid local
+  // state to `staleParseWarning` instead (rendered as a dismissable inline
+  // banner further below), since the user's in-progress edits are fine and
+  // will overwrite the stale/bad row on the next autosave.
   if (store.parseError) {
     return (
       <div className="editor-parse-error" role="alert">
@@ -160,6 +168,20 @@ export default function EditorPage() {
       {def.status !== 'draft' && (
         <div className="editor-readonly-banner" role="status">
           {t('editor.readonlyBanner')}
+        </div>
+      )}
+
+      {store.staleParseWarning && (
+        <div className="editor-stale-parse-banner" role="alert">
+          <span>{t('editor.staleParseWarning.body')}</span>
+          <button
+            type="button"
+            className="editor-stale-parse-banner-dismiss"
+            onClick={store.dismissStaleParseWarning}
+            aria-label={t('common.close')}
+          >
+            ×
+          </button>
         </div>
       )}
 

@@ -1,23 +1,4 @@
 /* flow-runtime/src/flow-runtime.css — block/renderer styles, ui-tokens only */
-.flow-renderer { display: flex; flex-direction: column; gap: 16px; }
-
-.fr-preview-notice {
-  background: var(--warning-muted); color: var(--text-primary);
-  border: 1px solid var(--warning); border-radius: var(--radius-sm);
-  padding: 8px 12px; font-size: 13px;
-}
-
-.fr-steps { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
-.fr-steps li { display: flex; }
-.fr-step-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--border-primary); background: var(--bg-card);
-  color: var(--text-secondary); border-radius: var(--radius-sm);
-  padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer;
-}
-.fr-step-btn[aria-current='step'] { border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.fr-step-btn .fr-step-done { color: var(--success); }
-
 .fr-block { background: var(--bg-card); border: 1px solid var(--border-primary);
   border-radius: var(--radius-md); padding: 20px; }
 .fr-block:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -37,14 +18,7 @@
 .fr-fieldset { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 12px; margin: 0; }
 .fr-choice-group { display: flex; flex-direction: column; gap: 6px; }
 .fr-choice-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-primary); }
-/* Scoped to `.flow-renderer`: this is a PACKAGE stylesheet, so an unscoped
-   `input[type=...]` selector restyled every checkbox and radio in the host
-   app — all of enrollx, and all of familyhub once Plan 5 adds the second
-   host — whether or not it sat inside a flow. */
-.flow-renderer input[type='radio'],
-.flow-renderer input[type='checkbox'] { accent-color: var(--accent); }
 .fr-required { color: var(--danger); margin-left: 2px; }
-.fr-field-error { color: var(--danger); font-size: 12px; }
 .fr-empty { color: var(--text-tertiary); font-size: 14px; }
 .fr-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -54,10 +28,15 @@
 .fr-doc-info { flex: 1 1 220px; min-width: 0; }
 .fr-doc-info strong { color: var(--text-primary); font-size: 14px; }
 .fr-doc-info p { margin: 2px 0 0; color: var(--text-secondary); font-size: 13px; }
-.fr-doc-flags { display: flex; gap: 6px; margin-top: 4px; }
 .fr-doc-flag { font-size: 11px; padding: 1px 6px; border-radius: 999px;
   background: var(--bg-tertiary); color: var(--text-secondary); }
-.fr-hidden-input { display: none; }
+
+/* Runtime documents-step upload affordance (StepRenderer, Plan 3) — a plain
+   visible file input per named doc, styled minimally to match .fr-input's
+   footprint. */
+.fr-file-input { font: inherit; font-size: 13px; color: var(--text-primary); max-width: 100%; }
+.fr-doc-uploaded { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.fr-doc-uploaded li { font-size: 13px; color: var(--text-secondary); }
 
 .fr-item-status { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .fr-item-status--not_started, .fr-item-status--in_progress { background: var(--bg-tertiary); color: var(--text-secondary); }
@@ -66,25 +45,7 @@
 .fr-item-status--rejected { background: var(--danger-muted); color: var(--danger); }
 .fr-item-status--waived { background: var(--tint-amber-bg); color: var(--tint-amber-text); }
 
-.fr-payment-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-.fr-payment-row { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px 14px; }
-.fr-payment-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.fr-payment-amount { font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 4px 0 12px; }
-.fr-payment-paid { display: inline-flex; align-items: center; gap: 8px;
-  background: var(--success-muted); color: var(--tint-green-text);
-  border-radius: var(--radius-sm); padding: 8px 12px; font-weight: 600; }
-
 .fr-message-body p { margin: 0 0 8px; color: var(--text-primary); line-height: 1.55; }
-
-.fr-review-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.fr-review-list li { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-primary); }
-.fr-review-done span[aria-hidden] { color: var(--success); }
-.fr-review-open span[aria-hidden] { color: var(--text-tertiary); }
-.fr-review-warn { background: var(--warning-muted); border-radius: var(--radius-sm);
-  padding: 8px 12px; color: var(--text-primary); font-size: 13px; }
-
-.fr-footer { display: flex; justify-content: space-between; gap: 12px; }
-.fr-footer-spacer { flex: 1; }
 
 .fr-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -95,20 +56,3 @@
 .fr-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .fr-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .fr-btn--primary { background: var(--accent-ink); border-color: var(--accent-ink); color: var(--text-inverse); }
-
-/* Pre-filled, non-editable context on an application-model form block (the
-   school and school year). A definition list, not disabled inputs: these are
-   facts the engine already knows from the tenant and the application, and a
-   disabled input still reads as "something you were meant to fill in".
-   `grid-column: 1 / -1` because `.fr-form-fields` is an auto-fill grid —
-   without it this lands in a single narrow column. */
-.fr-context {
-  grid-column: 1 / -1; margin: 0; padding: 10px 12px;
-  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
-  background: var(--bg-subtle, var(--bg-card));
-  display: grid; gap: 6px;
-}
-.fr-context-row { display: flex; gap: 8px; align-items: baseline; }
-.fr-context-row dt { margin: 0; min-width: 9ch; font-size: 13px; font-weight: 500;
-  color: var(--text-secondary); }
-.fr-context-row dd { margin: 0; font-size: 14px; color: var(--text-primary); }

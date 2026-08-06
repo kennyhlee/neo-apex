@@ -1,43 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import {
-  DONE_ITEM_STATUSES,
-  formatCents,
-  paymentAmountFor,
-  type ApplicationItem,
-} from '@neoapex/flow-runtime';
+import type { ItemStatus, WorkflowItemView } from '@neoapex/flow-runtime';
 import {
   decodeToken,
   FacadeError,
-  fetchApplication,
+  fetchInstance,
   getDocumentUrl,
-  submitApplication,
+  runAction,
   uploadDocumentFile,
 } from '../api/facade.ts';
-import {
-  entityData,
-  entityId,
-  type ApplicationStatus,
-  type EntityRecord,
-  type HubBundle,
-  type ItemStatus,
-} from '../types/registration.ts';
+import { entityData, entityId, type EntityRecord, type InstanceBundle } from '../types/workflow.ts';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './HubPage.css';
 
 type Tone = 'info' | 'success' | 'warning' | 'danger';
-
-const STATUS_TONE: Record<ApplicationStatus, Tone> = {
-  draft: 'info',
-  submitted: 'info',
-  in_review: 'info',
-  pending_items: 'warning',
-  approved: 'success',
-  enrolled: 'success',
-  waitlisted: 'warning',
-  declined: 'danger',
-  withdrawn: 'danger',
-};
 
 const ITEM_TONE: Record<ItemStatus, Tone> = {
   not_started: 'warning',
@@ -48,24 +24,15 @@ const ITEM_TONE: Record<ItemStatus, Tone> = {
   waived: 'info',
 };
 
-const ALL_STATUSES: ApplicationStatus[] = [
-  'draft', 'submitted', 'in_review', 'pending_items', 'approved',
-  'enrolled', 'waitlisted', 'declined', 'withdrawn',
-];
 const ALL_ITEM_STATUSES: ItemStatus[] = [
   'not_started', 'in_progress', 'submitted', 'verified', 'rejected', 'waived',
 ];
 
 // Statuses where the PARENT still has to do something. `submitted` is
-// deliberately excluded -- the parent already acted (uploaded/paid/filled
-// the form) and it is now with the school for review.
+// deliberately excluded -- the parent already acted (uploaded/filled the
+// form/acknowledged) and it is now with the school for review.
 const OUTSTANDING: ItemStatus[] = ['not_started', 'in_progress', 'rejected'];
-const TERMINAL: ApplicationStatus[] = ['declined', 'withdrawn'];
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.heic,.docx';
-
-function asStatus(value: unknown): ApplicationStatus {
-  return ALL_STATUSES.includes(value as ApplicationStatus) ? (value as ApplicationStatus) : 'draft';
-}
 
 function asItemStatus(value: unknown): ItemStatus {
   return ALL_ITEM_STATUSES.includes(value as ItemStatus) ? (value as ItemStatus) : 'not_started';
@@ -80,76 +47,46 @@ function asBool(v: unknown): boolean {
   return String(v) === 'true';
 }
 
-interface ApplicationView {
-  application_id: string;
-  status: ApplicationStatus;
-  /** Task 10: apexflow's workflow lineage id (`instance.definition_id`,
-   *  passed through unchanged by familyhub-backend's reshape) -- needed to
-   *  build the /w/{tenantId}/{definitionId} continue-form link below, since
-   *  that route segment no longer exists implicitly the way the old
-   *  single-registration-per-school /register/:tenantId path did. */
-  definition_id: string;
+/** `WorkflowItemView` plus the raw `payload_ref` field a `documents`-kind
+ *  item row also carries. `uploadDocumentFile` -> `completeItem` now writes
+ *  this (Task 3's write path, threaded through by the fix for final-review
+ *  finding C1) -- kept as its own field so the "view document" affordance
+ *  can read it straight off the item row without another frontend change. */
+interface ItemView extends WorkflowItemView {
+  payload_ref?: string;
 }
 
 /**
- * `application_id` here is the ONE genuine display exception to the
- * identifier trap (bindings §1 discrepancy 3): the business id, shown to
- * the parent, never dispatched on.
+ * IDENTIFIER TRAP: `entity_id` below MUST go through `entityId()`, never a
+ * row's business `item_id` field -- every action this page dispatches
+ * (`uploadDocumentFile` -> `completeItem`) sends this value straight
+ * through, and the backend resolves it against `entity_id`. `blocking` is
+ * coerced with `asBool` for the same stringly-typed-top-level-field reason.
  */
-function toApplicationView(row: EntityRecord): ApplicationView {
-  const d = entityData(row);
-  return {
-    application_id: String(d.application_id ?? ''),
-    status: asStatus(d.status),
-    definition_id: String(d.definition_id ?? ''),
-  };
-}
-
-/**
- * IDENTIFIER TRAP: `item_id` below MUST be the row's DataCore `entity_id`,
- * never the business `item_id` field the row also carries -- every action
- * this page dispatches (`uploadDocumentFile` -> `completeItem`) sends this
- * value straight through, and the backend resolves it against `entity_id`
- * (bindings §5). `blocking` is coerced with `asBool` for the same
- * stringly-typed-top-level-field reason.
- */
-function toApplicationItems(rows: EntityRecord[]): ApplicationItem[] {
+function toItemViews(rows: EntityRecord[]): ItemView[] {
   return rows.map((row) => {
     const d = entityData(row);
     return {
-      // MUST go through entityId(): `d` is base_data for the envelope
-      // shape, which has no entity_id in it (see entityId's note).
-      item_id: entityId(row),
-      application_id: String(d.application_id ?? ''),
-      block_id: String(d.block_id ?? ''),
-      kind: (d.kind as ApplicationItem['kind']) ?? 'form',
+      entity_id: entityId(row),
+      step_id: String(d.step_id ?? ''),
+      kind: (d.kind as ItemView['kind']) ?? 'form',
       title: String(d.title ?? ''),
       status: asItemStatus(d.status),
       blocking: asBool(d.blocking),
-      payload_ref: typeof d.payload_ref === 'string' ? d.payload_ref : undefined,
+      payload_ref: typeof d.payload_ref === 'string' && d.payload_ref ? d.payload_ref : undefined,
     };
   });
 }
 
-/**
- * `draft_data` is a JSON-serialized string column (same shape as
- * `config.blocks` before `facade.ts` normalizes it, but this one is never
- * pre-parsed for us). Values inside the parsed object are real JS types
- * already and must not be re-coerced.
- */
-function parseDraft(applicationRow: EntityRecord): Record<string, unknown> {
-  const raw = entityData(applicationRow).draft_data;
-  if (typeof raw !== 'string') return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function isDone(status: ItemStatus): boolean {
-  return (DONE_ITEM_STATUSES as readonly string[]).includes(status);
+/** Turn a machine action name into a readable button label without a
+ *  per-action i18n key -- see RegisterPage's identical helper for why
+ *  action names have no fixed translatable set. */
+function actionLabel(action: string): string {
+  return action
+    .split('_')
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(' ');
 }
 
 /**
@@ -166,27 +103,27 @@ function isInvalidLinkError(err: unknown): boolean {
 export default function HubPage() {
   const { token = '' } = useParams();
   const { t } = useTranslation();
-  const [hub, setHub] = useState<HubBundle | null>(null);
+  const [instance, setInstance] = useState<InstanceBundle | null>(null);
   const [invalid, setInvalid] = useState(false);
   // Transient load/refresh failure -- a masked 5xx, a 429, an offline
   // phone. Distinct from `invalid`: it gets a retry affordance, never the
   // "this link is invalid or has expired" screen.
   const [loadError, setLoadError] = useState(false);
   const [busyItem, setBusyItem] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // Used both for the retry banner/button and for post-action refreshes
-  // (`onUpload`-adjacent `onSubmit`). `load()`'s failure must NEVER
-  // flip `invalid` -- a refresh blipping after a successful action, or a
-  // parent tapping retry, is not evidence the link itself is bad. Only the
-  // very first fetch (the effect below) can ever set `invalid`, since only
-  // there is there no existing working hub to protect.
+  // Used both for the retry banner/button and for post-action refreshes.
+  // `load()`'s failure must NEVER flip `invalid` -- a refresh blipping
+  // after a successful action, or a parent tapping retry, is not evidence
+  // the link itself is bad. Only the very first fetch (the effect below)
+  // can ever set `invalid`, since only there is there no existing working
+  // instance to protect.
   const load = useCallback(async () => {
     try {
-      const h = await fetchApplication(token);
-      setHub(h);
+      const i = await fetchInstance(token);
+      setInstance(i);
       setLoadError(false);
     } catch {
       setLoadError(true);
@@ -194,14 +131,14 @@ export default function HubPage() {
   }, [token]);
 
   // Inlined (rather than calling `load` from here) so the initial fetch
-  // can be cancellation-guarded the same way RegisterPage's effects are,
-  // AND so it alone -- never `load()` -- is allowed to set `invalid`.
+  // can be cancellation-guarded, AND so it alone -- never `load()` -- is
+  // allowed to set `invalid`.
   useEffect(() => {
     let cancelled = false;
-    fetchApplication(token)
-      .then((h) => {
+    fetchInstance(token)
+      .then((i) => {
         if (cancelled) return;
-        setHub(h);
+        setInstance(i);
         setInvalid(false);
         setLoadError(false);
       })
@@ -218,9 +155,6 @@ export default function HubPage() {
     };
   }, [token]);
 
-  // These are declared with `useCallback`, ahead of the early returns below,
-  // so React's rules-of-hooks are satisfied -- none of them depend on `hub`
-  // (only on `token`/`t`/`load`), so hoisting them costs nothing.
   const onUpload = useCallback(async (itemId: string, file: File | null) => {
     if (!file) return;
     setBusyItem(itemId);
@@ -248,16 +182,16 @@ export default function HubPage() {
     }
   }, [token, t]);
 
-  const onSubmit = useCallback(async () => {
-    setSubmitting(true);
+  const onAction = useCallback(async (action: string) => {
+    setActionBusy(action);
     setActionError(null);
     try {
-      await submitApplication(token);
+      await runAction(token, action);
       await load();
     } catch {
       setActionError(t('hub.submitError'));
     } finally {
-      setSubmitting(false);
+      setActionBusy(null);
     }
   }, [token, load, t]);
 
@@ -270,7 +204,7 @@ export default function HubPage() {
     );
   }
 
-  if (!hub) {
+  if (!instance) {
     if (loadError) {
       return (
         <div className="hub-page">
@@ -284,37 +218,27 @@ export default function HubPage() {
     return <div className="hub-page"><p className="hub-loading">{t('hub.loading')}</p></div>;
   }
 
-  const app = toApplicationView(hub.application);
-  const status = app.status;
-  const terminal = TERMINAL.includes(status);
+  const state = String(entityData(instance.instance).state ?? '');
+  const stateInfo = instance.definition.machine.states.find((s) => s.state_id === state);
+  const stateLabel = stateInfo?.name ?? state;
+  const terminal = stateInfo?.kind === 'terminal';
   const decoded = decodeToken(token);
-  const items = toApplicationItems(hub.items);
-  const draft = parseDraft(hub.application);
-  const planChoice =
-    typeof draft.payment_plan_selection === 'string' ? draft.payment_plan_selection : '';
-  // items.py stamps the original payment item with the `payment` block's OWN
-  // block_id; stripe_webhook.py stamps the later "Balance payment" item with
-  // the `payment_plan` block's id instead. paymentAmountFor uses this id to
-  // tell the two apart structurally (never by title) -- see its doc comment.
-  const paymentBlockId = hub.config.blocks.find((b) => b.type === 'payment')?.block_id ?? null;
+  const items = toItemViews(instance.items);
+  const actionableAllowed = instance.allowed.filter(
+    (a) => a !== 'save_draft' && a !== 'complete_item',
+  );
+  // Captured as a plain local (not read through `instance` again) so the
+  // nested `affordance` closure below doesn't need TS to prove `instance`
+  // is still non-null by the time it runs -- `instance` is a `useState`
+  // value, and TS's control-flow narrowing does not persist into a nested
+  // function declaration's body.
+  const definitionId = instance.definition.definition_id;
 
-  const amountDueFor = (item: ApplicationItem): string | null => {
-    const cents = paymentAmountFor(hub.config, planChoice, item, paymentBlockId);
-    return cents != null ? t('hub.amountDue').replace('{amount}', formatCents(cents)) : null;
-  };
+  const outstanding = items.filter((i) => OUTSTANDING.includes(i.status as ItemStatus));
 
-  const outstanding = items.filter((i) => OUTSTANDING.includes(i.status));
-  const blockingOutstanding = items.filter((i) => i.blocking && !isDone(i.status));
-  // Mirrors FlowRenderer's own canSubmit gate (submit is legal from draft or
-  // pending_items, once every blocking item is done) so this page never
-  // offers an action the runtime itself would refuse.
-  const canSubmit =
-    !terminal && (status === 'draft' || status === 'pending_items') &&
-    blockingOutstanding.length === 0;
-
-  function affordance(item: ApplicationItem) {
+  function affordance(item: ItemView) {
     const documentId = item.payload_ref;
-    if (item.kind === 'document' && documentId && !OUTSTANDING.includes(item.status)) {
+    if (item.kind === 'documents' && documentId && !OUTSTANDING.includes(item.status as ItemStatus)) {
       return (
         <button
           type="button"
@@ -325,55 +249,46 @@ export default function HubPage() {
         </button>
       );
     }
-    if (terminal || !OUTSTANDING.includes(item.status)) return null;
+    if (terminal || !OUTSTANDING.includes(item.status as ItemStatus)) return null;
 
-    if (item.kind === 'document') {
+    if (item.kind === 'documents') {
       return (
         <>
           <button
             type="button"
             className="hub-action"
-            disabled={busyItem === item.item_id}
+            disabled={busyItem === item.entity_id}
             aria-label={`${t('hub.upload')}: ${item.title}`}
-            onClick={() => fileInputs.current[item.item_id]?.click()}
+            onClick={() => fileInputs.current[item.entity_id]?.click()}
           >
-            {busyItem === item.item_id ? t('hub.uploading') : t('hub.upload')}
+            {busyItem === item.entity_id ? t('hub.uploading') : t('hub.upload')}
           </button>
           <input
-            ref={(el) => { fileInputs.current[item.item_id] = el; }}
+            ref={(el) => { fileInputs.current[item.entity_id] = el; }}
             type="file"
             accept={ACCEPT}
             className="hub-file-input"
             aria-hidden="true"
             tabIndex={-1}
             onChange={(e) => {
-              void onUpload(item.item_id, e.target.files?.[0] ?? null);
+              void onUpload(item.entity_id, e.target.files?.[0] ?? null);
               e.target.value = '';
             }}
           />
         </>
       );
     }
-    if (item.kind === 'form' && decoded && app.definition_id) {
+    // 'form' and 'message-ack' items are completed on the running workflow
+    // page itself (the form fields / acknowledgement checkbox live there,
+    // not here) -- send the parent back to it.
+    if ((item.kind === 'form' || item.kind === 'message-ack') && decoded) {
       return (
         <Link
           className="hub-action link"
-          to={`/w/${decoded.tenantId}/${app.definition_id}?token=${encodeURIComponent(token)}`}
+          to={`/w/${decoded.tenantId}/${definitionId}?token=${encodeURIComponent(token)}`}
         >
           {t('hub.continueForm')}
         </Link>
-      );
-    }
-    if (item.kind === 'payment') {
-      // Payments are not part of Plan 1 -- the checkout facade route was
-      // removed along with enrollx (Task 12); apexflow has no checkout
-      // surface. A `payment` item can no longer be created, but the kind
-      // stays in the type union, so render an inert disabled affordance
-      // rather than a dead "Pay now" button that would only 502.
-      return (
-        <button type="button" className="hub-action" disabled>
-          {t('hub.payNow')}
-        </button>
       );
     }
     return null;
@@ -383,16 +298,11 @@ export default function HubPage() {
     <div className="hub-page">
       <h1 className="hub-title">{t('hub.title')}</h1>
 
-      <section
-        className={`hub-banner tone-${STATUS_TONE[status]}`}
-        role="status"
-        aria-live="polite"
-      >
-        <span className={`hub-status-chip tone-${STATUS_TONE[status]}`}>
-          {t(`status.${status}`)}
+      <section className="hub-banner tone-info" role="status" aria-live="polite">
+        <span className="hub-status-chip tone-info">
+          {t('hub.state')}: {stateLabel}
         </span>
-        <p>{t(`statusBanner.${status}`)}</p>
-        {status === 'declined' && <p className="hub-contact">{t('hub.contactSchool')}</p>}
+        {terminal && <p className="hub-contact">{t('hub.contactSchool')}</p>}
       </section>
 
       {loadError && (
@@ -414,28 +324,24 @@ export default function HubPage() {
           ) : (
             <ul>
               {outstanding.map((item) => (
-                <li key={item.item_id}>
+                <li key={item.entity_id}>
                   <span>{item.title}</span>
-                  <span className="hub-outstanding-meta">
-                    {item.kind === 'payment' && amountDueFor(item) && (
-                      <span className="hub-amount-inline">{amountDueFor(item)}</span>
-                    )}
-                    {item.blocking && <span className="hub-blocking">{t('hub.blocking')}</span>}
-                  </span>
+                  {item.blocking && <span className="hub-blocking">{t('hub.blocking')}</span>}
                 </li>
               ))}
             </ul>
           )}
-          {canSubmit && (
+          {actionableAllowed.map((action) => (
             <button
+              key={action}
               type="button"
               className="hub-submit"
-              disabled={submitting}
-              onClick={() => void onSubmit()}
+              disabled={actionBusy === action}
+              onClick={() => void onAction(action)}
             >
-              {t('hub.submit')}
+              {actionLabel(action)}
             </button>
-          )}
+          ))}
         </section>
       )}
 
@@ -443,16 +349,13 @@ export default function HubPage() {
         <h2>{t('hub.checklist')}</h2>
         <ul>
           {items.map((item) => (
-            <li key={item.item_id} className="hub-item">
+            <li key={item.entity_id} className="hub-item">
               <div className="hub-item-main">
                 <span className="hub-item-title">{item.title}</span>
-                <span className={`hub-item-chip tone-${ITEM_TONE[item.status]}`}>
+                <span className={`hub-item-chip tone-${ITEM_TONE[item.status as ItemStatus]}`}>
                   {t(`itemStatus.${item.status}`)}
                 </span>
               </div>
-              {item.kind === 'payment' && OUTSTANDING.includes(item.status) && amountDueFor(item) && (
-                <p className="hub-amount">{amountDueFor(item)}</p>
-              )}
               <div className="hub-item-actions">{affordance(item)}</div>
             </li>
           ))}

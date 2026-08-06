@@ -96,7 +96,7 @@ def test_upload_proxies_to_apexflow_token_scoped_route(client, fake_http):
                   FakeResponse(201, {"document_id": "DC0005",
                                      "upload_url": "https://r2.example/put",
                                      "storage_key": f"{TENANT}/wi-1/DC0005/shots.pdf"}))
-    resp = client.post(f"/api/application/{TOKEN}/documents",
+    resp = client.post(f"/api/instance/{TOKEN}/documents",
                        json={"item_id": "item-eid-docs", "filename": "shots.pdf",
                              "content_type": "application/pdf", "size": 12345})
     assert resp.status_code == 201
@@ -124,7 +124,7 @@ def test_upload_ignores_client_supplied_uploaded_by(client, fake_http):
                                      "upload_url": "https://r2.example/put",
                                      "storage_key": "k"}))
     resp = client.post(
-        f"/api/application/{TOKEN}/documents",
+        f"/api/instance/{TOKEN}/documents",
         json={"item_id": "item-eid-docs", "filename": "shots.pdf",
               "content_type": "application/pdf", "size": 100,
               "uploaded_by": "family:some-other-instance",
@@ -141,7 +141,7 @@ def test_upload_ignores_client_supplied_uploaded_by(client, fake_http):
 def test_upload_without_item_id(client, fake_http):
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/documents",
                   FakeResponse(201, {"document_id": "DC0006", "upload_url": "u", "storage_key": "k"}))
-    resp = client.post(f"/api/application/{TOKEN}/documents",
+    resp = client.post(f"/api/instance/{TOKEN}/documents",
                        json={"filename": "misc.pdf", "content_type": "application/pdf", "size": 10})
     assert resp.status_code == 201
     sent = fake_http.calls[0]["json"]
@@ -149,7 +149,7 @@ def test_upload_without_item_id(client, fake_http):
 
 
 def test_upload_rejects_disallowed_content_type(client, fake_http):
-    resp = client.post(f"/api/application/{TOKEN}/documents",
+    resp = client.post(f"/api/instance/{TOKEN}/documents",
                        json={"filename": "x.exe", "content_type": "application/x-msdownload",
                              "size": 10})
     assert resp.status_code == 415
@@ -157,7 +157,7 @@ def test_upload_rejects_disallowed_content_type(client, fake_http):
 
 
 def test_upload_rejects_oversize(client, fake_http):
-    resp = client.post(f"/api/application/{TOKEN}/documents",
+    resp = client.post(f"/api/instance/{TOKEN}/documents",
                        json={"filename": "x.pdf", "content_type": "application/pdf",
                              "size": 21 * 1024 * 1024})
     assert resp.status_code == 413
@@ -165,7 +165,7 @@ def test_upload_rejects_oversize(client, fake_http):
 
 
 def test_upload_rejects_non_positive_size(client, fake_http):
-    resp = client.post(f"/api/application/{TOKEN}/documents",
+    resp = client.post(f"/api/instance/{TOKEN}/documents",
                        json={"filename": "x.pdf", "content_type": "application/pdf", "size": 0})
     assert resp.status_code == 400
     assert fake_http.calls == []
@@ -178,7 +178,7 @@ def test_upload_with_invalid_token_passthrough(client, fake_http):
     no auth of its own). Relayed verbatim."""
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/documents",
                   FakeResponse(401, {"detail": "Invalid or revoked link"}))
-    resp = client.post(f"/api/application/{TOKEN}/documents",
+    resp = client.post(f"/api/instance/{TOKEN}/documents",
                        json={"filename": "x.pdf", "content_type": "application/pdf", "size": 10})
     assert resp.status_code == 401
 
@@ -186,7 +186,7 @@ def test_upload_with_invalid_token_passthrough(client, fake_http):
 def test_upload_masks_apexflow_500(client, fake_http):
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/documents",
                   FakeResponse(500, {"detail": "Traceback (most recent call last): ..."}))
-    resp = client.post(f"/api/application/{TOKEN}/documents",
+    resp = client.post(f"/api/instance/{TOKEN}/documents",
                        json={"filename": "x.pdf", "content_type": "application/pdf", "size": 10})
     assert resp.status_code == 502
     assert "Traceback" not in resp.text
@@ -200,10 +200,10 @@ def test_upload_is_rate_limited(client, fake_http):
                   FakeResponse(201, {"document_id": "DC0009", "upload_url": "u", "storage_key": "k"}))
     payload = {"filename": "x.pdf", "content_type": "application/pdf", "size": 10}
     for _ in range(20):
-        assert client.post(f"/api/application/{TOKEN}/documents",
+        assert client.post(f"/api/instance/{TOKEN}/documents",
                            json=payload).status_code == 201
     before = len(fake_http.calls)
-    throttled = client.post(f"/api/application/{TOKEN}/documents", json=payload)
+    throttled = client.post(f"/api/instance/{TOKEN}/documents", json=payload)
     assert throttled.status_code == 429
     # Refused by the dependency, so it cost no upstream call at all.
     assert len(fake_http.calls) == before
@@ -212,20 +212,20 @@ def test_upload_is_rate_limited(client, fake_http):
 def test_upload_apexflow_error_body_is_never_relayed_verbatim_on_5xx(client, fake_http):
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/documents",
                   FakeResponse(502, {"detail": "Could not start the upload. Please try again."}))
-    resp = client.post(f"/api/application/{TOKEN}/documents",
+    resp = client.post(f"/api/instance/{TOKEN}/documents",
                        json={"filename": "x.pdf", "content_type": "application/pdf", "size": 10})
     assert resp.status_code == 502
 
 
 def test_malformed_token_upload_costs_no_upstream_call(client, fake_http):
-    resp = client.post("/api/application/not-a-real-token/documents",
+    resp = client.post("/api/instance/not-a-real-token/documents",
                        json={"filename": "x.pdf", "content_type": "application/pdf", "size": 10})
     assert resp.status_code == 400
     assert fake_http.calls == []
 
 
 def test_malformed_token_download_costs_no_upstream_call(client, fake_http):
-    resp = client.get("/api/application/not-a-real-token/documents/DC0001/url")
+    resp = client.get("/api/instance/not-a-real-token/documents/DC0001/url")
     assert resp.status_code == 400
     assert fake_http.calls == []
 
@@ -237,7 +237,7 @@ def test_malformed_token_download_costs_no_upstream_call(client, fake_http):
 def test_download_proxies_to_apexflow_token_scoped_route(client, fake_http):
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}/documents/DC0001/url",
                   FakeResponse(200, {"download_url": "https://r2.example/get"}))
-    resp = client.get(f"/api/application/{TOKEN}/documents/DC0001/url")
+    resp = client.get(f"/api/instance/{TOKEN}/documents/DC0001/url")
     assert resp.status_code == 200
     assert resp.json()["download_url"] == "https://r2.example/get"
     assert fake_http.calls[0]["headers"]["X-Internal-Key"] == "test-internal-key"
@@ -248,21 +248,21 @@ def test_download_forbidden_passthrough(client, fake_http):
     from it is relayed verbatim (parent-safe: "not your document")."""
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}/documents/DC0002/url",
                   FakeResponse(403, {"detail": "Not permitted to view this document"}))
-    resp = client.get(f"/api/application/{TOKEN}/documents/DC0002/url")
+    resp = client.get(f"/api/instance/{TOKEN}/documents/DC0002/url")
     assert resp.status_code == 403
 
 
 def test_download_not_found_passthrough(client, fake_http):
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}/documents/DC9999/url",
                   FakeResponse(404, {"detail": "No such document on this instance"}))
-    resp = client.get(f"/api/application/{TOKEN}/documents/DC9999/url")
+    resp = client.get(f"/api/instance/{TOKEN}/documents/DC9999/url")
     assert resp.status_code == 404
 
 
 def test_download_masks_apexflow_500(client, fake_http):
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}/documents/DC0001/url",
                   FakeResponse(500, {"detail": "presign failed for bucket neoapex-prod"}))
-    resp = client.get(f"/api/application/{TOKEN}/documents/DC0001/url")
+    resp = client.get(f"/api/instance/{TOKEN}/documents/DC0001/url")
     assert resp.status_code == 502
     assert "neoapex-prod" not in resp.text
 
@@ -270,5 +270,5 @@ def test_download_masks_apexflow_500(client, fake_http):
 def test_download_status_forwarded_but_body_replaced_on_5xx(client, fake_http):
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}/documents/DC0001/url",
                   FakeResponse(502, {"detail": "That document is not available right now."}))
-    resp = client.get(f"/api/application/{TOKEN}/documents/DC0001/url")
+    resp = client.get(f"/api/instance/{TOKEN}/documents/DC0001/url")
     assert resp.status_code == 502

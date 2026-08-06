@@ -1,0 +1,3 @@
+.workflows-page {
+  animation: fadeIn var(--dur-base) var(--ease);
+}

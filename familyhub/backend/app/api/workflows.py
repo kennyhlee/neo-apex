@@ -1,5 +1,5 @@
-# familyhub/backend/app/api/registration.py
-"""Public registration facade routes.
+# familyhub/backend/app/api/workflows.py
+"""Public workflow facade routes.
 
 No credential at all on these two routes -- the config bundle is public
 data, and start creates a draft workflow_instance + issues the magic link.
@@ -14,16 +14,24 @@ by BOTH tenant_id AND a `definition_id` lineage id (spec §6's route shape,
 multi-definition per tenant, unlike enrollx's one-registration-per-school
 model.
 
-Response reshaping (deliberately minimal, per task-10-brief.md: "response
-reshaping minimal"): apexflow's config/start responses use a fundamentally
-different content model (`machine`/`steps`/sections) than enrollx's
-`registration_config.blocks` (`FlowBlock[]`) that `@neoapex/flow-runtime`'s
-`FlowRenderer` renders. There is no steps/sections -> blocks compiler yet
-(that bridge is explicitly out of scope -- task-10-brief.md: "deeper
-generalization is Phase 3"), so `_config_bundle_from_apexflow` below keeps
-the WIRE CONTRACT shape (`{config: {config_id, version, status, blocks}, ...}`)
-stable for the frontend but ships `blocks: []` until that compiler exists.
-`tenant`/`capacity` reshape losslessly (apexflow's shapes already match).
+Task 6 (Plan 3): module renamed `registration.py` -> `workflows.py`, routes
+renamed `/registration/*` -> `/workflows/*`. This facade now RELAYS
+apexflow's config bundle VERBATIM -- no more `_config_bundle_from_apexflow`
+reshape. apexflow's Task 4 work made the internal
+`/internal/workflows/{tenant_id}/{definition_id}/config` route itself
+return the exact `{definition, models, tenant, capacity, lineage_status}`
+shape the family runtime (flow-runtime's `StepRenderer`) needs, so there is
+no longer a `blocks: []` compiler-placeholder to ship -- the placeholder,
+and the function that emitted it, are deleted. Likewise the `start` route
+no longer renames `instance.state` to `application.status`
+(`_application_view_from_instance` is deleted) -- apexflow's `state`
+vocabulary is relayed as-is; the frontend migrates onto it in Task 7.
+
+`hub_url` stays `"/application/{token}"` (a familyhub-FRONTEND route, not a
+backend API path -- HubPage.tsx lives at `/application/:token`) even though
+the backend's own token-scoped API surface is now mounted at
+`/api/instance/*`. The two are independent namespaces; only the backend API
+path renamed.
 
 Upstream-error policy (applies to every route in this module): 4xx from
 apexflow is passed through verbatim (parent-safe, e.g. "no published
@@ -44,27 +52,10 @@ from app.upstream import apexflow, apexflow_headers, call_upstream
 router = APIRouter()
 
 
-def _config_bundle_from_apexflow(data: dict) -> dict:
-    definition = data.get("definition") if isinstance(data.get("definition"), dict) else {}
-    return {
-        "config": {
-            "config_id": definition.get("definition_id", ""),
-            "version": definition.get("version", 1),
-            "status": "published",
-            # Placeholder pending the steps/sections -> FlowBlock[] compiler
-            # (Phase 3, see module docstring). Keeps the wire contract stable
-            # in the meantime -- real form rendering needs that compiler.
-            "blocks": [],
-        },
-        "tenant": data.get("tenant") or {},
-        "capacity": data.get("capacity") or {"capacity": None, "admitted": 0, "full": False},
-    }
-
-
-@router.get("/registration/{tenant_id}/{definition_id}")
-def get_registration_bundle(tenant_id: str, definition_id: str) -> Response:
-    """The public config bundle: `{config, tenant, capacity}` -- see module
-    docstring for the reshaping this performs."""
+@router.get("/workflows/{tenant_id}/{definition_id}")
+def get_workflow_bundle(tenant_id: str, definition_id: str) -> Response:
+    """The public config bundle: apexflow's `{definition, models, tenant,
+    capacity, lineage_status}` relayed verbatim -- see module docstring."""
     resp = call_upstream(
         "GET",
         apexflow(f"/internal/workflows/{tenant_id}/{definition_id}/config"),
@@ -78,7 +69,7 @@ def get_registration_bundle(tenant_id: str, definition_id: str) -> Response:
         return upstream_unavailable()
     if not isinstance(data, dict):
         return upstream_unavailable()
-    return JSONResponse(_config_bundle_from_apexflow(data), status_code=200)
+    return JSONResponse(data, status_code=200)
 
 
 class StartBody(BaseModel):
@@ -112,25 +103,11 @@ def _school_year_for_date(ref: datetime.date) -> str:
     return f"{start_year}-{start_year + 1}"
 
 
-def _application_view_from_instance(instance: dict) -> dict:
-    """Minimal reshape (module docstring): apexflow's instance row uses
-    `state`, the old wire contract (and flow-runtime's `ApplicationStatus`)
-    used `status` -- the two vocabularies happen to be IDENTICAL string sets
-    (apexflow's enrollment template was modeled on enrollx's own status
-    lifecycle), so this is a pure rename, not a translation. Every other
-    field is passed through unchanged (already a flattened row, which
-    `EntityRecord`/`entityData()` on the frontend already tolerates)."""
-    view = dict(instance)
-    if "state" in view:
-        view["status"] = view["state"]
-    return view
-
-
 @router.post(
-    "/registration/{tenant_id}/{definition_id}/start",
+    "/workflows/{tenant_id}/{definition_id}/start",
     dependencies=[Depends(limit_start)],
 )
-def start_registration(tenant_id: str, definition_id: str, body: StartBody) -> Response:
+def start_workflow(tenant_id: str, definition_id: str, body: StartBody) -> Response:
     resp = call_upstream(
         "POST",
         apexflow(f"/internal/workflows/{tenant_id}/{definition_id}/start"),
@@ -153,7 +130,7 @@ def start_registration(tenant_id: str, definition_id: str, body: StartBody) -> R
         # would hand the parent a broken link if it ever didn't.
         raise HTTPException(502, "Upstream did not return a magic-link token")
     body_out = {
-        "application": _application_view_from_instance(data.get("instance") or {}),
+        "instance": data.get("instance") or {},
         "items": data.get("items") or [],
         "token": token,
         "link": data.get("link", ""),

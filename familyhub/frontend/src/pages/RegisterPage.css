@@ -99,6 +99,45 @@
   margin-top: var(--space-4);
 }
 
+/* Running phase: StepRenderer's own `.fr-*` classes (flow-runtime.css)
+   handle the form itself -- this only gives its blocks the same vertical
+   rhythm as the rest of this page's sections, matching StaffEntryPage's
+   `.staff-entry-page .fr-step-renderer` precedent. */
+.register-page .fr-step-renderer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+/* Action buttons derived from InstanceBundle.allowed (bindings §5's
+   "family-permitted actions" surface) -- same visual treatment as
+   HubPage's `.hub-action`, duplicated locally rather than cross-imported
+   so this page's stylesheet stays self-contained. */
+.register-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.register-actions .hub-action {
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent-ink);
+  color: var(--text-inverse);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.register-actions .hub-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 @media (min-width: 720px) {
   .register-page {
     padding: var(--space-6);

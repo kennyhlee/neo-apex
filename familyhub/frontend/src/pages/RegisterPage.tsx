@@ -1,41 +1,57 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { FlowRenderer, defaultSchoolYear } from '@neoapex/flow-runtime';
-import type { ApplicationItem, ApplicationSummary } from '@neoapex/flow-runtime';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { StepRenderer, defaultSchoolYear, type ModelFieldSource, type WorkflowDraft } from '@neoapex/flow-runtime';
+// flow-runtime ships its own `.fr-*` styles, not part of familyhub's own
+// stylesheet -- without this import StepRenderer renders with raw browser
+// defaults (unstyled inputs, no spacing). Same pattern as apexflow's
+// PreviewPane.tsx and admindash's StaffEntryPage.tsx: familyhub's
+// theme.css already re-points every token this stylesheet reads
+// (--bg-card, --bg-input, --border-primary, --accent-ink, etc.) at the
+// same compatibility layer those two hosts rely on, so no new tokens are
+// needed here.
+import '@neoapex/flow-runtime/src/flow-runtime.css';
 import {
   completeItem,
-  fetchApplication,
-  fetchRegistrationBundle,
+  draftToSectionAnswers,
+  FacadeError,
+  fetchInstance,
+  fetchWorkflowBundle,
+  runAction,
   saveDraft,
-  startRegistration,
-  submitApplication,
+  sectionAnswersToDraft,
+  startWorkflow,
   uploadDocumentFile,
 } from '../api/facade.ts';
 import {
   entityData,
   entityId,
   type EntityRecord,
-  type HubBundle,
-  type RegistrationBundle,
-} from '../types/registration.ts';
+  type InstanceBundle,
+  type WorkflowBundle,
+  type WorkflowItemView,
+} from '../types/workflow.ts';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './RegisterPage.css';
 
 /**
- * `loading`   -- fetching the public config bundle, or (resume path) the
- *                application behind a `?token=`.
- * `email`     -- config bundle loaded, no token yet: capture the applicant's
- *                email and start a new application.
- * `running`   -- an application + token are in hand: mount FlowRenderer.
- * `notFound`  -- the tenant's config bundle 404s (bad URL, or the school
- *                simply isn't open for registration -- the backend does not
- *                distinguish the two, see bindings §"Config bundle route").
+ * `loading`   -- fetching the public workflow bundle, or (resume path) the
+ *                instance behind a `?token=`.
+ * `email`     -- workflow bundle loaded, no token yet: capture the
+ *                applicant's email and start a new instance.
+ * `running`   -- an instance + token are in hand: mount `StepRenderer`.
+ * `notFound`  -- the tenant's workflow bundle 404s (bad URL, or no
+ *                published `channel_access: "family"` row -- the backend
+ *                does not distinguish the two).
  * `invalidLink` -- a `?token=` was supplied but is unknown/expired/revoked.
  *                  Distinct from `notFound` because the *school* is fine
- *                  here -- only the parent's link is bad -- so a different,
- *                  more accurate message + "request a new link" CTA applies.
+ *                  here -- only the parent's link is bad.
+ * `closed`    -- the lineage's `lineage_status !== 'active'` (deprecated or
+ *                retired): still published, but no longer accepting NEW
+ *                instances. A friendly page, not an error -- an existing
+ *                parent's own link still resumes fine (see the resume
+ *                effect below, which never routes through this phase).
  */
-type Phase = 'loading' | 'email' | 'running' | 'notFound' | 'invalidLink';
+type Phase = 'loading' | 'email' | 'running' | 'notFound' | 'invalidLink' | 'closed';
 
 /**
  * DataCore stringifies every top-level field of a flattened row -- `"false"`
@@ -47,64 +63,12 @@ function asBool(v: unknown): boolean {
 }
 
 /**
- * `HubBundle.application` / `StartResponse.application` are flattened
- * DataCore rows. `application_id` here is the ONE genuine display exception
- * to the identifier trap (bindings §1 discrepancy 3): it is the business id,
- * shown to the parent, and no block ever dispatches on it.
+ * `draft_data` is a JSON-serialized string column on `workflow_instance`.
+ * Values inside the parsed object are real JS types already and must not
+ * be re-coerced.
  */
-function toApplicationSummary(row: EntityRecord): ApplicationSummary {
-  const d = entityData(row);
-  return {
-    application_id: String(d.application_id ?? ''),
-    school_year: String(d.school_year ?? ''),
-    status: (d.status as ApplicationSummary['status']) ?? 'draft',
-    channel_started: (d.channel_started as ApplicationSummary['channel_started']) ?? 'parent',
-    // Stringly-typed top-level DataCore field -- coerce before any numeric use.
-    config_version: Number(d.config_version ?? 1),
-    applicant_email: typeof d.applicant_email === 'string' ? d.applicant_email : undefined,
-  };
-}
-
-/**
- * IDENTIFIER TRAP: `item_id` below MUST be the row's DataCore `entity_id`,
- * never the business `item_id` field the row also carries -- every action
- * this page dispatches (`onCompleteItem`, `onUploadDocument`) sends this
- * value straight back to `completeItem`/`uploadDocumentFile`, which resolve
- * it against `entity_id` server-side (bindings §5). `blocking` is coerced
- * with `asBool` for the same reason `application.config_version` is coerced
- * with `Number` above -- it is a stringly-typed top-level field.
- */
-function toApplicationItems(rows: EntityRecord[]): ApplicationItem[] {
-  return rows.map((row) => {
-    const d = entityData(row);
-    return {
-      // MUST go through entityId(): `d` is base_data for the envelope
-      // shape, which has no entity_id in it (see entityId's note).
-      item_id: entityId(row),
-      application_id: String(d.application_id ?? ''),
-      block_id: String(d.block_id ?? ''),
-      kind: (d.kind as ApplicationItem['kind']) ?? 'form',
-      title: String(d.title ?? ''),
-      status: (d.status as ApplicationItem['status']) ?? 'not_started',
-      blocking: asBool(d.blocking),
-      due_at: typeof d.due_at === 'string' ? d.due_at : undefined,
-      completed_by: typeof d.completed_by === 'string' ? d.completed_by : undefined,
-      payload_ref: typeof d.payload_ref === 'string' ? d.payload_ref : undefined,
-      due_days_after_approval:
-        d.due_days_after_approval != null ? Number(d.due_days_after_approval) : undefined,
-    };
-  });
-}
-
-/**
- * `draft_data` is a JSON-serialized string column (same shape as
- * `config.blocks` before `facade.ts` normalizes it, but this one is never
- * pre-parsed for us -- neither `HubBundle` nor `StartResponse` normalizes it,
- * since only `config` needs a typed shape). Values inside the parsed object
- * are real JS types already and must not be re-coerced.
- */
-function parseDraft(applicationRow: EntityRecord): Record<string, unknown> {
-  const raw = entityData(applicationRow).draft_data;
+function parseDraftData(instanceRow: EntityRecord): Record<string, unknown> {
+  const raw = entityData(instanceRow).draft_data;
   if (typeof raw !== 'string') return {};
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -114,41 +78,108 @@ function parseDraft(applicationRow: EntityRecord): Record<string, unknown> {
   }
 }
 
+/**
+ * IDENTIFIER TRAP: `entity_id` below MUST go through `entityId()`, never a
+ * row's business `item_id` field -- every action this page dispatches
+ * (`onCompleteItem`, `onUploadDocument`) sends this value straight back to
+ * `completeItem`/`uploadDocumentFile`, which resolve it against `entity_id`
+ * server-side. `blocking` is coerced with `asBool` for the same
+ * stringly-typed-top-level-field reason `application.config_version` used
+ * to be, pre-Task-12.
+ */
+function toItemViews(rows: EntityRecord[]): WorkflowItemView[] {
+  return rows.map((row) => {
+    const d = entityData(row);
+    return {
+      entity_id: entityId(row),
+      step_id: String(d.step_id ?? ''),
+      kind: (d.kind as WorkflowItemView['kind']) ?? 'form',
+      title: String(d.title ?? ''),
+      status: String(d.status ?? 'not_started'),
+      blocking: asBool(d.blocking),
+    };
+  });
+}
+
+/**
+ * `WorkflowBundle.models` values may be `null` (Plan 3 Task 4 finding: a
+ * referenced entity model that was never set up at this tenant) --
+ * `StepRenderer` types `models` as `Record<string, ModelFieldSource>` with
+ * no null. Filtering here means a section bound to a dropped key resolves
+ * to `undefined` in `StepRenderer`'s own lookup, and `sectionFields`
+ * already treats that as "render no fields" rather than crashing.
+ */
+function usableModels(models: Record<string, ModelFieldSource | null>): Record<string, ModelFieldSource> {
+  const out: Record<string, ModelFieldSource> = {};
+  for (const [key, value] of Object.entries(models)) {
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
+/** A 409's relayed body shape for `startWorkflow` (bindings §1f/§5a: FastAPI
+ *  wraps an `HTTPException(409, {"reason": ...})` as `{"detail": {...}}`
+ *  on the wire). */
+interface Start409Body {
+  detail?: { reason?: string };
+}
+
+/** Turn a machine action name into a readable button label without a
+ *  per-action i18n key -- action names are tenant-authored and open-ended
+ *  (a workflow definition can declare any transition name), so there is no
+ *  fixed set to translate ahead of time. */
+function actionLabel(action: string): string {
+  return action
+    .split('_')
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+const AUTOSAVE_DEBOUNCE_MS = 800;
+
 export default function RegisterPage() {
-  // Task 10: route is now /w/:tenantId/:definitionId (spec §6), renamed
-  // from /register/:tenantId -- see App.tsx.
   const { tenantId = '', definitionId = '' } = useParams();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
 
   const [phase, setPhase] = useState<Phase>('loading');
-  const [bundle, setBundle] = useState<RegistrationBundle | null>(null);
-  const [hub, setHub] = useState<HubBundle | null>(null);
+  const [bundle, setBundle] = useState<WorkflowBundle | null>(null);
+  const [instance, setInstance] = useState<InstanceBundle | null>(null);
   const [token, setToken] = useState<string>(searchParams.get('token') ?? '');
   const [email, setEmail] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<WorkflowDraft>({});
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Set the instant `onStart` has a token in hand -- before the resume
   // effect below can ever see the new `token` on a re-render. Guards that
-  // effect from re-firing a second, wholly redundant `fetchApplication`
-  // right after a successful start (see the effect's comment).
+  // effect from re-firing a second, wholly redundant `fetchInstance` right
+  // after a successful start.
   const startedLocallyRef = useRef(false);
+  // Hydrate `draft` from the server's `draft_data` exactly once per
+  // instance load -- never again on a post-action refresh, so a refresh
+  // triggered by e.g. `onCompleteItem` can't clobber an in-flight edit the
+  // autosave debounce hasn't flushed yet. `draft` is the client's source of
+  // truth for the lifetime of the page after that first hydration.
+  const draftHydratedRef = useRef(false);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load the public config bundle (school name, capacity state, blocks).
-  // This is unauthenticated and pre-start -- it never needs a token. (Phase
-  // starts at 'loading' via useState's initializer above; this effect only
-  // ever moves it forward from there, so no synchronous reset is needed
-  // inside the effect body itself.)
+  // Load the public workflow bundle (school name, capacity state, steps,
+  // models, lineage_status). Unauthenticated and pre-start -- never needs a
+  // token.
   useEffect(() => {
     let cancelled = false;
-    fetchRegistrationBundle(tenantId, definitionId)
+    fetchWorkflowBundle(tenantId, definitionId)
       .then((b) => {
         if (cancelled) return;
         setBundle(b);
-        setPhase((prev) => (prev === 'running' ? prev : 'email'));
+        setPhase((prev) => {
+          if (prev === 'running') return prev;
+          return b.lineage_status !== 'active' ? 'closed' : 'email';
+        });
       })
       .catch(() => {
         if (!cancelled) setPhase('notFound');
@@ -158,32 +189,23 @@ export default function RegisterPage() {
     };
   }, [tenantId, definitionId]);
 
-  // Resume path: `?token=` present -> load the application directly and
-  // skip the email-capture phase entirely, once the config bundle is also
-  // in hand (needed so a slow bundle fetch can't race the phase transition).
-  // Guarded by `startedLocallyRef`: without it, `onStart` setting `token`
-  // (previously '') makes both guards below pass on the very next render,
-  // firing a second, wholly redundant `fetchApplication` right after a
-  // successful start -- and that redundant fetch's own failure (a flaky
-  // connection, a masked 502, a 429) would otherwise replace a
-  // successfully-mounted FlowRenderer with "this link is invalid" seconds
-  // after the application was created.
+  // Resume path: `?token=` present -> load the instance directly and skip
+  // the email-capture phase entirely, once the workflow bundle is also in
+  // hand. This intentionally never checks `bundle.lineage_status` -- a
+  // deprecated/retired lineage still lets an EXISTING instance's own link
+  // resume (only NEW starts are blocked); the 'closed' phase set by the
+  // bundle-load effect above is guarded against overwriting 'running' for
+  // exactly this reason.
   useEffect(() => {
     if (!token || !bundle || startedLocallyRef.current) return;
     let cancelled = false;
-    fetchApplication(token)
-      .then((h) => {
+    fetchInstance(token)
+      .then((i) => {
         if (cancelled) return;
-        setHub(h);
+        setInstance(i);
         setPhase('running');
       })
       .catch(() => {
-        // Never downgrade a phase that is already `running` -- mirrors the
-        // `prev === 'running' ? prev : ...` guard the sibling bundle-load
-        // effect above already uses. Belt-and-suspenders alongside the
-        // `startedLocallyRef` guard: this effect should not even re-fire
-        // once running, but if it somehow did, its failure must still
-        // never imply the link itself is bad.
         if (!cancelled) setPhase((prev) => (prev === 'running' ? prev : 'invalidLink'));
       });
     return () => {
@@ -191,16 +213,23 @@ export default function RegisterPage() {
     };
   }, [token, bundle]);
 
-  const refreshHub = useCallback(async () => {
+  // Hydrate `draft` from the instance's persisted `draft_data` exactly
+  // once, the first time an instance is in hand (fresh start or resume).
+  useEffect(() => {
+    if (!instance || !bundle || draftHydratedRef.current) return;
+    draftHydratedRef.current = true;
+    setDraft(sectionAnswersToDraft(bundle.definition.steps, parseDraftData(instance.instance)));
+  }, [instance, bundle]);
+
+  const refreshInstance = useCallback(async () => {
     if (!token) return;
     try {
-      setHub(await fetchApplication(token));
+      setInstance(await fetchInstance(token));
     } catch {
       // A post-action refresh failing is not evidence the action itself
-      // failed -- swallow it here so `onCompleteItem`/`onUploadDocument`'s
-      // own try/catch below (which reports "the action failed") never
-      // fires for a refresh that merely blipped after the real action
-      // already succeeded. Same root cause as HubPage's `load()`.
+      // failed -- swallow it here so the action's own try/catch (which
+      // reports "the action failed") never fires for a refresh that merely
+      // blipped after the real action already succeeded.
     }
   }, [token]);
 
@@ -215,23 +244,66 @@ export default function RegisterPage() {
     setFormError(null);
     setStarting(true);
     try {
-      const started = await startRegistration(tenantId, definitionId, value);
+      const started = await startWorkflow(tenantId, definitionId, value);
       // Must be set before `setToken` -- otherwise the resume effect's
       // guard is not yet in place on the very next render.
       startedLocallyRef.current = true;
       setToken(started.token);
       setLinkSent(true);
-      // `started` already carries the fresh application + items -- reuse
-      // them (and the config bundle already in hand) instead of an
-      // immediate second round trip to `fetchApplication`. On a slow phone
-      // connection that second request is exactly the kind of avoidable
-      // wait this page should not impose.
-      setHub({ application: started.application, items: started.items, config: bundle.config });
+      // `StartResponse` carries no `allowed`/pinned `definition` (unlike
+      // the old registration-era shape) -- fetch the real InstanceBundle
+      // rather than hand-assembling a partial one.
+      const fresh = await fetchInstance(started.token);
+      setInstance(fresh);
       setPhase('running');
-    } catch {
+    } catch (err) {
+      if (err instanceof FacadeError && err.status === 409) {
+        const reason = (err.body as Start409Body | undefined)?.detail?.reason;
+        if (reason === 'lineage_not_active') {
+          setPhase('closed');
+          setStarting(false);
+          return;
+        }
+        if (reason === 'definition_stale' || reason === 'definition_broken') {
+          setFormError(t('register.startUnavailable'));
+          setStarting(false);
+          return;
+        }
+      }
+      // Any other failure (a capacity-style 409 from the machine, a
+      // network blip, a masked 502) falls through to the generic message.
       setFormError(t('register.startError'));
     } finally {
       setStarting(false);
+    }
+  }
+
+  function handleDraftChange(next: WorkflowDraft) {
+    setDraft(next);
+    if (!token || !bundle) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      // Converted against the FULL step set (not just the currently
+      // visible/state-filtered steps) so an answer from a step the
+      // instance has already moved past is never dropped from this
+      // snapshot's payload.
+      saveDraft(token, draftToSectionAnswers(bundle.definition.steps, next))
+        .then(() => setRuntimeError(null))
+        .catch(() => setRuntimeError(t('register.saveError')));
+    }, AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  async function handleAction(action: string) {
+    if (!token) return;
+    setActionBusy(action);
+    setRuntimeError(null);
+    try {
+      await runAction(token, action);
+      await refreshInstance();
+    } catch {
+      setRuntimeError(t('hub.submitError'));
+    } finally {
+      setActionBusy(null);
     }
   }
 
@@ -249,6 +321,22 @@ export default function RegisterPage() {
         <p className="register-status" role="alert">
           {t('register.notFound')}
         </p>
+      </div>
+    );
+  }
+
+  if (phase === 'closed') {
+    return (
+      <div className="register-page">
+        <header className="register-header">
+          <h1>{t('register.closedTitle')}</h1>
+        </header>
+        <p className="register-status" role="alert">
+          {t('register.closedBody')}
+        </p>
+        <Link className="register-link" to="/request-link">
+          {t('hub.requestNewLink')}
+        </Link>
       </div>
     );
   }
@@ -311,6 +399,14 @@ export default function RegisterPage() {
   }
 
   // phase === 'running'
+  const state = String(entityData(instance?.instance).state ?? '');
+  const visibleSteps = bundle.definition.steps.filter((s) => s.available_in.includes(state));
+  const models = usableModels(bundle.models);
+  const itemViews = instance ? toItemViews(instance.items) : [];
+  const actionableAllowed = (instance?.allowed ?? []).filter(
+    (a) => a !== 'save_draft' && a !== 'complete_item',
+  );
+
   return (
     <div className="register-page">
       <header className="register-header">
@@ -329,65 +425,60 @@ export default function RegisterPage() {
           {runtimeError}
         </p>
       )}
-      {hub && (
-        <FlowRenderer
-          config={hub.config}
-          mode="parent"
-          locale={locale}
-          schoolName={bundle.tenant.name}
-          application={toApplicationSummary(hub.application)}
-          items={toApplicationItems(hub.items)}
-          values={parseDraft(hub.application)}
-          onSaveDraft={async (values) => {
-            try {
-              await saveDraft(token, values);
-              setRuntimeError(null);
-            } catch (err) {
-              setRuntimeError(t('register.saveError'));
-              throw err;
+      {instance && (
+        <>
+          <StepRenderer
+            steps={visibleSteps}
+            models={models}
+            mode="family"
+            draft={draft}
+            onDraftChange={handleDraftChange}
+            items={itemViews}
+            onCompleteItem={(itemEid) =>
+              completeItem(token, itemEid)
+                .then(async () => {
+                  setRuntimeError(null);
+                  await refreshInstance();
+                })
+                .catch((err) => {
+                  setRuntimeError(t('hub.completeItemError'));
+                  throw err;
+                })
             }
-          }}
-          onCompleteItem={async (itemId) => {
-            try {
-              await completeItem(token, itemId);
-              await refreshHub();
-              setRuntimeError(null);
-            } catch (err) {
-              setRuntimeError(t('hub.completeItemError'));
-              throw err;
+            onUploadDocument={(itemEid, file) =>
+              uploadDocumentFile(token, itemEid, file)
+                .then(async () => {
+                  setRuntimeError(null);
+                  await refreshInstance();
+                })
+                .catch((err) => {
+                  setRuntimeError(t('hub.uploadFailed'));
+                  throw err;
+                })
             }
-          }}
-          onUploadDocument={async (_blockId, _doc, file, itemId) => {
-            if (!itemId) {
-              setRuntimeError(t('hub.uploadFailed'));
-              return;
-            }
-            try {
-              await uploadDocumentFile(token, itemId, file);
-              await refreshHub();
-              setRuntimeError(null);
-            } catch {
-              setRuntimeError(t('hub.uploadFailed'));
-            }
-          }}
-          onCheckout={async () => {
-            // Payments are not part of Plan 1 -- the checkout facade route
-            // was removed along with enrollx (Task 12); apexflow has no
-            // checkout surface. `onCheckout` is a required FlowRenderer
-            // prop, so it stays wired but inert: a `payment` block can no
-            // longer be configured, so this should never actually fire.
-            setRuntimeError(t('hub.payError'));
-          }}
-          onSubmit={async () => {
-            try {
-              await submitApplication(token);
-              navigate(`/application/${token}`);
-            } catch (err) {
-              setRuntimeError(t('hub.submitError'));
-              throw err;
-            }
-          }}
-        />
+            // No token-scoped documents-LISTING route exists on
+            // familyhub-backend yet (only presign-upload and
+            // download-by-id) -- StepRenderer's "already uploaded" sublist
+            // is therefore always empty here; uploading itself still
+            // works. Known gap, not this task's to close.
+            documents={[]}
+          />
+          {actionableAllowed.length > 0 && (
+            <div className="register-actions">
+              {actionableAllowed.map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  className="hub-action"
+                  disabled={actionBusy === action}
+                  onClick={() => void handleAction(action)}
+                >
+                  {actionLabel(action)}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
       <p className="register-hub-link">
         <Link className="register-link" to={`/application/${token}`}>

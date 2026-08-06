@@ -164,7 +164,7 @@ _ITEM_OP_FNS: dict[str, Callable[..., dict]] = {
     "waive_item": engine.waive_item,
 }
 
-# Declaration order matters for `_allowed_actions`'s honest listing (brief:
+# Declaration order matters for `allowed_actions`'s honest listing (brief:
 # "['save_draft','complete_item'] for family; all five for staff").
 _ITEM_BUILTINS_ALL: list[str] = ["save_draft", "complete_item", "verify_item", "reject_item", "waive_item"]
 _ITEM_BUILTINS_FAMILY: list[str] = ["save_draft", "complete_item"]
@@ -295,16 +295,36 @@ def _write_state(ctx: EvalContext, to_state: str) -> None:
     """Persist `ctx.instance`'s state (plus every other in-memory field an
     effect already mutated onto `ctx.instance` this call — full-replace PUT,
     per `entity_base_data`), and `closed_at` if `to_state` is terminal-kind
-    (module docstring, decision 5)."""
+    (module docstring, decision 5).
+
+    Preconditioned on `ctx.instance`'s CURRENT `_version` (Plan 3 Task 2).
+    This is deliberately read AFTER every effect has already run — an effect
+    (`set_context`, `set_entity_field` with `ref == "instance"`,
+    `commit_sections`'s `_persist_subject_refs`) may itself have written and
+    refreshed `ctx.instance["_version"]` earlier in this same
+    `_apply_transition` call (see those primitives' own writes for the
+    refresh), and this write must use THAT refreshed version, not a stale
+    one from context-assembly time, or it would false-409 against its own
+    prior sibling write. Refresh strategy after this write: take
+    `_version` straight off `dc_update`'s return envelope (a native int on
+    both the real client and `FakeDataCore` — confirmed against
+    `datacore/src/datacore/store.py::put_entity`'s returned record, which
+    is echoed verbatim, before any query-path flattening) rather than
+    re-fetching via `dc.get_entity` — avoids an extra round trip per write
+    and is exactly the number DataCore's own `next_version = current + 1`
+    invariant guarantees on a successful CAS write."""
     state_def = next((s for s in ctx.definition["machine"].states if s.state_id == to_state), None)
     base = entity_base_data(ctx.instance)
     base["state"] = to_state
     if state_def is not None and state_def.kind == "terminal":
         base["closed_at"] = ctx.now.isoformat()
-    dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base, ctx.token)
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=engine.row_version(ctx.instance))
     ctx.instance["state"] = to_state
     if "closed_at" in base:
         ctx.instance["closed_at"] = base["closed_at"]
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
 
 
 def _apply_transition(ctx: EvalContext, transition: TransitionDef) -> None:
@@ -328,12 +348,18 @@ def _apply_transition(ctx: EvalContext, transition: TransitionDef) -> None:
 # --- allowed-actions listing (409 body) -----------------------------------
 
 
-def _allowed_actions(ctx: EvalContext) -> list[str]:
+def allowed_actions(ctx: EvalContext) -> list[str]:
     """Currently-satisfiable NON-system actions for `ctx.actor` from the
     current state: guard-passing transition action names (declaration
     order, deduped), plus the actor-appropriate item built-in names — empty
     when the instance is terminal/cancelled (built-ins aren't satisfiable
-    there either, per `_is_terminal_state`'s use in `_run_item_builtin`)."""
+    there either, per `_is_terminal_state`'s use in `_run_item_builtin`).
+
+    Public (Plan 3 Task 3 — promoted from `_allowed_actions`, no alias
+    kept): consumed both by the two 409 raise sites below AND by the
+    staff `GET .../allowed-actions` route (`app/api/instances.py`) and the
+    family token-bundle route (`app/api/internal.py::instance_by_token`),
+    which advertise this same list outside of a failed-action 409."""
     if _is_terminal_state(ctx):
         return []
 
@@ -389,8 +415,15 @@ def _run_item_builtin(ctx: EvalContext, action_name: str, params: dict) -> None:
         if not item_entity_id:
             raise HTTPException(400, {"error": "item_id is required"})
         fn = _ITEM_OP_FNS[action_name]
-        ctx.item_result = fn(ctx.tenant_id, ctx.instance, item_entity_id, ctx.actor,
-                             token=ctx.token, now=ctx.now)
+        kwargs = {"token": ctx.token, "now": ctx.now}
+        if action_name == "complete_item":
+            # Plan 3 Task 3: thread the caller-supplied payload_ref through so
+            # a documents-kind item's completion can actually reference an
+            # uploaded document — engine.complete_item validates/writes it
+            # (see that function's own docstring). Non-`complete_item` ops
+            # have no such param to forward.
+            kwargs["payload_ref"] = params.get("payload_ref")
+        ctx.item_result = fn(ctx.tenant_id, ctx.instance, item_entity_id, ctx.actor, **kwargs)
 
     _refresh_items(ctx)
 
@@ -428,7 +461,7 @@ def _run_transition_action(ctx: EvalContext, action_name: str, params: dict) -> 
         if t.from_ == current_state and t.action == action_name and t.actor != "system"
     ]
     if not action_candidates:
-        raise HTTPException(409, {"allowed": _allowed_actions(ctx)})
+        raise HTTPException(409, {"allowed": allowed_actions(ctx)})
 
     if is_family_actor(ctx.actor):
         gated = [t for t in action_candidates if t.actor == "family"]
@@ -440,7 +473,7 @@ def _run_transition_action(ctx: EvalContext, action_name: str, params: dict) -> 
 
     winner = next((t for t in gated if _guards_pass(ctx, t)), None)
     if winner is None:
-        raise HTTPException(409, {"allowed": _allowed_actions(ctx)})
+        raise HTTPException(409, {"allowed": allowed_actions(ctx)})
     _apply_transition(ctx, winner)
 
 
@@ -496,10 +529,13 @@ def cancel_instance(ctx: EvalContext) -> dict:
     base["state"] = "cancelled"
     base["closed_at"] = ctx.now.isoformat()
     base["token_version"] = token_version + 1
-    dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base, ctx.token)
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=engine.row_version(ctx.instance))
     ctx.instance["state"] = "cancelled"
     ctx.instance["closed_at"] = base["closed_at"]
     ctx.instance["token_version"] = base["token_version"]
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
 
     _log_activity(ctx, "state_change", from_state, "cancelled")
     return ctx.instance

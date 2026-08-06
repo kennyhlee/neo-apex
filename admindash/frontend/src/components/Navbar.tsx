@@ -43,6 +43,12 @@ const icons: Record<string, ReactElement> = {
       <path d="M8 3v4" /><path d="M16 3v4" />
     </svg>
   ),
+  workflows: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <circle cx="5" cy="6" r="2.4" /><circle cx="5" cy="18" r="2.4" /><circle cx="19" cy="12" r="2.4" />
+      <path d="M7.1 6h6.4a4 4 0 0 1 4 4v0" /><path d="M7.1 18h6.4a4 4 0 0 0 4-4v0" />
+    </svg>
+  ),
 };
 
 export default function Navbar() {
@@ -84,6 +90,7 @@ export default function Navbar() {
     { to: '/students', label: t('nav.student'), icon: 'students' },
     { to: '/families', label: t('nav.family'), icon: 'families' },
     { to: '/programs', label: t('nav.program'), icon: 'programs' },
+    { to: '/workflows', label: t('nav.workflows'), icon: 'workflows' },
   ];
 
   const displayName = user?.name ?? 'User';
