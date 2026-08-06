@@ -99,6 +99,17 @@
   margin-top: var(--space-4);
 }
 
+/* Running phase: StepRenderer's own `.fr-*` classes (flow-runtime.css)
+   handle the form itself -- this only gives its blocks the same vertical
+   rhythm as the rest of this page's sections, matching StaffEntryPage's
+   `.staff-entry-page .fr-step-renderer` precedent. */
+.register-page .fr-step-renderer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
 /* Action buttons derived from InstanceBundle.allowed (bindings §5's
    "family-permitted actions" surface) -- same visual treatment as
    HubPage's `.hub-action`, duplicated locally rather than cross-imported

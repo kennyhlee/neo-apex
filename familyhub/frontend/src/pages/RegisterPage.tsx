@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { StepRenderer, defaultSchoolYear, type ModelFieldSource, type WorkflowDraft } from '@neoapex/flow-runtime';
+// flow-runtime ships its own `.fr-*` styles, not part of familyhub's own
+// stylesheet -- without this import StepRenderer renders with raw browser
+// defaults (unstyled inputs, no spacing). Same pattern as apexflow's
+// PreviewPane.tsx and admindash's StaffEntryPage.tsx: familyhub's
+// theme.css already re-points every token this stylesheet reads
+// (--bg-card, --bg-input, --border-primary, --accent-ink, etc.) at the
+// same compatibility layer those two hosts rely on, so no new tokens are
+// needed here.
+import '@neoapex/flow-runtime/src/flow-runtime.css';
 import {
   completeItem,
   draftToSectionAnswers,
