@@ -184,6 +184,7 @@ LEGITIMATE = [
 _GUARD_FILES = (
     "datacore/src/datacore/api/readonly_query.py",
     "admindash/backend/app/tenancy.py",
+    "apexflow/backend/app/tenancy.py",
 )
 
 
@@ -226,7 +227,8 @@ def test_guard_block_is_byte_identical_in_both_services():
         text = p.read_text(encoding="utf-8")
         blocks.append(text[text.index("# ── BEGIN shared SQL shape guard"):
                           text.index("# ── END shared SQL shape guard")])
-    assert blocks[0] == blocks[1]
+    for b in blocks[1:]:
+        assert b == blocks[0]
 # ── END shared SQL guard corpus ───────────────────────────────────────────
 
 

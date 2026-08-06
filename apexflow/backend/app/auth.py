@@ -9,13 +9,17 @@ Consolidated into one module for this scaffold's file list (task-1-brief.md
 lists only app/auth.py, not a separate tenancy.py/api/internal.py); enrollx
 keeps these split across three files.
 
-`require_staff` (no-tenant-path-param routes), `assert_query_tenant_match`,
-and `assert_sql_is_safe_read` (the shared SQL-shape guard) were NOT ported —
-they exist to support enrollx's /api/query route, which is out of scope for
-this task (no api/query.py is being ported). A later task that ports a query
-route should port those alongside it, copying the guard block byte-identical
-per the map's note (§2) that it must stay in sync with datacore's and
-admindash's copies.
+`require_staff` (no-tenant-path-param routes) was NOT ported — nothing in
+this service needs a no-tenant role check yet. `assert_query_tenant_match`
+and `assert_sql_is_safe_read` (the shared SQL-shape guard), deferred by the
+note this docstring used to carry, are now ported: they live in
+app/tenancy.py (Task 1 of Plan 2), alongside a byte-identical copy of the
+guard block from datacore/src/datacore/api/readonly_query.py, imported by
+app/api/query.py. `/api/query` itself needs no new dependency here — it
+uses `require_authenticated_user` below, the same as admindash's
+`/api/query` route (interface map §6b); its {tenant_id}-bearing sibling
+routes in app/api/entities.py use `require_staff_tenant` (map §6a's
+`require_tenant_match` binding, per the note below).
 """
 import hmac as hmac_mod
 

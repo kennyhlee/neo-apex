@@ -16,8 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import definitions as definitions_api
 from app.api import documents as documents_api
+from app.api import entities as entities_api
 from app.api import instances as instances_api
 from app.api import internal as internal_api
+from app.api import query as query_api
 from app.config import settings
 
 app = FastAPI(
@@ -38,6 +40,8 @@ app.add_middleware(
 app.include_router(definitions_api.router)
 app.include_router(instances_api.router)
 app.include_router(documents_api.router, prefix="/api")
+app.include_router(entities_api.router, prefix="/api")
+app.include_router(query_api.router, prefix="/api")
 app.include_router(internal_api.router)
 
 
