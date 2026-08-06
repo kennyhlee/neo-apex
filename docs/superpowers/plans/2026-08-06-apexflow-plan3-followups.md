@@ -121,6 +121,36 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
     `require_staff_tenant`); no test for a retired lineage's config-bundle
     200 (path verified by inspection); usableModels/toItemView row-mapper
     duplication between admindash and familyhub (different wire shapes).
+10b. **Final whole-branch review minors (accepted, not fixed this branch).**
+    The review's C1/I1 were fixed pre-merge (`ad5f56c`, `e06312e` — see
+    `final-review.md`'s fix-wave section in the plan workspace before it was
+    cleaned; the substance: familyhub now threads `payload_ref` through
+    document completion, and the staff document route derives `sensitive`
+    server-side via the same hoisted helper as the token route). Its nine
+    minors, verbatim triage:
+    - Token document create never validates `item_id` belongs to the
+      instance (`internal.py` writes it verbatim) — no privilege impact
+      (payload_ref and sensitivity both resolve against the instance's own
+      data), but document-by-item grouping can be polluted; add a cheap
+      `ctx.items` membership guard.
+    - Family resume converts drafts against the PUBLISHED bundle's steps
+      while `save_draft` validates against the PINNED steps — a mid-flight
+      republish that renames/removes a section makes an old instance's
+      autosave 400 persistently. The pinned steps are already in the
+      instance bundle; switch the converter to them.
+    - `test_workflows_proxy.py` uses `channel: "staff_assisted"` — not a
+      real vocabulary value (`Literal["staff","family"]`); harmless under
+      respx but documents a wire contract real apexflow would 422.
+    - Stale rename residue in docstrings (`test_instance_routes.py:5`,
+      `relay.py:17-18`, `blockConfig.ts:17`) and HubPage's now-false
+      "nothing writes payload_ref" comment (fixed with C1's commit where it
+      was load-bearing; the rest are comment-only).
+    - `_derived_sensitive` builds a full EvalContext per presign (2–3 extra
+      DataCore round trips per upload) — fine at current scale.
+    - StaffEntryPage's 'notFound' conflates network failures with "no
+      published version" (deliberate per comment); drawer facts `<dl>` shows
+      the pre-action state until the board reload lands (cosmetic);
+      `FakeDataCore.SYSTEM_COLUMNS` doc nit.
 11. **admindash `entities.py`/`query.py` sync-httpx-in-async debt remains
     open** (Plan 2 item 15's admindash half) — Plan 3 deliberately added
     no new instances (new proxies are plain `def` or threadpool-offloaded),
