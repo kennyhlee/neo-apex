@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, chat as chat_router, entities, extract, health, leads, query
+from app.api import auth, chat as chat_router, entities, extract, health, leads, query, workflows
 from app.config import settings
 from app.middleware.cloudflare_ip import CloudflareIPMiddleware
 
@@ -40,3 +40,4 @@ app.include_router(entities.router, prefix="/api", tags=["entities"])
 app.include_router(extract.router, prefix="/api", tags=["extract"])
 app.include_router(leads.router, prefix="/api", tags=["leads"])
 app.include_router(chat_router.router, prefix="/api", tags=["chat"])
+app.include_router(workflows.router, prefix="/api", tags=["workflows"])
