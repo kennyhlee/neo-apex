@@ -242,6 +242,38 @@ def test_list_definitions_health_broken_when_model_loses_a_referenced_field(clie
     assert row["health"] == "broken"
 
 
+def test_list_definitions_malformed_row_degrades_to_broken_not_500(client, fake_dc):
+    """A row with unparseable `machine` — e.g. `{}`, missing the required
+    `states`/`transitions` keys `MachineDef` needs — is writable through the
+    generic entities proxy (`app/api/entities.py`), which has no schema
+    enforcement of its own. Before this fix, `list_definitions` called
+    `defs.parse_machine_steps(row)` unguarded in its per-row loop, so ANY
+    such row raised an unhandled `pydantic.ValidationError` and 500'd the
+    ENTIRE list — one bad row made every other (valid) workflow invisible.
+    The malformed row must instead degrade to health "broken" *for that row
+    only*, stay in the list (with a `parse_error` detail an admin could act
+    on) so the good rows are still visible with status 200."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    good_id = _seed_definition(fake_dc, definition_id="wd-good-1", status="draft")
+    bad_id = _seed_definition(
+        fake_dc, definition_id="wd-bad-1", status="draft", machine={}, name="Direct")
+
+    resp = client.get(f"/api/workflows/{TENANT}/definitions")
+    assert resp.status_code == 200
+    rows = {r["entity_id"]: r for r in resp.json()["definitions"]}
+
+    assert rows[good_id]["health"] == "current"
+    assert "parse_error" not in rows[good_id]
+
+    assert rows[bad_id]["health"] == "broken"
+    assert isinstance(rows[bad_id].get("parse_error"), str)
+    assert rows[bad_id]["parse_error"]
+    # Still fully addressable — name/status/etc. come straight off the raw
+    # row, not the (unparseable) machine/steps.
+    assert rows[bad_id]["name"] == "Direct"
+    assert rows[bad_id]["definition_id"] == "wd-bad-1"
+
+
 def test_list_definitions_superseded_row_health_is_literal_no_computation(client, fake_dc):
     """A superseded row's underlying machine/model would compute "broken" if
     definition_health ran against it — but per the brief, superseded rows

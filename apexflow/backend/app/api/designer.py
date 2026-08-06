@@ -104,7 +104,17 @@ def _family_url(tenant_id: str, row: dict) -> str | None:
 @router.get("/{tenant_id}/definitions")
 def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant)):
     """One row per lineage-version row (frontend groups by `definition_id`
-    into lineages) — draft/published/superseded all included."""
+    into lineages) — draft/published/superseded all included.
+
+    `machine`/`steps` are free-text JSON on the DataCore row (the generic
+    entities proxy — `app/api/entities.py` — writes them with no schema
+    enforcement of its own), so a single malformed row is always reachable
+    in practice, not just a theoretical edge case. Per-row parse is wrapped
+    so ONE bad row degrades to health "broken" (with a `parse_error` detail)
+    for that row alone, rather than an unhandled `ValidationError` 500ing
+    every other (valid) row out of the list too — see `_parse_or_422`'s
+    docstring for the same "corrupt row bricks reads" failure mode this
+    mirrors, one route up."""
     token = user.get("_token")
     rows = dc.list_entities(tenant_id, "workflow_definition", "", token)
 
@@ -113,13 +123,19 @@ def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant))
     for row in rows:
         lineage_id = row.get("definition_id")
 
-        # _health_for_row itself short-circuits superseded rows before ever
-        # calling definition_health — no separate outer check needed here
-        # (code-review follow-up: the outer check duplicated that same
-        # branch instead of just trusting the helper to make it).
-        machine, steps = defs.parse_machine_steps(row)
-        models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
-        health = _health_for_row(row, machine, steps, models)
+        parse_error: str | None = None
+        try:
+            # _health_for_row itself short-circuits superseded rows before
+            # ever calling definition_health — no separate outer check
+            # needed here (code-review follow-up: the outer check
+            # duplicated that same branch instead of just trusting the
+            # helper to make it).
+            machine, steps = defs.parse_machine_steps(row)
+            models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
+            health = _health_for_row(row, machine, steps, models)
+        except ValidationError as exc:
+            health = "broken"
+            parse_error = str(exc)
 
         if lineage_id not in open_instance_counts:
             open_instance_counts[lineage_id] = defs.count_open_instances(
@@ -136,6 +152,8 @@ def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant))
             "health": health,
             "open_instances": open_instance_counts[lineage_id],
         }
+        if parse_error is not None:
+            entry["parse_error"] = parse_error
         family_url = _family_url(tenant_id, row)
         if family_url is not None:
             entry["family_url"] = family_url
