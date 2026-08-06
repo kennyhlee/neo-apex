@@ -14,6 +14,7 @@ route is declared directly here rather than in a separate app/api/health.py.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import auth_proxy as auth_proxy_api
 from app.api import definitions as definitions_api
 from app.api import designer as designer_api
 from app.api import documents as documents_api
@@ -38,6 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_proxy_api.router, prefix="/auth", tags=["auth"])
 app.include_router(definitions_api.router)
 app.include_router(designer_api.router)
 app.include_router(instances_api.router)

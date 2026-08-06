@@ -20,7 +20,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function checkStoredToken() {
       const token = localStorage.getItem(TOKEN_KEY);
-      if (!token) return;
+      if (!token) {
+        if (!cancelled) setReady(true);
+        return;
+      }
       try {
         const r = await fetch(`${APEXFLOW_API_URL}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
