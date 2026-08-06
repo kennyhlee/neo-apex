@@ -60,6 +60,13 @@ import type {
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 const VALIDATE_DEBOUNCE_MS = 600;
+const FLUSH_POLL_INTERVAL_MS = 50;
+/** Task 10 review fix (minor): `flush()` bails out rather than polling
+ * forever if a save is somehow still in flight after this long (a hung
+ * request, dead network, ...) — the Publish button's caller catches the
+ * thrown error and surfaces a toast instead of leaving the button spinning
+ * with no way out. */
+const FLUSH_MAX_WAIT_MS = 10_000;
 
 const EMPTY_MACHINE: MachineDef = { states: [], transitions: [] };
 
@@ -111,6 +118,9 @@ export interface DraftStore {
    * this before opening PublishDialog so its own on-open `validateDefinition`
    * call reads the just-saved row, not a stale one still sitting in the
    * 800ms autosave window. Resolves immediately if nothing is dirty.
+   * Rejects if an in-flight save doesn't finish within `FLUSH_MAX_WAIT_MS`
+   * — callers should catch this and surface it rather than leaving a
+   * Publish button stuck in a busy state.
    */
   flush: () => Promise<void>;
 }
@@ -198,6 +208,45 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
 
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const validateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Task 10 review fix: monotonic edit counter, incremented by `markDirty`
+   * (the single choke point `setSteps`/`setMachine`/`setChannelAccess` all
+   * route through) every time an edit happens. `runAutosave` snapshots this
+   * at the START of a PUT and, on success, only clears `dirty` if NO edit
+   * landed (no increment) while that PUT was in flight.
+   *
+   * Without this, `flush()` could silently drop an edit:
+   *   1. Edit #1 schedules an autosave; its 800ms timer fires and the PUT
+   *      starts (`savingRef.current = true`).
+   *   2. Edit #2 arrives while that PUT is still in flight — `markDirty`
+   *      calls `setDirty(true)` (already true, a no-op) and schedules its
+   *      OWN 800ms timer. It does NOT set `queuedForEntityRef` — that's
+   *      only set when `runAutosave` itself re-enters while `savingRef` is
+   *      already true, which a plain edit never does.
+   *   3. The user clicks Publish. `flush()` cancels edit #2's pending timer
+   *      and waits (the `while (savingRef.current)` loop) for edit #1's PUT
+   *      to finish.
+   *   4. Edit #1's PUT resolves successfully. The OLD code unconditionally
+   *      ran `setDirty(false)` here — clearing the flag edit #2 needed to
+   *      still be true, even though edit #2's content was never sent.
+   *   5. `flush()`'s `while` loop exits (`savingRef.current` is now false)
+   *      and checks `dirtyRef.current` — which the OLD code had just wrongly
+   *      cleared — sees `false`, and skips the forced save entirely. Publish
+   *      proceeds with edit #1's (stale) content; edit #2 is silently lost,
+   *      with no UI path to recover it once the row is published.
+   *
+   * Fixed sequence with `editSeqRef`: edit #1's PUT snapshots `seqAtSave =
+   * 1` at start. Edit #2's `markDirty` bumps the counter to `2`. Edit #1's
+   * PUT resolves, compares `1 !== 2`, and LEAVES `dirty` as-is (still `true`
+   * from edit #2). `flush()`'s wait loop exits, sees `dirtyRef.current ===
+   * true`, and force-runs `runAutosave()` again — THIS call snapshots
+   * `seqAtSave = 2`, PUTs the current (edit #2-inclusive) `stepsRef`/
+   * `machineRef`/`definitionRef` content, sees `2 === 2` on success, and
+   * only THEN clears `dirty`. `flush()` doesn't resolve until this second
+   * save completes, so Publish always opens against fully-persisted content.
+   */
+  const editSeqRef = useRef(0);
 
   const clearTimers = useCallback(() => {
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
@@ -294,6 +343,9 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     savingRef.current = true;
     setSaving(true);
     setSaveError(false);
+    // Snapshot BEFORE the PUT — see editSeqRef's own doc comment for the
+    // exact edit-loss race this prevents (Task 10 review fix).
+    const seqAtSave = editSeqRef.current;
     try {
       await updateEntity(tenantId, 'workflow_definition', entityId, {
         definition_id: def.definition_id,
@@ -305,7 +357,14 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
         machine: JSON.stringify(machineRef.current),
         steps: JSON.stringify(stepsRef.current),
       });
-      setDirty(false);
+      // Only clear `dirty` if no edit landed while this PUT was in flight
+      // (editSeqRef unchanged since the snapshot above) — otherwise this
+      // write is already stale relative to the newer edit, and `dirty` must
+      // stay true so that edit still gets its own save (either the timer it
+      // already scheduled, or a caller like `flush()` re-checking `dirty`).
+      if (seqAtSave === editSeqRef.current) {
+        setDirty(false);
+      }
       setSavedAt(Date.now());
       // Task review fix #5: the debounced typing-triggered validate reads
       // whatever's on the server as of ITS OWN timer firing, which can be
@@ -354,6 +413,13 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     // reachable non-draft — but never mark dirty (or schedule a write that
     // would be a no-op anyway per runAutosave's own guard) if it is.
     if (definitionRef.current && definitionRef.current.status !== 'draft') return;
+    // Bumped on every edit — `runAutosave`'s snapshot-and-compare against
+    // this is what lets it tell "no newer edit happened during my PUT"
+    // apart from "one did" (editSeqRef's own doc comment, Task 10 review
+    // fix). `setSteps`/`setMachine`/`setChannelAccess` all route through
+    // this single function for the dirty-flagging step, so incrementing
+    // here alone covers all three.
+    editSeqRef.current += 1;
     setDirty(true);
     setSaveError(false);
     scheduleAutosave();
@@ -509,14 +575,28 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
   // calling `runAutosave` immediately would just re-queue behind that save
   // (`queuedForEntityRef`) and resolve before the queued retry actually
   // ran, handing the Publish dialog a promise that resolved before the
-  // draft was actually fully flushed.
+  // draft was actually fully flushed. Combined with `editSeqRef` (see its
+  // own doc comment), re-checking `dirtyRef` AFTER draining the in-flight
+  // save is now reliable: if an edit landed during that save, `dirty` was
+  // deliberately left true, so the `if (dirtyRef.current)` below force-runs
+  // a second save carrying that edit's content.
+  //
+  // Bounded by `FLUSH_MAX_WAIT_MS` (review fix, minor): a save that never
+  // resolves (dead network, hung request) would otherwise poll forever —
+  // this throws instead, so the Publish button's `catch` can surface a
+  // toast and re-enable itself rather than spinning indefinitely.
   const flush = useCallback(async () => {
     if (autosaveTimer.current) {
       clearTimeout(autosaveTimer.current);
       autosaveTimer.current = null;
     }
+    let waited = 0;
     while (savingRef.current) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (waited >= FLUSH_MAX_WAIT_MS) {
+        throw new Error('flush() timed out waiting for an in-flight save to finish');
+      }
+      await new Promise((resolve) => setTimeout(resolve, FLUSH_POLL_INTERVAL_MS));
+      waited += FLUSH_POLL_INTERVAL_MS;
     }
     if (dirtyRef.current) {
       await runAutosave();

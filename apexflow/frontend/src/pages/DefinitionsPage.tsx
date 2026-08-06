@@ -202,6 +202,27 @@ export default function DefinitionsPage() {
     return t(fallbackKey);
   }
 
+  /**
+   * Task review fix (Task 10, important): `retire_definition`'s
+   * `HTTPException(409, {"open_instances": N})` — like every non-string
+   * `HTTPException` detail in this backend — comes back on the wire as
+   * `{"detail": {"open_instances": N}}` (FastAPI wraps it), NOT
+   * `{"open_instances": N}` at the top level. Reading `err.body` directly
+   * as `OpenInstancesConflict` (this function's prior shape) always missed,
+   * silently falling back to the caller's pre-click count every time — same
+   * unwrap pattern as PublishDialog.tsx's `extractPublishErrors`. Returns
+   * `null` for any other 409 shape or non-409 error, same as that sibling.
+   */
+  function extractOpenInstances(err: unknown): number | null {
+    if (!(err instanceof ApiError) || err.status !== 409) return null;
+    const body = err.body;
+    if (!body || typeof body !== 'object' || !('detail' in body)) return null;
+    const detail = (body as { detail?: unknown }).detail;
+    if (!detail || typeof detail !== 'object' || !('open_instances' in detail)) return null;
+    const n = (detail as OpenInstancesConflict).open_instances;
+    return typeof n === 'number' ? n : null;
+  }
+
   // --- New workflow (blank draft) -------------------------------------
 
   function openNewModal() {
@@ -313,8 +334,11 @@ export default function DefinitionsPage() {
       void load();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        const body = err.body as OpenInstancesConflict | undefined;
-        const count = body?.open_instances ?? retireTarget.open_instances;
+        // Fallback (`retireTarget.open_instances`) kept for resilience if
+        // the response ever doesn't carry the count — see
+        // `extractOpenInstances`'s own doc comment for the actual wire
+        // shape this now correctly unwraps.
+        const count = extractOpenInstances(err) ?? retireTarget.open_instances;
         toast({
           message: t('definitions.retireBlockedToast').replace('{n}', String(count)),
           tone: 'danger',

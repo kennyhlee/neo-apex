@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
+import { useToast } from '../hooks/useToast.ts';
 import { useDraftStore } from '../editor/draftStore.ts';
 import StepEditor from '../editor/StepEditor.tsx';
 import MachineEditor from '../editor/MachineEditor.tsx';
@@ -21,6 +22,7 @@ type EditorTab = 'steps' | 'machine' | 'preview';
 export default function EditorPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const { entityId } = useParams<{ entityId: string }>();
   const tenantId = user?.tenant_id ?? '';
@@ -33,11 +35,15 @@ export default function EditorPage() {
     // Task 10 binding rule: flush any pending autosave before opening the
     // dialog, so its own on-open validate/lineage fetch reads the
     // just-persisted draft rather than one still sitting in the debounce
-    // window.
+    // window. `flush()` rejects (review fix, minor) if an in-flight save
+    // doesn't finish within its bounded wait — surface that instead of
+    // leaving the button stuck mid-click.
     setPublishBusy(true);
     try {
       await store.flush();
       setShowPublishDialog(true);
+    } catch {
+      toast({ message: t('editor.publish.flushTimeout'), tone: 'danger' });
     } finally {
       setPublishBusy(false);
     }
