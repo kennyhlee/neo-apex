@@ -96,6 +96,40 @@ def test_merge_model_definition_skips_fields_with_no_name():
     assert merged["custom_fields"] == []
 
 
+def test_merge_model_definition_demotes_required_carried_field_without_default():
+    # A field that was engine-required in a PRIOR model generation (e.g. the
+    # retired registration_application's `config_version`/`channel_started`,
+    # replaced by workflow_instance fields of the same name in Task 2) but is
+    # no longer part of the CURRENT base_fields: no template section can ever
+    # satisfy it (nothing seeds it), so carrying `required: True` forward
+    # makes validate_definition's unconditional-coverage check fail forever
+    # -- reproduces the live reseed run's actual 409 on tenant "acme"
+    # (registration_application required 'channel_started'/'config_version'
+    # not covered by any section). Demote to optional on carry-forward.
+    base_fields = [{"name": "student_id", "type": "str", "required": True}]
+    existing = [
+        {"name": "student_id", "type": "str", "required": True},  # base -- dropped, not demoted
+        {"name": "config_version", "type": "number", "required": True},
+    ]
+    merged = reseed.merge_model_definition(base_fields, existing)
+    assert merged["custom_fields"] == [
+        {"name": "config_version", "type": "number", "required": False}
+    ]
+
+
+def test_merge_model_definition_keeps_required_true_when_field_has_default():
+    # A field with a `default` self-satisfies validate_definition's coverage
+    # check regardless of `required` (app/workflows/validate.py's
+    # `_coverage_errors`: `exempt = ... or "default" in fdef`), so it is not
+    # the case this demotion needs to guard -- left untouched.
+    base_fields: list[dict] = []
+    existing = [
+        {"name": "status", "type": "selection", "required": True, "default": "draft"},
+    ]
+    merged = reseed.merge_model_definition(base_fields, existing)
+    assert merged["custom_fields"] == existing
+
+
 def test_merge_model_definition_pure_no_mutation():
     base_fields = [{"name": "a", "type": "str", "required": True}]
     existing = [{"name": "b", "type": "str", "required": False}]
