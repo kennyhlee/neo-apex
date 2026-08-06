@@ -1,11 +1,13 @@
-# familyhub/backend/tests/test_registration_routes.py
-"""Public registration facade: config bundle + start (rate limited).
+# familyhub/backend/tests/test_workflow_routes.py
+"""Public workflow facade: config bundle relay + start (rate limited).
 
 Task 10: retargeted from enrollx's `/internal/registration/{tenant_id}/*` to
-apexflow's `/internal/workflows/{tenant_id}/{definition_id}/*`. See
-app/api/registration.py's module docstring for the reshaping policy
-(`config.blocks` is a documented placeholder `[]` pending the Phase 3
-steps->blocks compiler; `tenant`/`capacity` pass through losslessly).
+apexflow's `/internal/workflows/{tenant_id}/{definition_id}/*`. Task 6
+(Plan 3): renamed from `test_registration_routes.py`, retargeted to
+`/api/workflows/...`, and the config-bundle assertions now check a VERBATIM
+relay of apexflow's `{definition, models, tenant, capacity, lineage_status}`
+bundle -- no more `_config_bundle_from_apexflow` reshape (see
+app/api/workflows.py's module docstring).
 """
 import datetime
 import json
@@ -79,38 +81,52 @@ DEFINITION_ID = "enrollment"
 BUNDLE = {
     "definition": {"definition_id": DEFINITION_ID, "name": "Enrollment", "version": 1,
                    "machine": {"states": [], "transitions": []}, "steps": []},
+    "models": {},
     "tenant": {"tenant_id": TENANT, "name": "Acme Afterschool"},
     "capacity": {"capacity": 20, "admitted": 3, "full": False},
+    "lineage_status": "active",
 }
 
 
-def test_config_bundle_reshapes_definition_into_config(client, fake_http):
+def test_workflow_bundle_relays_verbatim(client, fake_http):
     fake_http.add("GET", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/config",
                   FakeResponse(200, BUNDLE))
-    resp = client.get(f"/api/registration/{TENANT}/{DEFINITION_ID}")
+    resp = client.get(f"/api/workflows/{TENANT}/{DEFINITION_ID}")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["tenant"]["name"] == "Acme Afterschool"
-    assert body["capacity"]["full"] is False
-    assert body["config"]["config_id"] == DEFINITION_ID
-    assert body["config"]["version"] == 1
-    assert body["config"]["status"] == "published"
-    assert body["config"]["blocks"] == []  # documented Phase 3 placeholder
+    assert body == BUNDLE
     # internal key was attached
     assert fake_http.calls[0]["headers"]["X-Internal-Key"] == "test-internal-key"
+
+
+def test_workflow_bundle_relays_models_and_lineage_status(client, fake_http):
+    fake_http.add("GET", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/config", FakeResponse(200, {
+        "definition": {"definition_id": DEFINITION_ID, "name": "Enrollment", "version": 2,
+                       "machine": {"states": [], "transitions": []}, "steps": []},
+        "models": {"student": {"base_fields": [], "custom_fields": []}},
+        "tenant": {"tenant_id": TENANT, "name": "Acme"},
+        "capacity": {"capacity": None, "admitted": 0, "full": False},
+        "lineage_status": "deprecated",
+    }))
+    resp = client.get(f"/api/workflows/{TENANT}/{DEFINITION_ID}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["lineage_status"] == "deprecated"
+    assert "blocks" not in json.dumps(body)          # the placeholder is gone
+    assert body["models"]["student"] == {"base_fields": [], "custom_fields": []}
 
 
 def test_config_bundle_404_passthrough(client, fake_http):
     fake_http.add("GET", f"/internal/workflows/{TENANT}/nosuch/config",
                   FakeResponse(404, {"detail": "No published workflow_definition for this lineage"}))
-    resp = client.get(f"/api/registration/{TENANT}/nosuch")
+    resp = client.get(f"/api/workflows/{TENANT}/nosuch")
     assert resp.status_code == 404
 
 
 def test_config_bundle_masks_upstream_500(client, fake_http):
     fake_http.add("GET", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/config",
                   FakeResponse(500, {"detail": "Traceback (most recent call last): ..."}))
-    resp = client.get(f"/api/registration/{TENANT}/{DEFINITION_ID}")
+    resp = client.get(f"/api/workflows/{TENANT}/{DEFINITION_ID}")
     assert resp.status_code == 502
     assert "Traceback" not in resp.text
 
@@ -125,15 +141,16 @@ def test_start_returns_token_and_hub_url(client, fake_http):
             "token": "tok123", "link": "http://localhost:5620/w/acme/enrollment?token=tok123",
         }),
     )
-    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+    resp = client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "parent@example.com"})
     assert resp.status_code == 201
     body = resp.json()
     assert body["token"] == "tok123"
     assert body["hub_url"] == "/application/tok123"
-    # instance.state reshaped to application.status (identical vocabulary)
-    assert body["application"]["status"] == "draft"
-    assert body["application"]["entity_id"] == "wi-1"
+    # state is no longer renamed to status -- relayed as apexflow sends it
+    assert body["instance"]["state"] == "draft"
+    assert "status" not in body["instance"]
+    assert body["instance"]["entity_id"] == "wi-1"
     assert body["items"] == [{"entity_id": "item-1", "entity_type": "workflow_item",
                               "base_data": {"kind": "form"}}]
 
@@ -144,7 +161,7 @@ def test_start_returns_token_and_hub_url(client, fake_http):
 
 
 def test_start_rejects_junk_email(client, fake_http):
-    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+    resp = client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "junk"})
     assert resp.status_code == 422
     assert fake_http.calls == []  # never reached apexflow
@@ -153,7 +170,7 @@ def test_start_rejects_junk_email(client, fake_http):
 def test_start_passes_through_upstream_errors(client, fake_http):
     fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
                   FakeResponse(404, {"detail": "No published workflow_definition for this lineage"}))
-    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+    resp = client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "parent@example.com"})
     assert resp.status_code == 404
 
@@ -161,7 +178,7 @@ def test_start_passes_through_upstream_errors(client, fake_http):
 def test_start_masks_upstream_500(client, fake_http):
     fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
                   FakeResponse(500, {"detail": "DataCore write failed: connection reset by peer"}))
-    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+    resp = client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "parent@example.com"})
     assert resp.status_code == 502
     assert "DataCore" not in resp.text
@@ -172,10 +189,10 @@ def test_start_is_rate_limited_per_ip(client, fake_http):
                   FakeResponse(201, {"instance": {"entity_id": "wi-1", "state": "draft"},
                                      "items": [], "token": "tok123", "link": "http://x/link"}))
     for _ in range(10):
-        ok = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+        ok = client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                          json={"applicant_email": "parent@example.com"})
         assert ok.status_code == 201
-    throttled = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+    throttled = client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                             json={"applicant_email": "parent@example.com"})
     assert throttled.status_code == 429
 
@@ -191,11 +208,11 @@ def test_start_derives_school_year_with_the_july_rollover(
     enrollment template's `context.school_year` scoping -- all channels must
     agree, because the capacity snapshot the parent was shown was computed
     for this year."""
-    monkeypatch.setattr("app.api.registration._today", lambda: today)
+    monkeypatch.setattr("app.api.workflows._today", lambda: today)
     fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
                   FakeResponse(201, {"instance": {"entity_id": "wi-1", "state": "draft"},
                                      "items": [], "token": "tok123", "link": "http://x/link"}))
-    resp = client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+    resp = client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                        json={"applicant_email": "parent@example.com"})
     assert resp.status_code == 201
     start_call = next(c for c in fake_http.calls if c["method"] == "POST")
@@ -210,6 +227,6 @@ def test_start_no_longer_prefetches_the_config_bundle(client, fake_http):
     fake_http.add("POST", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/start",
                   FakeResponse(201, {"instance": {"entity_id": "wi-1", "state": "draft"},
                                      "items": [], "token": "tok123", "link": "http://x/link"}))
-    client.post(f"/api/registration/{TENANT}/{DEFINITION_ID}/start",
+    client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                json={"applicant_email": "parent@example.com"})
     assert fake_http.calls and all(c["method"] == "POST" for c in fake_http.calls)

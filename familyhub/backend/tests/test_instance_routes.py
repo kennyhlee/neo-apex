@@ -1,12 +1,19 @@
-# familyhub/backend/tests/test_application_routes.py
-"""Token-scoped application facade: hub bundle, action allowlist,
-constant-200 request-link.
+# familyhub/backend/tests/test_instance_routes.py
+"""Token-scoped instance facade: hub bundle, action relay, constant-200
+request-link.
 
 Task 10: GET/PUT `/api/application/{token}` and request-link retarget from
 enrollx's `/internal/application-by-token/*` / `/internal/registration/*` to
 apexflow's `/internal/instance-by-token/*` / `/internal/workflows/*`.
-Task 12: the checkout route (the one call site not retargeted -- apexflow
-has no payments surface in Plan 1) was removed along with enrollx itself.
+
+Task 6 (Plan 3): renamed `test_application_routes.py` -> here, retargeted to
+`/api/instance/{token}` (app/api/application.py -> app/api/instance.py).
+`PARENT_ACTIONS` and its hand-synced allowlist are deleted: the PUT route's
+local guard shrinks to shape-validation only (JSON object with a string
+`action`) -- everything else, including which specific actions are
+permitted, is apexflow's call and relays back verbatim via the existing
+4xx-verbatim relay convention (apexflow's `BLOCKED_TOKEN_ACTIONS` 403 and
+actor checks are now the ONLY authority).
 """
 import json
 
@@ -80,21 +87,25 @@ HUB_BUNDLE = {
     "items": [],
     "definition": {"definition_id": "enrollment", "version": 1,
                    "machine": {"states": [], "transitions": []}, "steps": []},
+    "allowed": ["save_draft", "complete_item", "submit"],
 }
 
 
 def test_hub_bundle_passthrough(client, fake_http):
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}", FakeResponse(200, HUB_BUNDLE))
-    resp = client.get(f"/api/application/{TOKEN}")
+    resp = client.get(f"/api/instance/{TOKEN}")
     assert resp.status_code == 200
-    assert resp.json()["instance"]["entity_id"] == "wi-1"
+    body = resp.json()
+    assert body["instance"]["entity_id"] == "wi-1"
+    # apexflow's `allowed` field relays verbatim too.
+    assert body["allowed"] == ["save_draft", "complete_item", "submit"]
     assert fake_http.calls[0]["headers"]["X-Internal-Key"] == "test-internal-key"
 
 
 def test_hub_bundle_expired_token_passthrough(client, fake_http):
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}",
                   FakeResponse(401, {"detail": "Invalid or revoked link"}))
-    resp = client.get(f"/api/application/{TOKEN}")
+    resp = client.get(f"/api/instance/{TOKEN}")
     assert resp.status_code == 401
 
 
@@ -110,7 +121,7 @@ def test_hub_bundle_wrong_scope_passthrough_is_401_not_403(client, fake_http):
     indistinguishable from familyhub's side too."""
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}",
                   FakeResponse(401, {"detail": "Invalid or revoked link"}))
-    resp = client.get(f"/api/application/{TOKEN}")
+    resp = client.get(f"/api/instance/{TOKEN}")
     assert resp.status_code == 401
     assert resp.json() == {"detail": "Invalid or revoked link"}
 
@@ -118,81 +129,99 @@ def test_hub_bundle_wrong_scope_passthrough_is_401_not_403(client, fake_http):
 def test_hub_bundle_masks_upstream_500(client, fake_http):
     fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}",
                   FakeResponse(500, {"detail": "Traceback (most recent call last): ..."}))
-    resp = client.get(f"/api/application/{TOKEN}")
+    resp = client.get(f"/api/instance/{TOKEN}")
     assert resp.status_code == 502
     assert "Traceback" not in resp.text
 
 
-def test_allowed_parent_action_is_proxied(client, fake_http):
+def test_instance_put_relays_action_and_response_body(client, fake_http):
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
                   FakeResponse(200, {"instance": {"state": "draft"}}))
-    resp = client.put(f"/api/application/{TOKEN}",
+    resp = client.put(f"/api/instance/{TOKEN}",
                       json={"action": "save_draft", "section_answers": {"s1": {"child_name": "Mei"}}})
     assert resp.status_code == 200
     sent = fake_http.calls[0]["json"]
     assert sent["action"] == "save_draft"
+    assert sent["section_answers"] == {"s1": {"child_name": "Mei"}}
 
 
-def test_withdraw_action_is_proxied(client, fake_http):
-    """Coordinator review fix: `withdraw` is an `actor: "family"` transition
-    the enrollment template declares (and apexflow's machine allows any
-    family-permitted transition through the token-scoped actions route) --
-    PARENT_ACTIONS was missing it, which 403'd a real, apexflow-legal action
-    before it ever reached the network."""
+def test_instance_put_relays_any_action_and_apexflow_403s_stand(client, fake_http):
+    """THE key new-behavior test: there is no local allowlist any more --
+    apexflow decides which actions are permitted on the family channel, and
+    its 403 relays verbatim rather than being pre-empted locally."""
+    fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
+                  FakeResponse(403, {
+                      "detail": "Action 'verify_item' is not permitted on the family channel"}))
+    resp = client.put(f"/api/instance/{TOKEN}", json={"action": "verify_item"})
+    assert resp.status_code == 403                    # relayed verbatim, not locally decided
+    assert resp.json() == {
+        "detail": "Action 'verify_item' is not permitted on the family channel"}
+    # the request DID reach apexflow -- no local guard intercepted it.
+    assert fake_http.calls[0]["json"]["action"] == "verify_item"
+
+
+def test_instance_put_relays_withdraw_and_resubmit_too(client, fake_http):
+    """No allowlist means every action -- including ones a hand-synced list
+    might have missed -- reaches apexflow, which is now the sole authority."""
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
                   FakeResponse(200, {"instance": {"state": "withdrawn"}}))
-    resp = client.put(f"/api/application/{TOKEN}", json={"action": "withdraw"})
+    resp = client.put(f"/api/instance/{TOKEN}", json={"action": "withdraw"})
     assert resp.status_code == 200
     assert fake_http.calls[0]["json"]["action"] == "withdraw"
-
-
-def test_resubmit_action_is_proxied(client, fake_http):
-    """Coordinator review fix (second pass): `resubmit` is the parent's ONLY
-    path back from `pending_items` to `in_review` after fixing a rejected
-    item (`t_resubmit` in the enrollment template, `actor: "family"`).
-    PARENT_ACTIONS was missing it too -- without this, a parent who
-    corrected a rejected item had no way to return the application to
-    review and would be stuck until staff manually intervened."""
-    fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
-                  FakeResponse(200, {"instance": {"state": "in_review"}}))
-    resp = client.put(f"/api/application/{TOKEN}", json={"action": "resubmit"})
-    assert resp.status_code == 200
-    assert fake_http.calls[0]["json"]["action"] == "resubmit"
 
 
 def test_action_masks_upstream_500(client, fake_http):
     fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
                   FakeResponse(500, {"detail": "DataCore write failed: connection reset by peer"}))
-    resp = client.put(f"/api/application/{TOKEN}", json={"action": "submit"})
+    resp = client.put(f"/api/instance/{TOKEN}", json={"action": "submit"})
     assert resp.status_code == 502
     assert "DataCore" not in resp.text
 
 
-@pytest.mark.parametrize("action", [
-    "approve", "decline", "request_changes", "verify_item", "reject_item",
-    "waive_item", "cancel_instance", "record_offline_payment", "promote_waitlist",
-    "publish_config", "resend_link", "delete_everything", "", None,
-    ["save_draft"], {"action": "save_draft"},
-])
-def test_staff_or_unknown_actions_are_403_before_any_proxying(client, fake_http, action):
-    resp = client.put(f"/api/application/{TOKEN}", json={"action": action})
-    assert resp.status_code == 403
-    assert fake_http.calls == []  # THE critical assertion: nothing reached apexflow
+def test_instance_put_still_rejects_non_string_action_locally(client, fake_http):
+    resp = client.put(f"/api/instance/{TOKEN}", json={"action": 7})
+    assert resp.status_code == 400
+    assert fake_http.calls == []                       # no upstream call for malformed input
+
+
+@pytest.mark.parametrize("action", [None, ["save_draft"], {"action": "save_draft"}, 3.14])
+def test_instance_put_rejects_non_string_action_shapes_locally(client, fake_http, action):
+    resp = client.put(f"/api/instance/{TOKEN}", json={"action": action})
+    assert resp.status_code == 400
+    assert fake_http.calls == []
+
+
+def test_instance_put_forwards_empty_string_action_to_apexflow(client, fake_http):
+    """An empty string is still a string -- shape-validation only, not an
+    allowlist (module docstring). apexflow's own `InternalActionRequest`
+    declares `action: str` with no length floor, so it is apexflow's call
+    whether "" is a legal action name, not this facade's."""
+    fake_http.add("POST", f"/internal/instance-by-token/{TOKEN}/actions",
+                  FakeResponse(400, {"detail": "Unknown action ''"}))
+    resp = client.put(f"/api/instance/{TOKEN}", json={"action": ""})
+    assert resp.status_code == 400
+    assert fake_http.calls[0]["json"]["action"] == ""
+
+
+def test_instance_put_rejects_missing_action_locally(client, fake_http):
+    resp = client.put(f"/api/instance/{TOKEN}", json={"section_answers": {}})
+    assert resp.status_code == 400
+    assert fake_http.calls == []
 
 
 def test_non_object_body_is_400(client, fake_http):
-    resp = client.put(f"/api/application/{TOKEN}", json=["not", "a", "dict"])
+    resp = client.put(f"/api/instance/{TOKEN}", json=["not", "a", "dict"])
     assert resp.status_code == 400
     assert fake_http.calls == []
 
 
 def test_request_link_match_and_no_match_are_indistinguishable(client, fake_http):
     fake_http.add("POST", f"/internal/workflows/{TENANT}/request-link", FakeResponse(200, {}))
-    matched = client.post("/api/application/request-link",
+    matched = client.post("/api/instance/request-link",
                           json={"tenant_id": TENANT, "email": "parent@example.com"})
     fake_http.routes.clear()
     fake_http.add("POST", f"/internal/workflows/{TENANT}/request-link", FakeResponse(200, {}))
-    unmatched = client.post("/api/application/request-link",
+    unmatched = client.post("/api/instance/request-link",
                             json={"tenant_id": TENANT, "email": "stranger@example.com"})
     assert matched.status_code == unmatched.status_code == 200
     assert matched.json() == unmatched.json() == {"status": "ok"}
@@ -200,7 +229,7 @@ def test_request_link_match_and_no_match_are_indistinguishable(client, fake_http
 
 def test_request_link_forwards_only_the_email(client, fake_http):
     fake_http.add("POST", f"/internal/workflows/{TENANT}/request-link", FakeResponse(200, {}))
-    resp = client.post("/api/application/request-link",
+    resp = client.post("/api/instance/request-link",
                        json={"tenant_id": TENANT, "email": "p@example.com"})
     assert resp.status_code == 200 and resp.json() == {"status": "ok"}
     sent = next(c for c in fake_http.calls if c["method"] == "POST")["json"]
@@ -210,7 +239,7 @@ def test_request_link_forwards_only_the_email(client, fake_http):
 def test_request_link_upstream_error_is_still_200(client, fake_http):
     fake_http.add("POST", f"/internal/workflows/{TENANT}/request-link",
                   FakeResponse(500, {"detail": "boom"}))
-    resp = client.post("/api/application/request-link",
+    resp = client.post("/api/instance/request-link",
                        json={"tenant_id": TENANT, "email": "parent@example.com"})
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
@@ -227,7 +256,7 @@ def test_request_link_still_200_on_upstream_outage(client, monkeypatch):
         raise httpx.ConnectError("connection refused")
 
     monkeypatch.setattr("app.upstream.httpx.request", raise_request_error)
-    resp = client.post("/api/application/request-link",
+    resp = client.post("/api/instance/request-link",
                        json={"tenant_id": TENANT, "email": "parent@example.com"})
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
@@ -236,8 +265,8 @@ def test_request_link_still_200_on_upstream_outage(client, monkeypatch):
 def test_request_link_is_rate_limited(client, fake_http):
     fake_http.add("POST", f"/internal/workflows/{TENANT}/request-link", FakeResponse(200, {}))
     for _ in range(10):
-        assert client.post("/api/application/request-link",
+        assert client.post("/api/instance/request-link",
                            json={"tenant_id": TENANT, "email": "p@example.com"}).status_code == 200
-    throttled = client.post("/api/application/request-link",
+    throttled = client.post("/api/instance/request-link",
                             json={"tenant_id": TENANT, "email": "p@example.com"})
     assert throttled.status_code == 429

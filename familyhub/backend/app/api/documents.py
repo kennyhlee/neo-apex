@@ -19,13 +19,12 @@ call" ordering the previous version used. `parse_token` is decode-only (see
 `app/tokenutil.py`) -- it is NOT a credential check, just a cheap shape
 filter so a garbage token 400s before any upstream call.
 
-`sensitive` is no longer computed here: the doc-metadata
-(`config.blocks[].config.docs[].sensitive`) this module used to read no
-longer exists on the facade's config bundle (see `app/api/registration.py`'s
-module docstring -- the steps -> blocks compiler is Phase 3, out of scope).
-apexflow's token-scoped create route defaults `sensitive` to False when
-omitted; this is the SAME documented gap as `registration.py`'s empty
-`blocks: []`, not a new one.
+Task 6 (Plan 3): route prefix renamed `/application/{token}/documents...` ->
+`/instance/{token}/documents...`, matching `api/instance.py`'s rename.
+`sensitive` is no longer accepted from the client at all -- apexflow now
+DERIVES it server-side from the pinned definition's `docs[].sensitive`
+metadata (Plan 3 Task 4's `_derived_sensitive`), so there is no longer a
+documented gap here to carry forward.
 """
 from typing import Optional
 
@@ -63,7 +62,7 @@ class CreateDocumentBody(BaseModel):
     size: int
 
 
-@router.post("/application/{token}/documents",
+@router.post("/instance/{token}/documents",
              dependencies=[Depends(limit_document_presign)])
 def create_document(token: str, body: CreateDocumentBody) -> Response:
     """Presign an upload slot for this token's instance.
@@ -100,7 +99,7 @@ def create_document(token: str, body: CreateDocumentBody) -> Response:
     return _relay(resp)
 
 
-@router.get("/application/{token}/documents/{document_id}/url")
+@router.get("/instance/{token}/documents/{document_id}/url")
 def get_document_url(token: str, document_id: str) -> Response:
     """Presign a download URL -- own uploads (or non-sensitive documents of
     this instance) only. Ownership/sensitivity enforcement now lives
