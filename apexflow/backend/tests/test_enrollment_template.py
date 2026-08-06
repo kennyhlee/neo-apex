@@ -221,6 +221,37 @@ def test_submit_at_exact_capacity_boundary_goes_to_waitlisted(fake_dc):
     assert updated["state"] == "waitlisted"
 
 
+# --- submit gates on application_form completion (coordinator review fix) --
+# Both submit branches (capacity-available -> submitted, capacity-full ->
+# waitlisted) carry an items_in_status guard on the application_form item —
+# neither should fire while that item is still "not_started".
+
+
+def test_submit_409_when_application_form_never_completed_capacity_available(fake_dc):
+    _seed_template(fake_dc)
+    _seed_tenant_capacity(fake_dc, 10)  # plenty of room -- would take the "submitted" branch
+    instance_row = _create_instance(fake_dc)
+
+    ctx = machine.build_eval_context(TENANT, instance_row, actor="family:tok1")
+    with pytest.raises(HTTPException) as exc:
+        machine.execute_action(ctx, "submit", {})  # application_form item still not_started
+    assert exc.value.status_code == 409
+    assert fake_dc.get_entity(TENANT, "workflow_instance", instance_row["entity_id"])["state"] == "draft"
+
+
+def test_submit_409_when_application_form_never_completed_capacity_full(fake_dc):
+    _seed_template(fake_dc)
+    _seed_tenant_capacity(fake_dc, 1)
+    _seed_capacity_instance(fake_dc, "enrolled")  # AT capacity -- would take the "waitlisted" branch
+    instance_row = _create_instance(fake_dc)
+
+    ctx = machine.build_eval_context(TENANT, instance_row, actor="family:tok1")
+    with pytest.raises(HTTPException) as exc:
+        machine.execute_action(ctx, "submit", {})  # application_form item still not_started
+    assert exc.value.status_code == 409
+    assert fake_dc.get_entity(TENANT, "workflow_instance", instance_row["entity_id"])["state"] == "draft"
+
+
 def test_promote_waitlist_moves_to_in_review(fake_dc):
     _seed_template(fake_dc)
     _seed_tenant_capacity(fake_dc, 1)
@@ -366,6 +397,28 @@ def test_staff_withdraw_from_in_review(fake_dc):
     staff_ctx = machine.build_eval_context(TENANT, in_review_row, actor="staff-1")
 
     updated = machine.execute_action(staff_ctx, "withdraw", {})
+    assert updated["state"] == "withdrawn"
+
+
+def test_staff_withdraw_from_approved(fake_dc):
+    """Coordinator review fix: withdraw must be available from `approved`
+    too — spec §5 (2026-08-03 design): "Withdrawn (parent or admin, any
+    pre-enrolled state)"; `approved` is not yet `enrolled`."""
+    _seed_template(fake_dc)
+    approved, staff_ctx = _to_approved(fake_dc)
+
+    updated = machine.execute_action(staff_ctx, "withdraw", {})
+    assert updated["state"] == "withdrawn"
+
+
+def test_family_withdraw_from_approved(fake_dc):
+    _seed_template(fake_dc)
+    approved, _ = _to_approved(fake_dc, contacts=[
+        {"first_name": "Robin", "last_name": "Lee", "relationship": "Parent"},
+    ])
+
+    family_ctx = machine.build_eval_context(TENANT, approved, actor="family:tok1")
+    updated = machine.execute_action(family_ctx, "withdraw", {})
     assert updated["state"] == "withdrawn"
 
 

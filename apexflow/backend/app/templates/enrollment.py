@@ -34,9 +34,18 @@ DESIGN DECISIONS this module makes (full rationale in task-9-report.md):
 2. **Waitlist branch: NO guard negation exists** (Task 8's `machine.py`
    docstring, decision 8). Encoded as the accumulated-decisions text
    requires: `submit → submitted` GUARDED by `capacity_available` declared
-   FIRST, then unguarded `submit → waitlisted` declared LAST — the guarded
-   branch wins when there's room (`capacity_available` is true = room
-   available), the unguarded fallback is what a full school hits.
+   FIRST, then `submit → waitlisted` declared LAST — the guarded branch wins
+   when there's room (`capacity_available` is true = room available), the
+   fallback is what a full school hits. BOTH branches additionally carry
+   `_application_form_complete_guard()` (coordinator review fix — both
+   source specs require "all blocking items done" at submit; see decision 6,
+   below, for why this is a per-branch guard rather than a shared
+   precondition and why it doesn't sweep in the post-approval `documents`
+   item). This makes the `(from="draft", action="submit")` group have ZERO
+   unguarded transitions — legal per `validate.py`'s
+   `_unguarded_branch_errors` ("at most one," not "exactly one"); ordering
+   still matters, since `capacity_available` is what continues to pick
+   the submitted-vs-waitlisted branch between two form-complete candidates.
 3. **Two `withdraw` transitions per state (family + staff), each carrying an
    `actor_role` guard.** `TransitionDef.actor` is single-valued, so "family
    or staff may withdraw" needs two rows. Both would otherwise be
@@ -50,10 +59,12 @@ DESIGN DECISIONS this module makes (full rationale in task-9-report.md):
    too" dispatch resolve correctly regardless of declaration order — a staff
    actor's guard-pass search skips the family-only row (its `actor_role`
    guard fails for a non-family actor) and lands on the staff row.
-   Withdraw is offered from every pre-terminal, pre-enrollment state the
-   brief names: `draft, submitted, in_review, pending_items, waitlisted`
-   (not `approved` — once admitted, a family withdrawal is an out-of-band
-   admin conversation, not a self-service transition in v1).
+   Withdraw is offered from every pre-enrolled state (spec §5 of the
+   2026-08-03 design: "Withdrawn (parent or admin, any pre-enrolled
+   state)"): `draft, submitted, in_review, pending_items, approved,
+   waitlisted` — `approved` included per coordinator review (a first pass
+   narrowed this to "pre-approval only," which the source spec does not
+   say; `approved` is not yet `enrolled`, so it is still pre-enrolled).
 4. **`items_in_status`'s `quantifier`/status-list extension** (this task,
    `app.workflows.primitives`) is what makes two guards possible without a
    new primitive: `in_review → pending_items` needs "ANY item rejected"
@@ -92,17 +103,22 @@ DESIGN DECISIONS this module makes (full rationale in task-9-report.md):
    fires on its own — the family must explicitly resave/complete the form
    and then click "resubmit," regardless of whether they got to
    `pending_items` via `reject_item` or `request_changes`.
-6. **`submit` does not gate on item/form completion.** The pre-engine
-   `_submit` handler checked blocking items directly; this template does not
-   replicate that as a machine guard, for the same per-stage reason as
-   decision 4 (a blanket completeness guard would sweep in the post-approval
-   `documents` item). The real gate on data completeness is
-   `commit_sections`' own required-field 409 at `approve` time — an empty
-   `application_form` simply cannot be approved. A family submitting an
-   empty draft moves the instance forward but leaves staff nothing to
-   approve; acceptable for this template, and a future template-level
-   enhancement (a `data_condition` guard over drafted required fields) is
-   not attempted here.
+6. **`submit` DOES gate on `application_form` item completion**
+   (`_application_form_complete_guard()`, coordinator review fix — both the
+   2026-08-05 spec's engine semantics and the 2026-08-03 spec's status
+   lifecycle require "all blocking items done" at submit; a first pass
+   dropped this guard entirely, reasoning that `commit_sections`' own
+   required-field 409 at `approve` was gate enough — that left a family free
+   to `submit` an empty draft into `in_review`/`waitlisted` with nothing for
+   staff to act on). Scoped to `step_ids: ["application_form"]` — same
+   per-stage reasoning as decision 4's `items_in_status` guards
+   (`all_blocking_items_complete` would sweep in the post-approval
+   `documents` item, which cannot be done pre-approval) — checking
+   `status: ["submitted", "verified"]` (the item is at least as far along as
+   the family's own `complete_item` call takes it, since `application_form`'s
+   `review: "staff"` override means first completion lands at `"submitted"`,
+   never `"verified"`). Applied to BOTH `submit` branches (decision 2) so a
+   family cannot dodge the check by landing on the waitlisted branch.
 7. **`registration_application`'s own `school_year` field is a plain,
    optional form field** (model `required: false`), independent of the
    INSTANCE-level `context.school_year` the `capacity_available` guard
@@ -183,26 +199,51 @@ def _approve_effects() -> list[dict]:
     ]
 
 
+def _application_form_complete_guard() -> dict:
+    """`application_form` item at `submitted` or `verified` — the same
+    scoped-to-one-step pattern `t_resubmit` uses, deliberately NOT
+    `all_blocking_items_complete` (module docstring, decision 4's rationale
+    applies identically here: that guard sweeps in the `documents` step's
+    item too, which cannot be done pre-approval)."""
+    return {
+        "primitive": "items_in_status",
+        "params": {
+            "step_ids": ["application_form"], "status": ["submitted", "verified"],
+            "quantifier": "all",
+        },
+    }
+
+
 def _transitions() -> list[dict]:
     return [
-        # --- submit: guarded branch first, unguarded fallback last (decision 2) ---
+        # --- submit: both branches require the application_form item done
+        # (coordinator review fix — the source specs both require "all
+        # blocking items done" at submit; a scoped items_in_status guard on
+        # BOTH branches gets this without sweeping in the post-approval
+        # documents item). Zero unguarded transitions in this (from, action)
+        # group is legal (validate.py's rule is "at most one", not
+        # "exactly one") — capacity_available is what still picks the
+        # submitted-vs-waitlisted branch. ---
         {
             "transition_id": "t_submit_submitted",
             "from": "draft", "to": "submitted", "action": "submit", "actor": "family",
-            "guards": [{
-                "primitive": "capacity_available",
-                "params": {
-                    "count_states": ["approved", "enrolled"],
-                    "capacity_field": "capacity",
-                    "scope_context_key": "school_year",
+            "guards": [
+                {
+                    "primitive": "capacity_available",
+                    "params": {
+                        "count_states": ["approved", "enrolled"],
+                        "capacity_field": "capacity",
+                        "scope_context_key": "school_year",
+                    },
                 },
-            }],
+                _application_form_complete_guard(),
+            ],
             "effects": [],
         },
         {
             "transition_id": "t_submit_waitlisted",
             "from": "draft", "to": "waitlisted", "action": "submit", "actor": "family",
-            "guards": [],
+            "guards": [_application_form_complete_guard()],
             "effects": [{"primitive": "send_email", "params": {"template": "waitlisted"}}],
         },
         *_withdraw_pair("draft"),
@@ -283,6 +324,7 @@ def _transitions() -> list[dict]:
             }],
             "effects": [],
         },
+        *_withdraw_pair("approved"),
     ]
 
 

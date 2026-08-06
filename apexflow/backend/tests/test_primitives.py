@@ -129,6 +129,15 @@ def test_items_in_status_any_quantifier_vacuously_false_for_no_items():
     assert GUARDS["items_in_status"](ctx, {"status": "rejected", "quantifier": "any"}) is False
 
 
+def test_items_in_status_all_quantifier_vacuously_true_for_no_items():
+    """Coordinator review fix: the "all" companion to the "any" vacuous case
+    above -- an empty (or all-inapplicable/all-filtered-out) item set trivially
+    satisfies "all" (Python's `all([])` is True), the same way
+    `all_blocking_items_complete` is vacuously true with zero blocking items."""
+    ctx = _ctx(items=[], definition=_definition([_step("s1")]))
+    assert GUARDS["items_in_status"](ctx, {"status": "verified", "quantifier": "all"}) is True
+
+
 def test_items_in_status_status_list_matches_any_of_the_listed_statuses():
     items = [{"step_id": "s1", "status": "verified"}, {"step_id": "s1", "status": "waived"}]
     ctx = _ctx(items=items, definition=_definition([_step("s1")]))
