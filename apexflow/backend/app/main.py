@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import definitions as definitions_api
+from app.api import designer as designer_api
 from app.api import documents as documents_api
 from app.api import entities as entities_api
 from app.api import instances as instances_api
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 app.include_router(definitions_api.router)
+app.include_router(designer_api.router)
 app.include_router(instances_api.router)
 app.include_router(documents_api.router, prefix="/api")
 app.include_router(entities_api.router, prefix="/api")

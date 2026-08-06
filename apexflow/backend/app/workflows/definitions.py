@@ -37,7 +37,7 @@ from app.workflows.validate import validate_definition
 # module's old body, so it isn't re-imported here.)
 
 
-def _parse_machine_steps(row: dict) -> tuple[MachineDef, list[StepDef]]:
+def parse_machine_steps(row: dict) -> tuple[MachineDef, list[StepDef]]:
     """`machine`/`steps` are stored JSON-serialized string fields (task
     brief, `registration_config.blocks` precedent) — decode then validate
     against the Task 3 schemas."""
@@ -50,7 +50,7 @@ def _parse_machine_steps(row: dict) -> tuple[MachineDef, list[StepDef]]:
     return machine, steps
 
 
-def _referenced_entity_models(steps: list[StepDef]) -> set[str]:
+def referenced_entity_models(steps: list[StepDef]) -> set[str]:
     """Every `entity_model` named by a declared section across `form`
     steps — the set of models publish must fetch to build validate_definition's
     `models` argument (task brief: "fetch via get_model_definition for each
@@ -64,11 +64,11 @@ def _referenced_entity_models(steps: list[StepDef]) -> set[str]:
     return models
 
 
-def _fetch_models(tenant_id: str, entity_types: set[str], token: str | None) -> dict[str, Any]:
+def fetch_models(tenant_id: str, entity_types: set[str], token: str | None) -> dict[str, Any]:
     return {et: dc.get_model_definition(tenant_id, et, token) for et in sorted(entity_types)}
 
 
-def _require_definition_row(tenant_id: str, entity_id: str, token: str | None = None) -> dict:
+def require_definition_row(tenant_id: str, entity_id: str, token: str | None = None) -> dict:
     """Load one workflow_definition row by DataCore entity_id, scoped to
     `tenant_id` (get_entity already tenant-scopes via list_entities). 404 if
     absent — this is also what makes a business-id-shaped `entity_id` (the
@@ -107,10 +107,10 @@ def publish_definition(tenant_id: str, entity_id: str, token: str | None = None)
     the same lineage (if any, and if it isn't this same row), flip this row
     to `status="published"`, and return the updated row.
     """
-    row = _require_definition_row(tenant_id, entity_id, token)
+    row = require_definition_row(tenant_id, entity_id, token)
 
-    machine, steps = _parse_machine_steps(row)
-    models = _fetch_models(tenant_id, _referenced_entity_models(steps), token)
+    machine, steps = parse_machine_steps(row)
+    models = fetch_models(tenant_id, referenced_entity_models(steps), token)
     errors = validate_definition(machine, steps, models)
     if errors:
         raise HTTPException(409, {"errors": errors})
@@ -145,7 +145,7 @@ def _require_published_row(tenant_id: str, entity_id: str, token: str | None, ac
     with an actionable message instead of silently mutating a row nothing
     reads lineage state from.
     """
-    row = _require_definition_row(tenant_id, entity_id, token)
+    row = require_definition_row(tenant_id, entity_id, token)
     if row.get("status") != "published":
         raise HTTPException(
             409,
@@ -216,8 +216,8 @@ def retire_definition(tenant_id: str, entity_id: str, force_cancel: bool = False
 
     `cancel_instance_fn` is dependency-injected by the caller (`app.api
     .definitions`) rather than this module importing `app.workflows.machine`
-    directly — `machine.py` imports THIS module (`_parse_machine_steps`/
-    `_fetch_models`/`_referenced_entity_models`/`_as_int`), so a
+    directly — `machine.py` imports THIS module (`parse_machine_steps`/
+    `fetch_models`/`referenced_entity_models`/`_as_int`), so a
     `definitions.py -> machine.py` import back would close a cycle. Callers
     that pass `force_cancel=True` must supply `cancel_instance_fn` and a
     real `actor` — an `AssertionError` (a programming error, not a request
@@ -292,7 +292,7 @@ def model_impact(tenant_id: str, entity_type: str, field: str | None = None,
 
     references: list[dict] = []
     for row in rows:
-        machine, steps = _parse_machine_steps(row)
+        machine, steps = parse_machine_steps(row)
 
         section_map: dict[str, SectionDef] = {}
         for step in steps:
