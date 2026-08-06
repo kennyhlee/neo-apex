@@ -51,6 +51,20 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.columns.openInstances': 'Open instances',
     'definitions.columns.channel': 'Channel',
 
+    // Badge label overrides — StatusBadge's default label is the raw enum
+    // value (fine in en-US only by accident); every value each column can
+    // show gets a translated key.
+    'definitions.status.draft': 'Draft',
+    'definitions.status.published': 'Published',
+    'definitions.status.superseded': 'Superseded',
+    'definitions.lineageStatus.active': 'Active',
+    'definitions.lineageStatus.deprecated': 'Deprecated',
+    'definitions.lineageStatus.retired': 'Retired',
+    'definitions.health.current': 'Current',
+    'definitions.health.stale': 'Stale',
+    'definitions.health.broken': 'Broken',
+    'definitions.health.superseded': 'Superseded',
+
     'definitions.channel.staffOnly': 'Staff only',
     'definitions.channel.family': 'Family',
     'definitions.channel.familyLinkLabel': 'Open family link',
@@ -164,6 +178,17 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.columns.health': '健康状态',
     'definitions.columns.openInstances': '进行中的申请',
     'definitions.columns.channel': '渠道',
+
+    'definitions.status.draft': '草稿',
+    'definitions.status.published': '已发布',
+    'definitions.status.superseded': '已替代',
+    'definitions.lineageStatus.active': '生效中',
+    'definitions.lineageStatus.deprecated': '已停用',
+    'definitions.lineageStatus.retired': '已淘汰',
+    'definitions.health.current': '正常',
+    'definitions.health.stale': '需要更新',
+    'definitions.health.broken': '有问题',
+    'definitions.health.superseded': '已替代',
 
     'definitions.channel.staffOnly': '仅限员工',
     'definitions.channel.family': '家庭端',

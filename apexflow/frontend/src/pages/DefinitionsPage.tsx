@@ -179,6 +179,20 @@ export default function DefinitionsPage() {
     setPage(1);
   }
 
+  /**
+   * Translated badge label for a raw backend enum value — `status`,
+   * `lineage_status`, and `health` are all wire values like "deprecated",
+   * never themselves user-facing copy. Falls back to the raw value (not
+   * the untranslated i18n key) if a value somehow isn't in the map, so an
+   * unexpected value degrades to "shows the raw word" rather than "shows
+   * a literal translation key like definitions.status.foo".
+   */
+  function badgeLabel(prefix: 'status' | 'lineageStatus' | 'health', value: string): string {
+    const key = `definitions.${prefix}.${value}`;
+    const translated = t(key);
+    return translated === key ? value : translated;
+  }
+
   function errorMessage(err: unknown, fallbackKey: string): string {
     if (err instanceof ApiError && typeof err.body === 'string') return err.body;
     if (err instanceof ApiError && err.body && typeof err.body === 'object' && 'detail' in err.body) {
@@ -231,10 +245,15 @@ export default function DefinitionsPage() {
     try {
       const bundle = await getBundle(tenantId, entry.entity_id);
       const def = bundle.definition;
+      // `def.version` is already coerced to a real number by getBundle
+      // (see api/designer.ts / utils/numeric.ts) — DataCore's flattened row
+      // would otherwise hand back the STRING "1", and "1" + 1 === "11" in
+      // JS, silently corrupting every draft's version past the first.
+      const nextVersion = def.version + 1;
       const result = await createEntity(tenantId, 'workflow_definition', {
         definition_id: def.definition_id,
         name: def.name,
-        version: def.version + 1,
+        version: nextVersion,
         status: 'draft',
         lineage_status: def.lineage_status,
         channel_access: def.channel_access,
@@ -242,7 +261,7 @@ export default function DefinitionsPage() {
         steps: JSON.stringify(def.steps),
       });
       toast({
-        message: t('definitions.newDraftToast').replace('{v}', String(def.version + 1)),
+        message: t('definitions.newDraftToast').replace('{v}', String(nextVersion)),
         tone: 'success',
       });
       navigate(`/definitions/${result.entity_id}`);
@@ -338,19 +357,21 @@ export default function DefinitionsPage() {
       key: 'status',
       label: 'Status',
       i18nKey: 'definitions.columns.status',
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => <StatusBadge status={row.status} label={badgeLabel('status', row.status)} />,
     },
     {
       key: 'lineage_status',
       label: 'Lineage',
       i18nKey: 'definitions.columns.lineageStatus',
-      render: (row) => <StatusBadge status={row.lineage_status} />,
+      render: (row) => (
+        <StatusBadge status={row.lineage_status} label={badgeLabel('lineageStatus', row.lineage_status)} />
+      ),
     },
     {
       key: 'health',
       label: 'Health',
       i18nKey: 'definitions.columns.health',
-      render: (row) => <StatusBadge status={row.health} />,
+      render: (row) => <StatusBadge status={row.health} label={badgeLabel('health', row.health)} />,
     },
     {
       key: 'open_instances',

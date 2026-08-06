@@ -3,6 +3,7 @@
 // api/definitions.py — both read directly off apexflow/backend/app/api/ on
 // disk, not from memory).
 import { APEXFLOW_API_URL } from '../config.ts';
+import { asNumber } from '../utils/numeric.ts';
 import type {
   DefinitionBundle,
   DefinitionLifecycleAction,
@@ -51,21 +52,45 @@ async function parseOrThrow<T>(resp: Response): Promise<T> {
   throw new ApiError(resp.status, body);
 }
 
-/** GET /api/workflows/{tenant_id}/definitions — api/designer.py:79. */
+/**
+ * GET /api/workflows/{tenant_id}/definitions — api/designer.py:79.
+ *
+ * `version` and `open_instances` are coerced to real numbers here (see
+ * utils/numeric.ts's `asNumber` doc comment) so every caller downstream —
+ * this file's other exports included — gets a value it can safely do
+ * arithmetic on, rather than each page having to remember to coerce a
+ * flattened-string field itself.
+ */
 export async function listDefinitions(tenantId: string): Promise<ListDefinitionsResponse> {
   const resp = await fetch(`${API_BASE}/api/workflows/${tenantId}/definitions`, {
     headers: authHeaders(),
   });
-  return parseOrThrow(resp);
+  const data = await parseOrThrow<ListDefinitionsResponse>(resp);
+  return {
+    definitions: data.definitions.map((entry) => ({
+      ...entry,
+      version: asNumber(entry.version),
+      open_instances: asNumber(entry.open_instances),
+    })),
+  };
 }
 
-/** GET /api/workflows/{tenant_id}/definitions/{entity_id}/bundle — api/designer.py:122. */
+/**
+ * GET /api/workflows/{tenant_id}/definitions/{entity_id}/bundle —
+ * api/designer.py:122. `definition.version` coerced per `listDefinitions`'s
+ * comment above — the bundle route returns the same flattened row's raw
+ * `version` value.
+ */
 export async function getBundle(tenantId: string, entityId: string): Promise<DefinitionBundle> {
   const resp = await fetch(
     `${API_BASE}/api/workflows/${tenantId}/definitions/${entityId}/bundle`,
     { headers: authHeaders() },
   );
-  return parseOrThrow(resp);
+  const data = await parseOrThrow<DefinitionBundle>(resp);
+  return {
+    ...data,
+    definition: { ...data.definition, version: asNumber(data.definition.version) },
+  };
 }
 
 /**
@@ -119,7 +144,10 @@ export async function lifecycleAction(
       body: JSON.stringify({ action, ...opts }),
     },
   );
-  return parseOrThrow(resp);
+  const data = await parseOrThrow<DefinitionRow>(resp);
+  // `version` coerced per listDefinitions's comment — this is the same
+  // flattened `workflow_definition` row, returned directly by the backend.
+  return { ...data, version: asNumber(data.version) };
 }
 
 /** `lifecycleAction(tenantId, entityId, 'publish')` — named per the brief's Interfaces list. */
