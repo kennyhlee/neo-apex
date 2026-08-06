@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from datacore.store import Store, derive_abbrev
+from datacore.store import Store, VersionConflictError, derive_abbrev
 from datacore.query import QueryEngine, TableNotFoundError
 
 DUPLICATE_CHECK_THRESHOLD = float(
@@ -293,7 +293,8 @@ def register_routes(app: FastAPI, store: Store) -> None:
 
     @app.put("/api/entities/{tenant_id}/{entity_type}/{entity_id}")
     def update_entity(
-        tenant_id: str, entity_type: str, entity_id: str, body: CreateEntityRequest
+        tenant_id: str, entity_type: str, entity_id: str, body: CreateEntityRequest,
+        expected_version: int | None = Query(None),
     ):
         try:
             result = store.put_entity(
@@ -302,7 +303,12 @@ def register_routes(app: FastAPI, store: Store) -> None:
                 entity_id=entity_id,
                 base_data=dict(body.base_data),
                 custom_fields=body.custom_fields,
+                expected_version=expected_version,
             )
+        except VersionConflictError as e:
+            raise HTTPException(status_code=409, detail={
+                "error": "version_conflict", "expected": e.expected, "actual": e.actual,
+            })
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return result

@@ -81,3 +81,30 @@ def test_update_preserves_version_history(upd_client):
     entity = store.get_active_entity("t1", "student", "s1")
     assert entity["_version"] == 3
     assert entity["base_data"]["grade_level"] == "4th"
+
+
+def test_update_entity_matching_expected_version_succeeds(upd_client):
+    client, _ = upd_client
+    resp = client.put("/api/entities/t1/student/s1?expected_version=1", json={
+        "base_data": {"first_name": "Alice", "last_name": "Smith", "grade_level": "3rd"},
+    })
+    assert resp.status_code == 200
+    assert resp.json()["_version"] == 2
+
+
+def test_update_entity_stale_expected_version_returns_409(upd_client):
+    client, store = upd_client
+    # s1 starts at _version 1; bump it to _version 2 first.
+    client.put("/api/entities/t1/student/s1", json={
+        "base_data": {"first_name": "Alice", "last_name": "Smith", "grade_level": "3rd"},
+    })
+    resp = client.put(
+        "/api/entities/t1/student/s1?expected_version=1",
+        json={"base_data": {"first_name": "Alice", "last_name": "Smith", "grade_level": "C"}},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == {"error": "version_conflict", "expected": 1, "actual": 2}
+
+    # And the losing write must not have landed:
+    entity = store.get_active_entity("t1", "student", "s1")
+    assert entity["base_data"]["grade_level"] == "3rd"
