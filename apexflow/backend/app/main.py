@@ -14,6 +14,7 @@ route is declared directly here rather than in a separate app/api/health.py.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import definitions as definitions_api
 from app.config import settings
 
 app = FastAPI(
@@ -30,6 +31,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(definitions_api.router)
 
 
 @app.get("/health")

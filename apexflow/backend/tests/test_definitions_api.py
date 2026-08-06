@@ -1,0 +1,417 @@
+"""Route-level tests for the definitions API (Task 5): publish/lineage
+lifecycle actions and model-impact scanning.
+
+Written first per TDD (superpowers:test-driven-development):
+app.api.definitions / app.workflows.definitions do not exist yet, so this
+file is expected to fail at collection until they are implemented.
+
+Auth pattern follows enrollx/backend/tests/test_actions_approve.py: override
+`require_authenticated_user` at the app level rather than minting a real JWT
+(DataCore's /auth/me is out of scope for these tests) — this file's `client`
+fixture shadows conftest.py's plain `client` fixture, adding that override on
+top of the shared `fake_dc` fixture.
+
+Cross-task note (per task-5 brief): a "deprecate blocks Task 6 instance
+creation" test belongs to Task 6 (it needs `create_instance`, which doesn't
+exist until then) — intentionally NOT written here.
+"""
+import json
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.auth import require_authenticated_user
+from app.main import app
+
+TENANT = "acme"
+
+
+@pytest.fixture
+def client(fake_dc):
+    app.dependency_overrides[require_authenticated_user] = lambda: {
+        "user_id": "u1", "tenant_id": TENANT, "role": "admin", "_token": "Bearer test-token",
+    }
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+# --- Fixture builders (mirrors tests/test_validate.py's base fixture) -------
+
+
+def _valid_machine():
+    return {
+        "states": [
+            {"state_id": "draft", "name": "Draft", "kind": "initial"},
+            {"state_id": "submitted", "name": "Submitted", "kind": "active"},
+            {"state_id": "enrolled", "name": "Enrolled", "kind": "terminal"},
+        ],
+        "transitions": [
+            {
+                "transition_id": "t_submit",
+                "from": "draft",
+                "to": "submitted",
+                "action": "submit",
+                "actor": "family",
+                "guards": [],
+                "effects": [
+                    {"primitive": "commit_sections", "params": {"section_ids": ["student_section"]}}
+                ],
+            },
+            {
+                "transition_id": "t_approve",
+                "from": "submitted",
+                "to": "enrolled",
+                "action": "approve",
+                "actor": "staff",
+                "guards": [{"primitive": "all_blocking_items_complete", "params": {}}],
+                "effects": [],
+            },
+        ],
+    }
+
+
+def _broken_machine():
+    """No terminal state, no outgoing transition from the initial state —
+    trips several validate_definition rules at once; publish must reject."""
+    return {
+        "states": [{"state_id": "draft", "name": "Draft", "kind": "initial"}],
+        "transitions": [],
+    }
+
+
+def _valid_steps():
+    return [
+        {
+            "step_id": "student_details",
+            "type": "form",
+            "title": "Student details",
+            "required": True,
+            "blocking": True,
+            "available_in": ["draft"],
+            "show_if": None,
+            "review": None,
+            "config": {
+                "sections": [
+                    {
+                        "section_id": "student_section",
+                        "entity_model": "student",
+                        "fields": [
+                            {"name": "first_name", "required": True},
+                            {"name": "last_name", "required": True},
+                        ],
+                        "mode": "create",
+                        "repeat": None,
+                    }
+                ]
+            },
+        }
+    ]
+
+
+def _valid_models():
+    return {
+        "student": {
+            "base_fields": [
+                {"name": "student_id", "type": "str", "required": True},
+                {"name": "first_name", "type": "str", "required": True},
+                {"name": "last_name", "type": "str", "required": True},
+            ],
+            "custom_fields": [],
+        }
+    }
+
+
+def _seed_definition(fake_dc, *, definition_id, version=1, status="draft",
+                     lineage_status="active", machine=None, steps=None,
+                     channel_access="staff_only", name="Enrollment"):
+    base = {
+        "definition_id": definition_id,
+        "name": name,
+        "version": version,
+        "status": status,
+        "lineage_status": lineage_status,
+        "channel_access": channel_access,
+        "machine": json.dumps(machine if machine is not None else _valid_machine()),
+        "steps": json.dumps(steps if steps is not None else _valid_steps()),
+    }
+    created = fake_dc.dc_create(TENANT, "workflow_definition", base)
+    return created["entity_id"]
+
+
+def act(client, entity_id, action, **params):
+    return client.post(
+        f"/api/workflows/{TENANT}/definitions/{entity_id}/actions",
+        json={"action": action, **params},
+    )
+
+
+# --- publish ------------------------------------------------------------
+
+
+def test_publish_flips_draft_to_published_and_supersedes_prior(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    v1_eid = _seed_definition(fake_dc, definition_id="wd-lineage-1", version=1, status="published")
+    v2_eid = _seed_definition(fake_dc, definition_id="wd-lineage-1", version=2, status="draft")
+
+    resp = act(client, v2_eid, "publish")
+    assert resp.status_code == 200
+    assert resp.json()["base_data"]["status"] == "published"
+
+    v2_row = fake_dc.get_entity(TENANT, "workflow_definition", v2_eid)
+    assert v2_row["status"] == "published"
+    v1_row = fake_dc.get_entity(TENANT, "workflow_definition", v1_eid)
+    assert v1_row["status"] == "superseded"
+
+
+def test_publish_invalid_machine_returns_409_with_errors(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-lineage-2", machine=_broken_machine())
+
+    resp = act(client, eid, "publish")
+    assert resp.status_code == 409
+    errors = resp.json()["detail"]["errors"]
+    assert isinstance(errors, list) and len(errors) > 0
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["status"] == "draft"
+
+
+def test_publish_business_id_instead_of_entity_id_404s_and_leaves_row_draft(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    business_id = fake_dc.next_id(TENANT, "workflow_definition")
+    real_eid = _seed_definition(fake_dc, definition_id=business_id)
+
+    resp = act(client, business_id, "publish")
+    assert resp.status_code == 404
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", real_eid)
+    assert row["status"] == "draft"
+
+
+def test_publish_cross_tenant_row_404s(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    other_base = {
+        "definition_id": "wd-other-tenant",
+        "name": "Other",
+        "version": 1,
+        "status": "draft",
+        "lineage_status": "active",
+        "channel_access": "staff_only",
+        "machine": json.dumps(_valid_machine()),
+        "steps": json.dumps(_valid_steps()),
+    }
+    created = fake_dc.dc_create("globex", "workflow_definition", other_base)
+    resp = act(client, created["entity_id"], "publish")
+    assert resp.status_code == 404
+
+
+# --- deprecate / reactivate ------------------------------------------------
+
+
+def test_deprecate_then_reactivate_lineage_status(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-lineage-3", status="published")
+
+    resp = act(client, eid, "deprecate")
+    assert resp.status_code == 200
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["lineage_status"] == "deprecated"
+
+    resp = act(client, eid, "reactivate")
+    assert resp.status_code == 200
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["lineage_status"] == "active"
+
+
+# --- retire ------------------------------------------------------------
+
+
+def _seed_instance(fake_dc, *, definition_id, closed_at=""):
+    base = {
+        "instance_id": fake_dc.next_id(TENANT, "workflow_instance"),
+        "definition_id": definition_id,
+        "definition_version": 1,
+        "state": "draft",
+        "channel_started": "family",
+        "opened_at": "2026-08-01T00:00:00+00:00",
+        "closed_at": closed_at,
+    }
+    return fake_dc.dc_create(TENANT, "workflow_instance", base)["entity_id"]
+
+
+def test_retire_with_open_instances_returns_409_with_count(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-lineage-4", status="published")
+    _seed_instance(fake_dc, definition_id="wd-lineage-4", closed_at="")
+    _seed_instance(fake_dc, definition_id="wd-lineage-4", closed_at="2026-08-02T00:00:00+00:00")
+
+    resp = act(client, eid, "retire")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["open_instances"] == 1
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["lineage_status"] == "active"
+
+
+def test_retire_force_cancel_returns_501(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-lineage-5", status="published")
+    _seed_instance(fake_dc, definition_id="wd-lineage-5", closed_at="")
+
+    resp = act(client, eid, "retire", force_cancel=True)
+    assert resp.status_code == 501
+
+
+def test_retire_with_no_open_instances_succeeds(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-lineage-6", status="published")
+    _seed_instance(fake_dc, definition_id="wd-lineage-6", closed_at="2026-08-02T00:00:00+00:00")
+
+    resp = act(client, eid, "retire")
+    assert resp.status_code == 200
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert row["lineage_status"] == "retired"
+
+
+# --- model-impact ---------------------------------------------------------
+
+
+def _model_impact_machine():
+    return {
+        "states": [
+            {"state_id": "draft", "name": "Draft", "kind": "initial"},
+            {"state_id": "submitted", "name": "Submitted", "kind": "terminal"},
+        ],
+        "transitions": [
+            {
+                "transition_id": "t1",
+                "from": "draft",
+                "to": "submitted",
+                "action": "go",
+                "actor": "staff",
+                "guards": [
+                    {
+                        "primitive": "data_condition",
+                        "params": {
+                            "condition": {
+                                "all": [{"source": "student_section.first_name", "op": "not_empty"}]
+                            }
+                        },
+                    }
+                ],
+                "effects": [],
+            }
+        ],
+    }
+
+
+def _model_impact_steps():
+    return [
+        {
+            "step_id": "student_details",
+            "type": "form",
+            "title": "Student details",
+            "required": True,
+            "blocking": True,
+            "available_in": ["draft"],
+            "show_if": None,
+            "review": None,
+            "config": {
+                "sections": [
+                    {
+                        "section_id": "student_section",
+                        "entity_model": "student",
+                        "fields": [
+                            {"name": "first_name", "required": True},
+                            {"name": "last_name", "required": True},
+                        ],
+                        "mode": "create",
+                        "repeat": None,
+                    }
+                ]
+            },
+        },
+        {
+            "step_id": "photo_step",
+            "type": "message",
+            "title": "Photo release",
+            "required": False,
+            "blocking": False,
+            "available_in": ["draft"],
+            "show_if": {"all": [{"source": "student_section.first_name", "op": "not_empty"}]},
+            "review": None,
+            "config": {"body": "Please review the photo release."},
+        },
+    ]
+
+
+def _family_steps():
+    return [
+        {
+            "step_id": "family_details",
+            "type": "form",
+            "title": "Family details",
+            "required": True,
+            "blocking": True,
+            "available_in": ["draft"],
+            "show_if": None,
+            "review": None,
+            "config": {
+                "sections": [
+                    {
+                        "section_id": "family_section",
+                        "entity_model": "family",
+                        "fields": [{"name": "family_name", "required": True}],
+                        "mode": "create",
+                        "repeat": None,
+                    }
+                ]
+            },
+        }
+    ]
+
+
+def test_model_impact_returns_section_show_if_and_guard_references(client, fake_dc):
+    _seed_definition(
+        fake_dc, definition_id="wd-impact-1", status="published",
+        machine=_model_impact_machine(), steps=_model_impact_steps(),
+    )
+    # A definition referencing a different entity_model must not show up.
+    _seed_definition(
+        fake_dc, definition_id="wd-impact-2", status="published", steps=_family_steps(),
+    )
+    # A draft referencing "student" must be excluded (model-impact scans
+    # PUBLISHED definitions only).
+    _seed_definition(
+        fake_dc, definition_id="wd-impact-3", status="draft",
+        machine=_model_impact_machine(), steps=_model_impact_steps(),
+    )
+
+    resp = client.get(f"/api/workflows/{TENANT}/model-impact?entity_type=student")
+    assert resp.status_code == 200
+    refs = resp.json()["references"]
+    kinds = {r["kind"] for r in refs}
+    assert kinds == {"section", "show_if", "guard"}
+    assert all(r["definition_id"] == "wd-impact-1" for r in refs)
+    assert all(r["entity_id"] and r["version"] == 1 for r in refs)
+
+
+def test_model_impact_field_filter_narrows_to_matching_field(client, fake_dc):
+    _seed_definition(
+        fake_dc, definition_id="wd-impact-4", status="published",
+        machine=_model_impact_machine(), steps=_model_impact_steps(),
+    )
+    _seed_definition(
+        fake_dc, definition_id="wd-impact-5", status="published", steps=_family_steps(),
+    )
+
+    resp = client.get(f"/api/workflows/{TENANT}/model-impact?entity_type=student&field=last_name")
+    refs = resp.json()["references"]
+    # Only the section field-pick references last_name; show_if/guard both
+    # reference first_name only.
+    assert {r["kind"] for r in refs} == {"section"}
+
+    resp = client.get(f"/api/workflows/{TENANT}/model-impact?entity_type=family")
+    refs = resp.json()["references"]
+    assert len(refs) == 1
+    assert refs[0]["definition_id"] == "wd-impact-5"
