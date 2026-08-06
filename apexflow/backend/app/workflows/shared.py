@@ -104,6 +104,46 @@ def condition_data(draft_data: dict, context: dict) -> dict[str, Any]:
     return data
 
 
+def derived_document_sensitive(ctx, item_id: str | None) -> bool:
+    """Server-derived `sensitive` flag for a document upload -- the pinned
+    definition decides this, never the client (Plan 3 Task 4). Hoisted here
+    (final-review fix wave, finding I1) so BOTH document-create routes --
+    the token-scoped family surface (`app/api/internal.py`) and the staff
+    surface (`app/api/documents.py`) -- share one derivation instead of two
+    copies drifting apart.
+
+    Resolves `item_id` (a `workflow_item` entity_id) to its `workflow_item`
+    row's `step_id`, then to that step in `ctx.definition["steps"]` (the
+    PINNED steps -- both callers build `ctx` via `build_eval_context`, so
+    this is always the instance's pinned version, never the currently-
+    published row), then to the `config.docs` entry whose `name` equals the
+    item's `title` (`engine.py::_derive_item_specs` stamps `title =
+    doc["name"]` at creation, so this is an exact match, not a fuzzy one).
+    Returns `False` -- never raises -- when `item_id` is absent/`None` (a
+    free-standing upload with no item) or doesn't resolve to a
+    documents-kind item with a matching `docs` entry.
+
+    `ctx` is untyped here (not `EvalContext`) deliberately: this module is a
+    leaf `app/workflows/*` cannot import `primitives.py` (which imports THIS
+    module) without closing an import cycle -- see module docstring. Both
+    callers pass a real `machine.EvalContext`; only `.items` and
+    `.definition["steps"]` are read via duck typing.
+    """
+    if not item_id:
+        return False
+    item = next((i for i in ctx.items if i.get("entity_id") == item_id), None)
+    if item is None:
+        return False
+    step = next((s for s in ctx.definition["steps"] if s.step_id == item.get("step_id")), None)
+    if step is None or step.type != "documents":
+        return False
+    title = item.get("title")
+    for doc in step.config.get("docs", []) or []:
+        if doc.get("name") == title:
+            return bool(doc.get("sensitive", False))
+    return False
+
+
 def applicable_items(definition_steps: list[StepDef], items: list[dict], draft_data: dict,
                      context: dict) -> list[dict]:
     """Filter `items` to those whose owning step is currently applicable:

@@ -13,6 +13,19 @@ from `body` plus a value derived from the authenticated caller
 (`user["user_id"]`), so there is no code path through which a
 client-supplied value could reach DataCore.
 
+`sensitive` is the same story (final-review fix wave, finding I1):
+`CreateDocumentRequest` below has NO `sensitive` field either -- a
+client-supplied one is silently dropped by pydantic's default
+`extra="ignore"`. It is instead DERIVED server-side from the PINNED
+definition of `body.instance_id`'s instance, via
+`app.workflows.shared.derived_document_sensitive` -- the same helper
+`app/api/internal.py::create_document_by_token` uses on the family surface
+(Plan 3 Task 4 built the derivation there first; this route never got the
+same treatment until now, which is exactly the gap that let a staff upload
+of a definition-declared-sensitive doc land `sensitive=False` and become
+visible to any family magic-link holder via `documents_by_token`'s
+"own upload OR non-sensitive" rule).
+
 Error-relay convention: DataCore's status code IS forwarded (the client
 needs to distinguish a 404 from a 413), but the body never is -- DataCore's
 error text can name storage keys, upstream hosts, and model fields. This is
@@ -35,6 +48,9 @@ from pydantic import BaseModel
 
 from app.auth import require_staff_tenant
 from app.config import settings
+from app.workflows import datacore as dc
+from app.workflows import machine
+from app.workflows.shared import derived_document_sensitive
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +63,31 @@ class CreateDocumentRequest(BaseModel):
     filename: str
     content_type: str
     size: int
-    sensitive: bool = False
+
+
+def _derive_sensitive_for_staff(tenant_id: str, instance_id: str, item_id: str | None,
+                                user: dict) -> bool:
+    """Resolve `instance_id` -> pinned `EvalContext` -> `derived_document_sensitive`,
+    mirroring `app/api/internal.py::create_document_by_token`'s derivation
+    for the family surface. `False` (never a raised error) whenever any leg
+    of that resolution fails to resolve -- an unknown/foreign `instance_id`,
+    or an instance whose pinned `workflow_definition` row is missing --
+    since this route's job is presigning an upload, not validating the
+    caller's `instance_id`; the derivation is a best-effort security
+    upgrade, not a new way for `POST /documents` to 404/500 on a client
+    value it never validated before this fix either. `item_id` absent/
+    unresolvable also reads as `False`, same as the family surface."""
+    token = user.get("_token")
+    instance_row = dc.get_entity(tenant_id, "workflow_instance", instance_id, token)
+    if instance_row is None:
+        return False
+    try:
+        ctx = machine.build_eval_context(
+            tenant_id, instance_row, actor=user.get("user_id", "staff"), token=token,
+        )
+    except HTTPException:
+        return False
+    return derived_document_sensitive(ctx, item_id)
 
 
 def _dc_request(method: str, path: str, token: str | None,
@@ -69,14 +109,17 @@ def create_document(tenant_id: str, body: CreateDocumentRequest,
                     user=Depends(require_staff_tenant)):
     """Presign an upload. `uploaded_by` is derived from the authenticated
     staff caller (`user["user_id"]`) -- never read from the client body,
-    which has no such field to read (see module docstring)."""
+    which has no such field to read (see module docstring). `sensitive` is
+    likewise derived, from the pinned definition, via
+    `_derive_sensitive_for_staff` -- also never read from the client body."""
+    sensitive = _derive_sensitive_for_staff(tenant_id, body.instance_id, body.item_id, user)
     resp = _dc_request("POST", f"/api/documents/{tenant_id}", user.get("_token"), {
         "application_id": body.instance_id,  # DataCore's own fixed field name
         "item_id": body.item_id,
         "filename": body.filename,
         "content_type": body.content_type,
         "size": body.size,
-        "sensitive": body.sensitive,
+        "sensitive": sensitive,
         "uploaded_by": user.get("user_id", "staff"),
     })
     if resp.status_code not in (200, 201):

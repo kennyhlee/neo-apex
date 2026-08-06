@@ -80,7 +80,7 @@ from app.workflows import definitions as defs
 from app.workflows import engine
 from app.workflows import machine
 from app.workflows.emails import send_email
-from app.workflows.shared import as_bool
+from app.workflows.shared import as_bool, derived_document_sensitive
 from app.workflows.tokens import TokenError, make_link_token, parse_link_token, verify_link_token
 
 logger = logging.getLogger("apexflow.internal")
@@ -415,44 +415,15 @@ def _blob_request(method: str, path: str, json_body: dict | None = None) -> http
         raise HTTPException(502, "DataCore is unreachable")
 
 
-def _derived_sensitive(ctx, item_id: str | None) -> bool:
-    """Server-derived `sensitive` flag for a token document upload (Plan 3
-    Task 4) -- the pinned definition decides this, never the client.
-
-    Resolves `item_id` (a `workflow_item` entity_id, same id shape
-    `action_by_token`'s own `item_id` params use) to its `workflow_item`
-    row's `step_id`, then to that step in `ctx.definition["steps"]` (the
-    PINNED steps -- `build_eval_context` already loads these against the
-    instance's pinned version, same as every other route in this module),
-    then to the `config.docs` entry whose `name` equals the item's `title`
-    (`engine.py::_derive_item_specs` stamps `title = doc["name"]` at
-    creation, so this is an exact match, not a fuzzy one). Returns `False`
-    -- never raises -- when `item_id` is absent/`None` (a free-standing
-    upload with no item, e.g. a staff-side ad hoc attachment) or doesn't
-    resolve to a documents-kind item with a matching `docs` entry; this
-    mirrors `TokenCreateDocumentRequest`'s old client-supplied default."""
-    if not item_id:
-        return False
-    item = next((i for i in ctx.items if i.get("entity_id") == item_id), None)
-    if item is None:
-        return False
-    step = next((s for s in ctx.definition["steps"] if s.step_id == item.get("step_id")), None)
-    if step is None or step.type != "documents":
-        return False
-    title = item.get("title")
-    for doc in step.config.get("docs", []) or []:
-        if doc.get("name") == title:
-            return bool(doc.get("sensitive", False))
-    return False
-
-
 @router.post("/internal/instance-by-token/{token}/documents", status_code=201)
 def create_document_by_token(token: str, body: TokenCreateDocumentRequest):
     """Presign an upload slot for this token's instance. `uploaded_by` is
     DERIVED from the verified token (`family:{instance_entity_id}`) -- never
     read from the client body, which has no such field to read. `sensitive`
     is likewise DERIVED (Plan 3 Task 4) from the pinned definition via
-    `_derived_sensitive`, not accepted from the client at all -- see
+    `derived_document_sensitive` (`app/workflows/shared.py` -- hoisted there,
+    final-review fix wave finding I1, so the staff document-create route
+    shares the same derivation), not accepted from the client at all -- see
     `TokenCreateDocumentRequest`'s docstring."""
     tenant_id, instance_row = resolve_token(token)
     ctx = machine.build_eval_context(tenant_id, instance_row, actor=_family_actor(instance_row))
@@ -463,7 +434,7 @@ def create_document_by_token(token: str, body: TokenCreateDocumentRequest):
         "filename": body.filename,
         "content_type": body.content_type,
         "size": body.size,
-        "sensitive": _derived_sensitive(ctx, body.item_id),
+        "sensitive": derived_document_sensitive(ctx, body.item_id),
         "uploaded_by": _family_actor(instance_row),
     })
     if resp.status_code not in (200, 201):
