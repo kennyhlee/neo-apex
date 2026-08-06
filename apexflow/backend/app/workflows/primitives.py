@@ -176,13 +176,36 @@ def _guard_all_blocking_items_complete(ctx: EvalContext, params: dict) -> bool:
 
 
 def _guard_items_in_status(ctx: EvalContext, params: dict) -> bool:
-    status = params["status"]
+    """`items_in_status{step_ids?, status, quantifier?}` — true iff the
+    quantifier ("all", default, or "any") of the applicable
+    (optionally step_ids-scoped) items has a status IN `status` (a single
+    status string, preserving Task 7's original shape, or a list of
+    acceptable statuses).
+
+    # ADJUST(bindings) (Task 9): extended beyond Task 7's original
+    single-status/ALL-only shape in two ways, both needed by the enrollment
+    template and neither a new primitive name (per this task's accumulated
+    decisions — "Do NOT invent a new primitive name"):
+    - `status` may be a list (e.g. `["verified", "waived"]` for
+      `approved -> enrolled`'s post-approval tier — no single status value
+      can express "verified OR waived").
+    - `quantifier: "all"|"any"` (default `"all"`, so every existing
+      caller/test — which never passed this key — is unaffected):
+      `in_review -> pending_items` needs `"any"` ("ANY item rejected"; the
+      default `"all"` would require EVERY applicable item to be rejected,
+      which a single staff `reject_item` call on one item never makes true).
+    """
+    raw_status = params["status"]
+    statuses = set(raw_status) if isinstance(raw_status, list) else {raw_status}
+    quantifier = params.get("quantifier", "all")
     step_ids = params.get("step_ids")
     items = _applicable_items(ctx)
     if step_ids:
         step_id_set = set(step_ids)
         items = [i for i in items if i.get("step_id") in step_id_set]
-    return all(i.get("status") == status for i in items)
+    if quantifier == "any":
+        return any(i.get("status") in statuses for i in items)
+    return all(i.get("status") in statuses for i in items)
 
 
 def _guard_capacity_available(ctx: EvalContext, params: dict) -> bool:

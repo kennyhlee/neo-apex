@@ -105,6 +105,52 @@ def test_items_in_status_respects_show_if_applicability():
     assert GUARDS["items_in_status"](ctx, {"status": "verified"}) is True
 
 
+# --- guards: items_in_status quantifier/status-list extension (Task 9) -----
+# See app.workflows.primitives._guard_items_in_status's docstring: the
+# enrollment template needs "ANY item rejected" (in_review -> pending_items)
+# and "ALL items verified-OR-waived" (approved -> enrolled), neither of which
+# Task 7's original single-status/ALL-only shape could express.
+
+
+def test_items_in_status_any_quantifier_true_when_one_matches():
+    items = [{"step_id": "s1", "status": "rejected"}, {"step_id": "s1", "status": "verified"}]
+    ctx = _ctx(items=items, definition=_definition([_step("s1")]))
+    assert GUARDS["items_in_status"](ctx, {"status": "rejected", "quantifier": "any"}) is True
+
+
+def test_items_in_status_any_quantifier_false_when_none_match():
+    items = [{"step_id": "s1", "status": "verified"}, {"step_id": "s1", "status": "submitted"}]
+    ctx = _ctx(items=items, definition=_definition([_step("s1")]))
+    assert GUARDS["items_in_status"](ctx, {"status": "rejected", "quantifier": "any"}) is False
+
+
+def test_items_in_status_any_quantifier_vacuously_false_for_no_items():
+    ctx = _ctx(items=[], definition=_definition([_step("s1")]))
+    assert GUARDS["items_in_status"](ctx, {"status": "rejected", "quantifier": "any"}) is False
+
+
+def test_items_in_status_status_list_matches_any_of_the_listed_statuses():
+    items = [{"step_id": "s1", "status": "verified"}, {"step_id": "s1", "status": "waived"}]
+    ctx = _ctx(items=items, definition=_definition([_step("s1")]))
+    assert GUARDS["items_in_status"](ctx, {"status": ["verified", "waived"]}) is True
+
+
+def test_items_in_status_status_list_all_quantifier_fails_on_an_unlisted_status():
+    items = [{"step_id": "s1", "status": "verified"}, {"step_id": "s1", "status": "submitted"}]
+    ctx = _ctx(items=items, definition=_definition([_step("s1")]))
+    assert GUARDS["items_in_status"](ctx, {"status": ["verified", "waived"]}) is False
+
+
+def test_items_in_status_default_quantifier_is_all_backward_compatible():
+    """No `quantifier` key -> "all", matching every pre-Task-9 caller/test."""
+    items = [{"step_id": "s1", "status": "verified"}, {"step_id": "s1", "status": "verified"}]
+    ctx = _ctx(items=items, definition=_definition([_step("s1")]))
+    assert GUARDS["items_in_status"](ctx, {"status": "verified"}) is True
+    items_mixed = items + [{"step_id": "s1", "status": "submitted"}]
+    ctx2 = _ctx(items=items_mixed, definition=_definition([_step("s1")]))
+    assert GUARDS["items_in_status"](ctx2, {"status": "verified"}) is False
+
+
 # --- guards: capacity_available (boundary is the key assertion) -----------
 
 
