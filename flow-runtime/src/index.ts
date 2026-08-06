@@ -10,5 +10,6 @@ export {
 export { formatCents } from './money';
 export { sectionFields } from './sectionFields';
 export {
-  StepRenderer, evaluateCondition, type StepRendererProps, type WorkflowDraft,
+  StepRenderer, evaluateCondition,
+  type StepRendererProps, type StepRendererMode, type WorkflowDraft,
 } from './StepRenderer';

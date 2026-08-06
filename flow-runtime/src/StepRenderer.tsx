@@ -1,8 +1,10 @@
 // flow-runtime/src/StepRenderer.tsx
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import type {
-  Condition, ConditionGroupDef, ConditionItem, FlowField, WorkflowSectionDef, WorkflowStepDef,
+  Condition, ConditionGroupDef, ConditionItem, FlowField, InstanceDocumentView, WorkflowItemView,
+  WorkflowSectionDef, WorkflowStepDef,
 } from './types';
+import { DONE_ITEM_STATUSES } from './types';
 import type { ModelFieldSource } from './blockConfig';
 import { labelOf } from './blockConfig';
 import { sectionFields } from './sectionFields';
@@ -413,22 +415,102 @@ function SectionRenderer({ step, section, model, draft, onDraftChange }: Section
   );
 }
 
-function DocumentsStep({ step }: { step: WorkflowStepDef }) {
+/**
+ * Runtime-only (`item` set): one file input per named doc in `step.config.
+ * docs`, all uploading against the SAME step-level item (`WorkflowItemView`
+ * is one-per-step, not one-per-doc — unlike the registration-era
+ * `DocumentsBlock`/`ApplicationItem` pairing this mirrors in spirit).
+ * `documents` has no per-doc-name association (`InstanceDocumentView` only
+ * carries `item_id`), so the already-uploaded list below the doc rows is the
+ * whole `documents` slice matching this step's item, not attributed to any
+ * one named doc.
+ */
+function DocumentsStep({ step, item, documents, onUploadDocument }: {
+  step: WorkflowStepDef;
+  item?: WorkflowItemView;
+  documents?: InstanceDocumentView[];
+  onUploadDocument?: (itemEntityId: string, file: File) => Promise<void>;
+}) {
   const t = useFlowT();
   const docs = stepDocs(step);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   if (docs.length === 0) return <p className="fr-empty">{t('noFields')}</p>;
+
+  const canUpload = item !== undefined && onUploadDocument !== undefined;
+  const uploaded = item !== undefined && documents !== undefined
+    ? documents.filter((d) => d.item_id === item.entity_id)
+    : [];
+
+  const handleFile = (doc: WorkflowDoc, file: File | undefined) => {
+    if (!file || item === undefined || onUploadDocument === undefined) return;
+    setUploadingDoc(doc.name);
+    onUploadDocument(item.entity_id, file)
+      .catch(() => {})
+      .finally(() => setUploadingDoc(null));
+  };
+
   return (
-    <ul className="fr-doc-list">
-      {docs.map((doc) => (
-        <li key={doc.name} className="fr-doc-row">
-          <div className="fr-doc-info">
-            <strong>{doc.name}</strong>
-            {doc.description && <p>{doc.description}</p>}
-            {doc.sensitive && <span className="fr-doc-flag">{t('sensitiveDoc')}</span>}
-          </div>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="fr-doc-list">
+        {docs.map((doc) => (
+          <li key={doc.name} className="fr-doc-row">
+            <div className="fr-doc-info">
+              <strong>{doc.name}</strong>
+              {doc.description && <p>{doc.description}</p>}
+              {doc.sensitive && <span className="fr-doc-flag">{t('sensitiveDoc')}</span>}
+            </div>
+            {canUpload && (
+              <input type="file" className="fr-file-input" disabled={uploadingDoc !== null}
+                aria-label={`${t('upload')} — ${doc.name}`}
+                onChange={(e) => {
+                  handleFile(doc, e.target.files?.[0]);
+                  e.target.value = '';
+                }} />
+            )}
+          </li>
+        ))}
+      </ul>
+      {item !== undefined && uploaded.length > 0 && (
+        <ul className="fr-doc-uploaded">
+          {uploaded.map((d) => <li key={d.document_id}>{d.filename}</li>)}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/**
+ * Runtime-only "Mark complete" (`form` steps) / "Acknowledge" (`message`
+ * steps) button, calling `onCompleteItem(item.entity_id)`. Hidden once the
+ * item is in a `DONE_ITEM_STATUSES` tier (`submitted`/`verified`/`waived`) —
+ * there is nothing left to mark done — and disabled for the lifetime of the
+ * returned promise so a slow host call can't be double-fired by a second
+ * click. `.catch` + `finally` (not `.then`) resets the pending flag whether
+ * the promise resolves OR rejects, so a rejected `onCompleteItem` call can
+ * never wedge the button permanently disabled.
+ */
+function CompleteItemButton({ step, item, onCompleteItem }: {
+  step: WorkflowStepDef;
+  item: WorkflowItemView;
+  onCompleteItem?: (itemEntityId: string) => Promise<void>;
+}) {
+  const t = useFlowT();
+  const [pending, setPending] = useState(false);
+
+  if (!onCompleteItem) return null;
+  if ((DONE_ITEM_STATUSES as readonly string[]).includes(item.status)) return null;
+
+  const handleClick = () => {
+    setPending(true);
+    onCompleteItem(item.entity_id)
+      .catch(() => {})
+      .finally(() => setPending(false));
+  };
+
+  return (
+    <button type="button" className="fr-btn fr-btn--primary" disabled={pending} onClick={handleClick}>
+      {pending ? t('saving') : (step.type === 'message' ? t('acknowledge') : t('markComplete'))}
+    </button>
   );
 }
 
@@ -474,6 +556,11 @@ function FormStep({ step, models, draft, onDraftChange }: {
   );
 }
 
+/** Who's mounting `StepRenderer`: the designer's live preview (`'preview'`,
+ *  Task 2), or a real workflow-instance runtime — familyhub's parent flow
+ *  (`'family'`) or admindash's staff-assisted entry (`'staff'`). */
+export type StepRendererMode = 'preview' | 'family' | 'staff';
+
 export interface StepRendererProps {
   steps: WorkflowStepDef[];
   /** Entity model definitions, keyed by `entity_model` name (a
@@ -482,13 +569,26 @@ export interface StepRendererProps {
    *  (`{base_fields: [...], custom_fields: [...]}`, §8 of the interface
    *  map) — the same `ModelFieldSource` `blockConfig.ts` already exports. */
   models: Record<string, ModelFieldSource>;
-  /** Only `"preview"` today — the designer's live preview. Kept as a
-   *  literal (not widened to `FlowMode`) because a real family/staff
-   *  runtime for workflow instances doesn't exist yet (Plan 2 is the
-   *  designer only); widen this when that runtime lands. */
-  mode: 'preview';
+  /** Which renderer this is. `'preview'` (or omitting `items` entirely) is
+   *  the designer's live preview — rendering is identical to before this
+   *  mode was widened. `'family'`/`'staff'` are the real parent/staff
+   *  runtimes; StepRenderer treats them identically today (item-status and
+   *  completion/upload affordances gated on `items !== undefined`, not on
+   *  which of the two runtime modes it is) — the distinct value exists so
+   *  hosts can style/extend per-mode and so the type is honest about who's
+   *  mounting it. Staff-only verify/reject/waive actions live in the
+   *  AdminDash detail drawer, not here. */
+  mode: StepRendererMode;
   draft: WorkflowDraft;
   onDraftChange: (next: WorkflowDraft) => void;
+  /** Runtime modes only: one item per applicable step (matched by step_id). */
+  items?: WorkflowItemView[];
+  /** Mark a step's item done. Host wires this to the complete_item action. */
+  onCompleteItem?: (itemEntityId: string) => Promise<void>;
+  /** documents steps, runtime modes: upload a file against the step's item. */
+  onUploadDocument?: (itemEntityId: string, file: File) => Promise<void>;
+  /** Already-uploaded documents, shown on documents steps. */
+  documents?: InstanceDocumentView[];
 }
 
 /**
@@ -513,27 +613,53 @@ export interface StepRendererProps {
  * those whose `available_in` includes the selected state before passing
  * them in here.
  */
-export function StepRenderer({ steps, models, mode, draft, onDraftChange }: StepRendererProps) {
-  void mode; // reserved: only "preview" exists today, kept as an explicit prop for forward-compat.
+export function StepRenderer({
+  steps, models, mode, draft, onDraftChange, items, onCompleteItem, onUploadDocument, documents,
+}: StepRendererProps) {
+  const t = useFlowT();
   const conditionData = buildConditionData(steps, draft);
   const visible = steps.filter((step) => !step.show_if || evaluateCondition(step.show_if, conditionData));
 
   if (visible.length === 0) return null;
 
   return (
-    <div className="fr-step-renderer">
-      {visible.map((step) => (
-        <section key={step.step_id} className="fr-block" aria-label={step.title}>
-          <h2 className="fr-block-title">{step.title}</h2>
-          {step.type === 'form' && (
-            <FormStep step={step} models={models} draft={draft} onDraftChange={onDraftChange} />
-          )}
-          {step.type === 'documents' && <DocumentsStep step={step} />}
-          {step.type === 'message' && (
-            <MessageStep step={step} draft={draft} onDraftChange={onDraftChange} />
-          )}
-        </section>
-      ))}
+    // `data-mode` only appears in runtime modes (`items !== undefined`) —
+    // React omits an `undefined` attribute entirely, so the preview DOM
+    // (`items` undefined) carries no attribute at all, unchanged from before
+    // this prop existed. Lets a runtime host style/extend per `'family'`/
+    // `'staff'` without StepRenderer itself branching on which one it is.
+    <div className="fr-step-renderer" data-mode={items !== undefined ? mode : undefined}>
+      {visible.map((step) => {
+        // Runtime modes only (`items !== undefined`): the item matching this
+        // step, if any. `item` stays `undefined` in preview (where `items`
+        // itself is `undefined`) so every runtime-only branch below —
+        // status chip, complete/acknowledge button, upload affordances —
+        // renders nothing and the preview DOM is unchanged.
+        const item = items?.find((i) => i.step_id === step.step_id);
+        return (
+          <section key={step.step_id} className="fr-block" aria-label={step.title}>
+            <h2 className="fr-block-title">{step.title}</h2>
+            {items !== undefined && item && (
+              <span className={`fr-item-status fr-item-status--${item.status}`}>
+                {t(`status.${item.status}`)}
+              </span>
+            )}
+            {step.type === 'form' && (
+              <FormStep step={step} models={models} draft={draft} onDraftChange={onDraftChange} />
+            )}
+            {step.type === 'documents' && (
+              <DocumentsStep step={step} item={item} documents={documents}
+                onUploadDocument={onUploadDocument} />
+            )}
+            {step.type === 'message' && (
+              <MessageStep step={step} draft={draft} onDraftChange={onDraftChange} />
+            )}
+            {items !== undefined && item && (step.type === 'form' || step.type === 'message') && (
+              <CompleteItemButton step={step} item={item} onCompleteItem={onCompleteItem} />
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

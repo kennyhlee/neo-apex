@@ -59,6 +59,14 @@
   background: var(--bg-tertiary); color: var(--text-secondary); }
 .fr-hidden-input { display: none; }
 
+/* Runtime documents-step upload affordance (StepRenderer, Plan 3) — a plain
+   visible file input per named doc, styled minimally to match .fr-input's
+   footprint rather than introducing a second hidden-input+trigger-button
+   pattern alongside the registration-era DocumentsBlock's. */
+.fr-file-input { font: inherit; font-size: 13px; color: var(--text-primary); max-width: 100%; }
+.fr-doc-uploaded { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.fr-doc-uploaded li { font-size: 13px; color: var(--text-secondary); }
+
 .fr-item-status { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .fr-item-status--not_started, .fr-item-status--in_progress { background: var(--bg-tertiary); color: var(--text-secondary); }
 .fr-item-status--submitted { background: var(--info-muted); color: var(--accent-ink); }

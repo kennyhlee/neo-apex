@@ -218,3 +218,31 @@ export interface WorkflowStepDef {
   review?: 'staff' | 'auto' | null;
   config: Record<string, unknown>;
 }
+
+// ---- Runtime item/document views (Plan 3) ----------------------------------
+//
+// What the family/staff runtime channels (`StepRenderer`'s `'family'`/
+// `'staff'` modes) pass alongside `steps`/`draft`: one `WorkflowItemView` per
+// applicable step, matched to its step by `step_id` (not by array position —
+// a step with no `show_if`-visible/derived item simply has none in the
+// array). `InstanceDocumentView` is the flat list of already-uploaded files
+// for a workflow instance; a `documents`-step's uploads are found by
+// filtering on `item_id` against that step's matched `WorkflowItemView.
+// entity_id`.
+
+/** One workflow-instance item, as the family/staff runtime sees it. */
+export interface WorkflowItemView {
+  entity_id: string;
+  step_id: string;
+  kind: 'form' | 'documents' | 'message-ack';
+  title: string;
+  status: string;          // not_started | in_progress | submitted | verified | rejected | waived
+  blocking: boolean;
+}
+
+/** One already-uploaded document on a workflow instance. */
+export interface InstanceDocumentView {
+  document_id: string;
+  filename: string;
+  item_id?: string;
+}

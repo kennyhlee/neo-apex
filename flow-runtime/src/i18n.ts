@@ -44,6 +44,8 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     addAnother: 'Add another',
     removeRow: 'Remove',
     acknowledgeMessage: 'I acknowledge this message.',
+    markComplete: 'Mark complete',
+    acknowledge: 'Acknowledge',
   },
   'zh-CN': {
     required: '必填',
@@ -85,6 +87,8 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     addAnother: '添加一项',
     removeRow: '删除',
     acknowledgeMessage: '我已知悉此消息。',
+    markComplete: '标记为已完成',
+    acknowledge: '确认知悉',
   },
 };
 
