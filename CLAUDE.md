@@ -9,9 +9,9 @@ NeoApex is an education/enrollment management platform. Active services:
 - **datacore** — Central storage (LanceDB), query engine, and auth server (JWT/bcrypt). All other services depend on this.
 - **launchpad** — Tenant lifecycle, onboarding, and user management. Python backend + React frontend. Customer-facing entry point.
 - **papermite** — Document ingestion gateway. Upload documents → AI extraction → model definition finalization. Python backend + React frontend.
-- **admindash** — School operations product for school administrators. React frontend (port 5600) + Python FastAPI backend (port 5610). The backend proxies authenticated requests to DataCore and Papermite.
+- **admindash** — School operations product for school administrators. React frontend (port 5600) + Python FastAPI backend (port 5610). The backend proxies authenticated requests to DataCore, Papermite, and ApexFlow (staff-side workflow definitions/instances — a Workflows area lists definitions, shows a per-definition pipeline board, and drives a staff-assisted entry flow).
 - **apexflow** — workflow platform: admin-defined operational workflows (registration, signup, ...) built on tenant entity models. React frontend (port 5900, Phase 2) + Python FastAPI backend (port 5910).
-- **familyhub** — Family-facing registration channel: parent registration runtime and parent hub. React frontend (port 5620) + Python FastAPI backend (port 5630). Deliberately has no staff auth surface.
+- **familyhub** — Family-facing workflow channel: parent workflow runtime and parent hub, generalized over any published tenant workflow (currently registration) rather than hardcoded to one. React frontend (port 5620) + Python FastAPI backend (port 5630). Deliberately has no staff auth surface.
 - **ui-tokens** — Shared CSS design tokens package.
 
 Placeholder directories (empty): `sampledoc`.
@@ -94,7 +94,7 @@ Centralized in DataCore (`datacore/src/datacore/auth/`). Single JWT issuer. All 
 - DataCore owns all persistent storage (LanceDB with tenant-scoped tables, version history)
 - Papermite currently reads/writes model definitions via direct LanceDB access (migration to DataCore HTTP API planned)
 - LaunchPad manages users and onboarding via DataCore's registry table
-- AdminDash frontend talks only to its own backend (`admindash-backend`) on port 5610. The backend proxies entity/query operations to DataCore and document extract to Papermite, with JWT validation delegated to DataCore.
+- AdminDash frontend talks only to its own backend (`admindash-backend`) on port 5610. The backend proxies entity/query operations to DataCore, document extract to Papermite, and workflow definition/instance/document operations to ApexFlow, with JWT validation delegated to DataCore.
 
 ### Multi-Tenancy
 All data tenant-scoped. Tenant ID embedded in JWT. API routes enforce tenant match (`user.tenant_id == request.tenant_id`). Tenant entity must exist in DataCore before dependent operations.
