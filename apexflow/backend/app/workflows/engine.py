@@ -70,6 +70,24 @@ def _now(now: datetime | None) -> datetime:
     return now or datetime.now(timezone.utc)
 
 
+def row_version(row: dict) -> int | None:
+    """The _version a previously-read flattened row carries, or None.
+
+    DataCore flattens all scalars to strings; tolerate int or str. Every
+    write in this module that round-trips a previously-read
+    `workflow_instance`/`workflow_item` row passes
+    `expected_version=row_version(row)` to `dc.dc_update` (Plan 3 Task 2's
+    CAS precondition) so a lost-update race surfaces as a 409 conflict
+    instead of silently overwriting a concurrent write. `None` (row has no
+    `_version`, e.g. a freshly-created row this call never re-fetched) skips
+    the precondition — same as passing no `expected_version` at all."""
+    raw = row.get("_version")
+    try:
+        return int(raw) if raw not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _item_base_data(item_row: dict) -> dict:
     """`entity_base_data` (definitions.py, re-exported from shared.py) has
     no bool-coercion table since `workflow_definition` declares no bool
@@ -352,7 +370,8 @@ def save_draft(tenant_id: str, instance_row: dict, section_answers: dict, actor:
 
     base = defs.entity_base_data(instance_row)
     base["draft_data"] = json.dumps(draft)
-    return dc.dc_update(tenant_id, "workflow_instance", instance_row["entity_id"], base, token)
+    return dc.dc_update(tenant_id, "workflow_instance", instance_row["entity_id"], base, token,
+                        expected_version=row_version(instance_row))
 
 
 # --- item lookups + shared update path ------------------------------------
@@ -371,7 +390,8 @@ def _update_item(tenant_id: str, instance_row: dict, item_row: dict, changes: di
     base = _item_base_data(item_row)
     old_status = base.get("status", "not_started")
     base.update(changes)
-    updated = dc.dc_update(tenant_id, "workflow_item", item_row["entity_id"], base, token)
+    updated = dc.dc_update(tenant_id, "workflow_item", item_row["entity_id"], base, token,
+                           expected_version=row_version(item_row))
     _log_activity(tenant_id, instance_row.get("entity_id"), "item_change",
                  old_status, changes.get("status", old_status), actor, token, now)
     return updated

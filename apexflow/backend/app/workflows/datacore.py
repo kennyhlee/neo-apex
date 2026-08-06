@@ -88,19 +88,42 @@ def dc_create(tenant_id: str, entity_type: str, base_data: dict, token: str | No
 
 
 def dc_update(tenant_id: str, entity_type: str, entity_id: str, base_data: dict,
-              token: str | None = None, custom_fields: dict | None = None) -> dict:
+              token: str | None = None, custom_fields: dict | None = None,
+              expected_version: int | None = None) -> dict:
     """Full-replace PUT of one entity.
 
     `custom_fields` defaults to `{}` because most callers' entities have
     none — but this route REPLACES the stored custom_fields, so any caller
     round-tripping an entity that may carry them must pass them back
     explicitly or they are erased.
+
+    `expected_version`, when passed, is an opt-in CAS precondition (Task 1:
+    DataCore's `PUT .../{entity_id}?expected_version=N`) — the write only
+    proceeds when the entity's current stored version matches. A caller
+    round-tripping a previously-read `workflow_instance`/`workflow_item` row
+    should always pass `engine.row_version(row)` here so a lost-update race
+    surfaces as a conflict instead of silently overwriting a concurrent
+    write. `None` (the default) preserves last-write-wins behavior for
+    callers that never round-trip a prior read (e.g. `dc_create`-adjacent
+    writes) or don't need the precondition.
+
+    Raises `HTTPException(409, {"error": "conflict", "entity_type": ...,
+    "entity_id": ...})` on a version mismatch — DataCore's own raw 409 body
+    (`{"error": "version_conflict", "expected": N, "actual": M}`) is
+    translated here so every caller of this client sees one conflict shape
+    regardless of cause.
     """
     _validate_id(tenant_id, "tenant_id")
     _validate_id(entity_type, "entity_type")
     _validate_id(entity_id, "entity_id")
-    resp = _request("PUT", f"/api/entities/{tenant_id}/{entity_type}/{entity_id}", token,
+    path = f"/api/entities/{tenant_id}/{entity_type}/{entity_id}"
+    if expected_version is not None:
+        path += f"?expected_version={int(expected_version)}"
+    resp = _request("PUT", path, token,
                     {"base_data": base_data, "custom_fields": custom_fields or {}})
+    if resp.status_code == 409:
+        raise HTTPException(409, {"error": "conflict",
+                                  "entity_type": entity_type, "entity_id": entity_id})
     if resp.status_code not in (200, 201):
         raise HTTPException(resp.status_code, f"DataCore update failed: {resp.text}")
     return resp.json()

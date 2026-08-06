@@ -15,6 +15,35 @@ changes from the enrollx source:
 2. `BLOCKS` / `seed_config` (enrollx's registration_config + block-definition
    fixture data) were dropped — registration-specific, no equivalent concept
    exists in apexflow-backend yet (task-1-brief.md Step 1).
+3. VERSION EMULATION (Plan 3 Task 2): every row now carries an integer
+   `_version` (internal, tracked in `self._versions` keyed by
+   `(tenant_id, entity_type, entity_id)`; starts at 1 on `dc_create`, bumps
+   by 1 on every successful `dc_update`) — mirrors DataCore's
+   `store.py::put_entity`'s `next_version = current_version + 1` exactly.
+   `dc_update` gains `expected_version: int | None = None`; a mismatch
+   raises `HTTPException(409, {"error": "conflict", "entity_type": ...,
+   "entity_id": ...})` — the ALREADY-TRANSLATED shape the real
+   `app.workflows.datacore.dc_update` raises after catching DataCore's raw
+   `version_conflict` 409, not that raw shape itself. This fake stands in
+   for the ENTIRE client function (`install_fake_datacore` monkeypatches it
+   directly onto `app.workflows.datacore.dc_update`, bypassing `_request`/
+   httpx entirely), so it must emulate both the store-level version check
+   AND the client-level 409-translation in one step — callers (engine.py,
+   machine.py, primitives.py, and ultimately the actions API route) only
+   ever see the translated `{"error": "conflict", ...}` shape from the real
+   client, never DataCore's raw body, and this fake must match that or a
+   route-level 409 assertion (`resp.json()["detail"]["error"] == "conflict"`)
+   would fail. Flattened reads (`list_entities`/`get_entity`) carry
+   `_version` as a STRING (`str(version)`, matching real DataCore's query-
+   path flattening — see `_scalar_to_str`'s docstring below); `dc_create`/
+   `dc_update`'s RETURN envelope carries it as a native int (matching real
+   DataCore's PUT/POST response, which echoes `store.py::put_entity`'s
+   returned record straight from the store, before any query flattening —
+   confirmed via `datacore/src/datacore/store.py:394`,
+   `record["_version"] = next_version`). `force_bump_version(tenant_id,
+   entity_type, entity_id)` is a test-only helper that bumps a row's version
+   out-of-band (no base_data change) to simulate another writer winning a
+   race — used by `tests/test_concurrency.py`.
 
 Usage in every test file that touches DataCore (repeat this fixture verbatim,
 or use the `fake_dc` fixture in conftest.py):
@@ -48,11 +77,12 @@ tests today, but worth knowing before relying on the fake for something new):
    an id for ANY entity_type. The real DataCore only does this for types
    registered in its `DEFAULT_ABBREVS` table and returns 400 for anything
    else. The fake never rejects an unknown entity_type this way.
-4. No system columns. The fake omits real DataCore system columns
-   (`_status`, `_version`, `_created_at`, …) entirely — rows only have
-   `entity_id`/`entity_type`/`_tenant` plus flattened base_data/custom_fields.
-   This is harmless only because this suite never exercises archive/restore
-   or version-history behavior against the fake.
+4. No system columns except `_version`. The fake still omits real DataCore's
+   other system columns (`_status`, `_created_at`, …) — rows only have
+   `entity_id`/`entity_type`/`_tenant`/`_version` plus flattened
+   base_data/custom_fields. `_version` (see point 3 above) is now emulated;
+   this remains harmless for `_status`/timestamps only because this suite
+   never exercises archive/restore behavior against the fake.
 5. Update-time existence check. `dc_update` here raises `AssertionError` on
    an unknown `entity_id`. The real DataCore PUT is an upsert with no
    existence check — it would create the row. This is the safe direction
@@ -107,9 +137,12 @@ class FakeDataCore:
         # `models` table read that config hydration performs.
         self.models: dict[tuple[str, str], dict] = {}
         self.seq = 0
+        # Internal integer version per row, keyed (tenant_id, entity_type,
+        # entity_id) — see module docstring point 3.
+        self._versions: dict[tuple[str, str, str], int] = {}
 
     @staticmethod
-    def _store_row(entity_id, entity_type, tenant_id, base, custom_fields=None):
+    def _store_row(entity_id, entity_type, tenant_id, base, custom_fields=None, version=1):
         """Build the flattened, stringified row a real query would return.
 
         `base` and `custom_fields` are merged onto the same row (interface
@@ -120,8 +153,12 @@ class FakeDataCore:
 
         `None` values are preserved as None (real DataCore emits a null
         column, not the string "None") — see query.py's
-        `None if v is None else _scalar_to_str(v)`."""
-        row = {"entity_id": entity_id, "entity_type": entity_type, "_tenant": tenant_id}
+        `None if v is None else _scalar_to_str(v)`. `_version` is stamped
+        as a STRING (`str(version)`), matching real DataCore's query-path
+        flattening of that native-int system column (module docstring
+        point 3)."""
+        row = {"entity_id": entity_id, "entity_type": entity_type, "_tenant": tenant_id,
+               "_version": str(version)}
         for k, v in {**base, **(custom_fields or {})}.items():
             row[k] = None if v is None else _scalar_to_str(v)
         return row
@@ -134,24 +171,62 @@ class FakeDataCore:
             self.seq += 1
             base[id_field] = f"TT-{entity_type[:2].upper()}26{self.seq:04d}"
         entity_id = uuid.uuid4().hex[:12]
-        self.rows.append(self._store_row(entity_id, entity_type, tenant_id, base))
-        return {"entity_id": entity_id, "entity_type": entity_type, "base_data": base}
+        self._versions[(tenant_id, entity_type, entity_id)] = 1
+        self.rows.append(self._store_row(entity_id, entity_type, tenant_id, base, version=1))
+        return {"entity_id": entity_id, "entity_type": entity_type, "base_data": base,
+                "_version": 1}
 
     def dc_update(self, tenant_id, entity_type, entity_id, base_data, token=None,
-                  custom_fields=None):
+                  custom_fields=None, expected_version=None):
         """Full-replace, matching the real `dc_update`'s semantics (interface
         map §1): `custom_fields` defaults to erasing whatever was stored
         before, since a caller round-tripping custom fields must pass them
-        back explicitly."""
+        back explicitly.
+
+        `expected_version`, when passed, is checked against this row's
+        internally-tracked version (module docstring point 3) BEFORE any
+        mutation — mirrors DataCore's `store.py::put_entity` doing its
+        version check before archiving/inserting. A mismatch raises the
+        ALREADY-TRANSLATED conflict shape the real
+        `app.workflows.datacore.dc_update` raises (not DataCore's raw
+        `version_conflict` body) since this fake stands in for that whole
+        function."""
+        key = (tenant_id, entity_type, entity_id)
         for i, r in enumerate(self.rows):
             if (r["entity_id"] == entity_id and r["entity_type"] == entity_type
                     and r["_tenant"] == tenant_id):
+                current = self._versions.get(key, 1)
+                if expected_version is not None and current != expected_version:
+                    raise HTTPException(409, {
+                        "error": "conflict",
+                        "entity_type": entity_type, "entity_id": entity_id,
+                    })
+                new_version = current + 1
+                self._versions[key] = new_version
                 self.rows[i] = self._store_row(entity_id, entity_type, tenant_id,
-                                               dict(base_data), custom_fields)
+                                               dict(base_data), custom_fields,
+                                               version=new_version)
                 return {"entity_id": entity_id, "entity_type": entity_type,
                         "base_data": dict(base_data),
-                        "custom_fields": dict(custom_fields or {})}
+                        "custom_fields": dict(custom_fields or {}),
+                        "_version": new_version}
         raise AssertionError(f"update of unknown entity {entity_type}/{entity_id}")
+
+    def force_bump_version(self, tenant_id, entity_type, entity_id):
+        """Test-only: bump a row's version out-of-band, with no base_data
+        change — simulates another writer winning a race between this
+        test's read and its write, so the next `dc_update` against the
+        caller's stale in-memory copy 409s. `tests/test_concurrency.py`'s
+        sole consumer."""
+        key = (tenant_id, entity_type, entity_id)
+        new_version = self._versions.get(key, 1) + 1
+        self._versions[key] = new_version
+        for r in self.rows:
+            if (r["entity_id"] == entity_id and r["entity_type"] == entity_type
+                    and r["_tenant"] == tenant_id):
+                r["_version"] = str(new_version)
+                return
+        raise AssertionError(f"force_bump_version of unknown entity {entity_type}/{entity_id}")
 
     def next_id(self, tenant_id, entity_type, token=None):
         self.seq += 1
