@@ -96,9 +96,11 @@ export const APPLICATION_ENTITY_TYPE = 'registration_application';
  *
  * Two consumers, one list: the hosts exclude these when hydrating an
  * application-model form block (a parent must never be shown an editable
- * `status` or `config_version`), and enrollx's engine rejects a form answer
- * that targets one with a 400. The Python side restates it as
- * `engine.ENGINE_OWNED_APPLICATION_FIELDS` — the two MUST stay identical.
+ * `status` or `config_version`), and apexflow's engine rejects a form answer
+ * that targets one with a 400 (`save_draft`, `app/workflows/engine.py`). The
+ * Python side restates it as `schema.ENGINE_OWNED_FIELDS` — the two MUST
+ * stay identical. (Pre-Task-12 this was enrollx's
+ * `engine.ENGINE_OWNED_APPLICATION_FIELDS`.)
  *
  * `registration_application_id` is included even though the spec's field
  * table omits it: DataCore auto-assigns `"{entity_type}_id"` when absent and

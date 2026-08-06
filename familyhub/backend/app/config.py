@@ -21,16 +21,6 @@ class Settings(BaseSettings):
     apexflow_url: str = "http://localhost:5910"
     apexflow_internal_key: str = "dev-internal-key-change-in-prod"  # ADJUST(bindings): apexflow dev default
 
-    # enrollx still exists (deleted in Task 12) and is kept ONLY for the one
-    # call site this task does not retarget: `POST
-    # /api/application/{token}/checkout` (application.py) -- apexflow-backend
-    # has no payments/checkout surface yet (dropped in Task 1's port, see
-    # apexflow/backend/app/config.py's module docstring). Task 12's own
-    # grep-and-resolve step is expected to finish this off when enrollx is
-    # deleted.
-    enrollx_url: str = "http://localhost:5910"
-    enrollx_internal_key: str = "dev-internal-key-change-in-prod"  # ADJUST(bindings): enrollx dev default
-
     cors_allowed_origins: Union[Optional[str], List[str]] = None
     port: int = 5630
 
@@ -56,10 +46,6 @@ class Settings(BaseSettings):
             if not self.apexflow_internal_key or self.apexflow_internal_key == "dev-internal-key-change-in-prod":
                 raise ValueError(
                     "FAMILYHUB_APEXFLOW_INTERNAL_KEY must be set to a real secret in production"
-                )
-            if not self.enrollx_internal_key or self.enrollx_internal_key == "dev-internal-key-change-in-prod":
-                raise ValueError(
-                    "FAMILYHUB_ENROLLX_INTERNAL_KEY must be set to a real secret in production"
                 )
         elif not origins:
             origins = ["http://localhost:5620"]

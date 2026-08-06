@@ -24,7 +24,7 @@ const API_BASE = FAMILYHUB_API_URL;
  * Carries the upstream HTTP status so callers can distinguish "this link
  * is genuinely bad" (401/404) from a transient failure (a masked 5xx, a
  * 429, a dropped mobile connection) -- the backend's `relay()` goes out of
- * its way to preserve enrollx's real 401 and mask a genuine 5xx to a fixed
+ * its way to preserve apexflow's real 401 and mask a genuine 5xx to a fixed
  * 502 specifically so the client can tell the two apart; this is what
  * reads that distinction back out instead of discarding it. Message shape
  * is unchanged (`HTTP {status}`), so any existing `.message` reader keeps
@@ -165,9 +165,9 @@ async function putAction(
 }
 
 // The facade allowlists exactly {save_draft, complete_item, submit} and
-// 403s anything else BEFORE proxying (defense in depth -- enrollx enforces
-// the identical allowlist again). Params verified against
-// enrollx/backend/app/registration/actions.py: save_draft -> draft_data;
+// 403s anything else BEFORE proxying (defense in depth -- apexflow enforces
+// an equivalent allowlist again). Params verified against
+// apexflow/backend/app/workflows/engine.py: save_draft -> draft_data;
 // complete_item -> item_id (+ optional payload_ref, there is NO `payload`
 // field); submit -> no params at all.
 
@@ -271,35 +271,17 @@ export async function getDocumentUrl(token: string, documentId: string): Promise
 }
 
 /**
- * POST /api/application/{token}/checkout -> Stripe Checkout URL, carried in
- * the response's `checkout_url` key.
- * @param itemId optional (the facade's `CheckoutBody.item_id` is optional
- * too) -- but when passed, per the identifier trap, MUST be the payment
- * item's `entity_id`, matching what `flow-runtime`'s `onCheckout(itemId)`
- * hands you.
- */
-export async function startCheckout(token: string, itemId?: string): Promise<string> {
-  const resp = await fetch(`${API_BASE}/api/application/${encodeURIComponent(token)}/checkout`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ item_id: itemId ?? null }),
-  });
-  const body = await jsonOrThrow<{ checkout_url: string }>(resp);
-  return body.checkout_url;
-}
-
-/**
  * Decode (NOT verify) a magic-link token's plaintext segments. Purely a
  * display convenience -- carries no proof of authenticity. familyhub holds
  * no `link_secret` and must never attempt real verification; only
- * enrollx's `resolve_token` (reached through the facade routes above)
+ * apexflow's `resolve_token` (reached through the facade routes above)
  * authenticates a token.
  */
 export function decodeToken(token: string): DecodedToken | null {
   try {
     const padded = token + '='.repeat((4 - (token.length % 4)) % 4);
     const raw = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
-    // Exact 3-segment split, mirroring enrollx's own parse_link_token: a
+    // Exact 3-segment split, mirroring apexflow's own parse_link_token: a
     // token decodes to (tenant, application entity_id, signature) in
     // exactly one way. This function ignores the signature -- it is not a
     // verification -- but keeps the same segment-count strictness so a

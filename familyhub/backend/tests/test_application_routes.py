@@ -1,13 +1,12 @@
 # familyhub/backend/tests/test_application_routes.py
 """Token-scoped application facade: hub bundle, action allowlist,
-constant-200 request-link, checkout.
+constant-200 request-link.
 
 Task 10: GET/PUT `/api/application/{token}` and request-link retarget from
 enrollx's `/internal/application-by-token/*` / `/internal/registration/*` to
 apexflow's `/internal/instance-by-token/*` / `/internal/workflows/*`.
-Checkout is the ONE call site NOT retargeted (apexflow has no payments
-surface in Plan 1) -- it still uses `enrollx_internal_key`, so this file
-keeps BOTH internal-key fixtures patched.
+Task 12: the checkout route (the one call site not retargeted -- apexflow
+has no payments surface in Plan 1) was removed along with enrollx itself.
 """
 import json
 
@@ -60,7 +59,6 @@ def fake_http(monkeypatch):
 def internal_key(monkeypatch):
     from app.config import settings
     monkeypatch.setattr(settings, "apexflow_internal_key", "test-internal-key")
-    monkeypatch.setattr(settings, "enrollx_internal_key", "test-enrollx-key")
 
 
 @pytest.fixture(autouse=True)
@@ -243,31 +241,3 @@ def test_request_link_is_rate_limited(client, fake_http):
     throttled = client.post("/api/application/request-link",
                             json={"tenant_id": TENANT, "email": "p@example.com"})
     assert throttled.status_code == 429
-
-
-# --- checkout: NOT retargeted -- still enrollx (module docstring) ----------
-
-
-def test_checkout_still_uses_enrollx_and_its_own_internal_key(client, fake_http):
-    fake_http.add("POST", f"/internal/application-by-token/{TOKEN}/checkout",
-                  FakeResponse(200, {"checkout_url": "https://checkout.stripe.com/c/pay/cs_test"}))
-    resp = client.post(f"/api/application/{TOKEN}/checkout")
-    assert resp.status_code == 200
-    assert "checkout_url" in resp.json()
-    assert fake_http.calls[0]["headers"]["X-Internal-Key"] == "test-enrollx-key"
-
-
-def test_checkout_forwards_optional_item_id(client, fake_http):
-    fake_http.add("POST", f"/internal/application-by-token/{TOKEN}/checkout",
-                  FakeResponse(200, {"checkout_url": "https://checkout.stripe.com/c/pay/cs_test"}))
-    resp = client.post(f"/api/application/{TOKEN}/checkout", json={"item_id": "item-entity-1"})
-    assert resp.status_code == 200
-    assert fake_http.calls[0]["json"]["item_id"] == "item-entity-1"
-
-
-def test_checkout_masks_upstream_500(client, fake_http):
-    fake_http.add("POST", f"/internal/application-by-token/{TOKEN}/checkout",
-                  FakeResponse(500, {"detail": "Stripe blew up with a raw traceback"}))
-    resp = client.post(f"/api/application/{TOKEN}/checkout")
-    assert resp.status_code == 502
-    assert "Stripe blew up" not in resp.text

@@ -11,21 +11,17 @@ the plan's Global Constraints). Reuses `app.relay.relay()` for the
 upstream-error policy (4xx verbatim, >=500 masked to a fixed 502) rather
 than inventing a second error path.
 
-`checkout` (below) is the ONE call site this task does NOT retarget --
-apexflow-backend has no payments/checkout surface in Plan 1 (dropped in
-Task 1's port). It stays pointed at enrollx via `enrollx()`/
-`internal_headers()` until a later plan adds payments to apexflow (or Task
-12 removes it when enrollx is deleted -- see `app/config.py`'s module
-comment on `enrollx_url`).
+Task 12: the `checkout` route (proxied to enrollx, which had the only
+Stripe/payments surface) was removed along with enrollx itself -- payments
+are out of scope for Plan 1 and apexflow has no checkout surface to
+retarget it to. See `app/config.py`'s module docstring.
 """
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from app.ratelimit import limit_request_link
 from app.relay import relay as _relay
-from app.upstream import apexflow, apexflow_headers, call_upstream, enrollx, internal_headers
+from app.upstream import apexflow, apexflow_headers, call_upstream
 
 router = APIRouter()
 
@@ -125,20 +121,3 @@ def request_link(body: RequestLinkBody) -> dict:
     except HTTPException:
         pass
     return {"status": "ok"}
-
-
-class CheckoutBody(BaseModel):
-    item_id: Optional[str] = None
-
-
-@router.post("/application/{token}/checkout")
-def start_checkout(token: str, body: CheckoutBody = CheckoutBody()) -> Response:
-    """NOT retargeted (module docstring) -- apexflow has no checkout route
-    yet. Still proxies to enrollx, unchanged from before Task 10."""
-    resp = call_upstream(
-        "POST",
-        enrollx(f"/internal/application-by-token/{token}/checkout"),
-        json_body=body.model_dump(),
-        headers=internal_headers(),
-    )
-    return _relay(resp)

@@ -11,7 +11,6 @@ import {
   FacadeError,
   fetchApplication,
   getDocumentUrl,
-  startCheckout,
   submitApplication,
   uploadDocumentFile,
 } from '../api/facade.ts';
@@ -109,10 +108,10 @@ function toApplicationView(row: EntityRecord): ApplicationView {
 /**
  * IDENTIFIER TRAP: `item_id` below MUST be the row's DataCore `entity_id`,
  * never the business `item_id` field the row also carries -- every action
- * this page dispatches (`uploadDocumentFile` -> `completeItem`,
- * `startCheckout`) sends this value straight through, and the backend
- * resolves it against `entity_id` (bindings §5). `blocking` is coerced with
- * `asBool` for the same stringly-typed-top-level-field reason.
+ * this page dispatches (`uploadDocumentFile` -> `completeItem`) sends this
+ * value straight through, and the backend resolves it against `entity_id`
+ * (bindings §5). `blocking` is coerced with `asBool` for the same
+ * stringly-typed-top-level-field reason.
  */
 function toApplicationItems(rows: EntityRecord[]): ApplicationItem[] {
   return rows.map((row) => {
@@ -156,7 +155,7 @@ function isDone(status: ItemStatus): boolean {
 /**
  * 401 (bad/tampered token) and 404 (unknown/revoked token) are the only
  * responses that mean "this link is genuinely bad". Everything else --
- * a masked 502 (enrollx or DataCore down), a 429, a network failure that
+ * a masked 502 (apexflow or DataCore down), a 429, a network failure that
  * never reached the facade at all (plain non-`FacadeError` rejection) --
  * is transient and must not send the parent to the invalid-link screen.
  */
@@ -179,7 +178,7 @@ export default function HubPage() {
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Used both for the retry banner/button and for post-action refreshes
-  // (`onUpload`/`onPay`-adjacent `onSubmit`). `load()`'s failure must NEVER
+  // (`onUpload`-adjacent `onSubmit`). `load()`'s failure must NEVER
   // flip `invalid` -- a refresh blipping after a successful action, or a
   // parent tapping retry, is not evidence the link itself is bad. Only the
   // very first fetch (the effect below) can ever set `invalid`, since only
@@ -235,22 +234,6 @@ export default function HubPage() {
       setBusyItem(null);
     }
   }, [token, load, t]);
-
-  const onPay = useCallback(async (itemId: string) => {
-    setBusyItem(itemId);
-    setActionError(null);
-    try {
-      // Full-page redirect, not a new tab: Stripe redirects back to this
-      // same `/application/{token}` on success or cancel, and a
-      // background-tab `window.open` after an `await` is exactly the
-      // pattern mobile popup blockers kill.
-      const checkoutUrl = await startCheckout(token, itemId);
-      window.location.href = checkoutUrl;
-    } catch {
-      setActionError(t('hub.payError'));
-      setBusyItem(null);
-    }
-  }, [token, t]);
 
   const onViewDocument = useCallback(async (documentId: string) => {
     setActionError(null);
@@ -382,13 +365,13 @@ export default function HubPage() {
       );
     }
     if (item.kind === 'payment') {
+      // Payments are not part of Plan 1 -- the checkout facade route was
+      // removed along with enrollx (Task 12); apexflow has no checkout
+      // surface. A `payment` item can no longer be created, but the kind
+      // stays in the type union, so render an inert disabled affordance
+      // rather than a dead "Pay now" button that would only 502.
       return (
-        <button
-          type="button"
-          className="hub-action"
-          disabled={busyItem === item.item_id}
-          onClick={() => onPay(item.item_id)}
-        >
+        <button type="button" className="hub-action" disabled>
           {t('hub.payNow')}
         </button>
       );

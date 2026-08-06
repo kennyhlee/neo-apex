@@ -3,14 +3,16 @@
 
 Token format (roadmap contract): URL-safe base64 of
 "{tenant_id}.{application_id}.{signature}". familyhub only ever decodes to
-learn which tenant/application to address AFTER enrollx has already
-verified the signature via an internal application-by-token call. Never
-call parse_token on a token that enrollx has not just validated.
+learn which tenant/application to address AFTER apexflow has already
+verified the signature via an internal instance-by-token call (Task 10
+retarget; apexflow was enrollx pre-Task-12). Never call parse_token on a
+token that apexflow has not just validated.
 
-This is parsing only. familyhub has no access to enrollx's link_secret and
+This is parsing only. familyhub has no access to apexflow's link_secret and
 must never attempt to verify a signature itself — verify_link_token in
-enrollx takes (token, token_version) with no default, and it is enrollx's
-job (not familyhub's) to call it against the row's stored token_version.
+apexflow (app/workflows/tokens.py) takes (token, token_version) with no
+default, and it is apexflow's job (not familyhub's) to call it against the
+row's stored token_version.
 """
 import base64
 
@@ -18,12 +20,12 @@ from fastapi import HTTPException, status
 
 
 def parse_token(token: str) -> tuple[str, str]:
-    # Unbounded split + exact-3 unpack, mirroring enrollx's parse_link_token
-    # (registration/tokens.py:81) EXACTLY. Its comment forbids the bounded
+    # Unbounded split + exact-3 unpack, mirroring apexflow's parse_link_token
+    # (app/workflows/tokens.py:87) EXACTLY. Its comment forbids the bounded
     # form (`split(".", 2)` / `rsplit`) because absorbing extra dots into a
     # field reopens a scope-confusion class. familyhub's parser must never be
     # more lenient than the parser that signs: a token this accepted but
-    # enrollx rejected could only ever produce a scope enrollx never issued.
+    # apexflow rejected could only ever produce a scope apexflow never issued.
     try:
         padded = token + "=" * (-len(token) % 4)
         raw = base64.urlsafe_b64decode(padded.encode()).decode()

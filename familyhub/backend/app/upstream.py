@@ -1,5 +1,5 @@
 # familyhub/backend/app/upstream.py
-"""Outbound HTTP to enrollx (internal API) and DataCore (blob API).
+"""Outbound HTTP to apexflow (internal API) and DataCore (blob API).
 
 Every upstream call in this service goes through call_upstream so tests can
 monkeypatch ONE seam: app.upstream.httpx.request.
@@ -34,18 +34,6 @@ def call_upstream(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Upstream service unreachable",
         )
-
-
-def internal_headers() -> dict:
-    """enrollx's internal-key header -- kept ONLY for the one remaining
-    enrollx call site (application.py's checkout proxy). Every other route
-    module has moved to `apexflow_headers()`/`apexflow()` below (Task 10)."""
-    return {"X-Internal-Key": settings.enrollx_internal_key}
-
-
-def enrollx(path: str) -> str:
-    """Kept ONLY for the checkout call site -- see `internal_headers()`."""
-    return f"{settings.enrollx_url}{path}"
 
 
 def apexflow_headers() -> dict:

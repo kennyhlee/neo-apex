@@ -154,4 +154,4 @@ papermite/
 
 ## Part of NeoApex
 
-Papermite is one component of the NeoApex platform. It writes model definitions to LanceDB, which are read by **apexapi** and consumed by downstream services (admindash, familyhub, enrollx, datacore, apexflow) to dynamically construct entity views and forms.
+Papermite is one component of the NeoApex platform. It writes model definitions to LanceDB, which are read by **apexapi** and consumed by downstream services (admindash, familyhub, datacore, apexflow) to dynamically construct entity views and forms.

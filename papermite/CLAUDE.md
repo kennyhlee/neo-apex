@@ -73,4 +73,4 @@ All data is tenant-isolated. Tenant derived from authenticated user profile (tes
 
 ## Cross-Project Context
 
-Papermite **writes** model definitions to LanceDB. Read access is via **apexapi** (separate NeoApex sub-project). Downstream apps (admindash, familyhub, enrollx, datacore, apexflow) read model definitions to dynamically construct entity views. Papermite's scope is ingestion only.
+Papermite **writes** model definitions to LanceDB. Read access is via **apexapi** (separate NeoApex sub-project). Downstream apps (admindash, familyhub, datacore, apexflow) read model definitions to dynamically construct entity views. Papermite's scope is ingestion only.

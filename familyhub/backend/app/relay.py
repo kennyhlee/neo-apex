@@ -1,7 +1,7 @@
 # familyhub/backend/app/relay.py
 """Shared upstream-error relay policy.
 
-Applies to every route that proxies an upstream (enrollx/DataCore) response
+Applies to every route that proxies an upstream (apexflow/DataCore) response
 back to the parent verbatim:
 - 4xx from upstream is passed through verbatim. These are meaningful,
   parent-safe states -- "this program isn't open for registration" (404),

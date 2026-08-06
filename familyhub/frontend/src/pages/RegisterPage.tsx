@@ -7,7 +7,6 @@ import {
   fetchApplication,
   fetchRegistrationBundle,
   saveDraft,
-  startCheckout,
   startRegistration,
   submitApplication,
   uploadDocumentFile,
@@ -273,8 +272,9 @@ export default function RegisterPage() {
         <header className="register-header">
           <h1>{bundle.tenant.name}</h1>
           {/* Read-only: the school year is derived server-side from the same
-              July-rollover rule enrollx used for the capacity snapshot below,
-              so showing an editable field here could only disagree with it. */}
+              July-rollover rule familyhub-backend's `_school_year_for_date`
+              uses for the capacity snapshot below, so showing an editable
+              field here could only disagree with it. */}
           <p className="register-school-year">
             {t('register.schoolYear')}: {defaultSchoolYear()}
           </p>
@@ -370,17 +370,13 @@ export default function RegisterPage() {
               setRuntimeError(t('hub.uploadFailed'));
             }
           }}
-          onCheckout={async (itemId) => {
-            try {
-              const checkoutUrl = await startCheckout(token, itemId);
-              // Full-page redirect, not a new tab: Stripe redirects back to
-              // this same parent's `/application/{token}` on success or
-              // cancel, and a background-tab `window.open` after an
-              // `await` is exactly the pattern mobile popup blockers kill.
-              window.location.href = checkoutUrl;
-            } catch {
-              setRuntimeError(t('hub.payError'));
-            }
+          onCheckout={async () => {
+            // Payments are not part of Plan 1 -- the checkout facade route
+            // was removed along with enrollx (Task 12); apexflow has no
+            // checkout surface. `onCheckout` is a required FlowRenderer
+            // prop, so it stays wired but inert: a `payment` block can no
+            // longer be configured, so this should never actually fire.
+            setRuntimeError(t('hub.payError'));
           }}
           onSubmit={async () => {
             try {
