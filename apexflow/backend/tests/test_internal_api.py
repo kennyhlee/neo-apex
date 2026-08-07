@@ -637,6 +637,37 @@ def test_document_create_by_token_masks_upstream_500_to_502(client, fake_dc, mon
     assert "boom" not in resp.text
 
 
+def test_create_document_by_token_rejects_foreign_item_id(client, fake_dc, fake_documents_upstream):
+    """`item_id` must belong to THIS instance's `ctx.items` -- a foreign or
+    nonexistent id must 400, not silently write a mis-grouped document row
+    (the derivation fail-open otherwise stamps `sensitive=False` on it, see
+    `derived_document_sensitive`'s docstring)."""
+    started = _start(client, fake_dc, definition_id="wd-doc-foreign-item")
+    token = started["token"]
+
+    resp = client.post(
+        f"/internal/instance-by-token/{token}/documents", headers=HEADERS,
+        json={"filename": "x.pdf", "content_type": "application/pdf",
+              "size": 123, "item_id": "item-of-some-other-instance"},
+    )
+    assert resp.status_code == 400
+    assert "item_id" in str(resp.json()["detail"])
+
+
+def test_create_document_by_token_allows_null_item_id(client, fake_dc, fake_documents_upstream):
+    """An ad-hoc upload with no item binding at all (`item_id` omitted,
+    defaulting to `None`) is exempt from the membership guard -- it still
+    201s."""
+    started = _start(client, fake_dc, definition_id="wd-doc-null-item")
+    token = started["token"]
+
+    resp = client.post(
+        f"/internal/instance-by-token/{token}/documents", headers=HEADERS,
+        json={"filename": "x.pdf", "content_type": "application/pdf", "size": 123},
+    )
+    assert resp.status_code == 201
+
+
 def test_document_url_by_token_ownership_and_missing(client, fake_dc, monkeypatch):
     started = _start(client, fake_dc, definition_id="wd-docs-url")
     eid = started["instance"]["entity_id"]

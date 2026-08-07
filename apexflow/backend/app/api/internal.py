@@ -427,6 +427,13 @@ def create_document_by_token(token: str, body: TokenCreateDocumentRequest):
     `TokenCreateDocumentRequest`'s docstring."""
     tenant_id, instance_row = resolve_token(token)
     ctx = machine.build_eval_context(tenant_id, instance_row, actor=_family_actor(instance_row))
+    if body.item_id is not None and not any(
+        item.get("entity_id") == body.item_id for item in ctx.items
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "item_id does not belong to this instance"},
+        )
     eid = instance_row["entity_id"]
     resp = _blob_request("POST", f"/api/documents/{tenant_id}", {
         "application_id": eid,  # DataCore's own fixed field name; see module docstring
