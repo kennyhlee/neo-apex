@@ -10,6 +10,8 @@ Releases are triggered by GitHub Releases with module-prefixed tags:
 - `launchpad-v0.3.1` → deploys `launchpad-api` + `launchpad-frontend`
 - `papermite-v2.0.0-rc.1` → deploys `papermite-api` + `papermite-frontend` (prerelease is fine)
 - `admindash-v0.5.0` → deploys `admindash-api` + `admindash` frontend
+- `apexflow-v0.1.0` → deploys `apexflow-api` (backend only — no frontend deploy yet, parked this wave)
+- `familyhub-v0.1.0` → deploys `familyhub-api` (backend only — no frontend deploy yet, parked this wave)
 
 To cut a release:
 

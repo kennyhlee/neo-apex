@@ -1,0 +1,77 @@
+# Fly.io configuration for apexflow-api
+#
+# Public customer-facing service. Fronted by Cloudflare at
+# https://api.apexflow.floatify.com. Cloudflare IP allowlist middleware
+# enforces origin protection.
+#
+# Also exposes an internal flycast TCP listener (below) so familyhub-api and
+# admindash-api can reach apexflow-backend server-to-server without going
+# through the public http_service TLS pipeline — same dual shape as
+# papermite-api's fly.toml, which admindash-api's document-extract path uses
+# the same way.
+#
+# Production env vars (set via `flyctl secrets set -a apexflow-api`):
+#   - APEXFLOW_ENVIRONMENT=production
+#   - APEXFLOW_CORS_ALLOWED_ORIGINS=https://apexflow.floatify.com
+#   - APEXFLOW_DATACORE_URL=http://datacore.flycast:5800
+#   - APEXFLOW_LINK_SECRET=<32+ chars, random>
+#   - APEXFLOW_INTERNAL_KEY=<32+ chars, random> — must equal familyhub-api's
+#     FAMILYHUB_APEXFLOW_INTERNAL_KEY exactly (config.py's
+#     validate_production_secrets checks length/dev-default on this side;
+#     familyhub's own validator checks its copy — nothing cross-checks the
+#     two match except this runbook).
+#   - APEXFLOW_FAMILYHUB_BASE_URL=https://familyhub.floatify.com (base URL
+#     the magic-link facade points parents at; familyhub-frontend is not
+#     deployed this wave — set the placeholder now, correct it once it is)
+#   - APEXFLOW_RESEND_API_KEY=<optional; outbound workflow email>
+# NEVER set TRUST_ALL_IPS=1 here — production boot refuses it
+# (config.py's validate_production_secrets), and it would also disable the
+# Cloudflare IP allowlist above and collapse rate-limit keying.
+# Note: env vars above are read with the APEXFLOW_ prefix by pydantic-settings
+# (app/config.py's env_prefix="APEXFLOW_") — an unprefixed ENVIRONMENT or
+# CORS_ALLOWED_ORIGINS is silently ignored, not a fallback.
+
+app = "apexflow-api"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "5910"
+
+[http_service]
+  internal_port = 5910
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+# Internal-only TCP service exposing port 5910 so sibling Fly apps can reach
+# apexflow via `http://apexflow-api.flycast:5910` without going through the
+# public http_service TLS pipeline. familyhub-api and admindash-api use this
+# path for server-to-server calls into apexflow-backend's internal API.
+#
+# Auto-stop is set here too — without it, this service would keep the
+# machine warm even when [http_service] above asks for scale-to-zero.
+[[services]]
+  protocol = "tcp"
+  internal_port = 5910
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 5910
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

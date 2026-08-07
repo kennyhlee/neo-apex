@@ -49,15 +49,19 @@ Last updated: 2026-04-11
 | `launchpad-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.launchpad.floatify.com` | `launchpad-api.flycast:5510` |
 | `papermite-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.papermite.floatify.com` | `papermite-api.flycast:5710` |
 | `admindash-api` | Python/FastAPI backend | Fly.io (`sjc`, scale-to-zero) | `api.admin.floatify.com` | `admindash-api.flycast:5610` |
+| `apexflow-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.apexflow.floatify.com` | `apexflow-api.flycast:5910` |
+| `familyhub-api` | Python/FastAPI backend | Fly.io (`sjc`) | `api.familyhub.floatify.com` | — (no sibling calls into familyhub) |
 | `launchpad-frontend` | React SPA (static) | Cloudflare Workers (Static Assets) | `launchpad.floatify.com` | — |
 | `papermite-frontend` | React SPA (static) | Cloudflare Workers (Static Assets) | `papermite.floatify.com` | — |
 | `admindash` | React SPA (static) | Cloudflare Workers (Static Assets) | `admin.floatify.com` | — |
+
+`apexflow-api` and `familyhub-api` have Fly + deploy.yml artifacts (this wave) but no frontend deploy yet — apexflow-frontend and familyhub-frontend (Cloudflare Workers) are parked, out of this wave's scope. `apexflow-api` additionally exposes an internal flycast TCP listener (dual shape, same as `papermite-api`) so `familyhub-api` and `admindash-api` can reach it server-to-server without the public TLS pipeline; `datacore` remains private-network-only, unchanged.
 
 ## Trust boundaries and security layers
 
 1. **Cloudflare TLS termination** — every public domain is served over HTTPS by Cloudflare. Certificates auto-renewed.
 2. **Cloudflare WAF** — baseline DDoS and bot protection for all public hostnames.
-3. **Cloudflare IP allowlist** at the Fly.io public backends — `launchpad-api`, `papermite-api`, `admindash-api` reject any request whose source IP is not in Cloudflare's published IP ranges. This prevents attackers from finding the Fly origin IP (via certificate transparency logs) and bypassing the Cloudflare WAF.
+3. **Cloudflare IP allowlist** at the Fly.io public backends — `launchpad-api`, `papermite-api`, `admindash-api`, `apexflow-api`, `familyhub-api` reject any request whose source IP is not in Cloudflare's published IP ranges. This prevents attackers from finding the Fly origin IP (via certificate transparency logs) and bypassing the Cloudflare WAF.
 4. **CORS fail-closed** — every backend reads `CORS_ALLOWED_ORIGINS` from env and refuses to start if it's missing or contains `*` in production mode.
 5. **DataCore on Fly private network only** — no public DNS, no public HTTP service in `fly.toml`. Reachable only via Fly's internal WireGuard mesh from sibling Fly apps in the same org.
 6. **JWT auth via DataCore** — every authenticated request delegates validation to DataCore's `/auth/me`. Only DataCore holds the JWT signing secret.

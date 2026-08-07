@@ -16,6 +16,8 @@
     "datacore": "datacore-v0.5.0",
     "launchpad": "launchpad-v0.3.1",
     "papermite": "papermite-v0.8.2",
-    "admindash": "admindash-v0.10.4"
+    "admindash": "admindash-v0.10.4",
+    "apexflow": null,
+    "familyhub": null
   }
 }
