@@ -83,7 +83,7 @@ jobs:
 
       - name: Build and push datacore image (release event only)
         if: github.event_name == 'release'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: datacore
           file: datacore/Dockerfile
@@ -125,7 +125,7 @@ jobs:
 
       - name: Build and push launchpad-api image (release event only)
         if: github.event_name == 'release'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: launchpad
           file: launchpad/Dockerfile
@@ -202,7 +202,7 @@ jobs:
 
       - name: Build and push papermite-api image (release event only)
         if: github.event_name == 'release'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: papermite
           file: papermite/Dockerfile
@@ -278,7 +278,7 @@ jobs:
 
       - name: Build and push admindash-api image (release event only)
         if: github.event_name == 'release'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: admindash
           file: admindash/Dockerfile
