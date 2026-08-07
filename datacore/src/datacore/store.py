@@ -363,20 +363,10 @@ class Store:
 
         next_version = current_version + 1
 
-        # Archive current active
-        active_rows = (
-            table.search()
-            .where(f"{where} AND _status = 'active'")
-            .to_list()
-        )
-        if active_rows:
-            table.delete(f"{where} AND _status = 'active'")
-            for row in active_rows:
-                row["_status"] = "archived"
-                row["_updated_at"] = now
-            table.add(active_rows)
-
-        # Generate embedding from entity fields
+        # Generate embedding BEFORE any table mutation. The embedder is a
+        # slow network call; doing it between archive and insert would leave
+        # the entity with zero active rows for the duration, and a crash in
+        # that window would lose the active row permanently.
         all_fields = dict(base_data)
         all_fields.update(custom_fields or {})
         try:
@@ -399,6 +389,19 @@ class Store:
         }
         table.add([record])
 
+        # Archive the PREVIOUS active rows. The `_version < next_version`
+        # clause excludes the row just inserted. A reader racing this step
+        # transiently sees two active rows; get_active_entity resolves that
+        # by max _version.
+        stale = f"{where} AND _status = 'active' AND _version < {next_version}"
+        active_rows = table.search().where(stale).to_list()
+        if active_rows:
+            table.delete(stale)
+            for row in active_rows:
+                row["_status"] = "archived"
+                row["_updated_at"] = now
+            table.add(active_rows)
+
         # Trim old versions
         self._trim_entity_versions(table, entity_type, entity_id)
 
@@ -410,7 +413,12 @@ class Store:
     def get_active_entity(
         self, tenant_id: str, entity_type: str, entity_id: str
     ) -> dict | None:
-        """Get the active version of an entity."""
+        """Get the active version of an entity.
+
+        put_entity inserts the new active row before archiving the previous
+        one, so a concurrent reader (or a crash inside that window) can see
+        more than one active row. The newest — max ``_version`` — wins.
+        """
         table_name = self._entities_table_name(tenant_id)
         if table_name not in self._table_names():
             return None
@@ -423,13 +431,12 @@ class Store:
                 f"AND entity_id = '{entity_id}' "
                 f"AND _status = 'active'"
             )
-            .limit(1)
             .to_list()
         )
         if not rows:
             return None
 
-        row = rows[0]
+        row = max(rows, key=lambda r: int(r["_version"]))
         row["base_data"] = toon.decode(row["base_data"]) if row["base_data"] else {}
         row["custom_fields"] = toon.decode(row["custom_fields"]) if row["custom_fields"] else {}
         return row

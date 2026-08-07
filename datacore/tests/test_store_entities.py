@@ -1,5 +1,7 @@
 """Unit tests for Store entity CRUD, versioning, and validation."""
 
+import threading
+
 import pytest
 from datacore import Store
 from datacore.store import VersionConflictError
@@ -417,3 +419,101 @@ def test_put_entity_expected_version_on_missing_entity_conflicts(store):
         )
     assert exc.value.expected == 1
     assert exc.value.actual == 0
+
+
+# ── 20. No zero-active-row window while a put_entity is in flight ─────────────
+
+def test_reader_never_sees_zero_active_rows_during_put_entity(store):
+    """A concurrent reader must always see an active row for the entity.
+
+    The embedder is a slow network call in production. Parking inside it
+    makes the write window deterministic: the reader looks at the table while
+    the writer is suspended mid-put_entity.
+    """
+    store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="S001",
+        base_data={"first_name": "Alice", "last_name": "v1"},
+    )
+
+    gate = threading.Event()      # set once the writer reaches the embed step
+    release = threading.Event()   # set once the reader has looked
+    real_embed = store.embedder.embed
+
+    def blocking_embed(*args, **kwargs):
+        gate.set()
+        release.wait(30)
+        return real_embed(*args, **kwargs)
+
+    writer_error = []
+    seen = ["<unset>"]
+
+    def write():
+        try:
+            store.put_entity(
+                tenant_id="t1", entity_type="student", entity_id="S001",
+                base_data={"first_name": "Alice", "last_name": "v2"},
+            )
+        except Exception as exc:  # pragma: no cover - surfaced via assert
+            writer_error.append(exc)
+
+    store.embedder.embed = blocking_embed
+    writer = threading.Thread(target=write, daemon=True)
+    try:
+        writer.start()
+        assert gate.wait(30), "writer never reached the embed step"
+        seen[0] = store.get_active_entity("t1", "student", "S001")
+    finally:
+        release.set()
+        writer.join(30)
+        store.embedder.embed = real_embed
+
+    assert not writer_error, f"writer failed: {writer_error}"
+    assert not writer.is_alive(), "writer thread did not finish"
+    assert seen[0] is not None, "reader saw ZERO active rows mid-update"
+
+    # After the dust settles: exactly one active row, at the new version.
+    final = store.get_active_entity("t1", "student", "S001")
+    assert final["base_data"]["last_name"] == "v2"
+    assert final["_version"] == 2
+
+    history = store.get_entity_history("t1", "student", "S001")
+    actives = [r for r in history if r["_status"] == "active"]
+    assert len(actives) == 1
+
+
+# ── 21. get_active_entity tolerates a transient two-active-rows state ─────────
+
+def test_get_active_entity_prefers_max_version_when_two_actives_exist(store):
+    """A crash inside the insert-before-archive window leaves two actives.
+
+    max-_version semantics must resolve it to the newest row.
+    """
+    store.put_entity(
+        tenant_id="t1", entity_type="student", entity_id="S001",
+        base_data={"first_name": "Alice", "last_name": "v1"},
+    )
+
+    # Simulate the window: add a second active row at version 2 directly.
+    table = store._db.open_table(store._entities_table_name("t1"))
+    rows = table.search().where(
+        "entity_type = 'student' AND entity_id = 'S001'"
+    ).to_list()
+    assert len(rows) == 1
+    import toon
+    newer = dict(rows[0])
+    newer["_version"] = 2
+    newer["_status"] = "active"
+    newer["base_data"] = toon.encode(
+        {"first_name": "Alice", "last_name": "v2"}
+    )
+    table.add([newer])
+
+    active_rows = table.search().where(
+        "entity_type = 'student' AND entity_id = 'S001' "
+        "AND _status = 'active'"
+    ).to_list()
+    assert len(active_rows) == 2, "fixture did not create the two-active state"
+
+    row = store.get_active_entity("t1", "student", "S001")
+    assert int(row["_version"]) == 2
+    assert row["base_data"]["last_name"] == "v2"
