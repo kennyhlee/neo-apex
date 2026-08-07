@@ -182,6 +182,60 @@ def test_dc_update_translates_409_to_conflict_shape(monkeypatch):
     }
 
 
+# --- get_entity resolves a two-active-rows read to the newest row ----------
+#
+# DataCore's put_entity inserts the new active row BEFORE archiving the
+# previous one (`datacore/src/datacore/store.py`, hardening wave Task 6), so
+# an `_status = 'active'` filtered read racing a write can return TWO rows for
+# one entity_id. Tested at the client level with the same real-dc_* +
+# monkeypatched-httpx idiom the dc_update unit tests above use: FakeDataCore
+# replaces `dc.get_entity` wholesale (fakes.py::install_fake_datacore), so it
+# cannot exercise this selection at all.
+
+
+def _query_returning(rows):
+    def fake_request(method, url, **kwargs):
+        class R:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"data": rows, "total": len(rows)}
+        return R()
+    return fake_request
+
+
+def test_get_entity_returns_max_version_row_when_two_actives(monkeypatch):
+    """Both rows are active; the newest `_version` must win, in either
+    arrival order (DataCore's query path returns no guaranteed ordering)."""
+    stale = {"entity_id": "e1", "entity_type": "workflow_instance",
+             "state": "draft", "_version": "1"}
+    fresh = {"entity_id": "e1", "entity_type": "workflow_instance",
+             "state": "approved", "_version": "2"}
+
+    for rows in ([stale, fresh], [fresh, stale]):
+        monkeypatch.setattr("app.workflows.datacore.httpx.request",
+                            _query_returning(rows))
+        row = dc.get_entity("t1", "workflow_instance", "e1")
+        assert row["state"] == "approved", f"picked the stale row from {rows}"
+        assert row["_version"] == "2"
+
+
+def test_get_entity_without_version_column_keeps_first_row(monkeypatch):
+    """Degradation guard: rows carrying no `_version` must behave exactly as
+    the previous `rows[0]` implementation did, not raise or reorder."""
+    rows = [{"entity_id": "e1", "entity_type": "workflow_instance", "state": "draft"},
+            {"entity_id": "e1", "entity_type": "workflow_instance", "state": "approved"}]
+    monkeypatch.setattr("app.workflows.datacore.httpx.request",
+                        _query_returning(rows))
+    assert dc.get_entity("t1", "workflow_instance", "e1")["state"] == "draft"
+
+
+def test_get_entity_returns_none_when_no_rows(monkeypatch):
+    monkeypatch.setattr("app.workflows.datacore.httpx.request", _query_returning([]))
+    assert dc.get_entity("t1", "workflow_instance", "e1") is None
+
+
 # --- state-write / item-write conflict propagates 409 ----------------------
 #
 # # ADJUST(bindings): the brief's own test skeleton force-bumps the row's

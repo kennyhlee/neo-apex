@@ -125,6 +125,54 @@ def test_get_lead_not_found(client):
     assert resp.status_code == 404
 
 
+# DataCore's put_entity inserts the new active row BEFORE archiving the
+# previous one (datacore/src/datacore/store.py, hardening wave Task 6), so an
+# `_status = 'active'` filtered read racing a write can return TWO rows for one
+# entity_id. `_get_lead` must take the newest, or a stage/convert PUT — which
+# REPLACES base_data from the row `_get_lead` returned — would write a stale
+# copy back.
+
+
+@respx.mock
+def test_get_lead_prefers_max_version_when_two_actives(client):
+    _stub_auth(respx)
+    _stub_query(respx, entity_rows=[
+        {"entity_id": "ld1", "stage": "New", "_version": "1"},
+        {"entity_id": "ld1", "stage": "Toured", "_version": "2"},
+    ])
+    resp = client.get("/api/leads/t1/ld1", headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    assert resp.json()["stage"] == "Toured"
+
+
+@respx.mock
+def test_get_lead_prefers_max_version_regardless_of_row_order(client):
+    """DataCore's query path guarantees no ordering — the newer row arriving
+    first must not change the answer."""
+    _stub_auth(respx)
+    _stub_query(respx, entity_rows=[
+        {"entity_id": "ld1", "stage": "Toured", "_version": "2"},
+        {"entity_id": "ld1", "stage": "New", "_version": "1"},
+    ])
+    resp = client.get("/api/leads/t1/ld1", headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    assert resp.json()["stage"] == "Toured"
+
+
+@respx.mock
+def test_get_lead_without_version_column_keeps_first_row(client):
+    """Degradation guard: rows with no `_version` behave exactly as the
+    previous `rows[0]` implementation did."""
+    _stub_auth(respx)
+    _stub_query(respx, entity_rows=[
+        {"entity_id": "ld1", "stage": "New"},
+        {"entity_id": "ld1", "stage": "Toured"},
+    ])
+    resp = client.get("/api/leads/t1/ld1", headers={"Authorization": "Bearer good"})
+    assert resp.status_code == 200
+    assert resp.json()["stage"] == "New"
+
+
 @respx.mock
 def test_create_lead_honors_email_import_source(client):
     _stub_auth(respx)

@@ -99,14 +99,39 @@ def _default_prospect_fields() -> list[dict]:
     ]
 
 
+def _row_version(row: dict) -> int:
+    """A row's `_version` as an int for max-selection, or -1 when absent.
+
+    DataCore's query path flattens system columns to strings, so `_version`
+    arrives as `"3"`, not `3`.
+    """
+    raw = row.get("_version")
+    try:
+        return int(raw) if raw not in (None, "") else -1
+    except (TypeError, ValueError):
+        return -1
+
+
 def _get_lead(tenant: str, lead_id: str, token: str | None) -> dict | None:
+    """The lead's active row — the MAX-`_version` one when several match.
+
+    DataCore's `put_entity` inserts the new active row before archiving the
+    previous one (`datacore/src/datacore/store.py`), so even this
+    `_status = 'active'` filtered read can transiently see two rows for one
+    `entity_id`; taking an arbitrary one would serve a stale lead (and, since
+    stage/convert PUTs REPLACE base_data from the row this returns, write
+    that stale copy back). `max` returns the FIRST maximal element, so rows
+    with no `_version` degrade to the previous `rows[0]` behavior exactly.
+    """
     rows = _dc_query(
         tenant,
         f"SELECT * FROM data WHERE entity_type = 'lead' "
         f"AND entity_id = '{lead_id}' AND _status = 'active'",
         token,
     )
-    return rows[0] if rows else None
+    if not rows:
+        return None
+    return max(rows, key=_row_version)
 
 
 def _tenant_exists(tenant: str) -> bool:

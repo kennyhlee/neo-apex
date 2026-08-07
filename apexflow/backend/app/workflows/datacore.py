@@ -179,6 +179,21 @@ def list_entities(tenant_id: str, entity_type: str, where: str = "",
     return dc_query(tenant_id, sql, token)
 
 
+def _row_version(row: dict) -> int:
+    """A row's `_version` as an int for max-selection, or -1 when absent.
+
+    DataCore's query path flattens system columns to strings, so `_version`
+    arrives as `"3"`, not `3` — same tolerance as
+    `engine.row_version`, duplicated here rather than imported because
+    `engine` imports THIS module (circular otherwise).
+    """
+    raw = row.get("_version")
+    try:
+        return int(raw) if raw not in (None, "") else -1
+    except (TypeError, ValueError):
+        return -1
+
+
 def get_entity(tenant_id: str, entity_type: str, entity_id: str,
                token: str | None = None) -> dict | None:
     """Fetch a single active entity by id, scoped by `entity_type`.
@@ -188,12 +203,22 @@ def get_entity(tenant_id: str, entity_type: str, entity_id: str,
     crafted `entity_id` cannot widen the query or escape the entity_type
     scope. See `list_entities`'s trust-boundary note for the `where`
     parameter in general.
+
+    Returns the MAX-`_version` row when the query yields several. DataCore's
+    `put_entity` inserts the new active row before archiving the previous one
+    (`datacore/src/datacore/store.py`), so even an `_status = 'active'`
+    filtered read can transiently see two rows for one `entity_id`; taking an
+    arbitrary one would serve a stale row. `max` returns the FIRST maximal
+    element, so rows carrying no `_version` (a fake, a projected query)
+    degrade to the previous `rows[0]` behavior exactly.
     """
     _validate_id(tenant_id, "tenant_id")
     _validate_id(entity_type, "entity_type")
     _validate_id(entity_id, "entity_id")
     rows = list_entities(tenant_id, entity_type, f"entity_id = {sql_literal(entity_id)}", token)
-    return rows[0] if rows else None
+    if not rows:
+        return None
+    return max(rows, key=_row_version)
 
 
 def get_model_definition(tenant_id: str, entity_type: str,
