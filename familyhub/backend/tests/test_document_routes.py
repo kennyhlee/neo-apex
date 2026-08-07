@@ -272,3 +272,45 @@ def test_download_status_forwarded_but_body_replaced_on_5xx(client, fake_http):
                   FakeResponse(502, {"detail": "That document is not available right now."}))
     resp = client.get(f"/api/instance/{TOKEN}/documents/DC0001/url")
     assert resp.status_code == 502
+
+
+# --------------------------------------------------------------------------
+# List documents
+# --------------------------------------------------------------------------
+
+def test_list_documents_proxies_to_apexflow_token_scoped_route(client, fake_http):
+    fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}/documents",
+                  FakeResponse(200, {"documents": [
+                      {"entity_id": "d-1", "document_id": "d-1", "filename": "form.pdf",
+                       "uploaded_by": "family:wi-1", "item_id": "it-1"},
+                  ]}))
+    resp = client.get(f"/api/instance/{TOKEN}/documents")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [d["document_id"] for d in body["documents"]] == ["d-1"]
+    assert fake_http.calls[0]["url"].endswith(f"/internal/instance-by-token/{TOKEN}/documents")
+    assert fake_http.calls[0]["headers"]["X-Internal-Key"] == "test-internal-key"
+
+
+def test_list_documents_upstream_401_passthrough(client, fake_http):
+    """Mirrors test_upload_with_invalid_token_passthrough: apexflow's
+    resolve_token answers a uniform 401 for every failure mode, relayed
+    verbatim."""
+    fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}/documents",
+                  FakeResponse(401, {"detail": "Invalid or revoked link"}))
+    resp = client.get(f"/api/instance/{TOKEN}/documents")
+    assert resp.status_code == 401
+
+
+def test_list_documents_masks_apexflow_500(client, fake_http):
+    fake_http.add("GET", f"/internal/instance-by-token/{TOKEN}/documents",
+                  FakeResponse(500, {"detail": "Traceback (most recent call last): ..."}))
+    resp = client.get(f"/api/instance/{TOKEN}/documents")
+    assert resp.status_code == 502
+    assert "Traceback" not in resp.text
+
+
+def test_malformed_token_list_costs_no_upstream_call(client, fake_http):
+    resp = client.get("/api/instance/not-a-real-token/documents")
+    assert resp.status_code == 400
+    assert fake_http.calls == []

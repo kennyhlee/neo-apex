@@ -99,6 +99,21 @@ def create_document(token: str, body: CreateDocumentBody) -> Response:
     return _relay(resp)
 
 
+@router.get("/instance/{token}/documents")
+def list_documents(token: str) -> Response:
+    """Token-scoped list of this instance's visible documents.
+
+    Pure relay: apexflow's internal route already scopes to the instance
+    and hides other uploaders' sensitive documents."""
+    parse_token(token)
+    resp = call_upstream(
+        "GET",
+        apexflow(f"/internal/instance-by-token/{token}/documents"),
+        headers=apexflow_headers(),
+    )
+    return _relay(resp)
+
+
 @router.get("/instance/{token}/documents/{document_id}/url")
 def get_document_url(token: str, document_id: str) -> Response:
     """Presign a download URL -- own uploads (or non-sensitive documents of
