@@ -11,6 +11,7 @@ workflow-engine scaffold, apexflow-backend has no Papermite or familyhub
 dependency yet, and none of those fields are read by any module this task
 ports (app/auth.py, app/workflows/{datacore,tokens,emails}.py).
 """
+import os
 from typing import List, Optional, Union
 
 from pydantic import model_validator
@@ -101,6 +102,11 @@ class Settings(BaseSettings):
         """
         if self.environment != "production":
             return self
+        if os.environ.get("TRUST_ALL_IPS") == "1":
+            raise ValueError(
+                "TRUST_ALL_IPS=1 must never be set in production: it disables "
+                "the Cloudflare IP allowlist AND collapses rate-limit keying."
+            )
         for name, value, dev_default in (
             ("APEXFLOW_LINK_SECRET", self.link_secret, DEV_LINK_SECRET),
             ("APEXFLOW_INTERNAL_KEY", self.internal_key, DEV_INTERNAL_KEY),
