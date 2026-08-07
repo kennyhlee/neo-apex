@@ -221,7 +221,14 @@ export default function RegisterPage() {
   useEffect(() => {
     if (!instance || !bundle || draftHydratedRef.current) return;
     draftHydratedRef.current = true;
-    setDraft(sectionAnswersToDraft(bundle.definition.steps, parseDraftData(instance.instance)));
+    // Converted against the instance's PINNED steps (falls back to the
+    // bundle only if the instance response is somehow missing a definition)
+    // so hydration matches what save_draft will accept -- not the
+    // currently-published bundle, which may have moved on if the lineage
+    // was republished (renamed/removed a section) after this instance
+    // started.
+    const conversionSteps = instance?.definition?.steps ?? bundle.definition.steps;
+    setDraft(sectionAnswersToDraft(conversionSteps, parseDraftData(instance.instance)));
   }, [instance, bundle]);
 
   // Load the instance's already-uploaded documents whenever an instance is
@@ -307,11 +314,18 @@ export default function RegisterPage() {
     if (!token || !bundle) return;
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(() => {
-      // Converted against the FULL step set (not just the currently
-      // visible/state-filtered steps) so an answer from a step the
-      // instance has already moved past is never dropped from this
-      // snapshot's payload.
-      saveDraft(token, draftToSectionAnswers(bundle.definition.steps, next))
+      // Converted against the instance's PINNED steps (falls back to the
+      // bundle only if the instance response is somehow missing a
+      // definition) -- the FULL pinned step set, not just the currently
+      // visible/state-filtered steps, so an answer from a step the instance
+      // has already moved past is never dropped from this snapshot's
+      // payload. Using the pinned steps (rather than the currently-
+      // published bundle) keeps autosave payloads keyed by whatever section
+      // ids save_draft's pinned-steps validation actually accepts, even if
+      // the lineage was republished (renamed/removed a section) after this
+      // instance started.
+      const conversionSteps = instance?.definition?.steps ?? bundle.definition.steps;
+      saveDraft(token, draftToSectionAnswers(conversionSteps, next))
         .then(() => setRuntimeError(null))
         .catch(() => setRuntimeError(t('register.saveError')));
     }, AUTOSAVE_DEBOUNCE_MS);

@@ -12,7 +12,7 @@ import json
 import pytest
 from fastapi import HTTPException
 
-from app.workflows import engine
+from app.workflows import definitions, engine
 from app.workflows.schema import StepDef
 
 TENANT = "acme"
@@ -321,6 +321,133 @@ def test_save_draft_unknown_section_400s(fake_dc):
         engine.save_draft(TENANT, instance_row, {"nonexistent_section": {"x": 1}}, "family:tok1")
     assert exc.value.status_code == 400
     assert "nonexistent_section" in exc.value.detail["error"]
+
+
+# --- save_draft: pinned steps survive a republish rename (Task 4, hardening
+# wave -- familyhub's RegisterPage converted resume drafts against the
+# currently-PUBLISHED bundle's steps while save_draft validates against the
+# instance's PINNED steps; a mid-flight republish that renames a section made
+# an old instance's autosave 400 persistently). This is the server half of
+# that contract: save_draft ALREADY resolves pinned steps via
+# engine._pinned_steps (line ~323), so this test is expected to pass as soon
+# as it is correctly built -- see the mutation check noted in the report. ---
+
+
+def _guardians_steps(section_id):
+    return [
+        {
+            "step_id": "family_details",
+            "type": "form",
+            "title": "Family details",
+            "required": True,
+            "blocking": True,
+            "available_in": ["draft"],
+            "show_if": None,
+            "review": None,  # default for form -> auto
+            "config": {
+                "sections": [
+                    {
+                        "section_id": section_id,
+                        "entity_model": "student",
+                        "fields": [
+                            {"name": "first_name", "required": True},
+                            {"name": "last_name", "required": True},
+                        ],
+                        "mode": "create",
+                        "repeat": None,
+                    }
+                ]
+            },
+        }
+    ]
+
+
+def _guardians_machine(section_id):
+    return {
+        "states": [
+            {"state_id": "draft", "name": "Draft", "kind": "initial"},
+            {"state_id": "submitted", "name": "Submitted", "kind": "terminal"},
+        ],
+        "transitions": [
+            {
+                "transition_id": "t_submit",
+                "from": "draft",
+                "to": "submitted",
+                "action": "submit",
+                "actor": "family",
+                "guards": [],
+                "effects": [
+                    {"primitive": "commit_sections", "params": {"section_ids": [section_id]}}
+                ],
+            }
+        ],
+    }
+
+
+def test_save_draft_after_republish_rename_still_accepts_pinned_sections(fake_dc):
+    """Republish a real v1 -> v2 lineage that renames a form section
+    ('guardians' -> 'contacts'), using the same definitions.publish_definition
+    the designer API's publish action calls (test_definitions_api.py's
+    pattern) -- no mocking of the pinned lookup. An instance created against
+    v1 pins v1's steps at creation (engine.py:223-224); save_draft on that
+    instance, keyed by v1's OLD section id, must still return 200 even though
+    the lineage's currently-published row has moved on to v2/'contacts'.
+    """
+    fake_dc.set_model(TENANT, "student", _models()["student"])
+
+    # v1: published with a 'guardians' section.
+    v1 = fake_dc.dc_create(TENANT, "workflow_definition", {
+        "definition_id": "wd-republish-1",
+        "name": "Enrollment",
+        "version": 1,
+        "status": "published",
+        "lineage_status": "active",
+        "channel_access": "family",
+        "machine": json.dumps(_guardians_machine("guardians")),
+        "steps": json.dumps(_guardians_steps("guardians")),
+    })
+
+    # An instance created now pins v1 (definition_version == 1).
+    result = engine.create_instance(TENANT, "wd-republish-1", {}, "family")
+    instance_row = fake_dc.get_entity(TENANT, "workflow_instance", result["instance"]["entity_id"])
+    assert instance_row["definition_version"] == "1"
+
+    # Republish: a v2 draft renaming 'guardians' -> 'contacts', published for
+    # real via definitions.publish_definition (supersedes v1, becomes the
+    # lineage's currently-published row).
+    v2 = fake_dc.dc_create(TENANT, "workflow_definition", {
+        "definition_id": "wd-republish-1",
+        "name": "Enrollment",
+        "version": 2,
+        "status": "draft",
+        "lineage_status": "active",
+        "channel_access": "family",
+        "machine": json.dumps(_guardians_machine("contacts")),
+        "steps": json.dumps(_guardians_steps("contacts")),
+    })
+    definitions.publish_definition(TENANT, v2["entity_id"])
+
+    # Sanity: this is a real republish, not a fake pinned lookup.
+    v1_row = fake_dc.get_entity(TENANT, "workflow_definition", v1["entity_id"])
+    assert v1_row["status"] == "superseded"
+    published = definitions.get_published_definition(TENANT, "wd-republish-1")
+    assert published["version"] == "2"
+
+    # The old instance's autosave, keyed by v1's 'guardians' section id,
+    # still succeeds -- save_draft resolves the instance's PINNED (v1) steps,
+    # not the lineage's currently-published (v2) ones.
+    refreshed = _refresh_instance(fake_dc, instance_row)
+    updated = engine.save_draft(TENANT, refreshed, {"guardians": {"first_name": "Ada"}},
+                                "family:tok1")
+    draft = json.loads(updated["base_data"]["draft_data"])
+    assert draft == {"guardians": {"first_name": "Ada"}}
+
+    # And the reverse: v2's renamed 'contacts' id is NOT declared by this
+    # instance's pinned v1 definition, so it still 400s -- confirms
+    # resolution is genuinely pinned, not just permissive.
+    with pytest.raises(HTTPException) as exc:
+        engine.save_draft(TENANT, refreshed, {"contacts": {"first_name": "Ada"}}, "family:tok1")
+    assert exc.value.status_code == 400
 
 
 # --- save_draft: repeat sections (coordinator review finding #3) -----------
