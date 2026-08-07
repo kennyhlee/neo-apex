@@ -8,6 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import documents, health, instance, workflows
 from app.config import settings
 from app.middleware.cloudflare_ip import CloudflareIPMiddleware
+from app.middleware.security_headers import (
+    SecurityHeadersMiddleware,
+    install_access_log_scrubber,
+)
+
+install_access_log_scrubber()
 
 app = FastAPI(
     title="FamilyHub Backend",
@@ -32,6 +38,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Referrer-Policy: no-referrer on every response. Added last (=outermost —
+# Starlette's add_middleware makes the most-recently-added layer wrap
+# everything else added before it) so the header lands on ALL responses,
+# including CORS preflight replies and the 403s CloudflareIPMiddleware sends
+# directly without calling further inward.
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(workflows.router, prefix="/api", tags=["workflows"])
