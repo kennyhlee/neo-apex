@@ -1,4 +1,17 @@
-"""Generic SQL query proxy route — forwards POST /api/query to DataCore."""
+"""Generic SQL query proxy route — forwards POST /api/query to DataCore.
+
+The DataCore call uses an awaited `httpx.AsyncClient`, NOT the sync
+`httpx.post()` it used to call directly inside this `async def` handler
+with no `run_in_threadpool` wrapper — the same event-loop-blocking defect
+fixed in `app/api/entities.py`'s `_proxy_to_datacore` (see that module's
+docstring). Under concurrent browser load every such call monopolized
+Uvicorn's single asyncio event loop for the full DataCore round-trip AND
+opened a brand-new unpooled TCP connection each time, which together
+produced apexflow's Plan 2 gate defect: an intermittent, instant
+`httpx.RequestError` a one-shot curl never reproduces. Ported the fix from
+apexflow/backend/app/api/query.py (hardening wave, Task 5), for
+consistency with entities.py's shape.
+"""
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
@@ -31,15 +44,15 @@ async def query(
     assert_sql_is_safe_read(payload.get("sql", ""))
     content_type = request.headers.get("content-type", "application/json")
     try:
-        resp = httpx.post(
-            f"{settings.datacore_url}/api/query",
-            content=body,
-            headers={
-                "Content-Type": content_type,
-                "Authorization": user["_token"],
-            },
-            timeout=30.0,
-        )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.datacore_url}/api/query",
+                content=body,
+                headers={
+                    "Content-Type": content_type,
+                    "Authorization": user["_token"],
+                },
+            )
     except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

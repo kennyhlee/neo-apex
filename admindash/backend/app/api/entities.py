@@ -1,4 +1,20 @@
-"""Entity CRUD proxy routes — forward to DataCore."""
+"""Entity CRUD proxy routes — forward to DataCore.
+
+`_proxy_to_datacore` uses `httpx.AsyncClient` (awaited), NOT the sync
+`httpx.request()` helper it used to call. That sync call was a blocking,
+synchronous socket call made directly inside an `async def` route handler
+with no `run_in_threadpool` wrapper — it monopolized Uvicorn's single
+asyncio event loop for the full DataCore round-trip. Under real browser
+load (concurrent XHRs: CORS preflights, the actual request, other tabs'
+polling/autosave all arriving close together) every one of those gets
+serialized onto that one blocked thread, and the sync call additionally
+opens a brand-new unpooled TCP connection to DataCore on every single
+invocation — the two together are what apexflow's Plan 2 gate exposed as
+an intermittent, instant `httpx.RequestError` that a one-shot curl (no
+contention) never triggers. Ported the fix from
+apexflow/backend/app/api/entities.py (hardening wave, Task 5) — same
+awaited `httpx.AsyncClient` shape.
+"""
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
@@ -15,16 +31,16 @@ async def _proxy_to_datacore(
     body = await request.body() if method in ("POST", "PUT", "PATCH") else None
     content_type = request.headers.get("content-type", "application/json")
     try:
-        resp = httpx.request(
-            method,
-            f"{settings.datacore_url}{path}",
-            content=body,
-            headers={
-                "Content-Type": content_type,
-                "Authorization": token,
-            },
-            timeout=30.0,
-        )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.request(
+                method,
+                f"{settings.datacore_url}{path}",
+                content=body,
+                headers={
+                    "Content-Type": content_type,
+                    "Authorization": token,
+                },
+            )
     except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
