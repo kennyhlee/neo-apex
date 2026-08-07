@@ -23,6 +23,7 @@ from app.api import instances as instances_api
 from app.api import internal as internal_api
 from app.api import query as query_api
 from app.config import settings
+from app.middleware.cloudflare_ip import CloudflareIPMiddleware
 
 app = FastAPI(
     title="ApexFlow Backend",
@@ -30,6 +31,10 @@ app = FastAPI(
                  "application lifecycle, tracking — generalized from enrollx-backend",
     version="0.1.0",
 )
+
+# Cloudflare IP allowlist — rejects non-Cloudflare traffic in production.
+# Set TRUST_ALL_IPS=1 in dev to bypass.
+app.add_middleware(CloudflareIPMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

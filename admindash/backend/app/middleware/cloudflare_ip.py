@@ -13,9 +13,10 @@ HTTP 403. Two classes of source are trusted:
    fly-proxy from the public internet.
 
 IMPORTANT: This file is COPY-PASTED across launchpad/backend/app/middleware/,
-papermite/backend/app/middleware/, and admindash/backend/app/middleware/.
-Keep all three copies in sync. When Cloudflare updates its IP ranges (rare),
-update CLOUDFLARE_IPV4_RANGES / CLOUDFLARE_IPV6_RANGES in all three files.
+papermite/backend/app/middleware/, admindash/backend/app/middleware/ (this
+copy), familyhub/backend/app/middleware/, and apexflow/backend/app/middleware/.
+Keep all five copies in sync. When Cloudflare updates its IP ranges (rare),
+update CLOUDFLARE_IPV4_RANGES / CLOUDFLARE_IPV6_RANGES in all five files.
 
 Cloudflare IPs as of 2026-04-11, from https://www.cloudflare.com/ips/
 A follow-up change will fetch this list at container start instead of
