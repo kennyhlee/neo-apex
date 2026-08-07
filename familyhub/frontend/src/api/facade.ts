@@ -3,6 +3,7 @@ import {
   type DecodedToken,
   type DocumentSlot,
   type InstanceBundle,
+  type InstanceDocumentView,
   type StartResponse,
   type WorkflowBundle,
 } from '../types/workflow.ts';
@@ -237,6 +238,19 @@ export async function uploadDocumentFile(
   if (!put.ok) throw new Error(`Upload failed: HTTP ${put.status}`);
   await completeItem(token, itemId, slot.document_id);
   return slot.document_id;
+}
+
+/**
+ * GET /api/instance/{token}/documents -> apexflow's list of already-uploaded
+ * documents for this instance, relayed verbatim by familyhub-backend's
+ * facade route. The wire body is a WRAPPER object `{"documents": [...]}`,
+ * NOT a bare array -- this unwraps it to the flat `InstanceDocumentView[]`
+ * `StepRenderer`'s `documents` prop expects.
+ */
+export async function listDocuments(token: string): Promise<InstanceDocumentView[]> {
+  const resp = await fetch(`${API_BASE}/api/instance/${encodeURIComponent(token)}/documents`);
+  const body = await jsonOrThrow<{ documents: InstanceDocumentView[] }>(resp);
+  return body.documents;
 }
 
 /**

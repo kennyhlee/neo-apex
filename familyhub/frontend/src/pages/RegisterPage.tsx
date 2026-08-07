@@ -16,6 +16,7 @@ import {
   FacadeError,
   fetchInstance,
   fetchWorkflowBundle,
+  listDocuments,
   runAction,
   saveDraft,
   sectionAnswersToDraft,
@@ -27,6 +28,7 @@ import {
   entityId,
   type EntityRecord,
   type InstanceBundle,
+  type InstanceDocumentView,
   type WorkflowBundle,
   type WorkflowItemView,
 } from '../types/workflow.ts';
@@ -153,6 +155,7 @@ export default function RegisterPage() {
   const [linkSent, setLinkSent] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [draft, setDraft] = useState<WorkflowDraft>({});
+  const [documents, setDocuments] = useState<InstanceDocumentView[]>([]);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Set the instant `onStart` has a token in hand -- before the resume
   // effect below can ever see the new `token` on a re-render. Guards that
@@ -220,6 +223,27 @@ export default function RegisterPage() {
     draftHydratedRef.current = true;
     setDraft(sectionAnswersToDraft(bundle.definition.steps, parseDraftData(instance.instance)));
   }, [instance, bundle]);
+
+  // Load the instance's already-uploaded documents whenever an instance is
+  // in hand -- fresh start, resume, or any subsequent `refreshInstance()`
+  // (which always sets a fresh `instance` object, re-firing this effect,
+  // including right after a successful `uploadDocumentFile`). A listing
+  // failure must never break the page, so it falls back to an empty list
+  // rather than surfacing an error.
+  useEffect(() => {
+    if (!token || !instance) return;
+    let cancelled = false;
+    listDocuments(token)
+      .then((docs) => {
+        if (!cancelled) setDocuments(docs);
+      })
+      .catch(() => {
+        if (!cancelled) setDocuments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, instance]);
 
   const refreshInstance = useCallback(async () => {
     if (!token) return;
@@ -456,12 +480,7 @@ export default function RegisterPage() {
                   throw err;
                 })
             }
-            // No token-scoped documents-LISTING route exists on
-            // familyhub-backend yet (only presign-upload and
-            // download-by-id) -- StepRenderer's "already uploaded" sublist
-            // is therefore always empty here; uploading itself still
-            // works. Known gap, not this task's to close.
-            documents={[]}
+            documents={documents}
           />
           {actionableAllowed.length > 0 && (
             <div className="register-actions">
