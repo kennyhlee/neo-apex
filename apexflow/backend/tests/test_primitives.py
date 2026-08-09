@@ -12,6 +12,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.workflows.primitives import EFFECTS, GUARDS, EvalContext
+from app.workflows.rows import WorkflowItem
 from app.workflows.schema import MachineDef, StateDef, StepDef
 from tests.fakes import FakeDataCore
 
@@ -32,7 +33,21 @@ def _definition(steps: list[StepDef], definition_id: str = "wf-lineage-1", versi
     return {"machine": _machine(), "steps": steps, "definition_id": definition_id, "version": version}
 
 
+def _items(rows) -> list[WorkflowItem]:
+    """`EvalContext.items` is `list[WorkflowItem]`; these tests author the
+    flattened rows DataCore would return, so parse them at the same boundary
+    `machine.build_eval_context` does. `entity_id` is synthesized for the
+    rows that don't bother declaring one — no guard under test reads it."""
+    return [
+        r if isinstance(r, WorkflowItem)
+        else WorkflowItem.model_validate({"entity_id": f"it-{i}", **r})
+        for i, r in enumerate(rows)
+    ]
+
+
 def _ctx(**overrides) -> EvalContext:
+    if "items" in overrides:
+        overrides["items"] = _items(overrides["items"])
     defaults = dict(
         tenant_id=TENANT,
         instance={"entity_id": "inst-1", "subject_refs": "{}", "applicant_email": ""},
@@ -581,7 +596,7 @@ def test_start_due_clocks_sets_due_at_from_doc_config(fake_dc):
 
     updated = fake_dc.get_entity(TENANT, "workflow_item", item["entity_id"])
     assert updated["due_at"] == (now + timedelta(days=14)).isoformat()
-    assert ctx.items[0]["due_at"] == updated["due_at"]  # ctx mutated in place
+    assert ctx.items[0].due_at == updated["due_at"]  # ctx mutated in place
 
 
 def test_start_due_clocks_skips_item_with_no_due_days_config(fake_dc):

@@ -428,7 +428,7 @@ def create_document_by_token(token: str, body: TokenCreateDocumentRequest):
     tenant_id, instance_row = resolve_token(token)
     ctx = machine.build_eval_context(tenant_id, instance_row, actor=_family_actor(instance_row))
     if body.item_id is not None and not any(
-        item.get("entity_id") == body.item_id for item in ctx.items
+        item.entity_id == body.item_id for item in ctx.items
     ):
         raise HTTPException(
             status_code=400,

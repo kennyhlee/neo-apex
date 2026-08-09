@@ -152,6 +152,7 @@ from app.workflows import datacore as dc
 from app.workflows import definitions as defs
 from app.workflows import engine
 from app.workflows.primitives import EFFECTS, GUARDS, EvalContext
+from app.workflows.rows import WorkflowItem
 from app.workflows.schema import TransitionDef
 from app.workflows.shared import entity_base_data, is_family_actor
 
@@ -238,10 +239,13 @@ def build_eval_context(tenant_id: str, instance_row: dict, *, actor: str,
     def_row = _pinned_definition_row(tenant_id, instance_row, token)
     machine_def, steps = defs.parse_machine_steps(def_row)
 
-    items = dc.list_entities(
-        tenant_id, "workflow_item",
-        f"instance_id = {dc.sql_literal(instance_entity_id)}", token,
-    )
+    items = [
+        WorkflowItem.model_validate(r)
+        for r in dc.list_entities(
+            tenant_id, "workflow_item",
+            f"instance_id = {dc.sql_literal(instance_entity_id)}", token,
+        )
+    ]
 
     models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
 
@@ -270,10 +274,13 @@ def build_eval_context(tenant_id: str, instance_row: dict, *, actor: str,
 
 
 def _refresh_items(ctx: EvalContext) -> None:
-    ctx.items = dc.list_entities(
-        ctx.tenant_id, "workflow_item",
-        f"instance_id = {dc.sql_literal(ctx.instance['entity_id'])}", ctx.token,
-    )
+    ctx.items = [
+        WorkflowItem.model_validate(r)
+        for r in dc.list_entities(
+            ctx.tenant_id, "workflow_item",
+            f"instance_id = {dc.sql_literal(ctx.instance['entity_id'])}", ctx.token,
+        )
+    ]
 
 
 def _is_terminal_state(ctx: EvalContext) -> bool:

@@ -125,6 +125,20 @@ def condition_data(draft_data: dict, context: dict) -> dict[str, Any]:
     return data
 
 
+def item_field(item: Any, name: str, default: Any = None) -> Any:
+    """Read `name` off a `workflow_item` that may be EITHER a flattened dict
+    row or a `rows.WorkflowItem` model.
+
+    `EvalContext.items` carries models, but the two functions below are also
+    called directly with raw flattened rows (`engine.applicable_items` is a
+    public re-export, and the suite exercises it that way), so they accept
+    both. Duck-typed rather than `isinstance(item, WorkflowItem)` because
+    this module is a leaf `rows.py` imports — see the module docstring."""
+    if isinstance(item, dict):
+        return item.get(name, default)
+    return getattr(item, name, default)
+
+
 def derived_document_sensitive(ctx, item_id: str | None) -> bool:
     """Server-derived `sensitive` flag for a document upload -- the pinned
     definition decides this, never the client (Plan 3 Task 4). Hoisted here
@@ -152,13 +166,16 @@ def derived_document_sensitive(ctx, item_id: str | None) -> bool:
     """
     if not item_id:
         return False
-    item = next((i for i in ctx.items if i.get("entity_id") == item_id), None)
+    item = next((i for i in ctx.items if item_field(i, "entity_id") == item_id), None)
     if item is None:
         return False
-    step = next((s for s in ctx.definition["steps"] if s.step_id == item.get("step_id")), None)
+    step = next(
+        (s for s in ctx.definition["steps"] if s.step_id == item_field(item, "step_id")),
+        None,
+    )
     if step is None or step.type != "documents":
         return False
-    title = item.get("title")
+    title = item_field(item, "title")
     for doc in step.config.get("docs", []) or []:
         if doc.get("name") == title:
             return bool(doc.get("sensitive", False))
@@ -180,7 +197,7 @@ def applicable_items(definition_steps: list[StepDef], items: list[dict], draft_d
     steps_by_id = {s.step_id: s for s in definition_steps}
     result = []
     for item in items:
-        step = steps_by_id.get(item.get("step_id"))
+        step = steps_by_id.get(item_field(item, "step_id"))
         if step is None or step.show_if is None:
             result.append(item)
             continue

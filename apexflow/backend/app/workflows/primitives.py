@@ -81,6 +81,7 @@ from fastapi import HTTPException
 from app.workflows import datacore as dc
 from app.workflows.conditions import evaluate_condition
 from app.workflows.emails import send_email
+from app.workflows.rows import WorkflowItem
 from app.workflows.schema import ConditionGroup, ENGINE_OWNED_FIELDS, SectionDef, StepDef
 from app.workflows.shared import (
     ITEM_DONE_STATUSES,
@@ -106,13 +107,16 @@ class EvalContext:
     (Task 8's action dispatcher) before evaluating one transition's guards
     or applying its effects.
 
-    `instance`/`items` are the FLATTENED row shape (`dc.get_entity`/
-    `list_entities`'s return value — see engine.py's row-shape convention
-    note), never the create/update envelope. Effects that mutate an entity
-    also update the corresponding in-memory dict here (`instance`, an
-    `items` entry) so later guards/effects in the SAME action see the
-    change without a re-fetch — the spec's "applies effects atomically-per-
-    entity" wording.
+    `instance` is the FLATTENED row shape (`dc.get_entity`/`list_entities`'s
+    return value — see engine.py's row-shape convention note), never the
+    create/update envelope. `items` are those same flattened rows PARSED
+    into `rows.WorkflowItem` (typed `status`, real `bool` `blocking`, int
+    `version`), so guards read attributes rather than stringly-typed keys.
+    Effects that mutate an entity also update the corresponding in-memory
+    object here (`instance`'s dict, an `items` entry's fields) so later
+    guards/effects in the SAME action see the change without a re-fetch —
+    the spec's "applies effects atomically-per-entity" wording. That is why
+    `WorkflowItem` must stay mutable.
 
     `issued_link` is a side-channel the `issue_link` effect writes to
     (nothing is stored beyond the instance's existing `token_version`) —
@@ -132,7 +136,7 @@ class EvalContext:
 
     tenant_id: str
     instance: dict
-    items: list[dict]
+    items: list[WorkflowItem]
     definition: dict  # {"machine": MachineDef, "steps": list[StepDef], "definition_id": str, "version": int}
     draft: dict
     context: dict
@@ -147,7 +151,7 @@ class EvalContext:
 # --- small EvalContext-flavored wrappers around app.workflows.shared -----
 
 
-def _applicable_items(ctx: EvalContext) -> list[dict]:
+def _applicable_items(ctx: EvalContext) -> list[WorkflowItem]:
     """Thin wrapper: `shared.applicable_items` takes its four inputs
     explicitly (engine.py's original signature); here they all live on one
     `EvalContext`."""
@@ -163,7 +167,11 @@ def _row_version(row: dict) -> int | None:
     afterward so a LATER write in the same transition (e.g. `_write_state`
     after an effect's own instance write) uses the current version, not a
     stale one from context-assembly time."""
-    raw = row.get("_version")
+    return _as_version(row.get("_version"))
+
+
+def _as_version(raw: Any) -> int | None:
+    """`_version` as an int, tolerating DataCore's stringified scalars."""
     try:
         return int(raw) if raw not in (None, "") else None
     except (TypeError, ValueError):
@@ -187,8 +195,8 @@ def _parse_json(raw: Any) -> dict:
 
 def _guard_all_blocking_items_complete(ctx: EvalContext, params: dict) -> bool:
     items = _applicable_items(ctx)
-    blocking = [i for i in items if as_bool(i.get("blocking"))]
-    return all(i.get("status") in ITEM_DONE_STATUSES for i in blocking)
+    blocking = [i for i in items if i.blocking]
+    return all(i.status in ITEM_DONE_STATUSES for i in blocking)
 
 
 def _guard_items_in_status(ctx: EvalContext, params: dict) -> bool:
@@ -218,10 +226,10 @@ def _guard_items_in_status(ctx: EvalContext, params: dict) -> bool:
     items = _applicable_items(ctx)
     if step_ids:
         step_id_set = set(step_ids)
-        items = [i for i in items if i.get("step_id") in step_id_set]
+        items = [i for i in items if i.step_id in step_id_set]
     if quantifier == "any":
-        return any(i.get("status") in statuses for i in items)
-    return all(i.get("status") in statuses for i in items)
+        return any(i.status in statuses for i in items)
+    return all(i.status in statuses for i in items)
 
 
 def _guard_capacity_available(ctx: EvalContext, params: dict) -> bool:
@@ -576,9 +584,9 @@ def _effect_issue_link(ctx: EvalContext, params: dict) -> None:
     ctx.issued_link = make_link_token(ctx.tenant_id, ctx.instance["entity_id"], token_version)
 
 
-def _due_days_for_item(step: StepDef, item: dict) -> Any:
+def _due_days_for_item(step: StepDef, item: WorkflowItem) -> Any:
     for doc in step.config.get("docs", []) or []:
-        if doc.get("name", "") == item.get("title"):
+        if doc.get("name", "") == item.title:
             return doc.get("due_days_after_state")
     return None
 
@@ -587,9 +595,9 @@ def _effect_start_due_clocks(ctx: EvalContext, params: dict) -> None:
     step_ids = set(params.get("step_ids") or [])
     steps_by_id = {s.step_id: s for s in ctx.definition["steps"]}
     for item in ctx.items:
-        if item.get("step_id") not in step_ids or item.get("due_at"):
+        if item.step_id not in step_ids or item.due_at:
             continue
-        step = steps_by_id.get(item.get("step_id"))
+        step = steps_by_id.get(item.step_id)
         if step is None or step.type != "documents":
             continue
         due_days = _due_days_for_item(step, item)
@@ -600,13 +608,17 @@ def _effect_start_due_clocks(ctx: EvalContext, params: dict) -> None:
         except (TypeError, ValueError):
             continue
         due_at = (ctx.now + timedelta(days=days)).isoformat()
-        base = entity_base_data(item)
+        base = entity_base_data(item.raw)
         base["due_at"] = due_at
-        updated = dc.dc_update(ctx.tenant_id, "workflow_item", item["entity_id"], base, ctx.token,
-                               expected_version=_row_version(item))
-        item["due_at"] = due_at
+        updated = dc.dc_update(ctx.tenant_id, "workflow_item", item.entity_id, base, ctx.token,
+                               expected_version=item.version)
+        # In place, so later guards/effects in the SAME action see the new
+        # due_at and the refreshed version without a re-fetch.
+        item.due_at = due_at
+        item.raw["due_at"] = due_at
         if "_version" in updated:
-            item["_version"] = updated["_version"]
+            item.version = _as_version(updated["_version"])
+            item.raw["_version"] = updated["_version"]
 
 
 def _effect_set_context(ctx: EvalContext, params: dict) -> None:
