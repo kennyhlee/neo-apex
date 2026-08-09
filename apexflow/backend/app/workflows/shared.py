@@ -26,6 +26,7 @@ told to import these from `engine` — existing `from app.workflows.engine
 import is_family_actor` / `engine.applicable_items(...)` call sites keep
 working unchanged.
 """
+from enum import StrEnum
 from typing import Any
 
 from app.workflows.conditions import evaluate_condition
@@ -36,9 +37,29 @@ from app.workflows.schema import StepDef
 # the STRING "true"/"false", which is truthy in bare Python).
 _TRUTHY_STRINGS = {"true", "1", "yes"}
 
+
+class ItemStatus(StrEnum):
+    """The closed vocabulary of `workflow_item.status`.
+
+    StrEnum (not Enum) is load-bearing: DataCore returns flattened rows whose
+    status arrives as a plain string, and authored `items_in_status` guards
+    carry plain strings too. Members compare and hash equal to their values,
+    so every existing comparison keeps working — never write `.value` at a
+    comparison site, and never `str()`-wrap for equality.
+    """
+
+    NOT_STARTED = "not_started"
+    SUBMITTED = "submitted"
+    VERIFIED = "verified"
+    WAIVED = "waived"
+    REJECTED = "rejected"
+
+
 # Statuses treated as "done" for blocking-completeness checks (mirrors
-# enrollx's ITEM_DONE_STATUSES).
-ITEM_DONE_STATUSES = frozenset({"submitted", "verified", "waived"})
+# enrollx's ITEM_DONE_STATUSES). Derived from the enum, never re-spelled.
+ITEM_DONE_STATUSES = frozenset(
+    {ItemStatus.SUBMITTED, ItemStatus.VERIFIED, ItemStatus.WAIVED}
+)
 
 # Flattened-row columns that are never part of base_data.
 SYSTEM_COLS = {"entity_id", "entity_type", "base_data", "custom_fields", "vector", "_tenant"}

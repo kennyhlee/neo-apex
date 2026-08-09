@@ -35,7 +35,13 @@ from fastapi import HTTPException
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
 from app.workflows.schema import ENGINE_OWNED_FIELDS, SectionDef, StepDef
-from app.workflows.shared import ITEM_DONE_STATUSES, applicable_items, as_bool, is_family_actor
+from app.workflows.shared import (
+    ITEM_DONE_STATUSES,
+    ItemStatus,
+    applicable_items,
+    as_bool,
+    is_family_actor,
+)
 from app.workflows.validate import definition_health
 
 # `is_family_actor`, `ITEM_DONE_STATUSES`, and `applicable_items` now live in
@@ -61,7 +67,15 @@ REVIEW_DEFAULTS: dict[str, str] = {"form": "auto", "documents": "staff", "messag
 # confirmed/waived item back to submitted/verified (coordinator review
 # finding, Critical: a second complete_item call on a verified item used to
 # do exactly that with no guard at all).
-COMPLETABLE_STATUSES = frozenset({"not_started", "in_progress", "submitted", "rejected"})
+COMPLETABLE_STATUSES = frozenset(
+    {ItemStatus.NOT_STARTED, ItemStatus.SUBMITTED, ItemStatus.REJECTED}
+)
+
+# Source statuses `verify_item` may act from. `submitted` is the only one:
+# an item reaches staff review by being completed, and `verified`/`waived`/
+# `rejected`/`not_started` are all either terminal-for-verify or not yet
+# reviewable.
+VERIFIABLE_STATUSES = frozenset({ItemStatus.SUBMITTED})
 
 _EMPTY_VALUES = (None, "", [], {})
 
@@ -498,7 +512,7 @@ def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor
     activity either way.
 
     Source-status guard: only callable from `COMPLETABLE_STATUSES`
-    (`not_started`/`in_progress`/`submitted`/`rejected`) -> 409 otherwise.
+    (`not_started`/`submitted`/`rejected`) -> 409 otherwise.
     Re-completing a `submitted` item is idempotent-ok (re-answering the same
     form and resubmitting), and completing a `rejected` item is the resubmit
     path after staff sends it back. `verified`/`waived` are terminal from
@@ -547,17 +561,17 @@ def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor
 
 def verify_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: str, *,
                  token: str | None = None, now: datetime | None = None) -> dict:
-    """Staff-only (403 for a family actor). Valid from `submitted` or
-    `in_progress` only -> 409 `{"error": ..., "allowed": [...]}` otherwise
-    (spec §4 authority matrix: "verified means confirmed")."""
+    """Staff-only (403 for a family actor). Valid from `submitted` only ->
+    409 `{"error": ..., "allowed": [...]}` otherwise (spec §4 authority
+    matrix: "verified means confirmed")."""
     now = _now(now)
     _require_staff_actor(actor)
     item = _require_item(tenant_id, instance_row, item_entity_id, token)
-    current = item.get("status", "not_started")
-    if current not in ("submitted", "in_progress"):
+    current = item.get("status", ItemStatus.NOT_STARTED)
+    if current not in VERIFIABLE_STATUSES:
         raise HTTPException(409, {
             "error": f"cannot verify item from status {current!r}",
-            "allowed": ["submitted", "in_progress"],
+            "allowed": sorted(VERIFIABLE_STATUSES),
         })
     return _update_item(tenant_id, instance_row, item, {"status": "verified"}, actor, token, now)
 
