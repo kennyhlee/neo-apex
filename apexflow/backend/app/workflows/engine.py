@@ -182,7 +182,7 @@ def _create_item(tenant_id: str, instance_entity_id: str, fields: dict, token: s
         "item_id": item_id,
         "workflow_item_id": item_id,
         "instance_id": instance_entity_id,
-        "status": "not_started",
+        "status": ItemStatus.NOT_STARTED,
         **fields,
     }
     return dc.dc_create(tenant_id, "workflow_item", base, token)
@@ -551,7 +551,9 @@ def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor
     # message-ack: no further validation. Non-documents kinds ignore payload_ref entirely.
 
     effective_review = step.review or REVIEW_DEFAULTS[step.type]
-    changes["status"] = "verified" if effective_review == "auto" else "submitted"
+    changes["status"] = (
+        ItemStatus.VERIFIED if effective_review == "auto" else ItemStatus.SUBMITTED
+    )
 
     return _update_item(tenant_id, instance_row, item, changes, actor, token, now)
 
@@ -573,7 +575,7 @@ def verify_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: 
             "error": f"cannot verify item from status {current!r}",
             "allowed": sorted(VERIFIABLE_STATUSES),
         })
-    return _update_item(tenant_id, instance_row, item, {"status": "verified"}, actor, token, now)
+    return _update_item(tenant_id, instance_row, item, {"status": ItemStatus.VERIFIED}, actor, token, now)
 
 
 def reject_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: str, *,
@@ -583,7 +585,7 @@ def reject_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: 
     now = _now(now)
     _require_staff_actor(actor)
     item = _require_item(tenant_id, instance_row, item_entity_id, token)
-    return _update_item(tenant_id, instance_row, item, {"status": "rejected"}, actor, token, now)
+    return _update_item(tenant_id, instance_row, item, {"status": ItemStatus.REJECTED}, actor, token, now)
 
 
 def waive_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: str, *,
@@ -597,7 +599,7 @@ def waive_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: s
     item = _require_item(tenant_id, instance_row, item_entity_id, token)
     if item.get("status") == "verified":
         raise HTTPException(409, {"error": "cannot waive an already-verified item"})
-    return _update_item(tenant_id, instance_row, item, {"status": "waived"}, actor, token, now)
+    return _update_item(tenant_id, instance_row, item, {"status": ItemStatus.WAIVED}, actor, token, now)
 
 
 # --- applicability (show_if, dynamic — items are never mutated) ------------

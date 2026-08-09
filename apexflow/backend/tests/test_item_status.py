@@ -6,6 +6,9 @@ five values, `in_progress` is gone (Plan 1 follow-up #23), the derived sets
 are derived rather than re-spelled, and `StrEnum` semantics hold so a raw
 DataCore string still compares and hashes equal to its member.
 """
+import inspect
+
+from app.workflows import engine
 from app.workflows.engine import COMPLETABLE_STATUSES
 from app.workflows.shared import ITEM_DONE_STATUSES, ItemStatus
 
@@ -36,3 +39,15 @@ def test_derived_sets():
     assert COMPLETABLE_STATUSES == frozenset(
         {ItemStatus.NOT_STARTED, ItemStatus.SUBMITTED, ItemStatus.REJECTED}
     )
+
+
+def test_engine_writes_no_bare_status_literals():
+    """Every status the engine assigns comes from ItemStatus, so a typo is an
+    AttributeError at import rather than a silently wrong row."""
+    src = inspect.getsource(engine)
+    for literal in ('"not_started"', '"submitted"', '"verified"',
+                    '"waived"', '"rejected"'):
+        assert f'"status": {literal}' not in src, (
+            f"engine.py still writes a bare status literal {literal}"
+        )
+        assert f'changes["status"] = {literal}' not in src
