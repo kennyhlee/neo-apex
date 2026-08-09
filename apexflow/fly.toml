@@ -62,6 +62,18 @@ primary_region = "sjc"
 #
 # Auto-stop is set here too — without it, this service would keep the
 # machine warm even when [http_service] above asks for scale-to-zero.
+#
+# GOTCHA (hit on the 2026-08-08 first bring-up): because this app declares
+# BOTH [http_service] and a raw [[services]] block, Fly does NOT auto-allocate
+# public IPs on first deploy — familyhub-api, which has only [http_service],
+# does. Symptom: machines started and health checks passing, but `fly ips
+# list` empty and every external request fails to connect. One-time fix per
+# app, matching papermite-api's allocation set:
+#   fly ips allocate-v6 -a apexflow-api
+#   fly ips allocate-v4 --shared -a apexflow-api
+#   fly ips allocate-v6 --private -a apexflow-api   # flycast
+# (DNS for the new name can take a minute; a local negative-cache entry may
+# outlive it — verify with `dig @1.1.1.1` before believing a resolve error.)
 [[services]]
   protocol = "tcp"
   internal_port = 5910

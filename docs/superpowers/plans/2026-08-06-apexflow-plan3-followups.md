@@ -62,25 +62,36 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
 2. **[Transferred, unchanged] Document-authorization seam never exercised
    end-to-end.** `DATACORE_R2_*` still absent; Plan 3 built NEW upload
    surfaces that extend the deferred manual checklist:
-   - [ ] Staff upload via admindash proxy (`POST /api/workflows/{tenant}/documents`
+   - [x] Staff upload via admindash proxy (`POST /api/workflows/{tenant}/documents`
          → apexflow `/api/documents/{tenant}`) — presign → PUT → then
          `complete_item` with `payload_ref`; confirm the engine's
          `payload_ref` validation (`payload_ref_invalid` on cross-instance
          ids) against real uploads, and `uploaded_by` = staff user_id.
-   - [ ] Family upload via `POST /api/instance/{token}/documents` — confirm
+         **DONE live 2026-08-08**: full AdminDash browser walk on
+         AAC-WI260015 — StaffEntryPage upload → real R2 PUT →
+         `complete_item`; item `submitted`, `payload_ref` AAC-DC260007,
+         `uploaded_by` u-001 (DataCore-verified).
+   - [x] Family upload via `POST /api/instance/{token}/documents` — confirm
          server-DERIVED `sensitive` (Task 4) lands on the document row
          (client-supplied value ignored), `uploaded_by` = `family:{eid}`.
-   - [ ] The drawer's document download link via the url proxy.
+         **DONE live 2026-08-08**: FamilyHub runtime browser upload on
+         AAC-WI260013 — `sensitive: true` server-derived,
+         `uploaded_by family:cff5de17fb4b`, `payload_ref` AAC-DC260004.
+         Plus live: staff-sensitive doc hidden from family LIST + 403 on
+         url; staff ad-hoc non-sensitive listed + 200; cross-instance
+         document_id → 404.
+   - [x] The drawer's document download link via the url proxy.
+         **DONE live 2026-08-08**: drawer Download opened the presigned R2
+         URL (real object served).
 
-   → **Hardening wave (2026-08-08) status**: still open — the three boxes
-   require real `DATACORE_R2_*` credentials, and R2 has never been enabled
-   on the Cloudflare account (the enable step is a card-on-file transaction
-   requiring operator consent; wave blocked there). Code-side prerequisites
-   all landed and are unit/live-tested short of the R2 PUT itself: item_id
-   guard (`f844a8d`), documents-LIST facade (`0846b21`/`4016b7b`),
-   server-derived `sensitive`/`uploaded_by` (Plan 3), cross-instance 404 +
-   sensitive-hiding (tested at `test_internal_api.py:518,640`). Resume at
-   plan `2026-08-06-hardening-wave.md` Tasks L1–L2 once R2 exists.
+   → **CLOSED by hardening wave (2026-08-08)**: R2 enabled on the
+   Cloudflare account (operator-approved), bucket `neoapex-documents` +
+   scoped API token created, `DATACORE_R2_*` in `~/.zshrc`. The live gate
+   caught one real provisioning defect: the bucket had NO CORS policy, so
+   browser PUTs failed until a CORS rule (origins 5620/5600 +
+   familyhub/admin.floatify.com; GET/PUT; content-type) was added — now
+   part of the bucket config. Remember the 20 MB bucket-level object cap
+   (deployment follow-ups) is still unset.
 3. **[Transferred] Referrer-Policy/log scrubbing for token URLs** — still
    absent from familyhub/apexflow backends; unchanged risk.
    → **CLOSED by hardening wave (2026-08-08)**: `013fbbd` + `6f5ab9e` —
