@@ -319,6 +319,13 @@ jobs:
           cache: 'npm'
           cache-dependency-path: admindash/frontend/package-lock.json
 
+      # See the apexflow frontend job for why flow-runtime's own deps are needed.
+      # admindash gained this dep with Plan 3 (staff entry), after its last
+      # release — so its next deploy would have hit the same TS2307 failure.
+      - name: Install shared flow-runtime deps
+        working-directory: flow-runtime
+        run: npm ci
+
       - name: Install dependencies
         working-directory: admindash/frontend
         run: npm ci
@@ -354,6 +361,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apexflow/frontend/package-lock.json
 
+      # `@neoapex/flow-runtime` is a `file:` dep that npm symlinks rather than
+      # copies, and its `main`/`types` point at raw TS sources. `tsc -b` therefore
+      # type-checks those sources resolved at their real path, where `react` must
+      # resolve from flow-runtime's OWN node_modules. Without this step the build
+      # fails with TS2307 "Cannot find module 'react'".
+      - name: Install shared flow-runtime deps
+        working-directory: flow-runtime
+        run: npm ci
+
       - name: Install dependencies
         working-directory: apexflow/frontend
         run: npm ci
@@ -388,6 +404,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: familyhub/frontend/package-lock.json
+
+      # See the apexflow frontend job for why flow-runtime's own deps are needed.
+      - name: Install shared flow-runtime deps
+        working-directory: flow-runtime
+        run: npm ci
 
       - name: Install dependencies
         working-directory: familyhub/frontend
