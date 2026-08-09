@@ -50,6 +50,15 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
 1. **[Transferred, unchanged] `TRUST_ALL_IPS` must be unset in production;
    familyhub/apexflow behind Cloudflare.** Unchanged from Plans 1–2;
    `start-services.sh` still sets it for local dev.
+   → **MOSTLY CLOSED by hardening wave (2026-08-08)**: production boot now
+   REFUSES `TRUST_ALL_IPS=1` in both services (`6decc2d`, live failed-boot
+   demonstrated); apexflow gained the fifth allowlist copy with `/health`
+   exempt (`fc485e1`); absence proven across all four deployed Fly apps
+   (`fly secrets list`) and all fly.toml/deploy.yml. Fly + deploy.yml
+   entries for apexflow-api/familyhub-api exist (`9e98354`); the actual
+   Fly app creation + Cloudflare DNS fronting remains pending (blocked on
+   operator: permission classifier denied `fly apps create`; CF dashboard
+   login needed). See wave rulings section below.
 2. **[Transferred, unchanged] Document-authorization seam never exercised
    end-to-end.** `DATACORE_R2_*` still absent; Plan 3 built NEW upload
    surfaces that extend the deferred manual checklist:
@@ -62,8 +71,25 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
          server-DERIVED `sensitive` (Task 4) lands on the document row
          (client-supplied value ignored), `uploaded_by` = `family:{eid}`.
    - [ ] The drawer's document download link via the url proxy.
+
+   → **Hardening wave (2026-08-08) status**: still open — the three boxes
+   require real `DATACORE_R2_*` credentials, and R2 has never been enabled
+   on the Cloudflare account (the enable step is a card-on-file transaction
+   requiring operator consent; wave blocked there). Code-side prerequisites
+   all landed and are unit/live-tested short of the R2 PUT itself: item_id
+   guard (`f844a8d`), documents-LIST facade (`0846b21`/`4016b7b`),
+   server-derived `sensitive`/`uploaded_by` (Plan 3), cross-instance 404 +
+   sensitive-hiding (tested at `test_internal_api.py:518,640`). Resume at
+   plan `2026-08-06-hardening-wave.md` Tasks L1–L2 once R2 exists.
 3. **[Transferred] Referrer-Policy/log scrubbing for token URLs** — still
    absent from familyhub/apexflow backends; unchanged risk.
+   → **CLOSED by hardening wave (2026-08-08)**: `013fbbd` + `6f5ab9e` —
+   `Referrer-Policy: no-referrer` on every response (twin
+   `security_headers.py`, outermost middleware, live-curled on 200/404/405),
+   and `uvicorn.access` token scrubbing with a token-shape heuristic
+   (`request-link` stays unscrubbed). Live-proven: token routes hit on a
+   real instance; both services' `.logs/*.log` show `[token]`, zero raw
+   token occurrences.
 
 ## New items from this plan
 
@@ -73,6 +99,11 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
    "already uploaded" sublist is always empty (upload itself works; HubPage
    shows item status instead). Small facade+frontend addition; bundle with
    the R2 manual-verification pass (item 2).
+   → **CLOSED (code) by hardening wave (2026-08-08)**: `0846b21` (facade
+   route, relays the `{"documents": [...]}` wrapper) + `4016b7b`
+   (`listDocuments` + RegisterPage wiring; `documents={[]}` gone). Live
+   route returns 200 on a real token; the rendered-rows-with-a-real-upload
+   check rides with item 2's R2 pass.
 5. **DataCore `put_entity` has a transient no-active-row read window.** The
    archive-then-insert sequence (`store.py:344-378`) deletes the active row
    before inserting its replacement; a concurrent reader can see ZERO
@@ -81,6 +112,13 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
    Pre-existing property, now with a written repro. Consider insert-first /
    swap ordering or a small read retry in clients; matters more once
    multi-user channels are real.
+   → **CLOSED by hardening wave (2026-08-08)**: DECIDED as insert-before-
+   archive (embed → insert new active → archive old, CAS unmoved) —
+   `0cdcd63`; the gate's live repro is now a deterministic blocking-embedder
+   test, and `get_active_entity` + apexflow `datacore.get_entity` +
+   admindash `_get_lead` all pick max-`_version` during the residual
+   two-active window (`f614228`). Residuals recorded in task-6-report and
+   the wave rulings below.
 6. **`registration_application.school_year` lands null on committed
    applications.** The template's application section includes `school_year`
    as an ordinary optional form field; nobody fills it, and the engine does
@@ -133,11 +171,17 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
       (payload_ref and sensitivity both resolve against the instance's own
       data), but document-by-item grouping can be polluted; add a cheap
       `ctx.items` membership guard.
+      → **CLOSED by hardening wave (2026-08-08)**: `f844a8d` — non-null
+      foreign `item_id` now 400s; null (ad-hoc) stays allowed.
     - Family resume converts drafts against the PUBLISHED bundle's steps
       while `save_draft` validates against the PINNED steps — a mid-flight
       republish that renames/removes a section makes an old instance's
       autosave 400 persistently. The pinned steps are already in the
       instance bundle; switch the converter to them.
+      → **CLOSED by hardening wave (2026-08-08)**: `aa05409` — RegisterPage
+      hydration + autosave convert against `instance.definition.steps`
+      (pinned); backend regression test builds a real two-version lineage
+      (republish-rename, old section ids → 200; renamed ids still 400).
     - `test_workflows_proxy.py` uses `channel: "staff_assisted"` — not a
       real vocabulary value (`Literal["staff","family"]`); harmless under
       respx but documents a wire contract real apexflow would 422.
@@ -155,6 +199,10 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
     open** (Plan 2 item 15's admindash half) — Plan 3 deliberately added
     no new instances (new proxies are plain `def` or threadpool-offloaded),
     but the pre-existing two routes are still unfixed. Standalone ticket.
+    → **CLOSED by hardening wave (2026-08-08)**: `5027bab` — awaited
+    `httpx.AsyncClient` in both routes, plus the two apexflow regression
+    shapes (`..._unreachable_502`, `..._not_serialized_by_the_proxy`)
+    ported into admindash's suite (194→198).
 
 ## Process notes
 
@@ -169,3 +217,46 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
     `section_answers`; `payload_ref` having no write path) — both confirmed
     by the reviewer and fixed by plan amendment (Tasks 3/7). Map-first
     planning continues to pay for itself.
+
+## Hardening wave (2026-08-08) — parked rulings
+
+Recorded by the wave (branch `feat/hardening-wave`, plan
+`2026-08-06-hardening-wave.md`); each is a deliberate non-fix with a reason,
+not an oversight. Final whole-branch review examined and did not challenge
+any of them.
+
+1. **Staff `get_document_url` is tenant-scoped, not instance-scoped**
+   (`apexflow/backend/app/api/documents.py:132-141`) — deliberate: any
+   staff member may service any instance in their tenant. Asymmetric with
+   the family rule by design.
+2. **Staff `create_document` doesn't validate `instance_id`/`item_id`
+   membership** (acknowledged in its docstring) — staff is trusted within
+   tenant; revisit if staff roles narrow.
+3. **`derived_document_sensitive` fails open to `False` on unresolvable
+   items** (`shared.py`) — with the token-route item_id guard (`f844a8d`)
+   the family path can no longer reach it with a foreign id; the staff
+   no-item_id path remains fail-open by design (ad-hoc uploads).
+4. **Archive-then-insert windows remain in `put_model`, `put_global`, and
+   the unguarded search-then-delete shape in `archive_entity` /
+   `restore_entity` / `rollback_by_change_id`** — same class as the
+   put_entity window the wave closed, far lower concurrency exposure (rare
+   admin ops). A future wave item if multi-admin editing becomes real.
+   Related: `_trim_entity_versions` deletes by `_version`, not row
+   identity (harmless at configured limits).
+5. **Three `rows[0]` definition readers tolerate the two-active window
+   arbitrarily**: `machine.py:223`, `engine.py:260`
+   (`_pinned_definition_row`), `definitions.py:97`
+   (`get_published_definition`) — same low-exposure class as ruling 4
+   (named per final-review recommendation).
+6. **apexflow/familyhub FRONTEND deploys (Workers, `_headers`, wrangler)**
+   — out of wave scope; the goal named backends only.
+7. **RegisterPage still RENDERS from the published bundle while
+   CONVERTING against pinned steps** — render-drift on republish is a UX
+   question for a future plan.
+8. **`_row_version` duplicated in admindash `leads.py`** (apexflow's copy
+   is forced by a circular import; admindash's is not) — cosmetic.
+9. **admindash/fly.toml:11-14 comment documents unprefixed
+   `ENVIRONMENT`/`CORS_ALLOWED_ORIGINS` secret names** — the DEPLOYED
+   secrets are correctly `ADMINDASH_`-prefixed (verified live via
+   `fly secrets list -a admindash-api`, 2026-08-08), so this is a comment
+   bug only; fix the comment next time that file is touched.
