@@ -48,7 +48,7 @@ family-facing client receives all of it.
 | Model mutability | **Mutable, not frozen.** `primitives.py:607-609` deliberately mutates items in place so later guards/effects in the SAME action observe `due_at`/`_version` without a re-fetch. That invariant is preserved and pinned by a test. |
 | Reads | **Typed** via a parse boundary in `build_eval_context`. |
 | Wire payload | **Narrowed** to real item fields. |
-| Frontend sharing | **Generated JSON + drift test**, not a runtime API call. |
+| Frontend sharing | **Generated TS module + drift test**, not a runtime API call. (Was "generated JSON" — see the amendment in §5.) |
 
 ## The vocabulary
 
@@ -126,16 +126,40 @@ that is currently invisible.
 
 ### 5. Generated contract for TypeScript
 
-A committed JSON artifact generated from `ItemStatus`, imported by TS at build
-time the way `services.json` already is. A Python test asserts the committed
-file matches the enum, so the two cannot diverge without CI failing.
+A committed artifact generated from `ItemStatus`, consumed by TS at build time.
+A Python test asserts the committed file matches the enum, so the two cannot
+diverge without CI failing.
 
-Python remains authoritative and never reads the JSON at runtime: `services.json`
-is **not** copied into any Fly image, and the engine's correctness must not
-depend on a file that can be absent.
+Python remains authoritative and never reads the generated file at runtime: the
+engine's correctness must not depend on an artifact that can be absent from a
+Fly image.
 
 Fixing `flow-runtime/src/types.ts:118`'s stale `in_progress` comment is part of
 this step.
+
+> **AMENDMENT (implementation, `feat/item-status-typing`).** This section
+> originally specified a **root-level JSON** imported by TS "the way
+> `services.json` is." The implementation instead emits a **TypeScript module
+> inside `flow-runtime`** — `flow-runtime/src/itemStatus.generated.ts`, written
+> by `apexflow/backend/scripts/generate_item_status_ts.py`.
+>
+> Reason: `flow-runtime` is wired into each frontend as a symlinked npm `file:`
+> dependency, and a root-level JSON would have to be imported across that
+> package boundary. That is the exact resolution path that already broke the CI
+> frontend build once (`TS2307: Cannot find module 'react'`, fixed by
+> installing `flow-runtime`'s own deps — see the `flow-runtime` CI dep note in
+> `docs/deployment/follow-ups.md`), and it would additionally need a Vite
+> `fs.allow` entry in three frontends. A generated `.ts` inside the package is
+> a plain intra-package import with none of that, and
+> `flow-runtime/src/types.ts` was already the canonical home of the TS
+> `ItemStatus` union and `DONE_ITEM_STATUSES`. Same single-source property,
+> strictly less resolution risk.
+>
+> The generated module exports `ItemStatus` (union type), `ITEM_STATUSES`, and
+> `ITEM_DONE_STATUSES`; `types.ts` re-exports all three (keeping
+> `DONE_ITEM_STATUSES` as a deprecated alias so existing imports resolve). The
+> drift test is `apexflow/backend/tests/test_item_status.py::test_generated_ts_matches_the_enum`,
+> verified to fail on a deliberately-added sixth enum member.
 
 ## Consumer contract (must not break)
 
@@ -167,7 +191,7 @@ Measured, not assumed:
 - Same-action mutation visibility regression test.
 - Wire-shape test asserting the serialized item carries exactly the contract
   fields.
-- Drift test: committed JSON matches `ItemStatus`.
+- Drift test: the committed generated TS module matches `ItemStatus`.
 - Baselines hold: apexflow 510, familyhub 89, admindash 201, datacore 354,
   admindash vitest 92.
 

@@ -350,6 +350,24 @@ convention, not fixed in this wave.
     future item-authority change needs to actually use it, or it should be
     dropped from the declared set — a dead-but-declared status is a minor
     trap for a future guard author who assumes it's reachable.
+
+    **CLOSED** — `45c60c6` ("feat(apexflow): ItemStatus StrEnum as the single
+    status vocabulary; drop in_progress"), on branch
+    `feat/item-status-typing`. `in_progress` was dropped from
+    `COMPLETABLE_STATUSES` (which is now derived from the new
+    `ItemStatus` StrEnum rather than re-spelled), from `verify_item`'s
+    source-status guard (now `VERIFIABLE_STATUSES = {SUBMITTED}`), and from
+    two `engine.py` docstrings. `5ddc03c` removed it from the four
+    TypeScript sites — `flow-runtime/src/types.ts` (the union and the
+    `WorkflowItemView.status` comment), `familyhub HubPage.tsx`
+    (`ITEM_TONE`, `ALL_ITEM_STATUSES`, `OUTSTANDING`), and `admindash
+    workflowData.ts::itemActionVisibility` — plus the two now-dead i18n keys
+    (`flow-runtime/src/i18n.ts`, `familyhub .../translations.ts`). The
+    vocabulary now has exactly one spelling, in
+    `apexflow/backend/app/workflows/shared.py::ItemStatus`; the TS side is
+    GENERATED from it (`flow-runtime/src/itemStatus.generated.ts`) with a
+    drift test that fails if the two disagree. See
+    `docs/superpowers/plans/2026-08-09-workflow-item-status-typing.md`.
 24. **Process lesson: interface maps must also pin cross-service
     CONFIGURATION facts (ports/URLs), not just code bindings.** The
     6000-vs-5620 `familyhub_base_url` bug (item 1 above) came from the
