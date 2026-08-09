@@ -32,6 +32,7 @@ from app.workflows.schema import (
     SectionDef,
     StepDef,
 )
+from app.workflows.shared import ItemStatus
 
 # Task 7 landed the real guard/effect primitive registries in
 # app.workflows.primitives — these two constants are now DERIVED from the
@@ -322,6 +323,20 @@ def _guard_params_items_in_status(params: dict) -> list[str]:
                 f"'items_in_status' param 'status' must be a string or list of strings, "
                 f"got {type(status).__name__}"
             )
+        if not errors:
+            # Only once the shape checks pass, so a malformed param is not
+            # reported twice. An authored status outside the vocabulary can
+            # never match a stored row, so the guard would silently never
+            # fire — catch it at publish time instead (this also flows into
+            # `definition_health`, so a stored definition carrying one reads
+            # as unhealthy).
+            values = status if isinstance(status, list) else [status]
+            unknown = [v for v in values if isinstance(v, str) and v not in set(ItemStatus)]
+            if unknown:
+                errors.append(
+                    f"'items_in_status' param 'status' has unknown value(s) "
+                    f"{sorted(unknown)}; valid: {sorted(s.value for s in ItemStatus)}"
+                )
     quantifier = params.get("quantifier")
     if quantifier is not None and quantifier not in ("all", "any"):
         errors.append(

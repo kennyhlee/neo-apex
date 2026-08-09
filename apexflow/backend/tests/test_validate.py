@@ -27,7 +27,11 @@ import copy
 import pytest
 
 from app.workflows.schema import MachineDef, StepDef
-from app.workflows.validate import definition_health, validate_definition
+from app.workflows.validate import (
+    _guard_params_items_in_status,
+    definition_health,
+    validate_definition,
+)
 
 
 # --- Base fixture: one fully valid definition -------------------------------
@@ -761,3 +765,22 @@ def test_definition_health_broken_beats_stale_when_both_present():
             f["required"] = True
     machine, steps, models = _build(m, s, md)
     assert definition_health(machine, steps, models) == "broken"
+
+
+# --- items_in_status vocabulary validation ----------------------------------
+
+
+def test_items_in_status_rejects_unknown_status():
+    errors = _guard_params_items_in_status({"status": "verifyed"})
+    assert any("verifyed" in e for e in errors)
+
+
+def test_items_in_status_rejects_unknown_in_a_list():
+    errors = _guard_params_items_in_status({"status": ["submitted", "bogus"]})
+    assert any("bogus" in e for e in errors)
+
+
+def test_items_in_status_accepts_every_real_template_value():
+    """The enrollment template's actual guard params must still pass."""
+    for value in ("rejected", ["submitted", "verified"], ["verified", "waived"]):
+        assert _guard_params_items_in_status({"status": value}) == []
