@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { ITEM_STATUSES } from '@neoapex/flow-runtime';
 import {
   parseMachineStates,
   instancesByState,
@@ -13,6 +14,7 @@ import {
   settledSection,
   usableModels,
   asBool,
+  asItemStatus,
   toItemView,
   toDocumentView,
   type MachineStateView,
@@ -236,26 +238,38 @@ describe('actionButtonsFor', () => {
 });
 
 describe('itemActionVisibility', () => {
-  it('shows verify only for submitted/in_progress', () => {
+  it('shows verify only for submitted', () => {
     expect(itemActionVisibility('submitted').verify).toBe(true);
-    expect(itemActionVisibility('in_progress').verify).toBe(true);
-    expect(itemActionVisibility('not_started').verify).toBe(false);
-    expect(itemActionVisibility('verified').verify).toBe(false);
-    expect(itemActionVisibility('waived').verify).toBe(false);
-    expect(itemActionVisibility('rejected').verify).toBe(false);
+    for (const s of ITEM_STATUSES.filter((v) => v !== 'submitted')) {
+      expect(itemActionVisibility(s).verify).toBe(false);
+    }
   });
 
   it('shows waive unless already verified', () => {
     expect(itemActionVisibility('verified').waive).toBe(false);
-    for (const s of ['not_started', 'in_progress', 'submitted', 'rejected', 'waived']) {
+    for (const s of ITEM_STATUSES.filter((v) => v !== 'verified')) {
       expect(itemActionVisibility(s).waive).toBe(true);
     }
   });
 
   it('always shows reject', () => {
-    for (const s of ['not_started', 'in_progress', 'submitted', 'verified', 'rejected', 'waived']) {
+    for (const s of ITEM_STATUSES) {
       expect(itemActionVisibility(s).reject).toBe(true);
     }
+  });
+});
+
+describe('asItemStatus', () => {
+  it('passes every generated status through unchanged', () => {
+    for (const s of ITEM_STATUSES) {
+      expect(asItemStatus(s)).toBe(s);
+    }
+  });
+
+  it('falls back to not_started for a value outside the vocabulary', () => {
+    // `in_progress` was dropped from the vocabulary (Plan 1 follow-up #23)
+    expect(asItemStatus('in_progress')).toBe('not_started');
+    expect(asItemStatus(undefined)).toBe('not_started');
   });
 });
 

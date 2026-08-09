@@ -9,34 +9,34 @@ import {
   runAction,
   uploadDocumentFile,
 } from '../api/facade.ts';
-import { entityData, entityId, type EntityRecord, type InstanceBundle } from '../types/workflow.ts';
+import {
+  asItemStatus,
+  entityData,
+  entityId,
+  type EntityRecord,
+  type InstanceBundle,
+} from '../types/workflow.ts';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './HubPage.css';
 
 type Tone = 'info' | 'success' | 'warning' | 'danger';
 
+// Exhaustive by construction: `ItemStatus` is generated from apexflow's
+// StrEnum, so adding a status there fails this `Record` at compile time
+// rather than rendering a silently untoned badge.
 const ITEM_TONE: Record<ItemStatus, Tone> = {
   not_started: 'warning',
-  in_progress: 'warning',
   submitted: 'info',
   verified: 'success',
   rejected: 'danger',
   waived: 'info',
 };
 
-const ALL_ITEM_STATUSES: ItemStatus[] = [
-  'not_started', 'in_progress', 'submitted', 'verified', 'rejected', 'waived',
-];
-
 // Statuses where the PARENT still has to do something. `submitted` is
 // deliberately excluded -- the parent already acted (uploaded/filled the
 // form/acknowledged) and it is now with the school for review.
-const OUTSTANDING: ItemStatus[] = ['not_started', 'in_progress', 'rejected'];
+const OUTSTANDING: ItemStatus[] = ['not_started', 'rejected'];
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.heic,.docx';
-
-function asItemStatus(value: unknown): ItemStatus {
-  return ALL_ITEM_STATUSES.includes(value as ItemStatus) ? (value as ItemStatus) : 'not_started';
-}
 
 /**
  * DataCore stringifies every top-level field of a flattened row -- `"false"`

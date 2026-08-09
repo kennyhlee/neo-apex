@@ -50,7 +50,6 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Item statuses
     'itemStatus.not_started': 'Not started',
-    'itemStatus.in_progress': 'In progress',
     'itemStatus.submitted': 'Submitted',
     'itemStatus.verified': 'Verified',
     'itemStatus.rejected': 'Needs attention',
@@ -116,7 +115,6 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Item statuses
     'itemStatus.not_started': '未开始',
-    'itemStatus.in_progress': '进行中',
     'itemStatus.submitted': '已提交',
     'itemStatus.verified': '已核验',
     'itemStatus.rejected': '需重新处理',

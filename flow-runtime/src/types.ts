@@ -1,7 +1,14 @@
 // ---- Runtime data shapes (Plan 4) -----------------------------------------
 
-export type ItemStatus =
-  | 'not_started' | 'in_progress' | 'submitted' | 'verified' | 'rejected' | 'waived';
+// The status vocabulary is GENERATED from apexflow's `ItemStatus` StrEnum
+// (`apexflow/backend/app/workflows/shared.py`) -- see
+// `./itemStatus.generated.ts`. Re-exported here so every existing
+// `from '@neoapex/flow-runtime'` import keeps resolving, and so there is
+// still exactly one place a consumer needs to know about.
+import type { ItemStatus } from './itemStatus.generated';
+
+export type { ItemStatus };
+export { ITEM_STATUSES, ITEM_DONE_STATUSES } from './itemStatus.generated';
 
 /** One field inside a form block (same shape as an entity-model field). */
 export interface FlowField {
@@ -13,8 +20,13 @@ export interface FlowField {
   default?: unknown;
 }
 
-/** Item statuses that count as "done" for gating (spec §5). */
-export const DONE_ITEM_STATUSES: readonly ItemStatus[] = ['submitted', 'verified', 'waived'];
+/**
+ * Item statuses that count as "done" for gating (spec §5).
+ *
+ * @deprecated Import `ITEM_DONE_STATUSES` instead -- same values, generated
+ * from apexflow's `ITEM_DONE_STATUSES` rather than spelled here.
+ */
+export { ITEM_DONE_STATUSES as DONE_ITEM_STATUSES } from './itemStatus.generated';
 
 // ---- ApexFlow workflow types (Plan 2) --------------------------------------
 //
@@ -115,7 +127,7 @@ export interface WorkflowItemView {
   step_id: string;
   kind: 'form' | 'documents' | 'message-ack';
   title: string;
-  status: string;          // not_started | in_progress | submitted | verified | rejected | waived
+  status: ItemStatus;
   blocking: boolean;
 }
 

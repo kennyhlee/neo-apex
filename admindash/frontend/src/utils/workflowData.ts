@@ -1,4 +1,10 @@
-import type { InstanceDocumentView, ModelFieldSource, WorkflowItemView } from '@neoapex/flow-runtime';
+import {
+  ITEM_STATUSES,
+  type InstanceDocumentView,
+  type ItemStatus,
+  type ModelFieldSource,
+  type WorkflowItemView,
+} from '@neoapex/flow-runtime';
 
 /**
  * Pure logic for the AdminDash Workflows area — no network, no React, so it
@@ -207,18 +213,23 @@ export function actionButtonsFor(allowed: string[]): string[] {
 /**
  * Per-item staff-button visibility for one `workflow_item.status` value —
  * verbatim port of `engine.py`'s own source-status guards: `verify_item`
- * only accepts `submitted`/`in_progress` (`engine.py:557`); `waive_item`
- * 409s only when already `verified` (`engine.py:584`); `reject_item` has no
- * source-status restriction at all (`engine.py:567-572`'s docstring: "staff
- * may send an item back for correction from whatever state it's in").
+ * only accepts `submitted` (`engine.py`'s `VERIFIABLE_STATUSES`);
+ * `waive_item` 409s only when already `verified`; `reject_item` has no
+ * source-status restriction at all (its docstring: "staff may send an item
+ * back for correction from whatever state it's in").
+ *
+ * The status values compared here come from `ItemStatus`, generated from
+ * apexflow's StrEnum — `status` is deliberately still `string` because
+ * callers hand it straight from a flattened DataCore query row.
  */
 export function itemActionVisibility(
   status: string,
 ): { verify: boolean; reject: boolean; waive: boolean } {
+  const s = status as ItemStatus;
   return {
-    verify: status === 'submitted' || status === 'in_progress',
+    verify: s === 'submitted',
     reject: true,
-    waive: status !== 'verified',
+    waive: s !== 'verified',
   };
 }
 
@@ -305,9 +316,21 @@ export function toItemView(row: Record<string, unknown>): WorkflowItemView {
     step_id: String(row.step_id ?? ''),
     kind: (row.kind as WorkflowItemView['kind']) ?? 'form',
     title: String(row.title ?? ''),
-    status: String(row.status ?? 'not_started'),
+    status: asItemStatus(row.status),
     blocking: asBool(row.blocking),
   };
+}
+
+/**
+ * A flattened row's `status` column -> `ItemStatus`. Checked against the
+ * GENERATED vocabulary (`ITEM_STATUSES`, emitted from apexflow's `ItemStatus`
+ * StrEnum) rather than cast, so a value the backend vocabulary doesn't
+ * contain degrades to `not_started` instead of lying to the type system.
+ */
+export function asItemStatus(value: unknown): ItemStatus {
+  return ITEM_STATUSES.includes(value as ItemStatus)
+    ? (value as ItemStatus)
+    : 'not_started';
 }
 
 /**

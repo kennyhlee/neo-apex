@@ -24,6 +24,7 @@ import {
   uploadDocumentFile,
 } from '../api/facade.ts';
 import {
+  asItemStatus,
   entityData,
   entityId,
   type EntityRecord,
@@ -97,7 +98,7 @@ function toItemViews(rows: EntityRecord[]): WorkflowItemView[] {
       step_id: String(d.step_id ?? ''),
       kind: (d.kind as WorkflowItemView['kind']) ?? 'form',
       title: String(d.title ?? ''),
-      status: String(d.status ?? 'not_started'),
+      status: asItemStatus(d.status),
       blocking: asBool(d.blocking),
     };
   });

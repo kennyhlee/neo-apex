@@ -7,6 +7,8 @@ are derived rather than re-spelled, and `StrEnum` semantics hold so a raw
 DataCore string still compares and hashes equal to its member.
 """
 import inspect
+import re
+from pathlib import Path
 
 from app.workflows import engine
 from app.workflows.engine import COMPLETABLE_STATUSES
@@ -51,3 +53,29 @@ def test_engine_writes_no_bare_status_literals():
             f"engine.py still writes a bare status literal {literal}"
         )
         assert f'changes["status"] = {literal}' not in src
+
+
+def test_generated_ts_matches_the_enum():
+    """`flow-runtime/src/itemStatus.generated.ts` is generated from this enum
+    by `apexflow/backend/scripts/generate_item_status_ts.py` and committed.
+    This test is the drift alarm: change the enum without re-running the
+    generator and it fails."""
+    repo = Path(__file__).resolve().parents[3]
+    generated = (repo / "flow-runtime/src/itemStatus.generated.ts").read_text()
+    for s in ItemStatus:
+        assert f"'{s.value}'" in generated, f"{s.value} missing from generated TS"
+    assert "in_progress" not in generated
+    # every status the generated file declares is a real member, so a stale
+    # extra value is caught too
+    declared = set(re.findall(r"'([a-z_]+)'", generated))
+    assert declared == {s.value for s in ItemStatus}
+
+
+def test_generated_ts_done_statuses_match():
+    repo = Path(__file__).resolve().parents[3]
+    generated = (repo / "flow-runtime/src/itemStatus.generated.ts").read_text()
+    # split on "= [" so the `readonly ItemStatus[]` annotation's own bracket
+    # doesn't truncate the list
+    block = generated.split("ITEM_DONE_STATUSES")[1].split("= [")[1]
+    done = set(re.findall(r"'([a-z_]+)'", block.split("]")[0]))
+    assert done == {s.value for s in ITEM_DONE_STATUSES}

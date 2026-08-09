@@ -1,14 +1,22 @@
-import type { ModelFieldSource, WorkflowStepDef } from '@neoapex/flow-runtime';
+import { ITEM_STATUSES, type ItemStatus, type ModelFieldSource, type WorkflowStepDef } from '@neoapex/flow-runtime';
 
 // Re-exported rather than redeclared: flow-runtime's barrel already exports
 // these (`flow-runtime/src/types.ts` via `export * from './types'`), and
 // duplicating the literal unions here would let the two definitions drift.
-// `ItemStatus`'s vocabulary (not_started/in_progress/submitted/verified/
-// rejected/waived) is unchanged from the registration era -- apexflow's
-// `workflow_item.status` uses the exact same values (StepRenderer's own
-// `DONE_ITEM_STATUSES` constant is shared across both).
+// `ItemStatus` is GENERATED from apexflow's `ItemStatus` StrEnum
+// (`flow-runtime/src/itemStatus.generated.ts`), so this file -- and every
+// page below it -- never spells a status value.
 export type { ItemStatus, WorkflowStepDef, WorkflowItemView, InstanceDocumentView } from '@neoapex/flow-runtime';
 export type { ModelFieldSource };
+
+/**
+ * A flattened row's `status` column -> `ItemStatus`. Checked against the
+ * generated vocabulary rather than cast, so a value apexflow's enum doesn't
+ * contain degrades to `not_started` instead of lying to the type system.
+ */
+export function asItemStatus(value: unknown): ItemStatus {
+  return ITEM_STATUSES.includes(value as ItemStatus) ? (value as ItemStatus) : 'not_started';
+}
 
 /**
  * DataCore entities may arrive `base_data`-wrapped (the `{entity_id,
