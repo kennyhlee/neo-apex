@@ -338,9 +338,76 @@ jobs:
           command: deploy
           wranglerVersion: '4'
 
-  # NOTE: apexflow and familyhub are backends-only this wave — no frontend
-  # deploy jobs (Workers/wrangler) yet; parked per the hardening-wave exit
-  # gate rulings until their Cloudflare Worker projects are provisioned.
+  deploy-apexflow-frontend:
+    name: Deploy apexflow frontend (Cloudflare Workers)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'apexflow'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apexflow/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apexflow/frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: apexflow/frontend
+        env:
+          VITE_APEXFLOW_API_URL: https://api.apexflow.floatify.com
+        run: npm run build
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apexflow/frontend
+          command: deploy
+          wranglerVersion: '4'
+
+  deploy-familyhub-frontend:
+    name: Deploy familyhub frontend (Cloudflare Workers)
+    needs: parse-tag
+    if: needs.parse-tag.outputs.module == 'familyhub'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: familyhub/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: familyhub/frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: familyhub/frontend
+        env:
+          VITE_FAMILYHUB_API_URL: https://api.familyhub.floatify.com
+        run: npm run build
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: familyhub/frontend
+          command: deploy
+          wranglerVersion: '4'
+
   deploy-apexflow-api:
     name: Deploy apexflow-api (Fly.io)
     needs: parse-tag

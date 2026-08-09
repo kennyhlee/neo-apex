@@ -1,0 +1,24 @@
+// Cloudflare Workers config for the apexflow frontend (staff workflow designer).
+// See launchpad/frontend/wrangler.jsonc for the shared rationale.
+//
+// Unlike the three older frontends, the custom domain is declared HERE rather
+// than attached by hand in the dashboard: wrangler creates the hostname, its
+// DNS record and its TLS cert on deploy, so the mapping lives in version
+// control. `custom_domain: true` is hostname-scoped, which is what the
+// provisioning doc's "never use a wildcard Workers Route" warning requires —
+// api.apexflow.floatify.com stays unbound and proxies through to Fly.
+//
+// Standing this Worker up is also what makes Cloudflare issue the
+// `*.apexflow.floatify.com` edge cert that api.apexflow.floatify.com needs;
+// Universal SSL alone only covers one label deep. See docs/deployment/follow-ups.md.
+{
+  "name": "apexflow-frontend",
+  "compatibility_date": "2026-04-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    { "pattern": "apexflow.floatify.com", "custom_domain": true }
+  ]
+}

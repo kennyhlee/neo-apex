@@ -1,0 +1,15 @@
+// Cloudflare Workers config for the familyhub frontend (family-facing runtime).
+// See launchpad/frontend/wrangler.jsonc for the shared rationale and
+// apexflow/frontend/wrangler.jsonc for why the custom domain is declared here
+// rather than attached in the dashboard.
+{
+  "name": "familyhub-frontend",
+  "compatibility_date": "2026-04-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    { "pattern": "familyhub.floatify.com", "custom_domain": true }
+  ]
+}
