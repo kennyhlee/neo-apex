@@ -47,14 +47,12 @@ interface StaffEntryPageProps {
  *
  * Reuses Task 11's `workflowData.ts` SQL builders/`actionButtonsFor` and the
  * same `postQuery`-based refetch pattern `WorkflowInstanceDrawer` already
- * established, rather than trusting `createWorkflowInstance`'s own response
- * shape for the items list: `POST .../instances`'s `"items"` array is
- * `dc.dc_create`-ENVELOPE shaped (`{entity_id, entity_type, base_data}`,
- * per `apexflow/backend/app/api/instances.py`'s own doc comment — only
- * `"instance"` gets re-flattened before the response is built), so fetching
- * a fresh FLATTENED `itemsSql`/`documentsSql` row set immediately after
- * create avoids needing to handle two different item wire shapes on this
- * page.
+ * established, rather than reading `createWorkflowInstance`'s own response
+ * for the items list. `POST .../instances`'s `"items"` array is now the
+ * narrow `WorkflowItem` wire shape (flattened, exactly the item-status
+ * typing spec's field set) rather than the `dc.dc_create` envelope it used
+ * to be, but this page still refetches: it needs `documentsSql` rows in the
+ * same pass, and the refetch is what keeps it correct after later actions.
  */
 export default function StaffEntryPage({ tenant }: StaffEntryPageProps) {
   const { t } = useTranslation();

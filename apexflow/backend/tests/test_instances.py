@@ -385,3 +385,21 @@ def test_create_instance_route_no_advance_when_guard_unsatisfied(fake_dc, client
     )
     assert resp.status_code == 201
     assert resp.json()["instance"]["state"] == "draft"
+
+
+def test_create_instance_response_items_carry_only_contract_fields(client, fake_dc):
+    """Same wire contract as `/internal/instance-by-token` — the staff-
+    assisted entry path must not hand back a different item shape."""
+    _seed_published(fake_dc, definition_id="wd-route-wire")
+
+    resp = client.post(
+        f"/api/workflows/{TENANT}/definitions/wd-route-wire/instances",
+        json={"context": {"school_year": "2026-2027"}, "channel": "staff"},
+    )
+    assert resp.status_code == 201, resp.text
+    for item in resp.json()["items"]:
+        assert set(item) == {
+            "entity_id", "item_id", "instance_id", "step_id", "kind", "title",
+            "status", "blocking", "payload_ref", "due_at", "completed_by",
+            "_version",
+        }

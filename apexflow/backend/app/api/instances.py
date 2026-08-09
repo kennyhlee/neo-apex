@@ -85,10 +85,10 @@ def create_instance_route(tenant_id: str, definition_id: str, body: CreateInstan
     (`{"entity_id", "entity_type", "base_data": {...}}`) to the same
     flattened shape the actions route (`instance_action_route`, below)
     already returns, for one consistent contract across both routes.
-    `"items"` is left as `engine.create_instance` derived it — no seed
-    machine in this codebase has a creation-time system transition with an
-    item-mutating effect, and re-querying items unconditionally here would
-    be speculative scope beyond what triggered this fix.
+    `"items"` is serialized from `ctx.items` (`WorkflowItem`), so this route
+    and `/internal/instance-by-token` return the same narrow item contract
+    rather than two shapes — the create envelope this used to echo carried a
+    nested `base_data` the token route never emitted.
     """
     token = user.get("_token")
     actor = user.get("user_id", "staff")
@@ -102,6 +102,11 @@ def create_instance_route(tenant_id: str, definition_id: str, body: CreateInstan
     ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
     machine.run_system_transitions(ctx)
     result["instance"] = ctx.instance
+    # `engine.create_instance` returns dc_create ENVELOPES for items; `ctx`
+    # already holds the same rows parsed as `WorkflowItem` (and refreshed if
+    # a system transition mutated one), so respond with the same narrow item
+    # contract `/internal/instance-by-token` serves.
+    result["items"] = [i.model_dump(by_alias=True) for i in ctx.items]
     return result
 
 

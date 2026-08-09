@@ -346,7 +346,11 @@ def instance_by_token(token: str):
     ctx = machine.build_eval_context(tenant_id, instance_row, actor=_family_actor(instance_row))
     return {
         "instance": instance_row,
-        "items": ctx.items,
+        # Serialized explicitly (not left to FastAPI's encoder) so the
+        # wire contract is stated here: exactly the `WorkflowItem` field
+        # set, `_version` under its alias, and none of the unrelated tenant
+        # columns a flattened DataCore row carries.
+        "items": [i.model_dump(by_alias=True) for i in ctx.items],
         "definition": {
             "definition_id": ctx.definition["definition_id"],
             "version": ctx.definition["version"],

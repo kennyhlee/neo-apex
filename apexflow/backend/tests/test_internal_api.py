@@ -712,3 +712,52 @@ def test_document_url_by_token_ownership_and_missing(client, fake_dc, monkeypatc
 
     resp = client.get(f"/internal/instance-by-token/{token}/documents/DC-999/url", headers=HEADERS)
     assert resp.status_code == 404
+
+
+# --- wire boundary: items carry exactly the WorkflowItem field set ----------
+
+
+ITEM_WIRE_FIELDS = {
+    "entity_id", "item_id", "instance_id", "step_id", "kind", "title",
+    "status", "blocking", "payload_ref", "due_at", "completed_by", "_version",
+}
+
+
+def test_instance_items_carry_only_contract_fields(client, fake_dc):
+    """DataCore returns every column in the tenant's table on a flattened
+    row. Serializing through `WorkflowItem` keeps unrelated tenant columns
+    off the family client's wire while still carrying everything consumers
+    read."""
+    started = _start(client, fake_dc, definition_id="wd-wire")
+    token = started["token"]
+
+    resp = client.get(f"/internal/instance-by-token/{token}", headers=HEADERS)
+    assert resp.status_code == 200
+    item = resp.json()["items"][0]
+
+    assert set(item) == ITEM_WIRE_FIELDS
+    # the consumer contract specifically (flow-runtime WorkflowItemView,
+    # admindash toItemView, FamilyHub HubPage)
+    for required in ("entity_id", "step_id", "kind", "title", "status",
+                     "blocking", "payload_ref"):
+        assert required in item
+    assert "tuition_fall_semester_K" not in item
+
+
+def test_instance_items_drop_unrelated_tenant_columns(client, fake_dc):
+    """Pin the narrowing itself: a sparse column present on the stored row
+    must not reach the client."""
+    started = _start(client, fake_dc, definition_id="wd-wire-sparse")
+    token = started["token"]
+    items = fake_dc.list_entities(
+        TENANT, "workflow_item",
+        f"instance_id = '{started['instance']['entity_id']}'",
+    )
+    row = items[0]
+    base = {k: v for k, v in row.items()
+            if k not in ("entity_id", "entity_type") and not k.startswith("_")}
+    base["tuition_fall_semester_K"] = "1200"
+    fake_dc.dc_update(TENANT, "workflow_item", row["entity_id"], base)
+
+    resp = client.get(f"/internal/instance-by-token/{token}", headers=HEADERS)
+    assert "tuition_fall_semester_K" not in resp.json()["items"][0]
