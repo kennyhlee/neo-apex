@@ -402,7 +402,7 @@ def _require_item(tenant_id: str, instance_row: dict, item_entity_id: str,
 def _update_item(tenant_id: str, instance_row: dict, item_row: dict, changes: dict,
                   actor: str, token: str | None, now: datetime) -> dict:
     base = _item_base_data(item_row)
-    old_status = base.get("status", "not_started")
+    old_status = base.get("status", ItemStatus.NOT_STARTED)
     base.update(changes)
     updated = dc.dc_update(tenant_id, "workflow_item", item_row["entity_id"], base, token,
                            expected_version=row_version(item_row))
@@ -522,7 +522,7 @@ def complete_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor
     """
     now = _now(now)
     item = _require_item(tenant_id, instance_row, item_entity_id, token)
-    current = item.get("status", "not_started")
+    current = item.get("status", ItemStatus.NOT_STARTED)
     if current not in COMPLETABLE_STATUSES:
         raise HTTPException(409, {
             "error": f"cannot complete item from status {current!r}",
@@ -597,7 +597,7 @@ def waive_item(tenant_id: str, instance_row: dict, item_entity_id: str, actor: s
     now = _now(now)
     _require_staff_actor(actor)
     item = _require_item(tenant_id, instance_row, item_entity_id, token)
-    if item.get("status") == "verified":
+    if item.get("status") == ItemStatus.VERIFIED:
         raise HTTPException(409, {"error": "cannot waive an already-verified item"})
     return _update_item(tenant_id, instance_row, item, {"status": ItemStatus.WAIVED}, actor, token, now)
 
