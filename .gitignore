@@ -225,3 +225,6 @@ sampledoc/
 .logs
 *.swp
 .superpowers/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
