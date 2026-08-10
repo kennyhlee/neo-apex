@@ -123,8 +123,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.save.saved': 'All changes saved',
     'editor.save.error': "Couldn't save — retrying on the next change.",
 
-    'editor.tabs.steps': 'Steps',
-    'editor.tabs.machine': 'Machine',
     'editor.tabs.preview': 'Preview',
 
     // Stage editor
@@ -132,8 +130,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.stages.heading': 'Stages',
     'editor.stages.startsHere': 'Starts here',
     'editor.stages.finishes': 'Finished',
-    'editor.stages.stepCount': '{n} step(s)',
-    'editor.stages.moveCount': '{n} move(s) out',
     'editor.stages.empty': 'This workflow has no stages yet.',
     'editor.stages.errorCount': '{n} issue(s) to fix — see Validation',
     'editor.exits.heading': 'Exits',
@@ -145,7 +141,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.stage.stepsHeading': 'What happens here',
     'editor.stage.noSteps': 'Nothing happens in this stage yet.',
     'editor.stage.alsoIn': 'also in {stages}',
-    'editor.stage.addStep': 'Add something here',
     'editor.stage.rename': 'Stage name',
     'editor.stage.addExisting': 'Add an existing step here',
     'editor.stage.removeFromStage': 'Remove from this stage',
@@ -288,42 +283,7 @@ export const translations: Record<Locale, Record<string, string>> = {
       'Invalid JSON — needs EXACTLY ONE of all/any/not as a list (the other two must be null or omitted).',
 
     // Machine editor (Task 8)
-    'editor.machine.states.heading': 'States',
-    'editor.machine.states.add': '+ Add state',
-    'editor.machine.states.empty': 'No states yet. Add one to get started.',
-    'editor.machine.state.idPlaceholder': 'state_id',
-    'editor.machine.state.namePlaceholder': 'Name',
-    'editor.machine.state.kindLabel': 'Kind',
-    'editor.machine.state.kind.initial': 'Initial',
-    'editor.machine.state.kind.active': 'Active',
-    'editor.machine.state.kind.terminal': 'Terminal',
-    'editor.machine.state.remove': 'Remove',
-    'editor.machine.state.demotedInitial': '"{name}" is no longer the initial state — demoted to active.',
-
-    'editor.machine.primitives.loading': 'Loading guard/effect catalog…',
     'editor.machine.primitives.error': "Couldn't load the guard/effect catalog. Guards and effects can't be edited right now.",
-
-    'editor.machine.transitions.heading': 'Transitions',
-    'editor.machine.transitions.add': '+ Add transition',
-    'editor.machine.transitions.empty': 'No transitions yet. Add one to get started.',
-    'editor.machine.transition.unset': '(unset)',
-    'editor.machine.transition.addToGroup': '+ Add alternative',
-    'editor.machine.transition.remove': 'Remove',
-    'editor.machine.transition.moveUp': 'Move up',
-    'editor.machine.transition.moveDown': 'Move down',
-    'editor.machine.transition.from': 'From',
-    'editor.machine.transition.to': 'To',
-    'editor.machine.transition.action': 'Action',
-    'editor.machine.transition.actionPlaceholder': 'e.g. submit',
-    'editor.machine.transition.actor': 'Actor',
-    'editor.machine.transition.actor.family': 'Family',
-    'editor.machine.transition.actor.staff': 'Staff',
-    'editor.machine.transition.actor.system': 'System',
-    'editor.machine.transition.selectStatePlaceholder': 'Select a state…',
-    'editor.machine.transition.multipleUnguarded':
-      'Only one unguarded transition is allowed per (from, action) group.',
-    'editor.machine.transition.unguardedNotLast':
-      'The unguarded transition must be declared last in this group — guarded alternatives are matched first.',
 
     'editor.machine.guards.heading': 'Guards',
     'editor.machine.guards.empty': 'No guards — this transition always applies.',
@@ -507,8 +467,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.save.saved': '所有更改已保存',
     'editor.save.error': '保存失败 — 将在下次更改时重试。',
 
-    'editor.tabs.steps': '步骤',
-    'editor.tabs.machine': '状态机',
     'editor.tabs.preview': '预览',
 
     // Stage editor
@@ -516,8 +474,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.stages.heading': '阶段',
     'editor.stages.startsHere': '从这里开始',
     'editor.stages.finishes': '已完成',
-    'editor.stages.stepCount': '{n} 个步骤',
-    'editor.stages.moveCount': '{n} 个流转',
     'editor.stages.empty': '此工作流尚无阶段。',
     'editor.stages.errorCount': '有 {n} 个问题待修复 — 见校验',
     'editor.exits.heading': '退出',
@@ -529,7 +485,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.stage.stepsHeading': '这里发生什么',
     'editor.stage.noSteps': '此阶段尚无内容。',
     'editor.stage.alsoIn': '同时出现在 {stages}',
-    'editor.stage.addStep': '在此添加',
     'editor.stage.rename': '阶段名称',
     'editor.stage.addExisting': '在此添加已有步骤',
     'editor.stage.removeFromStage': '从此阶段移除',
@@ -669,41 +624,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.showIf.jsonInvalid': 'JSON 无效 — 需要 all/any/not 三者中恰好一个为列表（其余两个必须为 null 或省略）。',
 
     // Machine editor (Task 8)
-    'editor.machine.states.heading': '状态',
-    'editor.machine.states.add': '+ 添加状态',
-    'editor.machine.states.empty': '暂无状态，添加一个开始吧。',
-    'editor.machine.state.idPlaceholder': 'state_id',
-    'editor.machine.state.namePlaceholder': '名称',
-    'editor.machine.state.kindLabel': '类型',
-    'editor.machine.state.kind.initial': '初始',
-    'editor.machine.state.kind.active': '活动',
-    'editor.machine.state.kind.terminal': '终止',
-    'editor.machine.state.remove': '删除',
-    'editor.machine.state.demotedInitial': '"{name}" 不再是初始状态 — 已降级为活动状态。',
-
-    'editor.machine.primitives.loading': '正在加载守卫／效果目录…',
     'editor.machine.primitives.error': '无法加载守卫／效果目录。目前无法编辑守卫和效果。',
-
-    'editor.machine.transitions.heading': '转换',
-    'editor.machine.transitions.add': '+ 添加转换',
-    'editor.machine.transitions.empty': '暂无转换，添加一个开始吧。',
-    'editor.machine.transition.unset': '（未设置）',
-    'editor.machine.transition.addToGroup': '+ 添加备选项',
-    'editor.machine.transition.remove': '删除',
-    'editor.machine.transition.moveUp': '上移',
-    'editor.machine.transition.moveDown': '下移',
-    'editor.machine.transition.from': '起始状态',
-    'editor.machine.transition.to': '目标状态',
-    'editor.machine.transition.action': '动作',
-    'editor.machine.transition.actionPlaceholder': '例如：submit',
-    'editor.machine.transition.actor': '操作方',
-    'editor.machine.transition.actor.family': '家庭',
-    'editor.machine.transition.actor.staff': '员工',
-    'editor.machine.transition.actor.system': '系统',
-    'editor.machine.transition.selectStatePlaceholder': '选择一个状态…',
-    'editor.machine.transition.multipleUnguarded': '每个 (起始状态, 动作) 分组只允许有一个无守卫的转换。',
-    'editor.machine.transition.unguardedNotLast':
-      '无守卫的转换必须声明在该分组的最后 — 有守卫的备选项会被优先匹配。',
 
     'editor.machine.guards.heading': '守卫',
     'editor.machine.guards.empty': '暂无守卫 — 此转换始终适用。',
