@@ -3,32 +3,20 @@
 // raw-only allowlist — so a primitive added later fails the suite rather
 // than quietly degrading in front of an admin."
 //
-// The primitive list is transcribed from
-// apexflow/backend/app/workflows/primitives.py's GUARDS/EFFECTS registry
-// keys. A primitive added there without a phrase here fails this file.
+// The primitive list is NOT hand-typed here — that would only catch drift
+// against its own copy, not against the backend registry. It's imported
+// from `primitiveNames.generated.ts`, generated from
+// apexflow/backend/app/workflows/primitives.py's GUARDS/EFFECTS registry by
+// `apexflow/backend/scripts/generate_primitive_names_ts.py` and guarded by
+// `apexflow/backend/tests/test_primitive_names_generated.py`. A primitive
+// added to the backend registry fails that Python drift test first; once
+// regenerated, it fails this file if it's not accounted for here.
 import { describe, expect, it } from 'vitest';
 import { ABSORBED, describePrimitive, phraseKey, RAW_ONLY } from '../phrases.ts';
+import { EFFECT_NAMES, GUARD_NAMES } from '../primitiveNames.generated.ts';
 import { translations } from '../../../i18n/translations.ts';
 
-const GUARDS = [
-  'all_blocking_items_complete',
-  'items_in_status',
-  'capacity_available',
-  'data_condition',
-  'date_window',
-  'actor_role',
-] as const;
-
-const EFFECTS = [
-  'commit_sections',
-  'set_entity_field',
-  'send_email',
-  'issue_link',
-  'start_due_clocks',
-  'set_context',
-] as const;
-
-const ALL = [...GUARDS, ...EFFECTS];
+const ALL = [...GUARD_NAMES, ...EFFECT_NAMES];
 
 describe('phrase coverage', () => {
   it.each(ALL)('%s has a phrase, or is explicitly raw-only or absorbed', (primitive) => {

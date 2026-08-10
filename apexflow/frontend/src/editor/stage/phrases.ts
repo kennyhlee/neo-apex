@@ -2,9 +2,16 @@
 //
 // Design decision this file implements: "Anything without a phrase renders
 // as its raw primitive name with its params" — degraded, never hidden and
-// never dropped. `phrases.test.ts` fails if a primitive is added to the
-// backend registry without being accounted for here, which is the whole
-// point of the allowlist.
+// never dropped. Enforcing that against the real backend registry (not a
+// hand-typed copy of it) takes two parts: `apexflow/backend/scripts/
+// generate_primitive_names_ts.py` generates `primitiveNames.generated.ts`
+// from `app.workflows.primitives`' GUARDS/EFFECTS, and
+// `apexflow/backend/tests/test_primitive_names_generated.py` fails if that
+// file drifts from the registries. `phrases.test.ts` then imports the
+// generated names and fails if any of them isn't accounted for here —
+// together, a primitive added to the backend registry fails the suite
+// instead of quietly degrading to raw in front of an admin, which is the
+// whole point of the allowlist.
 //
 // `t` is a parameter rather than a `useTranslation()` call so this module is
 // pure and testable without React.
