@@ -77,7 +77,12 @@ export interface Stage {
   /** Index in the original `machine.states` array. `stages` is sorted into
    * spine order for display, which need not match declaration order; this
    * lets `writeMachine` write `states` back in the order the machine
-   * declared them, rather than in spine order. */
+   * declared them, rather than in spine order. A stage the editor CREATES
+   * this session carries `write.ts`'s `NEW_STAGE_INDEX` and sorts after
+   * every pre-existing stage — mirrors `MoveMember.order`'s `NEW_ORDER`
+   * convention. `Array.prototype.sort` is stable, so several new stages
+   * (all sharing that same value) keep their relative insertion order
+   * rather than being scrambled against each other. */
   declaredIndex: number;
   /** Steps whose `available_in` contains this stage, in definition order. */
   step_ids: string[];

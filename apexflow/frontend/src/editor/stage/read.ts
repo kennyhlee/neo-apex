@@ -12,6 +12,7 @@
 // for it.
 import type { GuardRef, MachineDef, TransitionDef, WorkflowStepDef } from '../../types/designer.ts';
 import type { MoveGroup, MoveMember, Stage, StageModel, Who } from './types.ts';
+import { cloneRef } from './clone.ts';
 import { finishStageId, orderStages } from './spine.ts';
 
 /** Stable, order-insensitive-per-key JSON for use in a grouping key. Params
@@ -24,18 +25,6 @@ function stableJson(value: unknown): string {
     a < b ? -1 : a > b ? 1 : 0,
   );
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`;
-}
-
-/** Structural deep copy for `GuardRef`/`EffectRef` values headed into the
- * returned model. `GuardRef`/`EffectRef` are plain JSON wire objects by
- * construction (`schema.py`), so `JSON.parse(JSON.stringify(...))` is exact
- * and cheap. Without this, `readStageModel`'s output shares object identity
- * with `machine`'s: Task 4's round-trip test would then pass trivially on
- * the aliased fields instead of actually comparing values, and an editor
- * task doing `group.effects.push(...)` in place would silently mutate the
- * definition the model was read from. */
-function cloneRef<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function splitActorRole(guards: GuardRef[]): { roleGuard: GuardRef | null; rest: GuardRef[] } {
