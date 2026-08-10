@@ -109,4 +109,49 @@ describe('finishStageId', () => {
     };
     expect(finishStageId(machine)).toBeNull();
   });
+
+  it('prefers a reachable terminal over an unreachable one, regardless of depth', () => {
+    // The editor's own "add a stage, promote it to terminal" flow: `done` is
+    // the real, reachable finish; `orphan` is a freshly-added stage with no
+    // move pointing at it yet, so its depth is UNREACHABLE — deeper than any
+    // reachable stage could ever be.
+    const machine = {
+      states: [
+        { state_id: 'draft', name: 'Draft', kind: 'initial' as const },
+        { state_id: 'done', name: 'Done', kind: 'terminal' as const },
+        { state_id: 'orphan', name: 'Orphan', kind: 'terminal' as const },
+      ],
+      transitions: [
+        {
+          transition_id: 't1',
+          from: 'draft',
+          to: 'done',
+          action: 'submit',
+          actor: 'staff' as const,
+          guards: [],
+          effects: [],
+        },
+      ],
+    };
+    expect(finishStageId(machine)).toBe('done');
+  });
+
+  it('falls back to the deepest-then-declared rule when every terminal is unreachable', () => {
+    const machine = {
+      states: [
+        { state_id: 'draft', name: 'Draft', kind: 'initial' as const },
+        { state_id: 'orphan1', name: 'Orphan 1', kind: 'terminal' as const },
+        { state_id: 'orphan2', name: 'Orphan 2', kind: 'terminal' as const },
+      ],
+      transitions: [],
+    };
+    // Both are UNREACHABLE (tied depth), so declaration order decides —
+    // same rule as the depth-tie case above, just applied among orphans.
+    expect(finishStageId(machine)).toBe('orphan1');
+  });
+
+  it('still picks the shipped templates’ finish stages', () => {
+    expect(finishStageId(ENROLLMENT_MACHINE)).toBe('enrolled');
+    expect(finishStageId(SIGNUP_MACHINE)).toBe('completed');
+  });
 });

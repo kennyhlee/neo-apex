@@ -83,13 +83,21 @@ describe('addStage', () => {
 describe('setStageKind', () => {
   it('demotes the previous initial stage to active when another is promoted', () => {
     const before = model();
+    const draftBefore = before.stages.find((s) => s.stage_id === 'draft')!;
     expect(before.stages.filter((s) => s.kind === 'initial').map((s) => s.stage_id)).toEqual([
       'draft',
     ]);
 
     const after = setStageKind(before, 'waitlisted', 'initial');
     expect(after.stages.find((s) => s.stage_id === 'waitlisted')?.kind).toBe('initial');
-    expect(after.stages.find((s) => s.stage_id === 'draft')?.kind).toBe('active');
+    // The demoted stage's `kind` flips and nothing else about it changes —
+    // in particular its `name` survives (a mutation that also wiped it,
+    // e.g. `{ ...s, kind: 'active', name: '' }`, passed every other
+    // assertion in this file).
+    expect(after.stages.find((s) => s.stage_id === 'draft')).toEqual({
+      ...draftBefore,
+      kind: 'active',
+    });
     // `_state_errors` requires exactly one — the whole point of the demotion.
     expect(after.stages.filter((s) => s.kind === 'initial')).toHaveLength(1);
   });

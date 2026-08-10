@@ -51,22 +51,37 @@ export function stageDepths(machine: MachineDef): Record<string, number> {
 }
 
 /**
- * The terminal stage forward progress ends at: the DEEPEST terminal stage,
- * ties broken by declaration order.
+ * The terminal stage forward progress ends at: the DEEPEST **reachable**
+ * terminal stage, ties broken by declaration order. A terminal with no path
+ * from the initial stage never wins while a reachable terminal exists — only
+ * once every terminal is unreachable does the deepest-then-declared rule
+ * apply among them (its `depths` are all `UNREACHABLE`, so the tie-break is
+ * declaration order alone).
  *
  * Measured against both shipped templates: enrollment's terminals are
  * `enrolled` (depth 4), `declined` (3), and `withdrawn` (1) — the finish is
  * `enrolled`. Signup's are `completed` (2) and `dropped` (1) — the finish is
  * `completed`. Taking the first-declared terminal instead would happen to be
  * right for both and would break the moment an author reorders the states.
+ *
+ * Reachability matters because the editor's "add a stage, then promote it to
+ * terminal" flow mints a stage with no move pointing at it: it is `active`
+ * (hence unreachable-safe to add) right up until its role is set to
+ * `terminal`, at which point it becomes a second terminal that is deeper
+ * (UNREACHABLE) than the real, reachable finish. Without this preference
+ * that orphan would outrank the true finish and get treated as the workflow's
+ * end state — demoted to an exit target by `orderStages` and targeted by
+ * `addExit` — even though it isn't reachable at all yet.
  */
 export function finishStageId(machine: MachineDef): string | null {
   const depths = stageDepths(machine);
   const declaredIndex = new Map(machine.states.map((s, i) => [s.state_id, i]));
   const terminals = machine.states.filter((s) => s.kind === 'terminal');
   if (terminals.length === 0) return null;
-  let best = terminals[0];
-  for (const candidate of terminals.slice(1)) {
+  const reachable = terminals.filter((s) => depths[s.state_id] !== UNREACHABLE);
+  const candidates = reachable.length > 0 ? reachable : terminals;
+  let best = candidates[0];
+  for (const candidate of candidates.slice(1)) {
     const deeper = depths[candidate.state_id] > depths[best.state_id];
     const tied = depths[candidate.state_id] === depths[best.state_id];
     const earlier =
