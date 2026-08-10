@@ -51,6 +51,7 @@ export default function StageEditor({
   const { t } = useTranslation();
   const model = useMemo(() => readStageModel(machine, steps), [machine, steps]);
   const [primitives, setPrimitives] = useState<PrimitivesCatalog | null>(null);
+  const [primitivesError, setPrimitivesError] = useState(false);
 
   // Loaded once per tenant, same rationale as MachineEditor.tsx: the
   // catalog is auth-scoped per tenant but its content is static (generated
@@ -59,12 +60,15 @@ export default function StageEditor({
   useEffect(() => {
     let cancelled = false;
     async function run() {
+      setPrimitivesError(false);
       try {
         const catalog = await getPrimitives(tenantId);
         if (!cancelled) setPrimitives(catalog);
       } catch {
-        // MoveRow degrades gracefully when primitives is null — see its
-        // `advanced && primitives` guard.
+        // MoveRow's "Edit as advanced" no longer goes silent on a failed
+        // fetch — it renders `editor.machine.primitives.error` (same key
+        // MachineEditor.tsx already uses for this) instead of nothing.
+        if (!cancelled) setPrimitivesError(true);
       }
     }
     void run();
@@ -124,11 +128,22 @@ export default function StageEditor({
                 <ul className="move-rows">
                   {moves.map((move) => (
                     <MoveRow
-                      key={move.key}
+                      // `move.key` is derived from (action, to, who, guards,
+                      // effects) — see types.ts — so editing ANY of those
+                      // fields changes it, remounting this row and
+                      // destroying focus/collapsing the advanced panel
+                      // mid-edit. `members[0].transition_id` is stable
+                      // across exactly those edits (renaming the action,
+                      // changing a guard/effect doesn't touch `members`) and
+                      // is unique per group (every transition belongs to
+                      // exactly one group) — see MoveGroup's `members`
+                      // comment ("Never empty").
+                      key={move.members[0].transition_id}
                       group={move}
                       stages={model.stages}
                       states={machine.states}
                       primitives={primitives}
+                      primitivesError={primitivesError}
                       models={models}
                       declaredSectionIds={sectionIds}
                       declaredStepIds={stepIds}

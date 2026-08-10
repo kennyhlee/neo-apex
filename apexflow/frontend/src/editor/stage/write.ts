@@ -86,6 +86,26 @@ export function actorsFor(who: Who): TransitionDef['actor'][] {
  * one, since `_unguarded_branch_errors` allows at most one unguarded
  * transition per (from, action) group). A single-actor group that was
  * authored without an actor_role guard keeps none.
+ *
+ * When a member's `(from, actor)` pair is UNCHANGED and a roleGuard is
+ * needed, the EXISTING roleGuard is kept as-is rather than replaced by
+ * `roleGuardFor(actor)`. `primitives.py` documents `actor_role` as
+ * authorable with any role list, not just the editor's own
+ * `{roles:['staff','admin']}` convention — a hand-authored
+ * `actor_role{roles:['admin']}` must survive an unrelated no-op Who edit
+ * (e.g. re-selecting the same value, or touching a sibling `from`'s row)
+ * rather than being silently widened to the editor's default. `roleGuardFor`
+ * only fires for a row that doesn't already exist — a genuinely NEW member,
+ * or one whose actor just changed and so has no prior guard to preserve.
+ *
+ * Edge case, not a bug: switching a guarded group to `'automatic'` always
+ * takes the NEW-member branch (no existing row has `actor: 'system'`), so
+ * it mints via `roleGuardFor('system')` — which, since `roleGuardFor` only
+ * special-cases `'family'`, falls through to the same
+ * `{roles:['staff','admin']}` every other actor gets. That guard is
+ * meaningless on a system-triggered transition but harmless:
+ * `_guard_actor_role` passes any non-family actor, including `system`. Not
+ * corrected here — flagged so it isn't mistaken for an oversight later.
  */
 export function membersForWho(group: MoveGroup, who: Who): MoveMember[] {
   const actors = actorsFor(who);
@@ -94,7 +114,9 @@ export function membersForWho(group: MoveGroup, who: Who): MoveMember[] {
   return froms.flatMap((from) =>
     actors.map((actor) => {
       const existing = group.members.find((m) => m.from === from && m.actor === actor);
-      if (existing) return { ...existing, roleGuard: needsRoleGuard ? roleGuardFor(actor) : null };
+      if (existing) {
+        return { ...existing, roleGuard: needsRoleGuard ? (existing.roleGuard ?? roleGuardFor(actor)) : null };
+      }
       return {
         transition_id: `t_${group.action}_${from}_${actor}`,
         from,

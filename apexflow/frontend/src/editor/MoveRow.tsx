@@ -22,6 +22,11 @@ interface MoveRowProps {
   stages: Stage[];
   states: StateDef[];
   primitives: PrimitivesCatalog | null;
+  /** True when the primitives catalog fetch failed — distinguishes "still
+   * loading" (primitives null, no error: advanced panel is briefly empty)
+   * from "never coming" (primitives null, errored: advanced panel explains
+   * why instead of silently rendering nothing). */
+  primitivesError: boolean;
   models: EntityModelsMap;
   declaredSectionIds: string[];
   declaredStepIds: string[];
@@ -38,6 +43,7 @@ export default function MoveRow({
   stages,
   states,
   primitives,
+  primitivesError,
   models,
   declaredSectionIds,
   declaredStepIds,
@@ -126,6 +132,10 @@ export default function MoveRow({
           {t('editor.move.remove')}
         </button>
       </div>
+
+      {advanced && primitivesError && (
+        <p className="move-row-primitives-error">{t('editor.machine.primitives.error')}</p>
+      )}
 
       {advanced && primitives && (
         <div className="move-row-advanced">
