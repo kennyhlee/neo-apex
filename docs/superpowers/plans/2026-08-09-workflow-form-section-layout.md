@@ -492,13 +492,16 @@ describe('SectionDescription safety', () => {
       '[x](ftp://files.example.com/a)',
     ]) {
       const out = html(bad);
-      expect(out, bad).not.toContain('<a ');
+      // The real property is "no live link", so assert on href rather than
+      // on the tag: an <a> with no href is inert, an <a href="javascript:">
+      // is not.
+      expect(out, bad).not.toContain('href');
       expect(out, bad).toContain('x');   // link TEXT survives as plain text
     }
   });
 
   it('is case-insensitive about schemes', () => {
-    expect(html('[x](JaVaScRiPt:alert(1))')).not.toContain('<a ');
+    expect(html('[x](JaVaScRiPt:alert(1))')).not.toContain('href');
   });
 
   it('drops headings, images, and lists', () => {
@@ -510,18 +513,31 @@ describe('SectionDescription safety', () => {
 });
 
 // --- structural guards: these are the enforcement mechanism, not decoration.
+//
+// `__tests__` is EXCLUDED from the walk on purpose: this very file contains
+// the literal strings being searched for, so including it would make both
+// guards match themselves and fail no matter what the source does.
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, e.name);
-    if (e.isDirectory()) out.push(...sourceFiles(p));
-    else if (/\.tsx?$/.test(e.name)) out.push(p);
+    if (e.isDirectory()) {
+      if (e.name === '__tests__') continue;
+      out.push(...sourceFiles(join(dir, e.name)));
+    } else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) {
+      out.push(join(dir, e.name));
+    }
   }
   return out;
 }
 
 describe('markdown containment', () => {
   const files = sourceFiles(join(__dirname, '..'));
+
+  it('walks a non-trivial set of source files', () => {
+    // Guards the guards: an empty list would make both checks below pass
+    // vacuously if the walk ever broke.
+    expect(files.length).toBeGreaterThan(5);
+  });
 
   it('imports markdown-to-jsx in exactly one file', () => {
     const importers = files.filter((f) => readFileSync(f, 'utf8').includes('markdown-to-jsx'));
@@ -623,7 +639,7 @@ export * from './SectionDescription';
 - [ ] **Step 6: Run the tests**
 
 Run: `cd flow-runtime && npm test`
-Expected: PASS — 5 from Task 3 + 10 here = **15 passing**.
+Expected: PASS — 5 from Task 3 + 11 here = **16 passing**.
 
 If the "drops disallowed link schemes" case fails because an anchor still renders, the `sanitizer` is not being consulted for that attribute — do **not** relax the assertion. Verify the option name against the installed version's types and fix the option.
 
@@ -857,7 +873,7 @@ export * from './sectionCompletion';
 - [ ] **Step 5: Run the tests**
 
 Run: `cd flow-runtime && npm test`
-Expected: 15 prior + 13 here = **28 passing**.
+Expected: 16 prior + 13 here = **29 passing**.
 
 - [ ] **Step 6: Commit**
 
@@ -1170,7 +1186,7 @@ cd flow-runtime && npm test && npx tsc -b
 cd ../familyhub/frontend && npm run build && npm run lint
 cd ../../apexflow/frontend && npm run build && npm run lint
 ```
-Expected: 28 tests passing, builds clean, lint clean.
+Expected: 29 tests passing, builds clean, lint clean.
 
 - [ ] **Step 10: Commit**
 
@@ -1372,7 +1388,7 @@ Append `export * from './RailSections';` to `flow-runtime/src/index.ts`, then:
 cd flow-runtime && npm test && npx tsc -b
 cd ../admindash/frontend && npm run build && npx vitest run
 ```
-Expected: flow-runtime 28 + 2 = **30 passing**; admindash builds clean; admindash vitest **94** (unchanged).
+Expected: flow-runtime 29 + 2 = **31 passing**; admindash builds clean; admindash vitest **94** (unchanged).
 
 - [ ] **Step 7: Commit**
 
@@ -1551,7 +1567,7 @@ cd ../admindash && uv run pytest backend/tests/ -q
 cd ../datacore && uv run python -m pytest tests/ -q
 cd ../admindash/frontend && npx vitest run
 ```
-Expected: flow-runtime **30**, apexflow **547**, familyhub **89**, admindash **201**, datacore **354**, admindash vitest **94**.
+Expected: flow-runtime **31**, apexflow **547**, familyhub **89**, admindash **201**, datacore **354**, admindash vitest **94**.
 
 - [ ] **Step 2: Build and lint all three frontends**
 
