@@ -25,6 +25,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.templates import enrollment
+from app.templates.catalog import template_catalog
 from app.workflows import engine, machine
 from app.workflows.schema import MachineDef, StepDef
 from app.workflows.validate import validate_definition
@@ -174,10 +175,15 @@ def test_template_catalog_contains_enrollment_and_validates_with_zero_errors():
     with zero errors against the real base_model.json models — reusing this
     file's own model-loading pattern (`_load_base_models`) rather than
     hand-copying field lists, same as the dedicated
-    `test_enrollment_template_validates_with_zero_errors` above."""
-    catalog = enrollment.template_catalog()
-    entry = next((t for t in catalog if t["template_id"] == enrollment.DEFINITION_ID), None)
+    `test_enrollment_template_validates_with_zero_errors` above.
+
+    The catalog list moved to `app.templates.catalog` when the signup
+    template landed; enrollment now contributes a single `catalog_entry()`.
+    """
+    entries = template_catalog()
+    entry = next((t for t in entries if t["template_id"] == enrollment.DEFINITION_ID), None)
     assert entry is not None
+    assert entry == enrollment.catalog_entry()
     assert entry["name"] == enrollment.DEFINITION_NAME
     assert entry["description"]
 

@@ -609,20 +609,28 @@ def test_primitives_catalog_surfaces_date_window_at_least_one_of_constraint(clie
 # --- GET .../templates (Task 6) ---------------------------------------------
 
 
-def test_templates_route_contains_enrollment(client):
+def test_templates_route_serves_every_shipped_template(client):
+    """The gallery is served straight from `app.templates.catalog`, so the
+    route's job is transport, not selection: whatever the catalog ships must
+    arrive intact. Asserted against the catalog itself rather than a
+    hardcoded id list, so a third template needs no edit here."""
+    from app.templates.catalog import template_catalog
+
     resp = client.get(f"/api/workflows/{TENANT}/templates")
     assert resp.status_code == 200
     templates = resp.json()["templates"]
-    ids = {t["template_id"] for t in templates}
-    assert "enrollment" in ids
 
-    entry = next(t for t in templates if t["template_id"] == "enrollment")
-    assert entry["name"]
-    assert entry["description"]
-    definition = entry["definition"]
-    assert definition["channel_access"] == "family"
-    assert definition["machine"]["states"]
-    assert definition["steps"]
+    expected_ids = [t["template_id"] for t in template_catalog()]
+    assert [t["template_id"] for t in templates] == expected_ids
+    assert len(expected_ids) >= 2, "the stage-editor coverage test requires n>=2 templates"
+
+    for entry in templates:
+        assert entry["name"]
+        assert entry["description"]
+        definition = entry["definition"]
+        assert definition["channel_access"] == "family"
+        assert definition["machine"]["states"]
+        assert definition["steps"]
     # alias spelling: "from", not "from_" (interface map §2i) — the route
     # returns the same plain-dict shape `build_machine()` builds, unwrapped
     # by any pydantic re-serialization that could drift the wire key.
