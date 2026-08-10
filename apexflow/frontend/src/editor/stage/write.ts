@@ -128,6 +128,36 @@ export function membersForWho(group: MoveGroup, who: Who): MoveMember[] {
   );
 }
 
+/**
+ * Recompute a group's members for a new set of source stages — the Exits
+ * panel's scope control.
+ *
+ * A stage already in scope keeps its existing members verbatim, including
+ * their `transition_id` and `order`. A stage added to scope gets one new
+ * member per actor. A stage removed from scope loses its members entirely.
+ *
+ * This is what makes "one rule, expanded on save" safe to re-edit: unticking
+ * a stage and re-ticking it does not silently renumber the transitions that
+ * were never touched.
+ */
+export function membersForScope(group: MoveGroup, stageIds: string[]): MoveMember[] {
+  const actors = actorsFor(group.who);
+  const needsRoleGuard = group.members.some((m) => m.roleGuard !== null) || actors.length > 1;
+  return stageIds.flatMap((from) =>
+    actors.map((actor) => {
+      const existing = group.members.find((m) => m.from === from && m.actor === actor);
+      if (existing) return existing;
+      return {
+        transition_id: `t_${group.action}_${from}_${actor}`,
+        from,
+        actor,
+        roleGuard: needsRoleGuard ? roleGuardFor(actor) : null,
+        order: NEW_ORDER,
+      };
+    }),
+  );
+}
+
 function memberToTransition(group: MoveGroup, member: MoveMember): TransitionDef {
   // Re-insert the absorbed actor_role guard at position 0, which is where
   // both shipped templates put it and where `splitActorRole` found it.

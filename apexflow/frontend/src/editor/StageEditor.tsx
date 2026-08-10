@@ -17,6 +17,7 @@ import { writeMachine } from './stage/write.ts';
 import { buildSourceGroups, declaredSectionIds, declaredStepIds } from './stage/sources.ts';
 import StageCard from './StageCard.tsx';
 import MoveRow from './MoveRow.tsx';
+import ExitsPanel from './ExitsPanel.tsx';
 import type { MoveGroup, StageModel } from './stage/types.ts';
 import type { StepsUpdater } from './draftStore.ts';
 import type {
@@ -167,27 +168,22 @@ export default function StageEditor({
         </ol>
       </section>
 
-      <section className="stage-exits">
-        <h3>{t('editor.exits.heading')}</h3>
-        {exits.length === 0 && <p className="stage-empty">{t('editor.exits.empty')}</p>}
-        <ul className="stage-exit-cards">
-          {exits.map((exit) => {
-            const stages = new Set(exit.members.map((m) => m.from)).size;
-            const actors = new Set(exit.members.map((m) => m.actor)).size;
-            return (
-              <li key={exit.key} className="stage-exit-card">
-                <span className="stage-exit-action">{exit.action}</span>
-                <span className="stage-exit-expansion">
-                  {t('editor.exits.expansion')
-                    .replace('{t}', String(exit.members.length))
-                    .replace('{s}', String(stages))
-                    .replace('{a}', String(actors))}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      <ExitsPanel
+        exits={exits}
+        stages={model.stages}
+        states={machine.states}
+        primitives={primitives}
+        primitivesError={primitivesError}
+        models={models}
+        declaredSectionIds={sectionIds}
+        declaredStepIds={stepIds}
+        sourceGroups={sourceGroups}
+        readOnly={readOnly}
+        onChange={(next) =>
+          commit({ ...model, groups: model.groups.map((g) => (g.key === next.key ? next : g)) })
+        }
+        onRemove={(key) => commit({ ...model, groups: model.groups.filter((g) => g.key !== key) })}
+      />
 
       {errors.length > 0 && (
         <p className="stage-editor-error-count" role="status">

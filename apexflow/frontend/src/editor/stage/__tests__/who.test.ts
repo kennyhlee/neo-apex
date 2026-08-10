@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { membersForWho, NEW_ORDER } from '../write.ts';
+import { membersForWho, membersForScope, NEW_ORDER, writeMachine } from '../write.ts';
 import { readStageModel } from '../read.ts';
 import { SIGNUP_MACHINE, SIGNUP_STEPS } from './fixtures.ts';
 import type { MoveGroup } from '../types.ts';
@@ -80,5 +80,46 @@ describe('membersForWho', () => {
     const next = membersForWho(group, group.who);
     expect(next).toEqual(group.members);
     expect(next[0].roleGuard).toEqual(adminOnly);
+  });
+});
+
+describe('membersForScope', () => {
+  it('re-scoping to the same stages changes nothing', () => {
+    const same = membersForScope(drop, [...new Set(drop.members.map((m) => m.from))]);
+    expect(same).toEqual(drop.members);
+  });
+
+  it('adding a stage adds one member per actor and touches nothing else', () => {
+    const froms = [...new Set(drop.members.map((m) => m.from))];
+    const next = membersForScope(drop, [...froms, 'completed']);
+    expect(next).toHaveLength(drop.members.length + 2);
+    const added = next.filter((m) => m.from === 'completed');
+    expect(added.map((m) => m.actor).sort()).toEqual(['family', 'staff']);
+    expect(next.filter((m) => m.from !== 'completed')).toEqual(drop.members);
+  });
+
+  it('removing a stage removes exactly its members', () => {
+    const froms = [...new Set(drop.members.map((m) => m.from))].filter((f) => f !== 'draft');
+    const next = membersForScope(drop, froms);
+    expect(next.some((m) => m.from === 'draft')).toBe(false);
+    expect(next).toHaveLength(drop.members.length - 2);
+  });
+
+  it('untick then re-tick restores the original machine exactly', () => {
+    const froms = [...new Set(drop.members.map((m) => m.from))];
+    const shrunk = { ...drop, members: membersForScope(drop, froms.filter((f) => f !== 'draft')) };
+    const restored = { ...shrunk, members: membersForScope(shrunk, froms) };
+    const model2 = { ...model, groups: model.groups.map((g) => (g.key === drop.key ? restored : g)) };
+    const out = writeMachine(model2);
+    // The re-added transitions are new members, so they land at the END of
+    // the array rather than their original positions. Their CONTENT must
+    // still match exactly — this asserts nothing was lost or altered.
+    expect(out.transitions.map((t) => t.transition_id).sort()).toEqual(
+      SIGNUP_MACHINE.transitions.map((t) => t.transition_id).sort(),
+    );
+    for (const before of SIGNUP_MACHINE.transitions) {
+      const after = out.transitions.find((t) => t.transition_id === before.transition_id);
+      expect(after).toEqual(before);
+    }
   });
 });

@@ -1318,3 +1318,32 @@
   font-size: var(--text-sm);
   margin: var(--space-2, 0.5rem) 0 0;
 }
+.stage-exit-scope {
+  border: none;
+  margin: var(--space-3, 0.75rem) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 0.75rem);
+  align-items: center;
+}
+.stage-exit-scope legend {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted, #6b6b76);
+}
+.stage-exit-scope-rule {
+  width: 100%;
+  margin: 0;
+  font-size: 0.875rem;
+}
+.stage-exit-scope-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+.stage-exit-uncovered {
+  color: var(--color-warning-text, #8a5a00);
+}
