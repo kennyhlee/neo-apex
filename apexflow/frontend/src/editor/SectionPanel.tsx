@@ -3,6 +3,7 @@
 // exclusion rules and the model-required-field auto-include/lock behavior
 // live in `./fieldPicker.ts` — this file is presentation + wiring only.
 import { useEffect } from 'react';
+import { humanizeSectionId } from '@neoapex/flow-runtime';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import {
   dropForbiddenConditionalFields,
@@ -120,6 +121,31 @@ export default function SectionPanel({
           {t('editor.section.remove')}
         </button>
       </div>
+
+      <label className="section-panel-field">
+        <span>{t('editor.section.title')}</span>
+        <input
+          type="text"
+          value={section.title ?? ''}
+          placeholder={humanizeSectionId(section.section_id)}
+          maxLength={80}
+          disabled={readOnly}
+          onChange={(e) => onChange({ ...section, title: e.target.value })}
+        />
+      </label>
+
+      <label className="section-panel-field">
+        <span>{t('editor.section.description')}</span>
+        <textarea
+          className="section-panel-textarea"
+          rows={3}
+          value={section.description ?? ''}
+          maxLength={600}
+          disabled={readOnly}
+          onChange={(e) => onChange({ ...section, description: e.target.value })}
+        />
+        <small className="section-panel-hint">{t('editor.section.descriptionHint')}</small>
+      </label>
 
       {errors.length > 0 && (
         <ul className="inline-errors" role="alert">

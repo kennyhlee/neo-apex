@@ -195,6 +195,11 @@ class SectionDef(BaseModel):
 
     section_id: str
     entity_model: str
+    # Display copy. Both default to "" so every stored definition that
+    # predates them keeps parsing, validating, and publishing untouched --
+    # the renderer falls back to a humanized section_id when title is blank.
+    title: str = ""
+    description: str = ""      # limited markdown: bold, italic, links
     fields: list[FieldPick]
     mode: Literal["create", "match_or_create"]
     repeat: RepeatSpec | None = None

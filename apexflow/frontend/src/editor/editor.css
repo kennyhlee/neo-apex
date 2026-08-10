@@ -298,6 +298,11 @@
   color: var(--text-secondary);
 }
 
+.section-panel-textarea { width: 100%; resize: vertical; font: inherit; font-size: 13px;
+  padding: 6px 8px; border: 1px solid var(--border-primary); border-radius: var(--radius-sm);
+  background: var(--bg-input); color: var(--text-primary); }
+.section-panel-hint { display: block; margin-top: 4px; font-size: 11px; color: var(--text-tertiary); }
+
 .section-fields-empty {
   color: var(--text-tertiary);
   font-size: var(--text-sm);

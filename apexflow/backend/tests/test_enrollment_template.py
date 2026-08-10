@@ -582,3 +582,26 @@ def test_commit_repeat_contacts_fan_out_to_multiple_entities(fake_dc):
 
     subject_refs = json.loads(approved["subject_refs"])
     assert set(subject_refs["contact_id"]) == {c["entity_id"] for c in contacts}
+
+
+def test_every_section_has_a_title_and_description():
+    """The one workflow that actually ships must demonstrate the feature --
+    and it is the form where `first_name` appears three times."""
+    from app.templates.enrollment import _steps
+
+    form = next(s for s in _steps() if s["step_id"] == "application_form")
+    sections = form["config"]["sections"]
+    assert len(sections) == 4
+    for section in sections:
+        assert section["title"].strip(), f"{section['section_id']} has no title"
+        assert section["description"].strip(), f"{section['section_id']} has no description"
+
+
+def test_student_and_contact_sections_are_distinguishable():
+    """Both declare first_name/last_name; their titles are what tells a
+    parent which child the name belongs to."""
+    from app.templates.enrollment import _steps
+
+    form = next(s for s in _steps() if s["step_id"] == "application_form")
+    by_id = {s["section_id"]: s for s in form["config"]["sections"]}
+    assert by_id["student_section"]["title"] != by_id["contacts_section"]["title"]

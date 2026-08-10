@@ -89,6 +89,10 @@ export interface RepeatSpec {
 export interface WorkflowSectionDef {
   section_id: string;
   entity_model: string;
+  /** Display heading. Blank/absent -> humanized section_id (see sectionTitle.ts). */
+  title?: string;
+  /** Limited markdown: bold, italic, links. Rendered ONLY via SectionDescription. */
+  description?: string;
   fields: FieldPick[];
   mode: 'create' | 'match_or_create';
   repeat?: RepeatSpec | null;

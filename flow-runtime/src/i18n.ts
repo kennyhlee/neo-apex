@@ -45,6 +45,12 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     acknowledgeMessage: 'I acknowledge this message.',
     markComplete: 'Mark complete',
     acknowledge: 'Acknowledge',
+    'section.done': 'Done',
+    'section.optional': 'Optional',
+    'section.remaining': '{n} left',
+    'section.expand': 'Expand section',
+    'section.collapse': 'Collapse section',
+    'section.nav': 'Sections',
   },
   'zh-CN': {
     required: '必填',
@@ -87,6 +93,12 @@ const STRINGS: Record<Locale, Record<string, string>> = {
     acknowledgeMessage: '我已知悉此消息。',
     markComplete: '标记为已完成',
     acknowledge: '确认知悉',
+    'section.done': '已完成',
+    'section.optional': '选填',
+    'section.remaining': '还剩 {n} 项',
+    'section.expand': '展开',
+    'section.collapse': '收起',
+    'section.nav': '章节',
   },
 };
 

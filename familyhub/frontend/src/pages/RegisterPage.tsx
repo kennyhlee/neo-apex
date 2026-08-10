@@ -163,12 +163,6 @@ export default function RegisterPage() {
   // effect from re-firing a second, wholly redundant `fetchInstance` right
   // after a successful start.
   const startedLocallyRef = useRef(false);
-  // Hydrate `draft` from the server's `draft_data` exactly once per
-  // instance load -- never again on a post-action refresh, so a refresh
-  // triggered by e.g. `onCompleteItem` can't clobber an in-flight edit the
-  // autosave debounce hasn't flushed yet. `draft` is the client's source of
-  // truth for the lifetime of the page after that first hydration.
-  const draftHydratedRef = useRef(false);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load the public workflow bundle (school name, capacity state, steps,
@@ -193,6 +187,35 @@ export default function RegisterPage() {
     };
   }, [tenantId, definitionId]);
 
+  // Hydrates `draft` from an instance's persisted `draft_data` -- called
+  // from the SAME batch that flips `phase` to `'running'`, both in the
+  // resume effect below and in `onStart` further down, never from a
+  // separate post-commit effect keyed off `instance`/`bundle`. That
+  // separate-effect shape used to be how this hydrated: React would commit
+  // a render with `StepRenderer` mounted and `draft` still `{}` FIRST, and
+  // only on the next render would the effect fill it in. `AccordionSections`'
+  // initial-open-section `useState` initializer runs once, on that first
+  // mount (deliberately -- so a parent's typing never yanks panels open
+  // later), so it computed against the empty draft and opened a section
+  // that was actually already complete. Calling this synchronously in the
+  // same handler that calls `setPhase('running')` means `StepRenderer`'s
+  // very first render already has the real draft. Matches `admindash`'s
+  // `StaffEntryPage.onStart`, which hydrates before flipping phase for the
+  // same reason. Never called from `refreshInstance` (post-action refresh)
+  // -- `draft` is the client's source of truth for the lifetime of the page
+  // after this first hydration, so a refresh must not clobber an in-flight
+  // edit the autosave debounce hasn't flushed yet.
+  const hydrateDraft = useCallback((i: InstanceBundle) => {
+    // Converted against the instance's PINNED steps (falls back to the
+    // bundle only if the instance response is somehow missing a definition)
+    // so hydration matches what save_draft will accept -- not the
+    // currently-published bundle, which may have moved on if the lineage
+    // was republished (renamed/removed a section) after this instance
+    // started.
+    const conversionSteps = i?.definition?.steps ?? bundle?.definition.steps ?? [];
+    setDraft(sectionAnswersToDraft(conversionSteps, parseDraftData(i.instance)));
+  }, [bundle]);
+
   // Resume path: `?token=` present -> load the instance directly and skip
   // the email-capture phase entirely, once the workflow bundle is also in
   // hand. This intentionally never checks `bundle.lineage_status` -- a
@@ -206,6 +229,7 @@ export default function RegisterPage() {
     fetchInstance(token)
       .then((i) => {
         if (cancelled) return;
+        hydrateDraft(i);
         setInstance(i);
         setPhase('running');
       })
@@ -215,22 +239,7 @@ export default function RegisterPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, bundle]);
-
-  // Hydrate `draft` from the instance's persisted `draft_data` exactly
-  // once, the first time an instance is in hand (fresh start or resume).
-  useEffect(() => {
-    if (!instance || !bundle || draftHydratedRef.current) return;
-    draftHydratedRef.current = true;
-    // Converted against the instance's PINNED steps (falls back to the
-    // bundle only if the instance response is somehow missing a definition)
-    // so hydration matches what save_draft will accept -- not the
-    // currently-published bundle, which may have moved on if the lineage
-    // was republished (renamed/removed a section) after this instance
-    // started.
-    const conversionSteps = instance?.definition?.steps ?? bundle.definition.steps;
-    setDraft(sectionAnswersToDraft(conversionSteps, parseDraftData(instance.instance)));
-  }, [instance, bundle]);
+  }, [token, bundle, hydrateDraft]);
 
   // Load the instance's already-uploaded documents whenever an instance is
   // in hand -- fresh start, resume, or any subsequent `refreshInstance()`
@@ -286,6 +295,7 @@ export default function RegisterPage() {
       // the old registration-era shape) -- fetch the real InstanceBundle
       // rather than hand-assembling a partial one.
       const fresh = await fetchInstance(started.token);
+      hydrateDraft(fresh);
       setInstance(fresh);
       setPhase('running');
     } catch (err) {

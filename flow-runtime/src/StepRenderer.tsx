@@ -9,6 +9,10 @@ import type { ModelFieldSource } from './blockConfig';
 import { labelOf } from './blockConfig';
 import { sectionFields } from './sectionFields';
 import { useFlowT } from './i18n';
+import { AccordionSections } from './AccordionSections';
+import { RailSections } from './RailSections';
+import { SectionShell } from './SectionShell';
+import { useMediaQuery } from './useMediaQuery';
 
 // ---- evaluateCondition: pure port of conditions.py -------------------------
 
@@ -539,20 +543,42 @@ function MessageStep({ step, draft, onDraftChange }: {
   );
 }
 
-function FormStep({ step, models, draft, onDraftChange }: {
+function FormStep({ step, models, draft, onDraftChange, mode }: {
   step: WorkflowStepDef; models: Record<string, ModelFieldSource>;
   draft: WorkflowDraft; onDraftChange: (next: WorkflowDraft) => void;
+  mode: StepRendererMode;
 }) {
   const t = useFlowT();
+  const wide = useMediaQuery('(min-width: 700px)');
   const sections = formSections(step);
   if (sections.length === 0) return <p className="fr-empty">{t('noFields')}</p>;
+
+  const renderFields = (section: WorkflowSectionDef) => (
+    <SectionRenderer step={step} section={section}
+      model={models[section.entity_model]} draft={draft} onDraftChange={onDraftChange} />
+  );
+
+  // A single section gets no accordion and no rail: one collapsible panel
+  // wrapping the whole form is chrome with no navigational value.
+  if (sections.length === 1) {
+    return (
+      <SectionShell section={sections[0]}>{renderFields(sections[0])}</SectionShell>
+    );
+  }
+
+  // Staff, wide screens only: rail + scrolling pane, optimized for an
+  // operator transcribing a paper application who needs to jump between
+  // sections. Every other mode/width combination gets the accordion.
+  if (mode === 'staff' && wide) {
+    return (
+      <RailSections step={step} sections={sections} models={models}
+        draft={draft} onDraftChange={onDraftChange} renderFields={renderFields} />
+    );
+  }
+
   return (
-    <>
-      {sections.map((section) => (
-        <SectionRenderer key={section.section_id} step={step} section={section}
-          model={models[section.entity_model]} draft={draft} onDraftChange={onDraftChange} />
-      ))}
-    </>
+    <AccordionSections step={step} sections={sections} models={models}
+      draft={draft} onDraftChange={onDraftChange} renderFields={renderFields} />
   );
 }
 
@@ -645,7 +671,8 @@ export function StepRenderer({
               </span>
             )}
             {step.type === 'form' && (
-              <FormStep step={step} models={models} draft={draft} onDraftChange={onDraftChange} />
+              <FormStep step={step} models={models} draft={draft}
+                onDraftChange={onDraftChange} mode={mode} />
             )}
             {step.type === 'documents' && (
               <DocumentsStep step={step} item={item} documents={documents}

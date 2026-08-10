@@ -338,6 +338,11 @@ def build_machine() -> dict:
 def _family_section() -> dict:
     return {
         "section_id": "family_section", "entity_model": "family", "mode": "match_or_create",
+        "title": "Family Information",
+        "description": (
+            "Who we contact about billing, closures, and pickup changes. "
+            "If your family is already enrolled, we'll match this to your existing record."
+        ),
         "fields": [
             {"name": "family_name", "required": True},
             {"name": "primary_address", "required": True},
@@ -359,6 +364,11 @@ def _family_section() -> dict:
 def _student_section() -> dict:
     return {
         "section_id": "student_section", "entity_model": "student", "mode": "create",
+        "title": "Student Information",
+        "description": (
+            "Tell us about the child you're enrolling. "
+            "Enrolling more than one child? Submit a separate application for each."
+        ),
         "fields": [
             {"name": "first_name", "required": True},
             {"name": "last_name", "required": True},
@@ -379,6 +389,11 @@ def _student_section() -> dict:
 def _contacts_section() -> dict:
     return {
         "section_id": "contacts_section", "entity_model": "contact", "mode": "create",
+        "title": "Emergency Contacts",
+        "description": (
+            "At least one adult besides a guardian who may be called in an emergency "
+            "or collect your child. You can add up to five."
+        ),
         "fields": [
             {"name": "first_name", "required": True},
             {"name": "last_name", "required": True},
@@ -396,6 +411,10 @@ def _contacts_section() -> dict:
 def _application_section() -> dict:
     return {
         "section_id": "application_section", "entity_model": "registration_application", "mode": "create",
+        "title": "Agreements & Signature",
+        "description": (
+            "Review and accept the enrollment agreements, then sign to submit."
+        ),
         "fields": [
             {"name": "school_year", "required": False},
             {"name": "requested_start_date", "required": False},

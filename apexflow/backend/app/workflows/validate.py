@@ -21,6 +21,7 @@ to classify an *already published* definition against the *current* models
 Both are consumed by later tasks (Task 5's model-impact endpoint, Task 6's
 creation-time refusal); neither talks to DataCore itself.
 """
+import re
 from datetime import datetime
 from typing import Any, Callable, Literal, NamedTuple
 
@@ -652,6 +653,78 @@ def _engine_owned_field_errors(section_entries: list[_SectionEntry]) -> list[str
     ]
 
 
+# Markdown inline-link form: [text](target). `\(\s*<?` allows the two
+# CommonMark-legal forms a naive "no whitespace right after `(`" match
+# missed: a space before the target (`[x]( target)`) and an angle-bracket-
+# wrapped target (`[x](<target>)`). The capture itself still stops at the
+# first `)`/whitespace/`>` -- good enough to recover the scheme prefix that
+# decides allow/reject, which is all this check needs; it is not a full
+# CommonMark destination parser (a target containing a literal balanced
+# paren, e.g. `alert(1)`, still only captures up to that inner `)`).
+_MD_LINK_INLINE_R = re.compile(r"\[[^\]]*\]\(\s*<?([^)\s>]*)")
+
+# Markdown reference-style link definition: `[label]: target` on its own
+# line. `[x][label]` + a `[label]: javascript:...` definition elsewhere in
+# the description is a second, entirely different place a link target can
+# be authored, and the inline-only regex above never looks at it.
+_MD_LINK_REF_R = re.compile(r"^[ \t]*\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
+
+# Positive allowlist, not a deny-list: an unlisted scheme is rejected rather
+# than a listed-bad one blocked (spec "Publish-time validation"). An empty or
+# whitespace-only target (`[x]()`, `[x](   )`) is rejected outright rather
+# than silently matching nothing -- the regex above's capture group can be
+# empty when the parens directly enclose a bare/absent target.
+_ALLOWED_LINK_SCHEMES = ("http://", "https://", "mailto:")
+
+
+def _md_link_targets(description: str) -> list[str]:
+    return _MD_LINK_INLINE_R.findall(description) + _MD_LINK_REF_R.findall(description)
+
+
+SECTION_TITLE_MAX = 80
+SECTION_DESCRIPTION_MAX = 600
+
+
+def _section_copy_errors(section_entries: list[_SectionEntry]) -> list[str]:
+    """Length caps on a section's display copy, plus a scheme allowlist for
+    every markdown link in its description -- both inline (`[x](target)`,
+    including a leading space or angle-bracket form) and reference-style
+    (`[x][label]` + a `[label]: target` definition line).
+
+    The description is rendered to PARENTS, so a hostile link target is a
+    phishing vector. `SectionDescription.tsx` enforces the same allowlist at
+    render time -- that client-side sanitizer is the actual security
+    boundary (no path to a live `javascript:` href has ever been found to
+    bypass it). This check is defence in depth: catching the bad value when
+    it is authored, in the two most natural forms an admin would actually
+    type it in, rather than relying solely on the render-time boundary.
+    Not a full CommonMark link-destination parser -- a target containing a
+    literal balanced parenthesis (`javascript:alert(1)`) is only captured up
+    to that inner `)`, but the truncated prefix still fails the scheme
+    allowlist, so it is still rejected."""
+    errors: list[str] = []
+    for entry in section_entries:
+        section = entry.section
+        if len(section.title) > SECTION_TITLE_MAX:
+            errors.append(
+                f"section '{section.section_id}' title is "
+                f"{len(section.title)} characters; max {SECTION_TITLE_MAX}"
+            )
+        if len(section.description) > SECTION_DESCRIPTION_MAX:
+            errors.append(
+                f"section '{section.section_id}' description is "
+                f"{len(section.description)} characters; max {SECTION_DESCRIPTION_MAX}"
+            )
+        for target in _md_link_targets(section.description):
+            stripped = target.strip()
+            if not stripped or not stripped.lower().startswith(_ALLOWED_LINK_SCHEMES):
+                errors.append(
+                    f"section '{section.section_id}' description has a link to "
+                    f"{target!r}; only http, https, and mailto targets are allowed"
+                )
+    return errors
+
+
 def _section_field_existence_errors(
     section_entries: list[_SectionEntry], models: dict[str, Any]
 ) -> list[str]:
@@ -783,6 +856,7 @@ def validate_definition(
     errors += _commit_sections_ref_errors(machine, declared_section_ids)
     errors += _state_ref_errors(machine, steps)
     errors += _engine_owned_field_errors(section_entries)
+    errors += _section_copy_errors(section_entries)
     errors += _broken_errors(machine, steps, section_entries, section_map, models)
 
     missing_errors, conditional_errors = _coverage_errors(section_entries, models, machine)

@@ -384,6 +384,38 @@ convention, not fixed in this wave.
     default, the same way it already requires citing a real source file
     for a field/function name.
 
+25. **`message`-step bodies are still plain text while section descriptions
+    render markdown.** `MessageStep` (`flow-runtime/src/StepRenderer.tsx`)
+    splits `config.body` on newlines into escaped paragraphs. Now that
+    `SectionDescription` exists as a hardened, single-call-site markdown
+    renderer, pointing message bodies at it is a small change — but it is a
+    separate authoring surface with its own review implications, so it was
+    deliberately left out of the section-layout work.
+
+26. **No CI runs any test suite.** `.github/workflows/` contains only
+    `deploy.yml` and `discord-release.yml`; neither invokes pytest or vitest.
+    Every suite is run locally by whoever remembers. This matters more now
+    than it did: `flow-runtime`'s new vitest suite contains the markdown
+    containment and link-scheme tests, which are a security boundary. A
+    guard that only runs when someone remembers is weaker than it looks.
+    Wiring a test workflow covering the four Python suites and two JS suites
+    is its own piece of work.
+
+27. **The spec and plan describe `disableParsingRawHTML` behavior that
+    `markdown-to-jsx@9.10.2` does not have.**
+    `docs/superpowers/specs/2026-08-09-workflow-form-section-layout-design.md`
+    ("Required configuration") and the Task 4 code block in
+    `docs/superpowers/plans/2026-08-09-workflow-form-section-layout.md` both
+    state that `disableParsingRawHTML: true` causes raw HTML to render as
+    literal text and imply that is sufficient. In practice the option demotes
+    raw HTML to a plain-text AST node, so attribute text such as
+    `onerror="alert(1)"` still reaches the reader as visible characters. The
+    shipped component therefore adds a `stripRawHtml` pre-filter that the spec
+    does not describe. The SECURITY guarantee is unaffected — a review
+    verified across ~60 adversarial inputs that `disableParsingRawHTML` alone
+    yields zero live elements and zero live attributes — but the documents no
+    longer match the code. Amend both before treating them as reference.
+
 ## Phase 2 / Phase 3 pointers (not this plan's scope)
 
 16. **Phase 2 — apexflow-frontend (definition/designer UI).** Currently a
@@ -446,3 +478,24 @@ survived into code comments:
 None of these needed a fix-round or blocked a task review — every one was
 caught by the `# ADJUST(bindings)` discipline at write time, the same
 mechanism Plan 5 introduced. No new plan-defect class emerged this time.
+
+28. **The section-description reference-link check over-rejects ordinary
+    prose.** `apexflow/backend/app/workflows/validate.py`'s
+    `_MD_LINK_REF_R` (`^[ \t]*\[[^\]]+\]:\s*(\S+)`, added in the final
+    fix wave of the form-section-layout branch) treats ANY line beginning
+    `[label]: text` as a markdown link definition. Legitimate copy is
+    blocked at publish with a misleading error naming a "link" that does not
+    exist: `[Important]: read the handbook before you begin.` is rejected
+    with "has a link to `'read'`", and `[^1]: Pickup is at 3pm on Fridays.`
+    is rejected likewise. The RENDERER disagrees — it displays both as plain
+    text — so a school can author copy that previews perfectly and cannot be
+    saved.
+
+    Fails closed (blocks publishing rather than allowing bad content),
+    admin-facing rather than family-facing, and workaroundable by
+    rephrasing, so it did not block the merge. Fix: only treat
+    `[label]: target` as a link definition when `target` is URL-ish
+    (contains `:` or `/`), or when the label is actually referenced by a
+    `[x][label]` elsewhere in the same description. Introduced by commit
+    `e9a42d0`; regression relative to the branch's own starting point, not a
+    pre-existing defect.
