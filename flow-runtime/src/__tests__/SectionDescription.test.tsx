@@ -30,6 +30,27 @@ describe('SectionDescription rendering', () => {
     expect(html('[a](http://x.example.com)')).toContain('href="http://x.example.com"');
     expect(html('[b](mailto:office@x.example.com)')).toContain('href="mailto:office@x.example.com"');
   });
+
+  it('renders CommonMark autolinks as live anchors instead of deleting them', () => {
+    // These are exactly what a school office types, and the naive
+    // "strip anything shaped like <...>" first pass silently deleted them.
+    expect(html('See <https://school.example.com> for details.')).toContain(
+      'href="https://school.example.com"',
+    );
+    expect(html('Email <mailto:office@school.example.com> anytime.')).toContain(
+      'href="mailto:office@school.example.com"',
+    );
+    expect(html('Email <office@school.example.com> anytime.')).toContain(
+      'href="mailto:office@school.example.com"',
+    );
+  });
+
+  it('leaves ordinary angle-bracket copy that is not a real tag untouched', () => {
+    expect(html('Use format <first> <last> on the form.')).toContain(
+      'Use format &lt;first&gt; &lt;last&gt; on the form.',
+    );
+    expect(html('Compare: a < b.')).toContain('Compare: a &lt; b.');
+  });
 });
 
 describe('SectionDescription safety', () => {
@@ -65,6 +86,35 @@ describe('SectionDescription safety', () => {
     expect(out).not.toContain('<h1');
     expect(out).not.toContain('<img');
     expect(out).not.toContain('<ul');
+  });
+
+  it('never mints a heading id, even though headings render as <p>', () => {
+    // A heading-derived id (e.g. # Address -> id="address") can collide
+    // with a real form field's id in the surrounding page and break
+    // getElementById / <label for> association.
+    const out = html('# Address');
+    expect(out).not.toContain('id=');
+  });
+
+  it('drops blockquotes and thematic breaks (spec: inline emphasis + links only)', () => {
+    expect(html('> Please read carefully.')).not.toContain('<blockquote');
+    expect(html('Above\n\n---\n\nBelow')).not.toContain('<hr');
+  });
+
+  it('does not leak an attribute name from a truly unclosed tag', () => {
+    // No closing `>` anywhere in the input -- disableParsingRawHTML alone
+    // renders this as inert but VISIBLE text, which is confusing/
+    // phishing-adjacent copy on a parent-facing form.
+    const out = html('<img src=x onerror=alert(1)');
+    expect(out).not.toContain('onerror');
+  });
+
+  it('does not leak an HTML comment body, even one containing ">"', () => {
+    const out = html('Fees <!-- internal: fee > $50, do not show --> apply.');
+    expect(out).not.toContain('internal');
+    expect(out).not.toContain('$50');
+    expect(out).toContain('Fees');
+    expect(out).toContain('apply');
   });
 });
 
