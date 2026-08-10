@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { isExitGroup, readStageModel } from '../stage/read.ts';
 import { NEW_ORDER, NEW_STAGE_INDEX, roleGuardFor, writeMachine } from '../stage/write.ts';
-import { addExit, addMove, addStage, canAddExit, newStage, removeStage } from '../stageOps.ts';
+import {
+  addExit,
+  addMove,
+  addStage,
+  canAddExit,
+  newStage,
+  removeMoveFromStage,
+  removeStage,
+  setStageKind,
+} from '../stageOps.ts';
 import { SIGNUP_MACHINE, SIGNUP_STEPS } from '../stage/__tests__/fixtures.ts';
 import type { Stage, StageModel } from '../stage/types.ts';
 
@@ -65,6 +74,155 @@ describe('addStage', () => {
     const reread = readStageModel(writeMachine(after), SIGNUP_STEPS);
     expect(transitionIds(reread)).toEqual(transitionIds(before));
     expect(reread.stages).toHaveLength(before.stages.length + 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setStageKind
+// ---------------------------------------------------------------------------
+describe('setStageKind', () => {
+  it('demotes the previous initial stage to active when another is promoted', () => {
+    const before = model();
+    expect(before.stages.filter((s) => s.kind === 'initial').map((s) => s.stage_id)).toEqual([
+      'draft',
+    ]);
+
+    const after = setStageKind(before, 'waitlisted', 'initial');
+    expect(after.stages.find((s) => s.stage_id === 'waitlisted')?.kind).toBe('initial');
+    expect(after.stages.find((s) => s.stage_id === 'draft')?.kind).toBe('active');
+    // `_state_errors` requires exactly one — the whole point of the demotion.
+    expect(after.stages.filter((s) => s.kind === 'initial')).toHaveLength(1);
+  });
+
+  it('sets terminal on a stage that still has outgoing moves, without dropping them', () => {
+    const before = model();
+    const outgoing = before.groups.filter((g) => g.members.some((m) => m.from === 'confirmed'));
+    expect(outgoing.length).toBeGreaterThan(0);
+
+    const after = setStageKind(before, 'confirmed', 'terminal');
+    expect(after.stages.find((s) => s.stage_id === 'confirmed')?.kind).toBe('terminal');
+    // Not blocked, not silently cleaned up: the rail reports it
+    // (`_outgoing_transition_errors`), the model keeps every transition.
+    expect(after.groups).toEqual(before.groups);
+    expect(transitionIds(after)).toEqual(transitionIds(before));
+  });
+
+  it('touches no other stage and no group when setting a non-initial kind', () => {
+    const before = model();
+    const after = setStageKind(before, 'confirmed', 'terminal');
+    expect(after.groups).toBe(before.groups);
+    expect(after.finishStageId).toBe(before.finishStageId);
+    for (const s of before.stages) {
+      if (s.stage_id === 'confirmed') continue;
+      expect(after.stages.find((x) => x.stage_id === s.stage_id)).toEqual(s);
+    }
+    expect(after.stages).toHaveLength(before.stages.length);
+  });
+
+  it('leaves every stage but the demoted one alone when promoting to initial', () => {
+    const before = model();
+    const after = setStageKind(before, 'confirmed', 'initial');
+    for (const s of before.stages) {
+      if (s.stage_id === 'confirmed' || s.stage_id === 'draft') continue;
+      expect(after.stages.find((x) => x.stage_id === s.stage_id)).toEqual(s);
+    }
+    expect(after.groups).toBe(before.groups);
+  });
+
+  it('is a no-op for an unknown stage or a kind the stage already holds', () => {
+    const before = model();
+    expect(setStageKind(before, 'no-such-stage', 'terminal')).toBe(before);
+    expect(setStageKind(before, 'draft', 'initial')).toBe(before);
+  });
+
+  it('round-trips: writeMachine + readStageModel sees the new kind and the same transitions', () => {
+    const before = model();
+    const after = setStageKind(before, 'confirmed', 'terminal');
+    const reread = readStageModel(writeMachine(after), SIGNUP_STEPS);
+    expect(reread.stages.find((s) => s.stage_id === 'confirmed')?.kind).toBe('terminal');
+    expect(transitionIds(reread)).toEqual(transitionIds(before));
+  });
+
+  it('unblocks the Exits panel: promoting an added stage to terminal makes canAddExit true', () => {
+    // The reachable failure this control exists for — a brand-new workflow's
+    // seed shape, where the only terminal stage IS the finish.
+    const seed: StageModel = {
+      stages: [stage('draft', 'initial'), stage('done', 'terminal')],
+      finishStageId: 'done',
+      groups: [],
+    };
+    expect(canAddExit(seed)).toBe(false);
+
+    const grown = addStage(seed);
+    const added = grown.stages[grown.stages.length - 1];
+    expect(added.kind).toBe('active');
+    expect(canAddExit(grown)).toBe(false);
+
+    const promoted = setStageKind(grown, added.stage_id, 'terminal');
+    expect(canAddExit(promoted)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// removeMoveFromStage
+// ---------------------------------------------------------------------------
+describe('removeMoveFromStage', () => {
+  it('drops only the named stage’s members, leaving the rest of the group intact', () => {
+    const before = model();
+    const sixMemberDrop = before.groups.find((g) => g.action === 'drop' && g.members.length === 6)!;
+    expect(sixMemberDrop.members.filter((m) => m.from === 'draft')).toHaveLength(2);
+
+    const after = removeMoveFromStage(before, sixMemberDrop.key, 'draft');
+    const survivor = after.groups.find((g) => g.key === sixMemberDrop.key)!;
+    expect(survivor.members).toHaveLength(4);
+    expect(survivor.members.every((m) => m.from !== 'draft')).toBe(true);
+    // The surviving members are the originals, untouched.
+    expect(survivor.members).toEqual(sixMemberDrop.members.filter((m) => m.from !== 'draft'));
+    // Same group otherwise, and no other group disturbed.
+    expect(survivor.action).toBe(sixMemberDrop.action);
+    expect(survivor.who).toBe(sixMemberDrop.who);
+    for (const g of before.groups) {
+      if (g.key === sixMemberDrop.key) continue;
+      expect(after.groups.find((x) => x.key === g.key)).toBe(g);
+    }
+  });
+
+  it('removes exactly the two transitions leaving that stage and nothing else', () => {
+    const before = model();
+    const sixMemberDrop = before.groups.find((g) => g.action === 'drop' && g.members.length === 6)!;
+    const after = removeMoveFromStage(before, sixMemberDrop.key, 'draft');
+    const expected = transitionIds(before).filter(
+      (id) => !['t_drop_draft_family', 't_drop_draft_staff'].includes(id),
+    );
+    expect(transitionIds(after)).toEqual(expected);
+  });
+
+  it('keeps the group a family/staff rectangle, so it re-reads as one "both" control', () => {
+    const before = model();
+    const sixMemberDrop = before.groups.find((g) => g.action === 'drop' && g.members.length === 6)!;
+    const after = removeMoveFromStage(before, sixMemberDrop.key, 'draft');
+    const reread = readStageModel(writeMachine(after), SIGNUP_STEPS);
+    const rereadGroup = reread.groups.find(
+      (g) => g.action === 'drop' && g.members.length === 4,
+    );
+    expect(rereadGroup).toBeDefined();
+    expect(rereadGroup?.who).toBe('both');
+  });
+
+  it('drops the group outright when the named stage held its last members', () => {
+    const before = model();
+    const confirmedDrop = before.groups.find(
+      (g) => g.action === 'drop' && g.members.every((m) => m.from === 'confirmed'),
+    )!;
+    const after = removeMoveFromStage(before, confirmedDrop.key, 'confirmed');
+    expect(after.groups.some((g) => g.key === confirmedDrop.key)).toBe(false);
+  });
+
+  it('is a no-op for a group key that does not exist', () => {
+    const before = model();
+    const after = removeMoveFromStage(before, 'no-such-group', 'draft');
+    expect(after.groups).toEqual(before.groups);
+    expect(after.stages).toBe(before.stages);
   });
 });
 

@@ -52,6 +52,32 @@ describe('membersForWho', () => {
     expect(next.every((m) => m.order !== NEW_ORDER)).toBe(true);
   });
 
+  // The exact two-click sequence that used to mint a duplicate id: rename
+  // one group's action to match another group's, then widen Who to "both".
+  // Signup's `t_complete_program` leaves `confirmed` as staff; the `drop`
+  // group also leaves `confirmed` (family + staff). Rename complete_program
+  // to `drop` and widen it, and the deterministic
+  // `t_${action}_${from}_${actor}` name it mints for the family row is
+  // `t_drop_confirmed_family` — a transition_id the drop group already
+  // holds. `transition_id` is machine-global, so that is two rows with one
+  // id in the written machine.
+  it('minting a member for an action that collides with another group does not reuse its transition_id', () => {
+    const complete = model.groups.find((g) => g.action === 'complete_program')!;
+    const renamed: MoveGroup = { ...complete, action: 'drop' };
+    const widened: MoveGroup = { ...renamed, who: 'both', members: membersForWho(renamed, 'both') };
+    const model2 = {
+      ...model,
+      groups: model.groups.map((g) => (g.key === complete.key ? widened : g)),
+    };
+    const ids = writeMachine(model2).transitions.map((t) => t.transition_id);
+    expect(ids).toHaveLength(new Set(ids).size);
+    // And specifically: the minted family row did NOT land on the drop
+    // group's existing id.
+    const minted = widened.members.find((m) => m.actor === 'family')!;
+    expect(minted.transition_id).not.toBe('t_drop_confirmed_family');
+    expect(minted.transition_id.startsWith('t_drop_confirmed_family_')).toBe(true);
+  });
+
   it('a who change that changes nothing round-trips the machine untouched', () => {
     const unchanged = { ...model, groups: model.groups.map((g) => ({ ...g, members: membersForWho(g, g.who) })) };
     expect(unchanged.groups.flatMap((g) => g.members.map((m) => m.transition_id)).sort()).toEqual(
@@ -87,6 +113,30 @@ describe('membersForScope', () => {
   it('re-scoping to the same stages changes nothing', () => {
     const same = membersForScope(drop, [...new Set(drop.members.map((m) => m.from))]);
     expect(same).toEqual(drop.members);
+  });
+
+  // Same hazard as `membersForWho`'s collision test above, reached through
+  // the Exits panel's scope checkboxes instead: tick a stage into a group
+  // whose action matches a DIFFERENT group that already leaves that stage.
+  it('scoping a group into a stage another group already leaves under the same action mints a distinct id', () => {
+    const complete = model.groups.find((g) => g.action === 'complete_program')!;
+    // `complete_program` leaves `confirmed`; `drop` leaves confirmed, draft,
+    // waitlisted and offered. Rename it to `drop` and scope it onto `draft`,
+    // where `t_drop_draft_staff` already exists.
+    const renamed: MoveGroup = { ...complete, action: 'drop' };
+    const scoped: MoveGroup = {
+      ...renamed,
+      members: membersForScope(renamed, ['confirmed', 'draft']),
+    };
+    const model2 = {
+      ...model,
+      groups: model.groups.map((g) => (g.key === complete.key ? scoped : g)),
+    };
+    const ids = writeMachine(model2).transitions.map((t) => t.transition_id);
+    expect(ids).toHaveLength(new Set(ids).size);
+    const minted = scoped.members.find((m) => m.from === 'draft')!;
+    expect(minted.transition_id).not.toBe('t_drop_draft_staff');
+    expect(minted.transition_id.startsWith('t_drop_draft_staff_')).toBe(true);
   });
 
   it('adding a stage adds one member per actor and touches nothing else', () => {
@@ -139,21 +189,35 @@ describe('membersForScope', () => {
     expect(next[0].roleGuard).toEqual(adminOnly);
   });
 
-  it('untick then re-tick restores the original machine exactly', () => {
+  it('untick then re-tick restores the original machine, re-minting only the re-added ids', () => {
     const froms = [...new Set(drop.members.map((m) => m.from))];
     const shrunk = { ...drop, members: membersForScope(drop, froms.filter((f) => f !== 'draft')) };
     const restored = { ...shrunk, members: membersForScope(shrunk, froms) };
     const model2 = { ...model, groups: model.groups.map((g) => (g.key === drop.key ? restored : g)) };
     const out = writeMachine(model2);
-    // The re-added transitions are new members, so they land at the END of
-    // the array rather than their original positions. Their CONTENT must
-    // still match exactly — this asserts nothing was lost or altered.
-    expect(out.transitions.map((t) => t.transition_id).sort()).toEqual(
-      SIGNUP_MACHINE.transitions.map((t) => t.transition_id).sort(),
-    );
+
+    expect(out.transitions).toHaveLength(SIGNUP_MACHINE.transitions.length);
+
+    // Every transition the untick never touched keeps its id AND its content
+    // byte-for-byte. That is the property this test has always been for: a
+    // scope edit must not renumber or rewrite its neighbours.
+    const reAdded = ['t_drop_draft_family', 't_drop_draft_staff'];
     for (const before of SIGNUP_MACHINE.transitions) {
-      const after = out.transitions.find((t) => t.transition_id === before.transition_id);
-      expect(after).toEqual(before);
+      if (reAdded.includes(before.transition_id)) continue;
+      expect(out.transitions.find((t) => t.transition_id === before.transition_id)).toEqual(before);
+    }
+
+    // The two re-added ones are genuinely NEW transitions — the untick
+    // deleted the originals — so `membersForScope` mints fresh, suffixed
+    // ids for them rather than reusing a deterministic name that a
+    // hand-authored or same-action transition elsewhere may already hold.
+    // Everything about them except the id must still match the original.
+    for (const id of reAdded) {
+      const before = SIGNUP_MACHINE.transitions.find((t) => t.transition_id === id)!;
+      const after = out.transitions.find((t) => t.transition_id.startsWith(`${id}_`));
+      expect({ id, found: after !== undefined }).toEqual({ id, found: true });
+      expect(after!.transition_id).not.toBe(id);
+      expect({ ...after!, transition_id: id }).toEqual(before);
     }
   });
 });

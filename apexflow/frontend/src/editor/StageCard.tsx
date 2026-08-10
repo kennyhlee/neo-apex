@@ -13,6 +13,10 @@ import type { MoveGroup, Stage } from './stage/types.ts';
 import type { EntityModelsMap, StateDef, WorkflowStepDef } from '../types/designer.ts';
 import './editor.css';
 
+/** Every role a stage can hold, in the order they read as a lifecycle.
+ * Matches `StateDef['kind']` exactly — the machine has no fourth value. */
+const STAGE_KINDS: Stage['kind'][] = ['initial', 'active', 'terminal'];
+
 interface StageCardProps {
   stage: Stage;
   moves: MoveGroup[];
@@ -32,6 +36,10 @@ interface StageCardProps {
   removeImpact: number;
   onStepsChange: (next: StepsUpdater) => void;
   onRename: (name: string) => void;
+  /** Writes the stage's role. StageEditor routes this through
+   * `stageOps.setStageKind` and `commit`, and raises the demotion toast when
+   * picking "Starts here" takes that role off another stage. */
+  onKindChange: (kind: Stage['kind']) => void;
   onRemoveStage: () => void;
   onAddMove: () => void;
   /** Rendered beneath the steps — supplied by StageEditor so MoveRow (Task 8)
@@ -51,6 +59,7 @@ export default function StageCard({
   removeImpact,
   onStepsChange,
   onRename,
+  onKindChange,
   onRemoveStage,
   onAddMove,
   renderMoves,
@@ -66,7 +75,7 @@ export default function StageCard({
     <li className="stage-card">
       <header className="stage-card-header">
         <label className="stage-card-name-label">
-          <span className="visually-hidden">{t('editor.stage.rename')}</span>
+          <span className="sr-only">{t('editor.stage.rename')}</span>
           <input
             type="text"
             className="stage-card-name-input"
@@ -76,12 +85,25 @@ export default function StageCard({
             onChange={(e) => onRename(e.target.value)}
           />
         </label>
-        {stage.kind === 'initial' && (
-          <span className="stage-card-role">{t('editor.stages.startsHere')}</span>
-        )}
-        {stage.kind === 'terminal' && (
-          <span className="stage-card-role">{t('editor.stages.finishes')}</span>
-        )}
+        {/* The stage's role. Previously a pair of read-only badges, which
+         * left `kind` writable only by `newStage`'s fill-the-missing-role
+         * rule — and therefore left a self-built workflow unable to ever
+         * grow the second terminal stage the Exits panel asks for. */}
+        <label className="stage-card-kind-label">
+          <span className="sr-only">{t('editor.stage.kindLabel')}</span>
+          <select
+            className="stage-card-kind"
+            value={stage.kind}
+            disabled={readOnly}
+            onChange={(e) => onKindChange(e.target.value as Stage['kind'])}
+          >
+            {STAGE_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {t(`editor.stage.kind.${k}`)}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           className="btn btn-danger btn-sm"
@@ -124,7 +146,7 @@ export default function StageCard({
          * rather than trying to keep showing a step that (once added) no
          * longer belongs in its own candidate list. */}
         <label className="stage-card-add-existing">
-          <span className="visually-hidden">{t('editor.stage.addExisting')}</span>
+          <span className="sr-only">{t('editor.stage.addExisting')}</span>
           <select
             className="stage-card-add-existing-select"
             value=""

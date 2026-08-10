@@ -32,8 +32,27 @@ interface MoveRowProps {
   declaredStepIds: string[];
   sourceGroups: SourceGroup[];
   readOnly: boolean;
+  /**
+   * Names of the OTHER stages this same move also leaves from, when it is
+   * rendered under one stage's card.
+   *
+   * A `MoveGroup` is keyed on everything except `from` (design ruling,
+   * Amendment B), so two moves that agree on action/target/who/guards/effects
+   * fold into ONE group rendered under every stage it leaves — pointing two
+   * hand-added `move…` rows at the same target is enough to produce that.
+   * Left unsaid, "Remove this move" then deletes the other stages'
+   * transitions too. Non-empty here switches this row to the same pair of
+   * scoped controls the step rows carry ("Remove from this stage" /
+   * "Delete everywhere"). Empty (the ordinary case, and always for the Exits
+   * panel, which scopes through its own checkbox rule instead) keeps the
+   * single unambiguous "Remove this move".
+   */
+  alsoFrom?: string[];
   onChange: (next: MoveGroup) => void;
   onRemove: () => void;
+  /** Drops only this stage's members. Required whenever `alsoFrom` is
+   * non-empty; unused otherwise. */
+  onRemoveFromStage?: () => void;
 }
 
 const WHO_OPTIONS: Who[] = ['family', 'staff', 'both', 'automatic'];
@@ -49,12 +68,15 @@ export default function MoveRow({
   declaredStepIds,
   sourceGroups,
   readOnly,
+  alsoFrom,
   onChange,
   onRemove,
+  onRemoveFromStage,
 }: MoveRowProps) {
   const { t } = useTranslation();
   const [advanced, setAdvanced] = useState(false);
   const targetName = stages.find((s) => s.stage_id === group.to)?.name || group.to;
+  const shared = (alsoFrom?.length ?? 0) > 0 && onRemoveFromStage !== undefined;
 
   function setWho(who: Who) {
     onChange({ ...group, who, members: membersForWho(group, who) });
@@ -115,6 +137,14 @@ export default function MoveRow({
         </p>
       )}
 
+      {/* Mirrors the step rows' "also in {stages}" note — same idiom, same
+       * job: say that an edit here is an edit somewhere else too. */}
+      {shared && (
+        <p className="move-row-also-from">
+          {t('editor.move.alsoFrom').replace('{stages}', alsoFrom!.join(', '))}
+        </p>
+      )}
+
       <div className="move-row-actions">
         <button
           type="button"
@@ -123,13 +153,25 @@ export default function MoveRow({
         >
           {advanced ? t('editor.move.advancedDone') : t('editor.move.advanced')}
         </button>
+        {shared && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={readOnly}
+            onClick={onRemoveFromStage}
+          >
+            {t('editor.move.removeFromStage')}
+          </button>
+        )}
         <button
           type="button"
           className="btn btn-danger btn-sm"
           disabled={readOnly}
           onClick={onRemove}
         >
-          {t('editor.move.remove')}
+          {/* Same rule the step rows follow: the global control only claims
+           * to be global once a scoped alternative sits next to it. */}
+          {shared ? t('editor.move.deleteEverywhere') : t('editor.move.remove')}
         </button>
       </div>
 

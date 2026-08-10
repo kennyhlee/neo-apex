@@ -46,12 +46,14 @@ export interface MoveMember {
  * except `from` (design ruling, Amendment B).
  *
  * Keying on `(action, to)` alone is not enough and this is measured, not
- * theoretical: signup's eight `drop` transitions all share an action and a
- * target, but only the one leaving `confirmed` may carry
+ * theoretical: signup's eight `drop` transitions (a family/staff pair from
+ * each of four stages) all share an action and a target, but only the TWO
+ * leaving `confirmed` may carry
  * `set_entity_field{ref: "enrollment", field: "status", value: "Withdrawn"}`
- * — the other three stages have no committed enrollment row and
- * `_effect_set_entity_field` raises 409. Under the looser key they collapse
- * into one card that cannot represent both shapes, and the round-trip fails.
+ * — the other six leave stages with no committed enrollment row, where
+ * `_effect_set_entity_field` raises 409. Under the looser key all eight
+ * collapse into one card that cannot represent both shapes, and the
+ * round-trip fails.
  */
 export interface MoveGroup {
   /** Stable within one read. Not persisted; used as a React key and for

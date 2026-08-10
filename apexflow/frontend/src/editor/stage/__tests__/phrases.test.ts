@@ -74,3 +74,163 @@ describe('describePrimitive', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Param-derived phrases.
+//
+// The finding these cover: a fixed sentence per primitive stated the INVERSE
+// of the truth on shipped data. `items_in_status` is the one that inverts, so
+// it gets the real definitions' own params, not invented ones.
+// ---------------------------------------------------------------------------
+describe('describePrimitive — items_in_status', () => {
+  const t = (k: string) => translations['en-US'][k] ?? k;
+
+  // enrollment.py's `t_flag_pending_items`, verbatim. This is the guard that
+  // rendered as "only if the required items are complete".
+  it('reads a rejected/any guard as a rejection, not a completion', () => {
+    const out = describePrimitive(
+      {
+        primitive: 'items_in_status',
+        params: { step_ids: ['application_form'], status: 'rejected', quantifier: 'any' },
+      },
+      t,
+    );
+    expect(out).toBe('only if any application_form item is sent back');
+    expect(out).not.toContain('complete');
+  });
+
+  // signup.py's confirm guard, verbatim.
+  it('reads a submitted-or-verified/all guard as a completion', () => {
+    expect(
+      describePrimitive(
+        {
+          primitive: 'items_in_status',
+          params: { step_ids: ['signup_form'], status: ['submitted', 'verified'], quantifier: 'all' },
+        },
+        t,
+      ),
+    ).toBe('only if every signup_form item is complete');
+  });
+
+  // enrollment.py's `t_finalize_enrollment` guard, verbatim.
+  it('reads a verified-or-waived/all guard as a completion too', () => {
+    expect(
+      describePrimitive(
+        {
+          primitive: 'items_in_status',
+          params: { step_ids: ['documents'], status: ['verified', 'waived'], quantifier: 'all' },
+        },
+        t,
+      ),
+    ).toBe('only if every documents item is complete');
+  });
+
+  it('defaults the quantifier to "all", as _guard_items_in_status does', () => {
+    expect(
+      describePrimitive({ primitive: 'items_in_status', params: { status: 'verified' } }, t),
+    ).toBe('only if every required item is complete');
+  });
+
+  it('drops the step clause when the guard is not scoped to steps', () => {
+    const out = describePrimitive(
+      { primitive: 'items_in_status', params: { status: 'rejected', quantifier: 'any' } },
+      t,
+    );
+    expect(out).toBe('only if any item is sent back');
+    expect(out).not.toContain('{steps}');
+  });
+
+  it('names every scoped step, not just the first', () => {
+    expect(
+      describePrimitive(
+        {
+          primitive: 'items_in_status',
+          params: { step_ids: ['application_form', 'documents'], status: 'verified' },
+        },
+        t,
+      ),
+    ).toBe('only if every application_form, documents item is complete');
+  });
+
+  it('lists the raw statuses rather than guessing a bucket it cannot justify', () => {
+    const out = describePrimitive(
+      { primitive: 'items_in_status', params: { status: ['not_started', 'rejected'] } },
+      t,
+    );
+    expect(out).toContain('not_started');
+    expect(out).toContain('rejected');
+  });
+
+  it('falls back to the bare phrase when a draft carries no usable status', () => {
+    expect(describePrimitive({ primitive: 'items_in_status', params: {} }, t)).toBe(
+      translations['en-US']['editor.phrase.items_in_status'],
+    );
+  });
+
+  it('leaves no placeholder unsubstituted in either locale', () => {
+    for (const locale of Object.keys(translations) as (keyof typeof translations)[]) {
+      const tl = (k: string) => translations[locale][k] ?? k;
+      for (const params of [
+        { step_ids: ['application_form'], status: 'rejected', quantifier: 'any' },
+        { status: ['submitted', 'verified'], quantifier: 'all' },
+      ]) {
+        const out = describePrimitive({ primitive: 'items_in_status', params }, tl);
+        expect({ locale, out, clean: !out.includes('{') }).toEqual({ locale, out, clean: true });
+      }
+    }
+  });
+});
+
+describe('describePrimitive — the other param-derived phrases', () => {
+  const t = (k: string) => translations['en-US'][k] ?? k;
+
+  // signup.py's confirmed drop pair and enrollment.py's approve effects.
+  it('set_entity_field names the record, the field and the value', () => {
+    expect(
+      describePrimitive(
+        {
+          primitive: 'set_entity_field',
+          params: { ref: 'enrollment', field: 'status', value: 'Withdrawn' },
+        },
+        t,
+      ),
+    ).toBe('sets the enrollment’s status to “Withdrawn”');
+    expect(
+      describePrimitive(
+        { primitive: 'set_entity_field', params: { ref: 'student', field: 'status', value: 'Enrolled' } },
+        t,
+      ),
+    ).toBe('sets the student’s status to “Enrolled”');
+  });
+
+  it('set_entity_field falls back when ref or field is missing', () => {
+    expect(describePrimitive({ primitive: 'set_entity_field', params: { value: 'x' } }, t)).toBe(
+      translations['en-US']['editor.phrase.set_entity_field'],
+    );
+  });
+
+  it('date_window names whichever bounds it actually has', () => {
+    expect(
+      describePrimitive(
+        { primitive: 'date_window', params: { start: '2026-01-01', end: '2026-03-31' } },
+        t,
+      ),
+    ).toBe('only between 2026-01-01 and 2026-03-31');
+    expect(
+      describePrimitive({ primitive: 'date_window', params: { start: '2026-01-01' } }, t),
+    ).toBe('only from 2026-01-01 onwards');
+    expect(describePrimitive({ primitive: 'date_window', params: { end: '2026-03-31' } }, t)).toBe(
+      'only until 2026-03-31',
+    );
+  });
+
+  it('set_context names the key it writes, on the workflow rather than an application', () => {
+    const out = describePrimitive(
+      { primitive: 'set_context', params: { key: 'school_year', value: '2026-2027' } },
+      t,
+    );
+    expect(out).toContain('school_year');
+    expect(out).toContain('2026-2027');
+    expect(out).not.toContain('application');
+  });
+});

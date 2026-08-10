@@ -11,15 +11,24 @@
 // this UI can make.
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { useToast } from '../hooks/useToast.ts';
 import { getPrimitives } from '../api/designer.ts';
 import { readStageModel, isExitGroup } from './stage/read.ts';
 import { writeMachine } from './stage/write.ts';
 import { buildSourceGroups, declaredSectionIds, declaredStepIds } from './stage/sources.ts';
-import { addExit, addMove, addStage, canAddExit, removeStage } from './stageOps.ts';
+import {
+  addExit,
+  addMove,
+  addStage,
+  canAddExit,
+  removeMoveFromStage,
+  removeStage,
+  setStageKind,
+} from './stageOps.ts';
 import StageCard from './StageCard.tsx';
 import MoveRow from './MoveRow.tsx';
 import ExitsPanel from './ExitsPanel.tsx';
-import type { MoveGroup, StageModel } from './stage/types.ts';
+import type { MoveGroup, Stage, StageModel } from './stage/types.ts';
 import type { StepsUpdater } from './draftStore.ts';
 import type {
   EntityModelsMap,
@@ -51,6 +60,7 @@ export default function StageEditor({
   onStepsChange,
 }: StageEditorProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const model = useMemo(() => readStageModel(machine, steps), [machine, steps]);
   const [primitives, setPrimitives] = useState<PrimitivesCatalog | null>(null);
   const [primitivesError, setPrimitivesError] = useState(false);
@@ -99,6 +109,26 @@ export default function StageEditor({
     onStepsChange(removed.steps);
   }
 
+  // `setStageKind` demotes the previous initial stage because the machine may
+  // hold exactly one — the deleted MachineEditor.tsx did the same and said so
+  // rather than letting a badge quietly move. The demoted stage is read here,
+  // before the write, so `setStageKind` itself stays pure.
+  function commitStageKind(stageId: string, kind: Stage['kind']) {
+    if (kind === 'initial') {
+      const demoted = model.stages.find((s) => s.kind === 'initial' && s.stage_id !== stageId);
+      if (demoted) {
+        toast({
+          message: t('editor.stage.demotedInitial').replace(
+            '{name}',
+            demoted.name || demoted.stage_id,
+          ),
+          tone: 'attn',
+        });
+      }
+    }
+    commit(setStageKind(model, stageId, kind));
+  }
+
   const exits = model.groups.filter((g) => isExitGroup(g, model));
   const movesByStage = new Map<string, MoveGroup[]>();
   for (const group of model.groups) {
@@ -119,6 +149,17 @@ export default function StageEditor({
   // This mirrors `removeStage`'s own deletion rule exactly: a group is
   // deleted if it targets the stage (`to`, which would otherwise dangle) or
   // every one of its members leaves from the stage (so none would remain).
+  const stageName = new Map(model.stages.map((s) => [s.stage_id, s.name || s.stage_id]));
+
+  /** The OTHER stages this move also leaves from, named. Empty for the
+   * ordinary one-stage move, which keeps its single "Remove this move"
+   * button; non-empty is exactly the case where that button would have
+   * deleted another stage's transition without saying so. */
+  function otherSourceNames(group: MoveGroup, stageId: string): string[] {
+    const others = [...new Set(group.members.map((m) => m.from))].filter((id) => id !== stageId);
+    return others.map((id) => stageName.get(id) ?? id);
+  }
+
   const removalImpact = new Map<string, number>();
   for (const stage of model.stages) {
     removalImpact.set(
@@ -156,6 +197,7 @@ export default function StageEditor({
                   ),
                 })
               }
+              onKindChange={(kind) => commitStageKind(stage.stage_id, kind)}
               onRemoveStage={() => commitRemoveStage(stage.stage_id)}
               onAddMove={() => commit(addMove(model, stage.stage_id))}
               renderMoves={(moves) => (
@@ -183,6 +225,12 @@ export default function StageEditor({
                       declaredStepIds={stepIds}
                       sourceGroups={sourceGroups}
                       readOnly={readOnly}
+                      // F3: a group is keyed on everything except `from`, so
+                      // one card can be the rendering of transitions leaving
+                      // several stages — and it renders identically under each
+                      // of them. Naming the others turns a silent multi-stage
+                      // delete into a labelled one.
+                      alsoFrom={otherSourceNames(move, stage.stage_id)}
                       onChange={(next) =>
                         commit({
                           ...model,
@@ -191,6 +239,9 @@ export default function StageEditor({
                       }
                       onRemove={() =>
                         commit({ ...model, groups: model.groups.filter((g) => g.key !== move.key) })
+                      }
+                      onRemoveFromStage={() =>
+                        commit(removeMoveFromStage(model, move.key, stage.stage_id))
                       }
                     />
                   ))}

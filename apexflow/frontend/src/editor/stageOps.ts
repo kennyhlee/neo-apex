@@ -1,7 +1,8 @@
-// The four authoring controls the deleted Machine tab carried and the stage
-// editor did not reinstate: add a stage, remove a stage, add a move out of a
-// stage, add a cross-cutting exit. Pure functions only, no React — the
-// caller (StageEditor/StageCard/ExitsPanel) commits the result through
+// The authoring controls the deleted Machine tab carried and the stage
+// editor did not reinstate: add a stage, remove a stage, change a stage's
+// role, add a move out of a stage, remove a move from one stage, add a
+// cross-cutting exit. Pure functions only, no React — the caller
+// (StageEditor/StageCard/ExitsPanel) commits the result through
 // `writeMachine`, same as every other edit this editor makes.
 //
 // Deliberately kept outside `src/editor/stage/` — that layer is the
@@ -27,8 +28,8 @@ function uniqueSuffix(): string {
  * `active` addition leaves both errors standing while adding a third
  * ("non-terminal but has no outgoing transition"). Filling the missing role
  * instead means adding a stage moves the machine toward valid, never away
- * from it. The kind stays freely editable afterwards (StageCard does not
- * expose that yet, matching the deleted UI's own scope).
+ * from it. The kind stays freely editable afterwards — StageCard's role
+ * control writes it through `setStageKind` below.
  */
 export function newStage(existing: Stage[]): Stage {
   const kind: Stage['kind'] = !existing.some((s) => s.kind === 'initial')
@@ -52,6 +53,50 @@ export function newStage(existing: Stage[]): Stage {
 /** Appends one new stage. Every existing stage and every group is untouched. */
 export function addStage(model: StageModel): StageModel {
   return { ...model, stages: [...model.stages, newStage(model.stages)] };
+}
+
+/**
+ * Sets one stage's role (`kind`).
+ *
+ * Without this the editor could not reach its own headline feature: a new
+ * workflow seeds `draft --submit--> done`, whose only terminal stage IS the
+ * finish, so `canAddExit` is false and the Exits panel tells the author to
+ * "add a finishing stage other than where this workflow ends" — an action
+ * `addStage` alone can never perform, because once both roles are filled
+ * `newStage` always yields `active`. Promoting an added stage to `terminal`
+ * is the missing move.
+ *
+ * Writing `initial` DEMOTES whichever other stage currently holds it to
+ * `active`. `validate.py`'s `_state_errors` requires exactly one initial
+ * state, so a second one is not a state the editor may pass through — this
+ * mirrors the deleted `MachineEditor.tsx`'s `setStateKind` (commit 0fb3fdc),
+ * including its rule that the demotion is reported to the author rather than
+ * done silently. The caller raises that toast: it can name the demoted stage
+ * by reading `model.stages` BEFORE calling, which keeps this function pure.
+ *
+ * Setting `terminal` on a stage that still has outgoing moves is ALLOWED.
+ * `_outgoing_transition_errors` reports it on the validation rail, which is
+ * where the author already reads every other machine-shape problem; blocking
+ * the edit here would instead make a legitimate two-step change (retarget the
+ * moves, then flip the role — or the reverse) impossible in either order.
+ *
+ * Nothing else is touched: every other stage keeps its identity, `groups` is
+ * returned by reference, and `finishStageId` is left alone — it is derived
+ * from the machine (`spine.ts`'s `finishStageId`) and presentational only, so
+ * the caller's `commit` -> `writeMachine` -> `readStageModel` cycle recomputes
+ * it a moment later, exactly as it does after `addStage`.
+ */
+export function setStageKind(model: StageModel, stageId: string, kind: Stage['kind']): StageModel {
+  const current = model.stages.find((s) => s.stage_id === stageId);
+  if (!current || current.kind === kind) return model;
+  return {
+    ...model,
+    stages: model.stages.map((s) => {
+      if (s.stage_id === stageId) return { ...s, kind };
+      if (kind === 'initial' && s.kind === 'initial') return { ...s, kind: 'active' as const };
+      return s;
+    }),
+  };
 }
 
 /**
@@ -149,6 +194,36 @@ export function addMove(model: StageModel, fromStageId: string): StageModel {
     members: [member],
   };
   return { ...model, groups: [...model.groups, group] };
+}
+
+/**
+ * Narrows one move to stop leaving `stageId`, without disturbing the stages
+ * it also leaves from.
+ *
+ * A `MoveGroup` is keyed on everything EXCEPT `from` (design ruling,
+ * Amendment B), so two moves authored separately on two stages fold into one
+ * group the moment they agree on action/target/who/guards/effects — and that
+ * one group then renders under BOTH stage cards. "Remove this move" deletes
+ * the group, i.e. the other stage's transition too. This is the move-level
+ * counterpart of `stagePlacement.ts`'s `removeStepFromStage`: the same
+ * "remove from here" / "delete everywhere" pair the step rows already offer.
+ *
+ * Drops every member leaving `stageId` — for a `who: 'both'` group that is
+ * the family/staff PAIR for that stage, which keeps the group a complete
+ * rectangle (`read.ts`'s `isRectangle`) so it re-reads as one `'both'`
+ * control rather than splitting per actor. A group left with no members at
+ * all is dropped outright: `writeMachine` would emit zero transitions for it
+ * and the next read could not reconstruct it.
+ */
+export function removeMoveFromStage(model: StageModel, groupKey: string, stageId: string): StageModel {
+  return {
+    ...model,
+    groups: model.groups
+      .map((g) =>
+        g.key === groupKey ? { ...g, members: g.members.filter((m) => m.from !== stageId) } : g,
+      )
+      .filter((g) => g.members.length > 0),
+  };
 }
 
 /**

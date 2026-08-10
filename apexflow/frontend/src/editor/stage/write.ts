@@ -57,6 +57,34 @@ export const NEW_ORDER = Number.MAX_SAFE_INTEGER;
 export const NEW_STAGE_INDEX = Number.MAX_SAFE_INTEGER;
 
 /**
+ * Short, non-cryptographic uniqueness suffix for a MINTED `transition_id` —
+ * same construction (and same precedent) as `stageOps.ts`'s own
+ * `uniqueSuffix`.
+ *
+ * `transition_id` is machine-GLOBAL, but the deterministic
+ * `t_${action}_${from}_${actor}` name is only unique per (action, from,
+ * actor). That gap is reachable from the editor with two clicks: rename one
+ * move's action to match another group's, then set Who to "both" — the
+ * second group mints `t_<action>_<from>_family`/`_staff` for a (from, actor)
+ * pair the FIRST group already occupies, and the machine ends up with two
+ * transitions sharing an id. `stageOps.addMove`/`addExit` were hardened for
+ * exactly this; the two `membersFor*` recomputations below are the remaining
+ * minting sites.
+ *
+ * Only NEW members get a suffix. A member that already exists is returned
+ * untouched, so this cannot renumber anything that was read from disk — the
+ * round-trip contract at the top of this file is unaffected.
+ */
+function uniqueSuffix(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+/** The id a newly minted member carries. See `uniqueSuffix`. */
+function newTransitionId(action: string, from: string, actor: TransitionDef['actor']): string {
+  return `t_${action}_${from}_${actor}_${uniqueSuffix()}`;
+}
+
+/**
  * The `actor_role` guard a given actor gets when the editor CREATES a
  * transition. Matches what both shipped templates author
  * (`_withdraw_pair`, `_drop_pair`) exactly, so an exit added in the editor
@@ -118,7 +146,7 @@ export function membersForWho(group: MoveGroup, who: Who): MoveMember[] {
         return { ...existing, roleGuard: needsRoleGuard ? (existing.roleGuard ?? roleGuardFor(actor)) : null };
       }
       return {
-        transition_id: `t_${group.action}_${from}_${actor}`,
+        transition_id: newTransitionId(group.action, from, actor),
         from,
         actor,
         roleGuard: needsRoleGuard ? roleGuardFor(actor) : null,
@@ -138,7 +166,10 @@ export function membersForWho(group: MoveGroup, who: Who): MoveMember[] {
  *
  * This is what makes "one rule, expanded on save" safe to re-edit: unticking
  * a stage and re-ticking it does not silently renumber the transitions that
- * were never touched.
+ * were never touched. The re-ticked stage's own members ARE new transitions
+ * (the untick deleted the originals) and so carry freshly minted, suffixed
+ * ids — see `newTransitionId`, and `who.test.ts`'s untick/re-tick test,
+ * which pins both halves of that.
  */
 export function membersForScope(group: MoveGroup, stageIds: string[]): MoveMember[] {
   const actors = actorsFor(group.who);
@@ -148,7 +179,7 @@ export function membersForScope(group: MoveGroup, stageIds: string[]): MoveMembe
       const existing = group.members.find((m) => m.from === from && m.actor === actor);
       if (existing) return existing;
       return {
-        transition_id: `t_${group.action}_${from}_${actor}`,
+        transition_id: newTransitionId(group.action, from, actor),
         from,
         actor,
         roleGuard: needsRoleGuard ? roleGuardFor(actor) : null,

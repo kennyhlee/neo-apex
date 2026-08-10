@@ -980,9 +980,16 @@
 .stage-card-header .btn {
   margin-left: auto;
 }
-.stage-card-role {
+.stage-card-kind-label {
+  display: inline-flex;
+}
+.stage-card-kind {
   font-size: 0.8125rem;
   color: var(--color-text-muted, #6b6b76);
+  padding: 0.125rem 0.25rem;
+  border: 1px solid var(--color-border, #d7d7dc);
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
 }
 .stage-card-remove-warn {
   margin: 0.25rem 0 0;
@@ -1040,6 +1047,11 @@
 .stage-exits > .btn {
   margin-top: var(--space-3, 0.75rem);
 }
+.step-editor-reorder-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #6b6b76);
+}
 .step-card-also-in {
   margin: 0.25rem 0 0;
   padding: 0 0 0 2rem;
@@ -1057,14 +1069,6 @@
   border-radius: var(--radius-sm, 4px);
   background: transparent;
   color: var(--color-text-muted, #6b6b76);
-}
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
 }
 .move-rows {
   list-style: none;
@@ -1114,6 +1118,13 @@
 }
 .move-row-clause-label {
   font-weight: 600;
+  color: var(--color-text-muted, #6b6b76);
+}
+/* Same treatment as `.step-card-also-in` — it says the same kind of thing
+   about a row that belongs to more than one stage. */
+.move-row-also-from {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
   color: var(--color-text-muted, #6b6b76);
 }
 .move-row-actions {

@@ -231,6 +231,12 @@ export default function StepEditor({
        * alongside it. */}
       {!stageId && steps.length === 0 && <p className="step-editor-empty">{t('editor.steps.empty')}</p>}
 
+      {/* Only worth saying where it can bite: in stage mode, with more than
+       * one step in the workflow, and only when the buttons are usable. */}
+      {stageId && steps.length > 1 && !readOnly && (
+        <p className="step-editor-reorder-hint">{t('editor.stage.reorderHint')}</p>
+      )}
+
       <ul className="step-editor-list">
         {steps.map((step, idx) => {
           if (stageId && !step.available_in.includes(stageId)) return null;
@@ -260,21 +266,29 @@ export default function StepEditor({
                   onChange={(e) => updateStepAt(idx, { ...step, title: e.target.value })}
                 />
                 <div className="step-card-actions">
+                  {/* Reordering is scoped to the WHOLE workflow's step order,
+                   * not to this stage: `idx` is the index in the full array
+                   * and `moveStep` swaps neighbours there, so in stage mode a
+                   * press can swap this step past one that isn't on screen.
+                   * That is why the buttons say so — both in their accessible
+                   * names here and in `editor.stage.reorderHint` above the
+                   * list — rather than being disabled, which is how the
+                   * capability silently left the product. */}
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    disabled={readOnly || Boolean(stageId) || idx === 0}
+                    disabled={readOnly || idx === 0}
                     onClick={() => moveStep(idx, -1)}
-                    aria-label={t('editor.step.moveUp')}
+                    aria-label={t(stageId ? 'editor.step.moveUpGlobal' : 'editor.step.moveUp')}
                   >
                     &uarr;
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    disabled={readOnly || Boolean(stageId) || idx === steps.length - 1}
+                    disabled={readOnly || idx === steps.length - 1}
                     onClick={() => moveStep(idx, 1)}
-                    aria-label={t('editor.step.moveDown')}
+                    aria-label={t(stageId ? 'editor.step.moveDownGlobal' : 'editor.step.moveDown')}
                   >
                     &darr;
                   </button>
