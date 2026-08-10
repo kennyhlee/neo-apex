@@ -179,7 +179,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.step.reviewStaff': 'Staff review',
     'editor.step.reviewAuto': 'Auto-verify',
     'editor.step.availableIn': 'Available in states',
-    'editor.step.noStates': 'This workflow has no states yet — add some in the Machine tab.',
+    'editor.step.noStates': 'No stages yet. Open the Machine tab and add at least a starting stage and a finishing stage — then come back and tick where this step appears.',
     'editor.step.showIf': 'Show only if',
 
     'editor.section.heading': 'Sections',
@@ -514,7 +514,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.step.reviewStaff': '员工审核',
     'editor.step.reviewAuto': '自动通过',
     'editor.step.availableIn': '可用状态',
-    'editor.step.noStates': '此工作流尚无状态 — 请在"状态机"标签页中添加。',
+    'editor.step.noStates': '尚无阶段。请打开"状态机"标签页，至少添加一个起始阶段和一个结束阶段，然后回到这里勾选此步骤出现的位置。',
     'editor.step.showIf': '显示条件',
 
     'editor.section.heading': '版块',

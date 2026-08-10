@@ -42,8 +42,24 @@ function uniqueSuffix(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function newState(): StateDef {
-  return { state_id: `state-${uniqueSuffix()}`, name: '', kind: 'active' };
+/**
+ * A new state's kind is chosen from what the machine is currently MISSING,
+ * not hardcoded to `active`.
+ *
+ * Hardcoding `active` made "Add state" actively counter-productive: a new
+ * workflow shows "no initial state"/"no terminal state", and adding a state
+ * left both errors standing while adding a third ("non-terminal but has no
+ * outgoing transition"). The author's obvious corrective action raised the
+ * error count. Filling the missing role instead means adding a state moves
+ * the machine toward valid. The kind stays freely editable afterwards.
+ */
+function newState(existing: StateDef[]): StateDef {
+  const kind: StateDef['kind'] = !existing.some((s) => s.kind === 'initial')
+    ? 'initial'
+    : !existing.some((s) => s.kind === 'terminal')
+      ? 'terminal'
+      : 'active';
+  return { state_id: `state-${uniqueSuffix()}`, name: '', kind };
 }
 
 function getSections(step: WorkflowStepDef): WorkflowSectionDef[] {
@@ -158,7 +174,7 @@ export default function MachineEditor({ tenantId, machine, steps, models, errors
     onChange({ ...machine, states: machine.states.filter((_, i) => i !== idx) });
   }
   function addState() {
-    onChange({ ...machine, states: [...machine.states, newState()] });
+    onChange({ ...machine, states: [...machine.states, newState(machine.states)] });
   }
   function setTransitions(next: MachineDef['transitions']) {
     onChange({ ...machine, transitions: next });

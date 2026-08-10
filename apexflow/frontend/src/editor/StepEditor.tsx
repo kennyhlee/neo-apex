@@ -39,14 +39,28 @@ function uniqueSuffix(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function newStep(type: WorkflowStepDef['type']): WorkflowStepDef {
+/**
+ * `available_in` defaults to the machine's INITIAL state rather than `[]`.
+ *
+ * An empty `available_in` is a step that appears in no state at all —
+ * silently inert, with nothing in the UI saying so. Defaulting to the
+ * initial state means a newly added step is visible somewhere by default,
+ * which is what an author almost always wants; widening or moving it is a
+ * checkbox away. Falls back to `[]` only when the machine has no initial
+ * state yet, since there is nothing honest to point at.
+ */
+function newStep(
+  type: WorkflowStepDef['type'],
+  states: StateDef[] = [],
+): WorkflowStepDef {
+  const initial = states.find((s) => s.kind === 'initial');
   return {
     step_id: `${type}-${uniqueSuffix()}`,
     type,
     title: '',
     required: false,
     blocking: false,
-    available_in: [],
+    available_in: initial ? [initial.state_id] : [],
     show_if: null,
     review: null,
     config: type === 'form' ? { sections: [] } : type === 'documents' ? { docs: [] } : { body: '' },
@@ -125,7 +139,7 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
   }
 
   function addStep(type: WorkflowStepDef['type']) {
-    onChange((prev) => [...prev, newStep(type)]);
+    onChange((prev) => [...prev, newStep(type, states)]);
   }
 
   /**
