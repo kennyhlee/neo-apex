@@ -90,22 +90,35 @@ export default function ExitsPanel({
               <fieldset className="stage-exit-scope">
                 <legend>{t('editor.exit.scopeHeading')}</legend>
                 <p className="stage-exit-scope-rule">{t('editor.exit.scopeRule')}</p>
-                {ruleStages.map((stage) => (
-                  <label key={stage.stage_id} className="stage-exit-scope-option">
-                    <input
-                      type="checkbox"
-                      checked={scope.has(stage.stage_id)}
-                      disabled={readOnly}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...scope, stage.stage_id]
-                          : [...scope].filter((id) => id !== stage.stage_id);
-                        onChange({ ...exit, members: membersForScope(exit, next) });
-                      }}
-                    />
-                    {stage.name || stage.stage_id}
-                  </label>
-                ))}
+                {ruleStages.map((stage) => {
+                  // Refuse the last untick: emptying a scope makes
+                  // `membersForScope` return `[]`, which `writeMachine`
+                  // writes as zero transitions — on the next read the group
+                  // no longer exists (`readStageModel` has nothing to build
+                  // it from) and the card vanishes with no undo. Deliberate
+                  // deletion of the whole rule stays available through
+                  // "Remove this move" (explicit, labelled), so disabling
+                  // this box loses no capability — it only blocks the
+                  // accidental, silent path to the same end state.
+                  const ticked = scope.has(stage.stage_id);
+                  const isLastTicked = ticked && scope.size === 1;
+                  return (
+                    <label key={stage.stage_id} className="stage-exit-scope-option">
+                      <input
+                        type="checkbox"
+                        checked={ticked}
+                        disabled={readOnly || isLastTicked}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...scope, stage.stage_id]
+                            : [...scope].filter((id) => id !== stage.stage_id);
+                          onChange({ ...exit, members: membersForScope(exit, next) });
+                        }}
+                      />
+                      {stage.name || stage.stage_id}
+                    </label>
+                  );
+                })}
               </fieldset>
 
               <p className="stage-exit-expansion">

@@ -1190,14 +1190,12 @@
 }
 .stage-exit-card {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-3, 0.75rem);
   border: 1px solid var(--color-border, #d7d7dc);
   border-radius: var(--radius-md, 8px);
   padding: var(--space-3, 0.75rem);
-}
-.stage-exit-action {
-  font-weight: 600;
 }
 .stage-exit-expansion {
   font-size: 0.8125rem;
