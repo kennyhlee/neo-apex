@@ -138,6 +138,27 @@ def test_valid_definition_health_is_current():
     assert definition_health(machine, steps, models) == "current"
 
 
+def test_section_copy_errors_reach_validate_definition():
+    """Wiring regression guard: every other section-copy test in
+    `test_section_copy.py` calls `_section_copy_errors` directly, so
+    deleting the `errors += _section_copy_errors(section_entries)` line
+    inside `validate_definition` (validate.py) leaves that whole file green
+    — nothing exercises the aggregate. This drives the same over-length-
+    title + disallowed-link-scheme defect through the PUBLIC
+    `validate_definition` entry point instead, so unwiring the check breaks
+    a test."""
+    steps_list = _base_steps_list()
+    section = steps_list[0]["config"]["sections"][0]
+    section["title"] = "x" * 81
+    # No nested parens in the link target -- keeps this test about the
+    # WIRING, not the regex-capture edge cases IMPORTANT 4 covers separately.
+    section["description"] = "Click [here](javascript:doBadThing) to continue."
+    machine, steps, models = _build(_base_machine_dict(), steps_list, _base_models())
+    errors = validate_definition(machine, steps, models)
+    assert any("student_section" in e and "title" in e for e in errors), errors
+    assert any("javascript:dobadthing" in e.lower() for e in errors), errors
+
+
 def test_guarded_transition_plus_unguarded_last_in_same_group_is_valid():
     """Regression guard for `_unguarded_branch_errors` false positives: a
     (from, action) group with ONE guarded transition followed by ONE
