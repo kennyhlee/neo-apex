@@ -61,3 +61,26 @@
 .fr-section-desc p { margin: 0 0 6px; }
 .fr-section-desc p:last-child { margin-bottom: 0; }
 .fr-section-desc a { color: var(--accent-ink, var(--accent)); }
+
+.fr-section { border: 1px solid var(--border-primary); border-radius: var(--radius-sm);
+  padding: 14px 16px; margin: 0; min-width: 0; }
+.fr-section-title { font-size: 14px; font-weight: 650; color: var(--text-primary); padding: 0 4px; }
+.fr-accordion { display: flex; flex-direction: column; gap: 8px; }
+.fr-accordion-item { border: 1px solid var(--border-primary); border-radius: var(--radius-sm);
+  overflow: hidden; }
+.fr-accordion-h { margin: 0; font-size: inherit; font-weight: inherit; }
+.fr-accordion-btn { display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 13px; background: none; border: 0; font: inherit; text-align: left;
+  color: var(--text-primary); cursor: pointer; }
+.fr-accordion-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fr-accordion-t { font-weight: 650; }
+.fr-accordion-chev { margin-left: auto; color: var(--text-tertiary); }
+.fr-accordion-panel { padding: 0 13px 13px; }
+.fr-accordion-panel .fr-section { border: 0; padding: 0; }
+.fr-pill { font-size: 11px; font-weight: 650; padding: 1px 8px; border-radius: 999px;
+  border: 1px solid transparent; white-space: nowrap; }
+.fr-pill--done { background: var(--success-muted); color: var(--success); border-color: var(--success); }
+.fr-pill--todo { background: var(--warning-muted, transparent); color: var(--warning, var(--text-secondary));
+  border-color: var(--warning, var(--border-primary)); }
+.fr-pill--optional { background: var(--bg-tertiary); color: var(--text-tertiary);
+  border-color: var(--border-primary); }

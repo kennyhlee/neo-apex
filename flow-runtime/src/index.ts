@@ -13,3 +13,6 @@ export { draftToSectionAnswers, sectionAnswersToDraft } from './sectionAnswers';
 export * from './sectionTitle';
 export * from './SectionDescription';
 export * from './sectionCompletion';
+export * from './SectionShell';
+export * from './AccordionSections';
+export * from './useMediaQuery';
