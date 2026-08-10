@@ -478,3 +478,24 @@ survived into code comments:
 None of these needed a fix-round or blocked a task review — every one was
 caught by the `# ADJUST(bindings)` discipline at write time, the same
 mechanism Plan 5 introduced. No new plan-defect class emerged this time.
+
+28. **The section-description reference-link check over-rejects ordinary
+    prose.** `apexflow/backend/app/workflows/validate.py`'s
+    `_MD_LINK_REF_R` (`^[ \t]*\[[^\]]+\]:\s*(\S+)`, added in the final
+    fix wave of the form-section-layout branch) treats ANY line beginning
+    `[label]: text` as a markdown link definition. Legitimate copy is
+    blocked at publish with a misleading error naming a "link" that does not
+    exist: `[Important]: read the handbook before you begin.` is rejected
+    with "has a link to `'read'`", and `[^1]: Pickup is at 3pm on Fridays.`
+    is rejected likewise. The RENDERER disagrees — it displays both as plain
+    text — so a school can author copy that previews perfectly and cannot be
+    saved.
+
+    Fails closed (blocks publishing rather than allowing bad content),
+    admin-facing rather than family-facing, and workaroundable by
+    rephrasing, so it did not block the merge. Fix: only treat
+    `[label]: target` as a link definition when `target` is URL-ish
+    (contains `:` or `/`), or when the label is actually referenced by a
+    `[x][label]` elsewhere in the same description. Introduced by commit
+    `e9a42d0`; regression relative to the branch's own starting point, not a
+    pre-existing defect.
