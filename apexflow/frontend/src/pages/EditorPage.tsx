@@ -8,8 +8,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useToast } from '../hooks/useToast.ts';
 import { useDraftStore } from '../editor/draftStore.ts';
-import StepEditor from '../editor/StepEditor.tsx';
-import MachineEditor from '../editor/MachineEditor.tsx';
+import StageEditor from '../editor/StageEditor.tsx';
 import PreviewPane from '../editor/PreviewPane.tsx';
 import PublishDialog from '../editor/PublishDialog.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -17,7 +16,7 @@ import { Button } from '../components/ui/Button.tsx';
 import type { ChannelAccess } from '../types/designer.ts';
 import './EditorPage.css';
 
-type EditorTab = 'steps' | 'machine' | 'preview';
+type EditorTab = 'stages' | 'preview';
 
 export default function EditorPage() {
   const { t } = useTranslation();
@@ -27,7 +26,7 @@ export default function EditorPage() {
   const { entityId } = useParams<{ entityId: string }>();
   const tenantId = user?.tenant_id ?? '';
   const store = useDraftStore(tenantId, entityId);
-  const [tab, setTab] = useState<EditorTab>('steps');
+  const [tab, setTab] = useState<EditorTab>('stages');
   const [publishBusy, setPublishBusy] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
 
@@ -189,20 +188,11 @@ export default function EditorPage() {
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'steps'}
-          className={`editor-tab${tab === 'steps' ? ' editor-tab-active' : ''}`}
-          onClick={() => setTab('steps')}
+          aria-selected={tab === 'stages'}
+          className={`editor-tab${tab === 'stages' ? ' editor-tab-active' : ''}`}
+          onClick={() => setTab('stages')}
         >
-          {t('editor.tabs.steps')}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'machine'}
-          className={`editor-tab${tab === 'machine' ? ' editor-tab-active' : ''}`}
-          onClick={() => setTab('machine')}
-        >
-          {t('editor.tabs.machine')}
+          {t('editor.tabs.stages')}
         </button>
         <button
           type="button"
@@ -217,25 +207,16 @@ export default function EditorPage() {
 
       <div className="editor-layout">
         <div className="editor-main" role="tabpanel">
-          {tab === 'steps' && (
-            <StepEditor
-              steps={store.steps}
-              onChange={store.setSteps}
-              models={store.models}
-              states={store.machine.states}
-              errors={store.validation.errors}
-              readOnly={store.readOnly}
-            />
-          )}
-          {tab === 'machine' && (
-            <MachineEditor
+          {tab === 'stages' && (
+            <StageEditor
               tenantId={tenantId}
               machine={store.machine}
-              onChange={store.setMachine}
               steps={store.steps}
               models={store.models}
               errors={store.validation.errors}
               readOnly={store.readOnly}
+              onMachineChange={store.setMachine}
+              onStepsChange={store.setSteps}
             />
           )}
           {tab === 'preview' && (

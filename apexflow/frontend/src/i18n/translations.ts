@@ -127,6 +127,19 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.tabs.machine': 'Machine',
     'editor.tabs.preview': 'Preview',
 
+    // Stage editor
+    'editor.tabs.stages': 'Stages',
+    'editor.stages.heading': 'Stages',
+    'editor.stages.startsHere': 'Starts here',
+    'editor.stages.finishes': 'Finished',
+    'editor.stages.stepCount': '{n} step(s)',
+    'editor.stages.moveCount': '{n} move(s) out',
+    'editor.stages.empty': 'This workflow has no stages yet.',
+    'editor.stages.errorCount': '{n} issue(s) to fix — see Validation',
+    'editor.exits.heading': 'Exits',
+    'editor.exits.empty': 'No exits yet.',
+    'editor.exits.expansion': 'expands to {t} transition(s) · {s} stage(s) × {a} actor(s)',
+
     'editor.preview.stateLabel': 'Preview as state',
     'editor.preview.stepCount': '{n} of {m} steps available in this state',
     'editor.preview.resetAnswers': 'Reset answers',
@@ -473,6 +486,19 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.tabs.steps': '步骤',
     'editor.tabs.machine': '状态机',
     'editor.tabs.preview': '预览',
+
+    // Stage editor
+    'editor.tabs.stages': '阶段',
+    'editor.stages.heading': '阶段',
+    'editor.stages.startsHere': '从这里开始',
+    'editor.stages.finishes': '已完成',
+    'editor.stages.stepCount': '{n} 个步骤',
+    'editor.stages.moveCount': '{n} 个流转',
+    'editor.stages.empty': '此工作流尚无阶段。',
+    'editor.stages.errorCount': '有 {n} 个问题待修复 — 见校验',
+    'editor.exits.heading': '退出',
+    'editor.exits.empty': '尚无退出。',
+    'editor.exits.expansion': '展开为 {t} 个转换 · {s} 个阶段 × {a} 个操作者',
 
     'editor.preview.stateLabel': '以此状态预览',
     'editor.preview.stepCount': '此状态下共 {m} 个步骤中的 {n} 个可用',
