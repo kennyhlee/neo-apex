@@ -152,11 +152,13 @@ describe('translations', () => {
   });
 
   it('has no blank values', () => {
+    const blank: string[] = [];
     for (const locale of LOCALES) {
       for (const [key, value] of Object.entries(translations[locale])) {
-        expect(`${locale}:${key}:${value.trim()}`).not.toMatch(/:$/);
+        if (value.trim() === '') blank.push(`${locale}:${key}`);
       }
     }
+    expect(blank).toEqual([]);
   });
 });
 ```
@@ -2213,8 +2215,7 @@ Create `apexflow/frontend/src/editor/StageEditor.tsx`:
 import { useMemo } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { readStageModel, isExitGroup } from './stage/read.ts';
-import { writeMachine } from './stage/write.ts';
-import type { MoveGroup, StageModel } from './stage/types.ts';
+import type { MoveGroup } from './stage/types.ts';
 import type {
   EntityModelsMap,
   MachineDef,
@@ -2252,13 +2253,6 @@ export default function StageEditor({
       movesByStage.set(member.from, list);
     }
   }
-
-  /** Every edit funnels through here, so there is exactly one place a
-   * StageModel becomes a machine. */
-  function commit(next: StageModel) {
-    onMachineChange(writeMachine(next));
-  }
-  void commit; // Tasks 7-9 wire the editing controls to this.
 
   return (
     <div className="stage-editor">
@@ -2716,7 +2710,16 @@ In `StageEditor.tsx`, replace the `<li key={stage.stage_id} className="stage-car
             />
 ```
 
-Add `import StageCard from './StageCard.tsx';` and remove the `void commit;` line.
+Add `import StageCard from './StageCard.tsx';`, add `readOnly` back to the destructured props (Task 6 deliberately left it out to keep lint clean), and add the single place a `StageModel` becomes a machine — every editing control in Tasks 7–9 funnels through it, so the round-trip property covers all of them:
+
+```tsx
+import { writeMachine } from './stage/write.ts';
+import type { StageModel } from './stage/types.ts';
+
+  function commit(next: StageModel) {
+    onMachineChange(writeMachine(next));
+  }
+```
 
 - [ ] **Step 5: Add the CSS**
 
@@ -2823,6 +2826,9 @@ replaces two tabs."
 
 **Files:**
 - Create: `apexflow/frontend/src/editor/MoveRow.tsx`
+- Create: `apexflow/frontend/src/editor/stage/sources.ts`
+- Modify: `apexflow/frontend/src/editor/stage/write.ts` (add `membersForWho`)
+- Create: `apexflow/frontend/src/editor/stage/__tests__/who.test.ts`
 - Modify: `apexflow/frontend/src/editor/StageEditor.tsx`, `translations.ts`, `editor.css`
 
 **Interfaces:**
@@ -3044,7 +3050,68 @@ export default function MoveRow({
 
 - [ ] **Step 3: Wire MoveRow into StageEditor**
 
-In `StageEditor.tsx`: load the primitives catalog (lift the `useEffect` from `MachineEditor.tsx:122-137` verbatim, including `primitivesError`), build `sourceGroups`/`declaredSectionIds`/`declaredStepIds` by lifting `MachineEditor.tsx:65-110` verbatim, and replace `renderMoves={() => null}` with:
+First extract the picker menus into a real module rather than copying them out of `MachineEditor.tsx`. Create `apexflow/frontend/src/editor/stage/sources.ts`:
+
+```ts
+// The three picker menus GuardEffectComposer needs: declared section ids
+// (`commit_sections.section_ids`), declared step ids (`start_due_clocks`,
+// `items_in_status`), and the `{section_id}.{field}` source groups a
+// `data_condition` guard's ShowIfBuilder offers.
+//
+// These existed as module-private helpers in MachineEditor.tsx, which Task 10
+// deletes. They are a real module now rather than a copy: StepEditor.tsx has
+// its own `buildSourceGroups` for step `show_if`, and having a third copy
+// appear alongside the one that is about to be deleted is exactly the
+// duplication a reviewer should reject.
+import type { SourceGroup } from '../ShowIfBuilder.tsx';
+import type { WorkflowSectionDef, WorkflowStepDef } from '../../types/designer.ts';
+
+function getSections(step: WorkflowStepDef): WorkflowSectionDef[] {
+  const raw = step.config.sections;
+  return Array.isArray(raw) ? (raw as WorkflowSectionDef[]) : [];
+}
+
+export function declaredSectionIds(steps: WorkflowStepDef[]): string[] {
+  const ids: string[] = [];
+  for (const step of steps) {
+    if (step.type !== 'form') continue;
+    for (const section of getSections(step)) {
+      if (section.section_id) ids.push(section.section_id);
+    }
+  }
+  return ids;
+}
+
+export function declaredStepIds(steps: WorkflowStepDef[]): string[] {
+  return steps.map((s) => s.step_id);
+}
+
+export function buildSourceGroups(steps: WorkflowStepDef[], contextLabel: string): SourceGroup[] {
+  const groups: SourceGroup[] = [];
+  for (const step of steps) {
+    if (step.type !== 'form') continue;
+    for (const section of getSections(step)) {
+      if (!section.entity_model || section.fields.length === 0) continue;
+      groups.push({
+        label: section.section_id,
+        options: section.fields.map((f) => ({
+          value: `${section.section_id}.${f.name}`,
+          label: `${section.section_id}.${f.name}`,
+        })),
+      });
+    }
+  }
+  groups.push({
+    label: contextLabel,
+    options: [{ value: 'context.school_year', label: 'context.school_year' }],
+  });
+  return groups;
+}
+```
+
+> This is behaviour-preserving: it is what `MachineEditor.tsx:65-110` does today, including the hardcoded `context.school_year` option. That option is wrong for the signup template, whose context key is `program_id` — **leave it wrong here.** Widening it is a behaviour change that belongs in its own task with its own test, not smuggled into an extraction. Log it as a deferred minor.
+
+Then in `StageEditor.tsx`: import those three helpers, load the primitives catalog with the same one-fetch-per-tenant effect `MachineEditor.tsx:122-137` uses (the catalog is auth-scoped per tenant but its content is static, so a single fetch per mount is enough), and replace `renderMoves={() => null}` with:
 
 ```tsx
               renderMoves={(moves) => (
