@@ -51,6 +51,36 @@ describe('SectionDescription rendering', () => {
     );
     expect(html('Compare: a < b.')).toContain('Compare: a &lt; b.');
   });
+
+  it('leaves a bare tag name with no attribute-like content after it untouched', () => {
+    // A tag NAME alone (no `=`, no immediate close) is exactly what a
+    // school writes as a fill-in-the-blank placeholder, not markup.
+    expect(html('Write a title like <title of your book> here.')).toContain(
+      '&lt;title of your book&gt;',
+    );
+    // "b" is a real tag name, but with nothing after it that looks like
+    // markup, `a<b` must survive rather than being truncated to `a`.
+    expect(html('Compare using a<b notation.')).toContain('a&lt;b notation');
+  });
+
+  it('renders survivable content, not just an absence of stripped markup', () => {
+    // Positive/survival checks, not just `not.toContain`: a mutation that
+    // makes an override or the stripper swallow everything must fail these,
+    // even though it could still pass every `not.toContain` assertion above.
+    expect(html('> Please read carefully.')).toContain('Please read carefully');
+    expect(html('# Address')).toContain('Address');
+    expect(
+      html(
+        'Please read the attached handbook.\n<img src=x onerror=alert(1)\nContact the office with questions.',
+      ),
+    ).toContain('Please read the attached handbook.');
+    expect(
+      html(
+        'Please read the attached handbook.\n<img src=x onerror=alert(1)\nContact the office with questions.',
+      ),
+    ).toContain('Contact the office with questions.');
+    expect(html('See <https://school.example.com> for details.')).toContain('for details');
+  });
 });
 
 describe('SectionDescription safety', () => {

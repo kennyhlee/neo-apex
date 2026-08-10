@@ -97,18 +97,47 @@ const OPTIONS = {
  *
  * `stripRawHtml` is display hygiene layered ON TOP of that boundary, not a
  * replacement for it -- it must never be relied on to prevent injection,
- * only to prevent ugly leakage. It is therefore optimized for "never
- * destroy legitimate copy" over "catch every conceivable tag-shaped string":
+ * only to prevent ugly leakage. Two earlier designs got the tradeoff wrong
+ * in opposite directions:
+ *
+ *   1. "Strip anything shaped like `<...>`" deleted real content: CommonMark
+ *      autolinks (`<https://x>`), placeholder copy (`<first> <last>`), and
+ *      a heading-name allowlist even ate word placeholders like
+ *      `<form name>` or `<title of your book>` because a bare tag NAME
+ *      match was treated as sufficient.
+ *   2. Gating on tag name plus "runs to end of line if unclosed" fixed the
+ *      onerror-leak case but introduced silent truncation of ordinary
+ *      copy: `a<b` (a real tag name, "b", immediately after `<`) rendered
+ *      as just `a`.
+ *
+ * The actual signal that something is markup -- as opposed to a stray `<`
+ * that happens to be followed by a real tag name -- is not "starts with a
+ * tag name" but "starts with a tag name AND has attribute-like content
+ * after it". A name alone (`<title of your book>`, `<form name>`) is
+ * exactly what a school types as a fill-in-the-blank placeholder and must
+ * survive. A name followed by `=` (an attribute) or by an immediate `>` or
+ * `/>` (a real empty/self-closing tag) is what the library's own raw-HTML
+ * grammar would recognize as a tag, closed or not:
  *
  * - Matches only a fixed allowlist of real HTML tag names (plus HTML
- *   comments), not arbitrary `<...>` -- so CommonMark autolinks
- *   (`<https://x>`, `<mailto:a@b>`, bare `<a@b>`), placeholder copy like
- *   `<first> <last>`, and comparisons like `a < b` all survive untouched,
- *   because none of them is a known tag name.
- * - Requires a boundary (whitespace, `/`, or `>`) right after the matched
- *   tag name, so a longer word that happens to start with a tag name
- *   (there are none in this specific allowlist, but this guards future
- *   entries) can't be mistaken for that shorter tag.
+ *   comments), not arbitrary `<...>` -- so autolinks, placeholders, and
+ *   comparisons that don't spell a tag name at all (`<https:...>`,
+ *   `a < b`, `ages < 5`) never enter the tag-shaped branches to begin with.
+ * - Within that allowlist, only strips when the name is immediately
+ *   followed by a real delimiter (`(?=[\s/>])`) AND either (a) closes
+ *   immediately (`<b>`, `<br/>`, `</b>`) or (b) contains a literal `=`
+ *   before its terminator (`<img src=x ...>`, unclosed or not). A bare
+ *   name with plain words after it (`<title of your book>`, `<form
+ *   name>`, `<section 2>`) matches neither shape and survives -- this is
+ *   what fixes `a<b` (no `=`, no immediate close -> untouched) without
+ *   reintroducing the placeholder-deletion problem from design #1.
+ * - The `=`-bearing branch's terminator is `(?:>|$)`, not just `>` --
+ *   closed and never-closed attribute-bearing tags share ONE pattern, so
+ *   `<img src=x onerror=alert(1)>` and the same string with no trailing
+ *   `>` both match, without a separate end-of-line-only rule. `< img
+ *   src=x onerror=alert(1)>` (space between `<` and the name) also
+ *   matches via the same branch, because the boundary check is about the
+ *   character after the tag name, not before it.
  * - Matches HTML comments (`<!-- ... -->`) as a single non-greedy unit
  *   across embedded `>` characters, so `<!-- note: x > y -->` doesn't leak
  *   its tail as body text.
@@ -117,30 +146,29 @@ const OPTIONS = {
  *   `<<b>b>hi<</b>/b>` fully collapses to `hi` instead of reassembling into
  *   a live-looking `<b>hi</b>`).
  *
- * A truly unclosed tag (`<img src=x onerror=alert(1)` with no closing `>`
- * anywhere) has no `>` for the primary pattern to anchor on, so it gets a
- * second, narrower pattern: known-tag-name-immediately-after-`<`, running
- * to end of line rather than to a `>`. This is still name-gated (only fires
- * for a real tag name right after `<`, same as the primary pattern) so it
- * doesn't touch ordinary prose -- it only swallows a genuinely dangling
- * opening tag and whatever trails it on that line.
- *
- * `< img ...>` (a SPACE between `<` and the tag name) intentionally still
- * survives: real browsers don't parse that as a tag start either, so it's
- * in the same "coincidentally tag-shaped but not a tag" bucket as `a < b`
- * or `ages < 5`, not the "malicious/confusing markup" bucket this function
- * targets.
+ * Known accepted tradeoff: because the `=`-bearing branch's terminator can
+ * be end-of-line, a genuinely unclosed attribute-bearing tag mid-sentence
+ * (no `>` anywhere on that line) consumes the rest of that same line, not
+ * just the tag itself. This only reaches beyond the injected fragment when
+ * an admin's real prose shares an unbroken line with unclosed tag-shaped
+ * text with no line break in between -- an unusual authoring accident, not
+ * a realistic paragraph. Prose on earlier or later lines is untouched.
  */
 const HTML_TAGS =
   'a|abbr|b|base|blockquote|body|br|button|canvas|code|dd|div|dl|dt|em|embed|fieldset|font|form|frame|frameset|h[1-6]|head|html|i|iframe|img|input|label|li|link|map|marquee|meta|noscript|object|ol|optgroup|option|p|param|picture|pre|s|script|section|select|slot|small|source|span|strong|style|sub|sup|svg|table|tbody|td|template|textarea|tfoot|th|thead|title|tr|track|u|ul|video|xmp';
+// Optional whitespace/slash around the tag name so `</b>` (closing) and
+// `< img ...>` (stray leading space, still attribute-bearing) both qualify
+// as the SAME tag-name match; what decides whether it's actually stripped
+// is the shape that follows (see TAG_RE below), not this prefix.
+const OPEN = `<\\s*\\/?\\s*(?:${HTML_TAGS})`;
 const TAG_RE = new RegExp(
   // 1) HTML comments, non-greedy across embedded `>`.
   '<!--[\\s\\S]*?-->|' +
-    // 2) A complete, closed tag (open or close) for a known tag name.
-    `</?(?:${HTML_TAGS})(?=[\\s/>])[^>]*>|` +
-    // 3) A dangling, never-closed tag: same name gate, but runs to end of
-    //    line instead of requiring a `>`.
-    `</?(?:${HTML_TAGS})(?=[\\s/>]|$)[^\\n>]*$`,
+    // 2) Immediate close, no attributes: <b>, <br/>, <br />, </b>.
+    `${OPEN}(?=[\\s/>])\\s*\\/?>|` +
+    // 3) Attribute-bearing (has a literal `=` before its terminator),
+    //    closed or not: <img src=x>, <img src=x onerror=alert(1) (no >).
+    `${OPEN}(?=[\\s/>])[^\\n>]*=[^\\n>]*(?:>|$)`,
   'gim',
 );
 
