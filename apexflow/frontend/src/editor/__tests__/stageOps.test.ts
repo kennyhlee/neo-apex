@@ -107,9 +107,16 @@ describe('setStageKind', () => {
     expect(transitionIds(after)).toEqual(transitionIds(before));
   });
 
-  it('touches no other stage and no group when setting a non-initial kind', () => {
+  it('changes only `kind` on the target stage, and no other stage or group', () => {
     const before = model();
+    const target = before.stages.find((s) => s.stage_id === 'confirmed')!;
     const after = setStageKind(before, 'confirmed', 'terminal');
+    // The target keeps its name, depth, declaredIndex and step_ids — `kind`
+    // is the only field this function may write.
+    expect(after.stages.find((s) => s.stage_id === 'confirmed')).toEqual({
+      ...target,
+      kind: 'terminal',
+    });
     expect(after.groups).toBe(before.groups);
     expect(after.finishStageId).toBe(before.finishStageId);
     for (const s of before.stages) {
