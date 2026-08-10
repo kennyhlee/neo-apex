@@ -110,15 +110,21 @@ export default function StageEditor({
     }
   }
 
-  // How many moves (of ANY kind — stage moves and exits alike) a stage's
-  // removal would touch, either because they start there or because they
-  // land there — StageCard's delete-confirmation count.
+  // How many moves `removeStage` would genuinely delete — NOT how many
+  // merely touch the stage. A group survives with a shorter member list if
+  // it has members from other stages too (see `removeStage`'s doc comment),
+  // so counting every group that merely touches the stage overstates the
+  // impact — e.g. signup's six-member `drop` group survives removing
+  // `offered` with 4 members left, so it must not count toward the total.
+  // This mirrors `removeStage`'s own deletion rule exactly: a group is
+  // deleted if it targets the stage (`to`, which would otherwise dangle) or
+  // every one of its members leaves from the stage (so none would remain).
   const removalImpact = new Map<string, number>();
   for (const stage of model.stages) {
     removalImpact.set(
       stage.stage_id,
       model.groups.filter(
-        (g) => g.to === stage.stage_id || g.members.some((m) => m.from === stage.stage_id),
+        (g) => g.to === stage.stage_id || g.members.every((m) => m.from === stage.stage_id),
       ).length,
     );
   }

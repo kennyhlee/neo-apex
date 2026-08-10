@@ -154,7 +154,12 @@ export default function ExitsPanel({
       >
         {t('editor.exit.addExit')}
       </button>
-      {!canAddExit && <p className="stage-exit-needs-terminal">{t('editor.exit.needsTerminal')}</p>}
+      {/* No action is possible on a read-only published definition, so the
+       * hint about what would unlock the button is noise there — suppress
+       * it rather than explain an affordance the author cannot use. */}
+      {!canAddExit && !readOnly && (
+        <p className="stage-exit-needs-terminal">{t('editor.exit.needsTerminal')}</p>
+      )}
     </section>
   );
 }

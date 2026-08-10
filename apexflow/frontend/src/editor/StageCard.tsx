@@ -26,9 +26,9 @@ interface StageCardProps {
    * control is disabled rather than allowed to empty the workflow. */
   canRemove: boolean;
   /** How many moves (stage moves and exits alike) removing this stage would
-   * touch — either because they start here or because they land here.
-   * Surfaced via `editor.stage.removeStageWarn` so deletion is not a
-   * surprise. */
+   * genuinely delete — a group that keeps members from other stages
+   * survives with a shorter list and does not count here. Surfaced via
+   * `editor.stage.removeStageWarn` so deletion is not a surprise. */
   removeImpact: number;
   onStepsChange: (next: StepsUpdater) => void;
   onRename: (name: string) => void;

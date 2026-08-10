@@ -111,7 +111,11 @@ export function removeStage(
  * Action defaults to a name not already used by another group leaving that
  * stage, so the new move cannot collide into an existing `(from, action)`
  * group and disturb its unguarded-last ordering (see `write.ts`'s
- * `NEW_ORDER` doc comment).
+ * `NEW_ORDER` doc comment). That uniqueness is scoped to `(from, action)` —
+ * the right key for the backend validator's grouping — but `transition_id`
+ * is machine-global, so it also carries `uniqueSuffix()` (same as
+ * `addExit`'s action already does) to rule out colliding with a
+ * hand-authored `t_<action>_<stage>_staff` id under a different action.
  */
 export function addMove(model: StageModel, fromStageId: string): StageModel {
   const index = model.stages.findIndex((s) => s.stage_id === fromStageId);
@@ -129,7 +133,7 @@ export function addMove(model: StageModel, fromStageId: string): StageModel {
   }
 
   const member: MoveMember = {
-    transition_id: `t_${action}_${fromStageId}_staff`,
+    transition_id: `t_${action}_${fromStageId}_staff_${uniqueSuffix()}`,
     from: fromStageId,
     actor: 'staff',
     roleGuard: null,

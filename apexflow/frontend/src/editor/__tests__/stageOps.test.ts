@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readStageModel } from '../stage/read.ts';
+import { isExitGroup, readStageModel } from '../stage/read.ts';
 import { NEW_ORDER, NEW_STAGE_INDEX, roleGuardFor, writeMachine } from '../stage/write.ts';
 import { addExit, addMove, addStage, canAddExit, newStage, removeStage } from '../stageOps.ts';
 import { SIGNUP_MACHINE, SIGNUP_STEPS } from '../stage/__tests__/fixtures.ts';
@@ -239,6 +239,21 @@ describe('addMove', () => {
       [...transitionIds(before), added.members[0].transition_id].sort(),
     );
   });
+
+  it('two successive calls on the same stage produce distinct transition ids', () => {
+    // `transition_id` is machine-global, but uniqueness of the DEFAULT
+    // action name is only scoped to (from, action) — a second `addMove` on
+    // the same stage picks a different action ('move', then 'move_2'), but
+    // the id must not collide even where the action alone would not be
+    // enough to guarantee that (e.g. a hand-authored transition already
+    // named `t_move_<stage>_staff` under a different action).
+    const before = model();
+    const once = addMove(before, 'confirmed');
+    const twice = addMove(once, 'confirmed');
+    const firstId = once.groups[once.groups.length - 1].members[0].transition_id;
+    const secondId = twice.groups[twice.groups.length - 1].members[0].transition_id;
+    expect(firstId).not.toBe(secondId);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -298,6 +313,10 @@ describe('addExit', () => {
     expect(rereadGroup).toBeDefined();
     expect(rereadGroup?.who).toBe('both');
     expect(rereadGroup?.members).toHaveLength(added.members.length);
+    // The property `addExit` exists to produce: the reread group renders in
+    // the Exits panel (isExitGroup), not as a move on each non-terminal
+    // stage card.
+    expect(isExitGroup(rereadGroup!, reread)).toBe(true);
   });
 
   it('is a no-op when canAddExit is false', () => {
