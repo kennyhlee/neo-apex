@@ -74,6 +74,11 @@ export interface Stage {
   kind: StateDef['kind'];
   /** Shortest-path distance from the initial stage. Drives spine order. */
   depth: number;
+  /** Index in the original `machine.states` array. `stages` is sorted into
+   * spine order for display, which need not match declaration order; this
+   * lets `writeMachine` write `states` back in the order the machine
+   * declared them, rather than in spine order. */
+  declaredIndex: number;
   /** Steps whose `available_in` contains this stage, in definition order. */
   step_ids: string[];
 }

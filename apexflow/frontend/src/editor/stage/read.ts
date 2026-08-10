@@ -156,12 +156,14 @@ function splitByActor(group: MoveGroup): MoveGroup[] {
 
 export function readStageModel(machine: MachineDef, steps: WorkflowStepDef[]): StageModel {
   const { ordered, depths } = orderStages(machine);
+  const declaredIndex = new Map(machine.states.map((s, i) => [s.state_id, i]));
 
   const stages: Stage[] = ordered.map((state) => ({
     stage_id: state.state_id,
     name: state.name,
     kind: state.kind,
     depth: depths[state.state_id],
+    declaredIndex: declaredIndex.get(state.state_id)!,
     step_ids: steps
       .filter((step) => step.available_in.includes(state.state_id))
       .map((step) => step.step_id),
