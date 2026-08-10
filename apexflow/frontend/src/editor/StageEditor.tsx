@@ -71,7 +71,6 @@ export default function StageEditor({
             <StageCard
               key={stage.stage_id}
               stage={stage}
-              stages={model.stages}
               moves={movesByStage.get(stage.stage_id) ?? []}
               steps={steps}
               states={machine.states}

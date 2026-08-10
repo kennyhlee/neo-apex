@@ -144,6 +144,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.stage.alsoIn': 'also in {stages}',
     'editor.stage.addStep': 'Add something here',
     'editor.stage.rename': 'Stage name',
+    'editor.stage.addExisting': 'Add an existing step here',
+    'editor.stage.removeFromStage': 'Remove from this stage',
+    'editor.stage.deleteEverywhere': 'Delete everywhere',
 
     'editor.preview.stateLabel': 'Preview as state',
     'editor.preview.stepCount': '{n} of {m} steps available in this state',
@@ -509,6 +512,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.stage.alsoIn': '同时出现在 {stages}',
     'editor.stage.addStep': '在此添加',
     'editor.stage.rename': '阶段名称',
+    'editor.stage.addExisting': '在此添加已有步骤',
+    'editor.stage.removeFromStage': '从此阶段移除',
+    'editor.stage.deleteEverywhere': '从所有阶段删除',
 
     'editor.preview.stateLabel': '以此状态预览',
     'editor.preview.stepCount': '此状态下共 {m} 个步骤中的 {n} 个可用',

@@ -9,6 +9,7 @@ import SectionPanel from './SectionPanel.tsx';
 import ShowIfBuilder, { type SourceGroup } from './ShowIfBuilder.tsx';
 import { errorsForStep, errorsForSection } from './validationMatch.ts';
 import { dropForbiddenConditionalFieldsAcross } from './fieldPicker.ts';
+import { removeStepFromStage } from './stagePlacement.ts';
 import type { StepsUpdater } from './draftStore.ts';
 import type {
   ConditionGroupDef,
@@ -128,6 +129,13 @@ export default function StepEditor({
     () => buildSourceGroups(steps, t('editor.showIf.contextGroup')),
     [steps, t],
   );
+  // Friendly names for the "also in {stages}" note (F2) — built from the
+  // same `states` prop the (now-hidden-in-stage-mode) available_in grid
+  // already used, so no extra prop is needed to name a stage.
+  const stateNames = useMemo(
+    () => new Map(states.map((s) => [s.state_id, s.name || s.state_id])),
+    [states],
+  );
 
   function toggleCollapsed(stepId: string) {
     setCollapsed((prev) => {
@@ -190,7 +198,10 @@ export default function StepEditor({
   return (
     <div className="step-editor">
       <div className="step-editor-toolbar">
-        <span className="step-editor-heading">{t('editor.steps.heading')}</span>
+        {/* F3: StageCard already renders "What happens here" directly above
+         * this component in stage mode — a second "Steps" heading here would
+         * reintroduce the exact tab-vocabulary this task exists to retire. */}
+        {!stageId && <span className="step-editor-heading">{t('editor.steps.heading')}</span>}
         <div className="step-editor-add-buttons">
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => addStep('form')} disabled={readOnly}>
             {t('editor.step.addForm')}
@@ -214,7 +225,11 @@ export default function StepEditor({
         </div>
       </div>
 
-      {steps.length === 0 && <p className="step-editor-empty">{t('editor.steps.empty')}</p>}
+      {/* F4: in stage mode, StageCard's own `editor.stage.noSteps` already
+       * covers the empty case for THIS stage — this message tests the FULL
+       * array and would render a second, contradictory empty state
+       * alongside it. */}
+      {!stageId && steps.length === 0 && <p className="step-editor-empty">{t('editor.steps.empty')}</p>}
 
       <ul className="step-editor-list">
         {steps.map((step, idx) => {
@@ -263,16 +278,52 @@ export default function StepEditor({
                   >
                     &darr;
                   </button>
+                  {/* F1: the only way to take a step out of ONE stage without
+                   * deleting it everywhere else it appears. Uses the pure
+                   * `removeStepFromStage` helper, keyed by step_id — not
+                   * `idx` — so it is correct regardless of the full array's
+                   * ordering. */}
+                  {stageId && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => onChange((prev) => removeStepFromStage(prev, step.step_id, stageId))}
+                      disabled={readOnly}
+                    >
+                      {t('editor.stage.removeFromStage')}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-danger btn-sm"
                     onClick={() => removeStepAt(idx)}
                     disabled={readOnly}
                   >
-                    {t('editor.step.remove')}
+                    {/* F2: this button is global — it deletes the step from
+                     * EVERY stage it appears in, not just this card. Its
+                     * label must read as that, now that "Remove from this
+                     * stage" exists right next to it and the two must not be
+                     * confused. */}
+                    {stageId ? t('editor.stage.deleteEverywhere') : t('editor.step.remove')}
                   </button>
                 </div>
               </div>
+
+              {/* F2: moved onto the step's own row, next to the buttons that
+               * act on it — was previously a separate list rendered above
+               * the whole step list in StageCard, disconnected from the row
+               * a reader would act on. */}
+              {stageId && step.available_in.length > 1 && (
+                <p className="step-card-also-in">
+                  {t('editor.stage.alsoIn').replace(
+                    '{stages}',
+                    step.available_in
+                      .filter((id) => id !== stageId)
+                      .map((id) => stateNames.get(id) ?? id)
+                      .join(', '),
+                  )}
+                </p>
+              )}
 
               {stepErrors.length > 0 && (
                 <ul className="inline-errors" role="alert">
