@@ -186,6 +186,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.section.add': '+ Add section',
     'editor.section.empty': 'No sections yet. Add one to collect data for this step.',
     'editor.section.remove': 'Remove section',
+    'editor.section.title': 'Section heading',
+    'editor.section.description': 'Section description',
+    'editor.section.descriptionHint':
+      'Shown to applicants under the heading. **bold**, *italic*, and [links](https://example.com) are supported; links must be http, https, or mailto.',
     'editor.section.entityModel': 'Entity model',
     'editor.section.entityModelPlaceholder': 'Select a model…',
     'editor.section.mode': 'Mode',
@@ -517,6 +521,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.section.add': '+ 添加版块',
     'editor.section.empty': '暂无版块，添加一个以采集此步骤的数据。',
     'editor.section.remove': '删除版块',
+    'editor.section.title': '章节标题',
+    'editor.section.description': '章节说明',
+    'editor.section.descriptionHint':
+      '显示在标题下方。支持 **粗体**、*斜体* 和 [链接](https://example.com)；链接必须是 http、https 或 mailto。',
     'editor.section.entityModel': '数据模型',
     'editor.section.entityModelPlaceholder': '选择一个模型…',
     'editor.section.mode': '模式',
