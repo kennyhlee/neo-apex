@@ -21,6 +21,7 @@ to classify an *already published* definition against the *current* models
 Both are consumed by later tasks (Task 5's model-impact endpoint, Task 6's
 creation-time refusal); neither talks to DataCore itself.
 """
+import re
 from datetime import datetime
 from typing import Any, Callable, Literal, NamedTuple
 
@@ -652,6 +653,48 @@ def _engine_owned_field_errors(section_entries: list[_SectionEntry]) -> list[str
     ]
 
 
+# Markdown inline-link form: [text](target). Matches the same construct the
+# renderer parses, so publish-time and render-time agree on what a link is.
+_MD_LINK_R = re.compile(r"\[[^\]]*\]\(([^)\s]+)")
+
+# Positive allowlist, not a deny-list: an unlisted scheme is rejected rather
+# than a listed-bad one blocked (spec "Publish-time validation").
+_ALLOWED_LINK_SCHEMES = ("http://", "https://", "mailto:")
+
+SECTION_TITLE_MAX = 80
+SECTION_DESCRIPTION_MAX = 600
+
+
+def _section_copy_errors(section_entries: list[_SectionEntry]) -> list[str]:
+    """Length caps on a section's display copy, plus a scheme allowlist for
+    every markdown link in its description.
+
+    The description is rendered to PARENTS, so a hostile link target is a
+    phishing vector. `SectionDescription.tsx` enforces the same allowlist at
+    render time; this check is defence in depth, catching the bad value when
+    it is authored rather than only when it is shown."""
+    errors: list[str] = []
+    for entry in section_entries:
+        section = entry.section
+        if len(section.title) > SECTION_TITLE_MAX:
+            errors.append(
+                f"section '{section.section_id}' title is "
+                f"{len(section.title)} characters; max {SECTION_TITLE_MAX}"
+            )
+        if len(section.description) > SECTION_DESCRIPTION_MAX:
+            errors.append(
+                f"section '{section.section_id}' description is "
+                f"{len(section.description)} characters; max {SECTION_DESCRIPTION_MAX}"
+            )
+        for target in _MD_LINK_R.findall(section.description):
+            if not target.lower().startswith(_ALLOWED_LINK_SCHEMES):
+                errors.append(
+                    f"section '{section.section_id}' description has a link to "
+                    f"{target!r}; only http, https, and mailto targets are allowed"
+                )
+    return errors
+
+
 def _section_field_existence_errors(
     section_entries: list[_SectionEntry], models: dict[str, Any]
 ) -> list[str]:
@@ -783,6 +826,7 @@ def validate_definition(
     errors += _commit_sections_ref_errors(machine, declared_section_ids)
     errors += _state_ref_errors(machine, steps)
     errors += _engine_owned_field_errors(section_entries)
+    errors += _section_copy_errors(section_entries)
     errors += _broken_errors(machine, steps, section_entries, section_map, models)
 
     missing_errors, conditional_errors = _coverage_errors(section_entries, models, machine)
