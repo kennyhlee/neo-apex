@@ -16,3 +16,4 @@ export * from './sectionCompletion';
 export * from './SectionShell';
 export * from './AccordionSections';
 export * from './useMediaQuery';
+export * from './RailSections';

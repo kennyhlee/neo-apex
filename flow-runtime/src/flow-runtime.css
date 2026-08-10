@@ -84,3 +84,16 @@
   border-color: var(--warning, var(--border-primary)); }
 .fr-pill--optional { background: var(--bg-tertiary); color: var(--text-tertiary);
   border-color: var(--border-primary); }
+
+.fr-rail-layout { display: grid; grid-template-columns: 200px 1fr; gap: 18px; align-items: start; }
+.fr-rail { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.fr-rail-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 0;
+  border-left: 2px solid transparent; background: none; font: inherit; font-size: 13px;
+  text-align: left; color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-sm); }
+.fr-rail-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fr-rail-item--on { background: var(--accent-muted); color: var(--text-primary);
+  font-weight: 650; border-left-color: var(--accent); }
+.fr-rail-dot { width: 7px; height: 7px; border-radius: 999px; flex: none;
+  border: 1.5px solid var(--border-primary); }
+.fr-rail-dot--done { background: var(--success); border-color: var(--success); }
+.fr-rail-pane { display: flex; flex-direction: column; gap: 14px; min-width: 0; }

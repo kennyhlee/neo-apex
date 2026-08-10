@@ -10,6 +10,7 @@ import { labelOf } from './blockConfig';
 import { sectionFields } from './sectionFields';
 import { useFlowT } from './i18n';
 import { AccordionSections } from './AccordionSections';
+import { RailSections } from './RailSections';
 import { SectionShell } from './SectionShell';
 import { useMediaQuery } from './useMediaQuery';
 
@@ -542,10 +543,6 @@ function MessageStep({ step, draft, onDraftChange }: {
   );
 }
 
-// `mode` and `wide` (below) are unused until Task 7 adds the
-// `mode === 'staff' && wide` branch that routes to RailSections, which
-// does not exist yet -- until then every mode/width combination falls
-// through to AccordionSections.
 function FormStep({ step, models, draft, onDraftChange, mode }: {
   step: WorkflowStepDef; models: Record<string, ModelFieldSource>;
   draft: WorkflowDraft; onDraftChange: (next: WorkflowDraft) => void;
@@ -553,12 +550,6 @@ function FormStep({ step, models, draft, onDraftChange, mode }: {
 }) {
   const t = useFlowT();
   const wide = useMediaQuery('(min-width: 700px)');
-  // Read but not yet branched on -- consuming frontends' `tsc -b` runs with
-  // noUnusedLocals/noUnusedParameters, which would otherwise fail the build
-  // (TS6133) on a param/local that only Task 7's `mode === 'staff' && wide`
-  // branch (RailSections, not yet added) will actually use.
-  void mode;
-  void wide;
   const sections = formSections(step);
   if (sections.length === 0) return <p className="fr-empty">{t('noFields')}</p>;
 
@@ -575,9 +566,16 @@ function FormStep({ step, models, draft, onDraftChange, mode }: {
     );
   }
 
-  // Task 7 adds a `mode === 'staff' && wide` branch here that routes to
-  // RailSections; that component does not exist yet, so every mode/width
-  // combination falls through to the accordion for now.
+  // Staff, wide screens only: rail + scrolling pane, optimized for an
+  // operator transcribing a paper application who needs to jump between
+  // sections. Every other mode/width combination gets the accordion.
+  if (mode === 'staff' && wide) {
+    return (
+      <RailSections step={step} sections={sections} models={models}
+        draft={draft} onDraftChange={onDraftChange} renderFields={renderFields} />
+    );
+  }
+
   return (
     <AccordionSections step={step} sections={sections} models={models}
       draft={draft} onDraftChange={onDraftChange} renderFields={renderFields} />
