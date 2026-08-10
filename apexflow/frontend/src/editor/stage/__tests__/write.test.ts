@@ -251,3 +251,21 @@ describe('roleGuard index is not preserved (documented, not a bug)', () => {
     expect(out.transitions[0].guards).not.toEqual(machine.transitions[0].guards);
   });
 });
+
+describe('renaming a stage', () => {
+  it('changes only the name and leaves every transition untouched', async () => {
+    const { readStageModel } = await import('../read.ts');
+    const { SIGNUP_MACHINE, SIGNUP_STEPS } = await import('./fixtures.ts');
+    const model = readStageModel(SIGNUP_MACHINE, SIGNUP_STEPS);
+    const renamed = {
+      ...model,
+      stages: model.stages.map((s) => (s.stage_id === 'offered' ? { ...s, name: 'Offer Out' } : s)),
+    };
+    const out = writeMachine(renamed);
+    expect(out.transitions).toEqual(SIGNUP_MACHINE.transitions);
+    expect(out.states.find((s) => s.state_id === 'offered')?.name).toBe('Offer Out');
+    expect(out.states.filter((s) => s.state_id !== 'offered')).toEqual(
+      SIGNUP_MACHINE.states.filter((s) => s.state_id !== 'offered'),
+    );
+  });
+});

@@ -28,6 +28,15 @@ interface StepEditorProps {
   /** True when the definition isn't a draft — disables every mutating
    * control (task review fix #6). */
   readOnly: boolean;
+  /** Stage-editor mode: render only steps whose `available_in` contains this
+   * stage, and create new steps into it. The component still operates on the
+   * FULL `steps` array internally — filtering happens at render time only, so
+   * indices, reordering, and `onChange` payloads stay whole-array. */
+  stageId?: string;
+  /** Suppress the `available_in` checkbox grid. In stage-editor mode a step's
+   * placement is which card it sits in, so a second control for the same data
+   * would be two ways to edit one field. */
+  hideAvailableIn?: boolean;
 }
 
 /** Short, non-cryptographic uniqueness suffix — same precedent as
@@ -102,7 +111,16 @@ function buildSourceGroups(steps: WorkflowStepDef[], contextLabel: string): Sour
   return groups;
 }
 
-export default function StepEditor({ steps, onChange, models, states, errors, readOnly }: StepEditorProps) {
+export default function StepEditor({
+  steps,
+  onChange,
+  models,
+  states,
+  errors,
+  readOnly,
+  stageId,
+  hideAvailableIn,
+}: StepEditorProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -139,7 +157,8 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
   }
 
   function addStep(type: WorkflowStepDef['type']) {
-    onChange((prev) => [...prev, newStep(type, states)]);
+    const created = newStep(type, states);
+    onChange((prev) => [...prev, stageId ? { ...created, available_in: [stageId] } : created]);
   }
 
   /**
@@ -199,6 +218,7 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
 
       <ul className="step-editor-list">
         {steps.map((step, idx) => {
+          if (stageId && !step.available_in.includes(stageId)) return null;
           const isCollapsed = collapsed.has(step.step_id);
           const stepErrors = errorsForStep(errors, step.step_id);
           return (
@@ -228,7 +248,7 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    disabled={readOnly || idx === 0}
+                    disabled={readOnly || Boolean(stageId) || idx === 0}
                     onClick={() => moveStep(idx, -1)}
                     aria-label={t('editor.step.moveUp')}
                   >
@@ -237,7 +257,7 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    disabled={readOnly || idx === steps.length - 1}
+                    disabled={readOnly || Boolean(stageId) || idx === steps.length - 1}
                     onClick={() => moveStep(idx, 1)}
                     aria-label={t('editor.step.moveDown')}
                   >
@@ -304,33 +324,35 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
                     </label>
                   </div>
 
-                  <div className="step-available-in">
-                    <span className="step-panel-label">{t('editor.step.availableIn')}</span>
-                    <div className="step-available-in-options">
-                      {states.length === 0 && (
-                        <span className="step-available-in-empty">{t('editor.step.noStates')}</span>
-                      )}
-                      {states.map((s) => {
-                        const checked = step.available_in.includes(s.state_id);
-                        return (
-                          <label key={s.state_id} className="step-state-chip">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={readOnly}
-                              onChange={(e) => {
-                                const next = e.target.checked
-                                  ? [...step.available_in, s.state_id]
-                                  : step.available_in.filter((id) => id !== s.state_id);
-                                updateStepAt(idx, { ...step, available_in: next });
-                              }}
-                            />
-                            {s.state_id}
-                          </label>
-                        );
-                      })}
+                  {!hideAvailableIn && (
+                    <div className="step-available-in">
+                      <span className="step-panel-label">{t('editor.step.availableIn')}</span>
+                      <div className="step-available-in-options">
+                        {states.length === 0 && (
+                          <span className="step-available-in-empty">{t('editor.step.noStates')}</span>
+                        )}
+                        {states.map((s) => {
+                          const checked = step.available_in.includes(s.state_id);
+                          return (
+                            <label key={s.state_id} className="step-state-chip">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={readOnly}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...step.available_in, s.state_id]
+                                    : step.available_in.filter((id) => id !== s.state_id);
+                                  updateStepAt(idx, { ...step, available_in: next });
+                                }}
+                              />
+                              {s.state_id}
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {step.type === 'form' && (
                     <FormStepPanel

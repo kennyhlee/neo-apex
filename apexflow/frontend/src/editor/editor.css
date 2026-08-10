@@ -1203,3 +1203,41 @@
   font-size: 0.8125rem;
   color: var(--color-text-muted, #6b6b76);
 }
+.stage-card-name-input {
+  font-weight: 600;
+  font-size: 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.125rem 0.25rem;
+  background: transparent;
+}
+.stage-card-name-input:hover:not(:disabled),
+.stage-card-name-input:focus {
+  border-color: var(--color-border, #d7d7dc);
+  background: var(--color-surface, #fff);
+}
+.stage-card-steps h4,
+.stage-card-moves h4 {
+  margin: var(--space-4, 1rem) 0 var(--space-2, 0.5rem);
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted, #6b6b76);
+}
+.stage-card-step-notes {
+  list-style: none;
+  margin: 0 0 var(--space-2, 0.5rem);
+  padding: 0;
+}
+.stage-card-step-note {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #6b6b76);
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

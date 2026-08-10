@@ -12,7 +12,10 @@
 import { useMemo } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { readStageModel, isExitGroup } from './stage/read.ts';
-import type { MoveGroup } from './stage/types.ts';
+import { writeMachine } from './stage/write.ts';
+import StageCard from './StageCard.tsx';
+import type { MoveGroup, StageModel } from './stage/types.ts';
+import type { StepsUpdater } from './draftStore.ts';
 import type {
   EntityModelsMap,
   MachineDef,
@@ -28,16 +31,24 @@ interface StageEditorProps {
   errors: string[];
   readOnly: boolean;
   onMachineChange: (next: MachineDef) => void;
-  onStepsChange: (next: WorkflowStepDef[]) => void;
+  onStepsChange: (next: StepsUpdater) => void;
 }
 
 export default function StageEditor({
   machine,
   steps,
+  models,
   errors,
+  readOnly,
+  onMachineChange,
+  onStepsChange,
 }: StageEditorProps) {
   const { t } = useTranslation();
   const model = useMemo(() => readStageModel(machine, steps), [machine, steps]);
+
+  function commit(next: StageModel) {
+    onMachineChange(writeMachine(next));
+  }
 
   const exits = model.groups.filter((g) => isExitGroup(g, model));
   const movesByStage = new Map<string, MoveGroup[]>();
@@ -57,25 +68,27 @@ export default function StageEditor({
         {model.stages.length === 0 && <p className="stage-empty">{t('editor.stages.empty')}</p>}
         <ol className="stage-cards">
           {model.stages.map((stage) => (
-            <li key={stage.stage_id} className="stage-card">
-              <header className="stage-card-header">
-                <span className="stage-card-name">{stage.name || stage.stage_id}</span>
-                {stage.kind === 'initial' && (
-                  <span className="stage-card-role">{t('editor.stages.startsHere')}</span>
-                )}
-                {stage.kind === 'terminal' && (
-                  <span className="stage-card-role">{t('editor.stages.finishes')}</span>
-                )}
-              </header>
-              <p className="stage-card-counts">
-                {t('editor.stages.stepCount').replace('{n}', String(stage.step_ids.length))}
-                {' · '}
-                {t('editor.stages.moveCount').replace(
-                  '{n}',
-                  String((movesByStage.get(stage.stage_id) ?? []).length),
-                )}
-              </p>
-            </li>
+            <StageCard
+              key={stage.stage_id}
+              stage={stage}
+              stages={model.stages}
+              moves={movesByStage.get(stage.stage_id) ?? []}
+              steps={steps}
+              states={machine.states}
+              models={models}
+              errors={errors}
+              readOnly={readOnly}
+              onStepsChange={onStepsChange}
+              onRename={(name) =>
+                commit({
+                  ...model,
+                  stages: model.stages.map((s) =>
+                    s.stage_id === stage.stage_id ? { ...s, name } : s,
+                  ),
+                })
+              }
+              renderMoves={() => null}
+            />
           ))}
         </ol>
       </section>

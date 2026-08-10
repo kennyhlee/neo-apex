@@ -139,6 +139,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.exits.heading': 'Exits',
     'editor.exits.empty': 'No exits yet.',
     'editor.exits.expansion': 'expands to {t} transition(s) · {s} stage(s) × {a} actor(s)',
+    'editor.stage.stepsHeading': 'What happens here',
+    'editor.stage.noSteps': 'Nothing happens in this stage yet.',
+    'editor.stage.alsoIn': 'also in {stages}',
+    'editor.stage.addStep': 'Add something here',
+    'editor.stage.rename': 'Stage name',
 
     'editor.preview.stateLabel': 'Preview as state',
     'editor.preview.stepCount': '{n} of {m} steps available in this state',
@@ -499,6 +504,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.exits.heading': '退出',
     'editor.exits.empty': '尚无退出。',
     'editor.exits.expansion': '展开为 {t} 个转换 · {s} 个阶段 × {a} 个操作者',
+    'editor.stage.stepsHeading': '这里发生什么',
+    'editor.stage.noSteps': '此阶段尚无内容。',
+    'editor.stage.alsoIn': '同时出现在 {stages}',
+    'editor.stage.addStep': '在此添加',
+    'editor.stage.rename': '阶段名称',
 
     'editor.preview.stateLabel': '以此状态预览',
     'editor.preview.stepCount': '此状态下共 {m} 个步骤中的 {n} 个可用',
