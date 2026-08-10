@@ -149,9 +149,17 @@ Because safety depends on those options being passed, **`markdown-to-jsx` is imp
 exactly one module**: `flow-runtime/src/SectionDescription.tsx`. Everything else renders a
 description by using that component.
 
-This is enforced mechanically, not by convention: an eslint `no-restricted-imports` rule
-bans `markdown-to-jsx` everywhere except that file. A second unguarded call site would be an
-XSS hole, and a rule is cheaper than remembering.
+This is enforced mechanically, not by convention — but **not** with eslint:
+`flow-runtime` has no eslint config, and the frontends' `eslint .` runs never reach
+`flow-runtime/src`, so a `no-restricted-imports` rule there would be enforcement in name
+only.
+
+Instead a **source-grep test** in flow-runtime's own vitest suite asserts that
+`markdown-to-jsx` is imported in exactly one file, and that
+`dangerouslySetInnerHTML` appears nowhere in `src/`. This reuses the test infrastructure
+this work already adds, needs no second toolchain, and follows a pattern the codebase
+already uses (`apexflow/backend/tests/test_item_status.py::test_engine_writes_no_bare_status_literals`
+greps module source the same way). A second unguarded call site fails the suite.
 
 ### Cost
 
@@ -274,8 +282,16 @@ ambiguity for the one workflow that actually ships today.
 **New infrastructure:** `flow-runtime` has no test runner today, and neither does familyhub's
 frontend — only admindash has vitest. The markdown wrapper is a security boundary and its
 tests must not live in a different package that might not run, so **this work adds vitest to
-`flow-runtime`** (devDependency, `test` script, and a CI step). That is new infrastructure,
-not just a feature, and it is the main non-obvious cost in this design.
+`flow-runtime`** (devDependency plus a `test` script). That is new infrastructure, not just a
+feature, and it is the main non-obvious cost in this design.
+
+Note that **this repository has no CI test workflow** — `.github/workflows/` contains only
+`deploy.yml` and `discord-release.yml`, neither of which runs pytest or vitest. Every suite
+is run locally today. Adding flow-runtime's `npm test` therefore gives a local command and
+nothing more; wiring a test job that covers the four Python suites and two JS suites is a
+separate piece of work and is **out of scope here**, but it is worth logging as a follow-up,
+because a security-boundary test that only runs when someone remembers is weaker protection
+than it looks.
 
 ## Out of scope
 
@@ -297,6 +313,7 @@ not just a feature, and it is the main non-obvious cost in this design.
   unchanged.
 - No wire-shape change to `workflow_item`, instances, or drafts. Draft keys are untouched, so
   in-flight drafts keep resolving.
-- `flow-runtime` gains its first runtime dependency. All three frontends already install the
-  package's own dependencies in CI (`npm ci` in `flow-runtime` before frontend builds), so no
-  new CI wiring is required for the dependency itself — only for the new test script.
+- `flow-runtime` gains its first runtime dependency. `deploy.yml` already runs `npm ci` in
+  `flow-runtime` before the admindash, apexflow, and familyhub frontend builds
+  (`deploy.yml:325`, `:369`, `:409`), so the new dependency is installed in CI with no
+  workflow change at all.
