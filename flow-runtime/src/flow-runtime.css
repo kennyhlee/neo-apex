@@ -56,3 +56,8 @@
 .fr-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .fr-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .fr-btn--primary { background: var(--accent-ink); border-color: var(--accent-ink); color: var(--text-inverse); }
+
+.fr-section-desc { font-size: 13px; color: var(--text-secondary); margin: 0 0 10px; max-width: 60ch; line-height: 1.5; }
+.fr-section-desc p { margin: 0 0 6px; }
+.fr-section-desc p:last-child { margin-bottom: 0; }
+.fr-section-desc a { color: var(--accent-ink, var(--accent)); }

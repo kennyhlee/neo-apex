@@ -11,3 +11,4 @@ export {
 } from './StepRenderer';
 export { draftToSectionAnswers, sectionAnswersToDraft } from './sectionAnswers';
 export * from './sectionTitle';
+export * from './SectionDescription';
