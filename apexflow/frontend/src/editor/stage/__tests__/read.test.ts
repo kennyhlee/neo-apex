@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { MachineDef } from '../../../types/designer.ts';
 import { isExitGroup, readStageModel } from '../read.ts';
-import { SIGNUP_MACHINE, SIGNUP_STEPS } from './fixtures.ts';
+import { ENROLLMENT_MACHINE, ENROLLMENT_STEPS, SIGNUP_MACHINE, SIGNUP_STEPS } from './fixtures.ts';
 
 const model = () => readStageModel(SIGNUP_MACHINE, SIGNUP_STEPS);
 
@@ -86,6 +87,104 @@ describe('readStageModel — grouping', () => {
   it('accounts for every transition exactly once', () => {
     const ids = model().groups.flatMap((g) => g.members.map((m) => m.transition_id));
     expect(ids.sort()).toEqual(SIGNUP_MACHINE.transitions.map((t) => t.transition_id).sort());
+  });
+});
+
+describe('readStageModel — object identity (F1)', () => {
+  it('does not alias guards when there is no actor_role to split out', () => {
+    // t_submit_waitlisted's only guard is `formComplete` — no actor_role —
+    // so `splitActorRole` used to return `rest: guards`, the SAME array
+    // object as `t.guards`. This is the read.ts:26 case, directly.
+    const submitWaitlist = model().groups.find((g) => g.action === 'submit' && g.to === 'waitlisted');
+    const sourceTransition = SIGNUP_MACHINE.transitions.find(
+      (t) => t.transition_id === 't_submit_waitlisted',
+    );
+    expect(submitWaitlist).toBeDefined();
+    expect(sourceTransition).toBeDefined();
+    expect(submitWaitlist?.guards).not.toBe(sourceTransition?.guards);
+    expect(submitWaitlist?.guards[0]).not.toBe(sourceTransition?.guards[0]);
+    expect(submitWaitlist?.guards).toEqual(sourceTransition?.guards);
+  });
+
+  it('does not alias effects', () => {
+    const dropConfirmed = model()
+      .groups.filter((g) => g.action === 'drop')
+      .find((g) => g.effects.length > 0);
+    const sourceTransition = SIGNUP_MACHINE.transitions.find(
+      (t) => t.transition_id === 't_drop_confirmed_family',
+    );
+    expect(dropConfirmed).toBeDefined();
+    expect(sourceTransition).toBeDefined();
+    expect(dropConfirmed?.effects).not.toBe(sourceTransition?.effects);
+    expect(dropConfirmed?.effects[0]).not.toBe(sourceTransition?.effects[0]);
+    expect(dropConfirmed?.effects).toEqual(sourceTransition?.effects);
+  });
+
+  it('mutating the returned model leaves the fixture unchanged', () => {
+    const before = JSON.stringify(SIGNUP_MACHINE);
+    const dropConfirmed = model()
+      .groups.filter((g) => g.action === 'drop')
+      .find((g) => g.effects.length > 0);
+    expect(dropConfirmed).toBeDefined();
+    dropConfirmed?.effects.push({ primitive: 'send_email', params: { template: 'hacked' } });
+    if (dropConfirmed?.effects[0]) {
+      dropConfirmed.effects[0].params.value = 'MUTATED';
+    }
+    expect(JSON.stringify(SIGNUP_MACHINE)).toBe(before);
+  });
+});
+
+describe('readStageModel — actor rectangle (F2)', () => {
+  it('keeps the withdraw group whole — every source has both actors (enrollment)', () => {
+    const m = readStageModel(ENROLLMENT_MACHINE, ENROLLMENT_STEPS);
+    const withdraws = m.groups.filter((g) => g.action === 'withdraw');
+    expect(withdraws).toHaveLength(1);
+    expect(withdraws[0].members).toHaveLength(12);
+    expect(withdraws[0].who).toBe('both');
+  });
+
+  it('keeps the drop groups whole at 6 and 2 members — every source has both actors (signup)', () => {
+    const drops = model().groups.filter((g) => g.action === 'drop');
+    expect(drops).toHaveLength(2);
+    const sizes = drops.map((g) => g.members.length).sort((a, b) => a - b);
+    expect(sizes).toEqual([2, 6]);
+    expect(drops.every((g) => g.who === 'both')).toBe(true);
+  });
+
+  it('does not merge a lone family transition with a lone staff transition from different stages', () => {
+    const machine: MachineDef = {
+      states: [
+        { state_id: 'a', name: 'A', kind: 'initial' },
+        { state_id: 'b', name: 'B', kind: 'active' },
+        { state_id: 'z', name: 'Z', kind: 'terminal' },
+      ],
+      transitions: [
+        {
+          transition_id: 't1',
+          from: 'a',
+          to: 'z',
+          action: 'quit',
+          actor: 'family',
+          guards: [],
+          effects: [],
+        },
+        {
+          transition_id: 't2',
+          from: 'b',
+          to: 'z',
+          action: 'quit',
+          actor: 'staff',
+          guards: [],
+          effects: [],
+        },
+      ],
+    };
+    const m = readStageModel(machine, []);
+    const quits = m.groups.filter((g) => g.action === 'quit');
+    expect(quits).toHaveLength(2);
+    expect(quits.every((g) => g.who !== 'both')).toBe(true);
+    expect(quits.map((g) => g.who).sort()).toEqual(['family', 'staff']);
+    expect(quits.every((g) => g.members.length === 1)).toBe(true);
   });
 });
 

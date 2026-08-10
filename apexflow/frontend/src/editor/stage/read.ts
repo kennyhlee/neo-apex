@@ -1,10 +1,15 @@
 // machine + steps -> StageModel. Pure; no React, no fetch.
 //
-// Grouping key: (action, to, who, guards-without-actor_role, effects) —
-// everything except `from` (design ruling, Amendment B). Two transitions
-// join a group only when they are indistinguishable apart from where they
-// leave from, which is exactly the condition under which one Exits-panel
-// card can faithfully re-emit both.
+// Grouping key: (action, to, actor class, guards-without-actor_role,
+// effects) — everything except `from` (design ruling, Amendment B). Two
+// transitions join a group only when they are indistinguishable apart from
+// where they leave from, which is exactly the condition under which one
+// Exits-panel card can faithfully re-emit both.
+//
+// "Actor class" folds `family`/`staff` to `'human'` and leaves `system` on
+// its own — see `groupKey`'s doc comment for why that is coarser than it
+// sounds, and `isRectangle`/`splitByActor` below for the pass that corrects
+// for it.
 import type { GuardRef, MachineDef, TransitionDef, WorkflowStepDef } from '../../types/designer.ts';
 import type { MoveGroup, MoveMember, Stage, StageModel, Who } from './types.ts';
 import { finishStageId, orderStages } from './spine.ts';
@@ -19,6 +24,18 @@ function stableJson(value: unknown): string {
     a < b ? -1 : a > b ? 1 : 0,
   );
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`;
+}
+
+/** Structural deep copy for `GuardRef`/`EffectRef` values headed into the
+ * returned model. `GuardRef`/`EffectRef` are plain JSON wire objects by
+ * construction (`schema.py`), so `JSON.parse(JSON.stringify(...))` is exact
+ * and cheap. Without this, `readStageModel`'s output shares object identity
+ * with `machine`'s: Task 4's round-trip test would then pass trivially on
+ * the aliased fields instead of actually comparing values, and an editor
+ * task doing `group.effects.push(...)` in place would silently mutate the
+ * definition the model was read from. */
+function cloneRef<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function splitActorRole(guards: GuardRef[]): { roleGuard: GuardRef | null; rest: GuardRef[] } {
@@ -37,29 +54,91 @@ function whoForActor(actor: TransitionDef['actor']): Who {
   return actor === 'system' ? 'automatic' : actor;
 }
 
-/** Two members merge into `who: 'both'` only when they are a family/staff
- * pair from the SAME stage — that is the shape `_withdraw_pair`/`_drop_pair`
- * emit, and the only shape one "Who can do it" control can re-emit. */
+/** Two members merge into `who: 'both'` only when BOTH a family and a staff
+ * actor are present in the group. `groupKey` only folds `family`/`staff`
+ * down to `'human'`, so at this point a mixed set always means exactly
+ * `{family, staff}` — a group's actor class can never mix `human` and
+ * `system` members, since `groupKey` keys those two classes apart. Whether
+ * that mixed set is a COMPLETE family/staff pair per source stage (and
+ * therefore may safely stay one group) is a separate question, checked
+ * after grouping by `isRectangle` — this function only folds the actor set
+ * itself. */
 function foldWho(members: MoveMember[]): Who {
   const actors = new Set(members.map((m) => m.actor));
   if (actors.size === 1) return whoForActor(members[0].actor);
-  if (actors.size === 2 && actors.has('family') && actors.has('staff')) return 'both';
-  // Anything else (e.g. system mixed with family) cannot be one control.
-  // Callers never build this — `groupKey` includes the actor set, so a mixed
-  // set can only arise from a hand-edited machine. Report the first actor
-  // and let each member keep its own; `write.ts` writes `member.actor`, not
-  // `group.who`, so nothing is lost.
-  return whoForActor(members[0].actor);
+  return 'both';
 }
 
 /**
- * The grouping key. Note what is IN it: the actor set is folded to
- * "family+staff pair or not", so a `_drop_pair` joins, while a lone staff
- * transition does not join a family one from a different stage.
+ * The grouping key. Note what is IN it, and what is deliberately coarse:
+ * the actor is folded only to `'human'` vs `'system'`, NOT to "a complete
+ * family+staff pair or not". That means a LONE family transition from one
+ * stage and a LONE staff transition from a different stage — sharing
+ * everything else — DO share a key at this stage, exactly the shape
+ * `_drop_pair`/`_withdraw_pair` rely on when both members leave the SAME
+ * stage.
+ *
+ * That coarseness is corrected after grouping, not here: `isRectangle`
+ * checks whether every source stage in the resulting group has both a
+ * family and a staff member, and `splitByActor` breaks the group apart when
+ * it doesn't — see `readStageModel`. Folding the actor any more precisely
+ * INTO the key (e.g. by `from`) would defeat the point of grouping at all,
+ * since `from` is exactly the field two transitions are allowed to differ
+ * on.
  */
 function groupKey(t: TransitionDef, rest: GuardRef[]): string {
   const actorClass = t.actor === 'system' ? 'system' : 'human';
-  return [t.action, t.to, actorClass, stableJson(rest), stableJson(t.effects)].join('|');
+  // `action`/`to` are unconstrained strings server-side (schema.py); a
+  // delimiter-joined key would let an author-typed value containing the
+  // delimiter merge two groups that should stay distinct. JSON.stringify
+  // over the parts array escapes each part, so no part's content can bleed
+  // into a neighboring part's slot.
+  return JSON.stringify([t.action, t.to, actorClass, stableJson(rest), stableJson(t.effects)]);
+}
+
+/**
+ * A group may keep `who: 'both'` only if every distinct `from` among its
+ * members has BOTH a family member and a staff member — the exact shape
+ * `_drop_pair`/`_withdraw_pair` emit. A group with only one actor overall
+ * (including every `system` group) trivially satisfies this.
+ */
+function isRectangle(members: MoveMember[]): boolean {
+  const actors = new Set(members.map((m) => m.actor));
+  if (actors.size < 2) return true;
+  const byFrom = new Map<string, Set<TransitionDef['actor']>>();
+  for (const m of members) {
+    const set = byFrom.get(m.from) ?? new Set<TransitionDef['actor']>();
+    set.add(m.actor);
+    byFrom.set(m.from, set);
+  }
+  for (const set of byFrom.values()) {
+    if (!(set.has('family') && set.has('staff'))) return false;
+  }
+  return true;
+}
+
+/**
+ * Splits a group that failed `isRectangle` into one group per actor. This
+ * is what stops a lone family transition from one stage and a lone staff
+ * transition from another — which shared a `groupKey` deliberately, see
+ * above — from being reported as one `who: 'both'` control. Tasks 8/9
+ * expand a `'both'` group by cross-producting its source stages with BOTH
+ * actors; doing that to a non-rectangular group would invent transitions
+ * that were never authored.
+ */
+function splitByActor(group: MoveGroup): MoveGroup[] {
+  const byActor = new Map<TransitionDef['actor'], MoveMember[]>();
+  for (const m of group.members) {
+    const list = byActor.get(m.actor) ?? [];
+    list.push(m);
+    byActor.set(m.actor, list);
+  }
+  return [...byActor.entries()].map(([actor, members]) => ({
+    ...group,
+    key: `${group.key}#${actor}`,
+    who: whoForActor(actor),
+    members,
+  }));
 }
 
 export function readStageModel(machine: MachineDef, steps: WorkflowStepDef[]): StageModel {
@@ -83,7 +162,7 @@ export function readStageModel(machine: MachineDef, steps: WorkflowStepDef[]): S
       transition_id: t.transition_id,
       from: t.from,
       actor: t.actor,
-      roleGuard,
+      roleGuard: roleGuard ? cloneRef(roleGuard) : null,
       order,
     };
     const existing = byKey.get(key);
@@ -97,15 +176,22 @@ export function readStageModel(machine: MachineDef, steps: WorkflowStepDef[]): S
       action: t.action,
       to: t.to,
       who: whoForActor(t.actor),
-      guards: rest,
-      effects: t.effects,
+      // Deep-copied so the returned model shares no object identity with
+      // `machine` — see `cloneRef`'s doc comment.
+      guards: rest.map(cloneRef),
+      effects: t.effects.map(cloneRef),
       members: [member],
     });
   });
 
+  // Correct `groupKey`'s deliberate coarseness: a group only keeps
+  // `who: 'both'` if it is a complete family/staff rectangle. Anything else
+  // splits into one group per actor.
+  const resolved = [...byKey.values()].flatMap((g) => (isRectangle(g.members) ? [g] : splitByActor(g)));
+
   // Groups in first-member declaration order, so the panels read in the same
   // order the machine declares.
-  const groups = [...byKey.values()].sort(
+  const groups = resolved.sort(
     (a, b) => Math.min(...a.members.map((m) => m.order)) - Math.min(...b.members.map((m) => m.order)),
   );
 
