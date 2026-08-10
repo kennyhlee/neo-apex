@@ -5,6 +5,41 @@ import { ENROLLMENT_MACHINE, ENROLLMENT_STEPS, SIGNUP_MACHINE, SIGNUP_STEPS } fr
 
 const model = () => readStageModel(SIGNUP_MACHINE, SIGNUP_STEPS);
 
+// Shared by the F2 "does not merge..." test and the F5 split-sibling
+// identity tests below: A family-only exit from `a` and a staff-only exit
+// from `b`, otherwise identical (same action/to/guards/effects) — the
+// shape that shares a `groupKey` before `isRectangle` splits it apart.
+// Non-empty `guards`/`effects` (not `[]`) so the F5 tests can prove the two
+// split siblings don't share array/object identity, not just that two
+// distinct empty arrays happen to compare unequal by reference.
+const AB_QUIT_MACHINE: MachineDef = {
+  states: [
+    { state_id: 'a', name: 'A', kind: 'initial' },
+    { state_id: 'b', name: 'B', kind: 'active' },
+    { state_id: 'z', name: 'Z', kind: 'terminal' },
+  ],
+  transitions: [
+    {
+      transition_id: 't1',
+      from: 'a',
+      to: 'z',
+      action: 'quit',
+      actor: 'family',
+      guards: [{ primitive: 'always_true', params: {} }],
+      effects: [{ primitive: 'send_email', params: { template: 'goodbye' } }],
+    },
+    {
+      transition_id: 't2',
+      from: 'b',
+      to: 'z',
+      action: 'quit',
+      actor: 'staff',
+      guards: [{ primitive: 'always_true', params: {} }],
+      effects: [{ primitive: 'send_email', params: { template: 'goodbye' } }],
+    },
+  ],
+};
+
 describe('readStageModel — stages', () => {
   it('reads every state as a stage, in spine order', () => {
     expect(model().stages.map((s) => s.stage_id)).toEqual([
@@ -132,6 +167,23 @@ describe('readStageModel — object identity (F1)', () => {
     }
     expect(JSON.stringify(SIGNUP_MACHINE)).toBe(before);
   });
+
+  it('does not alias roleGuard (F6)', () => {
+    // t_drop_draft_family's only guard is the actor_role guard itself
+    // (`guards: [familyRole]`) — absorbed whole into `roleGuard` by
+    // read.ts's `cloneRef(roleGuard)` call.
+    const sourceTransition = SIGNUP_MACHINE.transitions.find(
+      (t) => t.transition_id === 't_drop_draft_family',
+    );
+    const member = model()
+      .groups.flatMap((g) => g.members)
+      .find((m) => m.transition_id === 't_drop_draft_family');
+    expect(sourceTransition).toBeDefined();
+    expect(member).toBeDefined();
+    expect(member?.roleGuard).not.toBeNull();
+    expect(member?.roleGuard).not.toBe(sourceTransition?.guards[0]);
+    expect(member?.roleGuard).toEqual(sourceTransition?.guards[0]);
+  });
 });
 
 describe('readStageModel — actor rectangle (F2)', () => {
@@ -152,39 +204,36 @@ describe('readStageModel — actor rectangle (F2)', () => {
   });
 
   it('does not merge a lone family transition with a lone staff transition from different stages', () => {
-    const machine: MachineDef = {
-      states: [
-        { state_id: 'a', name: 'A', kind: 'initial' },
-        { state_id: 'b', name: 'B', kind: 'active' },
-        { state_id: 'z', name: 'Z', kind: 'terminal' },
-      ],
-      transitions: [
-        {
-          transition_id: 't1',
-          from: 'a',
-          to: 'z',
-          action: 'quit',
-          actor: 'family',
-          guards: [],
-          effects: [],
-        },
-        {
-          transition_id: 't2',
-          from: 'b',
-          to: 'z',
-          action: 'quit',
-          actor: 'staff',
-          guards: [],
-          effects: [],
-        },
-      ],
-    };
-    const m = readStageModel(machine, []);
+    const m = readStageModel(AB_QUIT_MACHINE, []);
     const quits = m.groups.filter((g) => g.action === 'quit');
     expect(quits).toHaveLength(2);
     expect(quits.every((g) => g.who !== 'both')).toBe(true);
     expect(quits.map((g) => g.who).sort()).toEqual(['family', 'staff']);
     expect(quits.every((g) => g.members.length === 1)).toBe(true);
+  });
+});
+
+describe('readStageModel — split-sibling identity (F5)', () => {
+  it('gives each split-off group its own guards/effects arrays, not shared with its sibling', () => {
+    const quits = readStageModel(AB_QUIT_MACHINE, []).groups.filter((g) => g.action === 'quit');
+    expect(quits).toHaveLength(2);
+    const [g1, g2] = quits;
+    expect(g1.guards).not.toBe(g2.guards);
+    expect(g1.effects).not.toBe(g2.effects);
+    expect(g1.guards[0]).not.toBe(g2.guards[0]);
+    expect(g1.effects[0]).not.toBe(g2.effects[0]);
+    // Same content — only identity differs.
+    expect(g1.guards).toEqual(g2.guards);
+    expect(g1.effects).toEqual(g2.effects);
+  });
+
+  it('mutating one split sibling leaves the other unchanged', () => {
+    const [g1, g2] = readStageModel(AB_QUIT_MACHINE, []).groups.filter((g) => g.action === 'quit');
+    const before = JSON.stringify(g2);
+    g1.effects.push({ primitive: 'send_email', params: { template: 'hacked' } });
+    g1.guards.push({ primitive: 'injected', params: {} });
+    if (g1.effects[0]) g1.effects[0].params.template = 'MUTATED';
+    expect(JSON.stringify(g2)).toBe(before);
   });
 });
 

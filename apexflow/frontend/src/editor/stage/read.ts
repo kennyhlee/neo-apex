@@ -125,6 +125,17 @@ function isRectangle(members: MoveMember[]): boolean {
  * expand a `'both'` group by cross-producting its source stages with BOTH
  * actors; doing that to a non-rectangular group would invent transitions
  * that were never authored.
+ *
+ * Each sibling gets its OWN `guards`/`effects` arrays (`cloneRef`, not the
+ * source group's arrays by reference): a shallow `{...group}` spread would
+ * leave every sibling pointing at the same array objects, so an in-place
+ * `group.effects.push(...)` on one sibling (Tasks 6-9 edit `MoveGroup`s in
+ * place) would silently mutate every other sibling too. `cloneRef` already
+ * broke the alias to `machine`'s objects (see its doc comment); this reuses
+ * it to also break the alias BETWEEN siblings, which is a distinct hazard
+ * `cloneRef`'s original call sites don't touch — this function is the only
+ * place one `MoveGroup`'s fields are copied into more than one output
+ * `MoveGroup`.
  */
 function splitByActor(group: MoveGroup): MoveGroup[] {
   const byActor = new Map<TransitionDef['actor'], MoveMember[]>();
@@ -137,6 +148,8 @@ function splitByActor(group: MoveGroup): MoveGroup[] {
     ...group,
     key: `${group.key}#${actor}`,
     who: whoForActor(actor),
+    guards: group.guards.map(cloneRef),
+    effects: group.effects.map(cloneRef),
     members,
   }));
 }
