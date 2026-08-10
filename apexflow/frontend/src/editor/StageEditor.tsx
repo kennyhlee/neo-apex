@@ -9,16 +9,20 @@
 // it, and writes edits back through `writeMachine` — so the round-trip
 // property proved in stage/__tests__/roundTrip.test.ts covers every edit
 // this UI can make.
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { getPrimitives } from '../api/designer.ts';
 import { readStageModel, isExitGroup } from './stage/read.ts';
 import { writeMachine } from './stage/write.ts';
+import { buildSourceGroups, declaredSectionIds, declaredStepIds } from './stage/sources.ts';
 import StageCard from './StageCard.tsx';
+import MoveRow from './MoveRow.tsx';
 import type { MoveGroup, StageModel } from './stage/types.ts';
 import type { StepsUpdater } from './draftStore.ts';
 import type {
   EntityModelsMap,
   MachineDef,
+  PrimitivesCatalog,
   WorkflowStepDef,
 } from '../types/designer.ts';
 import './editor.css';
@@ -35,6 +39,7 @@ interface StageEditorProps {
 }
 
 export default function StageEditor({
+  tenantId,
   machine,
   steps,
   models,
@@ -45,6 +50,35 @@ export default function StageEditor({
 }: StageEditorProps) {
   const { t } = useTranslation();
   const model = useMemo(() => readStageModel(machine, steps), [machine, steps]);
+  const [primitives, setPrimitives] = useState<PrimitivesCatalog | null>(null);
+
+  // Loaded once per tenant, same rationale as MachineEditor.tsx: the
+  // catalog is auth-scoped per tenant but its content is static (generated
+  // from the primitives registries, not tenant data), so a single fetch per
+  // mount is enough.
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      try {
+        const catalog = await getPrimitives(tenantId);
+        if (!cancelled) setPrimitives(catalog);
+      } catch {
+        // MoveRow degrades gracefully when primitives is null — see its
+        // `advanced && primitives` guard.
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId]);
+
+  const sourceGroups = useMemo(
+    () => buildSourceGroups(steps, t('editor.showIf.contextGroup')),
+    [steps, t],
+  );
+  const sectionIds = useMemo(() => declaredSectionIds(steps), [steps]);
+  const stepIds = useMemo(() => declaredStepIds(steps), [steps]);
 
   function commit(next: StageModel) {
     onMachineChange(writeMachine(next));
@@ -86,7 +120,33 @@ export default function StageEditor({
                   ),
                 })
               }
-              renderMoves={() => null}
+              renderMoves={(moves) => (
+                <ul className="move-rows">
+                  {moves.map((move) => (
+                    <MoveRow
+                      key={move.key}
+                      group={move}
+                      stages={model.stages}
+                      states={machine.states}
+                      primitives={primitives}
+                      models={models}
+                      declaredSectionIds={sectionIds}
+                      declaredStepIds={stepIds}
+                      sourceGroups={sourceGroups}
+                      readOnly={readOnly}
+                      onChange={(next) =>
+                        commit({
+                          ...model,
+                          groups: model.groups.map((g) => (g.key === move.key ? next : g)),
+                        })
+                      }
+                      onRemove={() =>
+                        commit({ ...model, groups: model.groups.filter((g) => g.key !== move.key) })
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
             />
           ))}
         </ol>

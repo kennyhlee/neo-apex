@@ -78,6 +78,34 @@ export function actorsFor(who: Who): TransitionDef['actor'][] {
   return [who];
 }
 
+/**
+ * Recompute a group's members for a new `who`.
+ *
+ * Rule: regenerate `roleGuard` only when the group ALREADY had one, or when
+ * the new `who` is a multi-actor pair (which cannot be expressed without
+ * one, since `_unguarded_branch_errors` allows at most one unguarded
+ * transition per (from, action) group). A single-actor group that was
+ * authored without an actor_role guard keeps none.
+ */
+export function membersForWho(group: MoveGroup, who: Who): MoveMember[] {
+  const actors = actorsFor(who);
+  const froms = [...new Set(group.members.map((m) => m.from))];
+  const needsRoleGuard = group.members.some((m) => m.roleGuard !== null) || actors.length > 1;
+  return froms.flatMap((from) =>
+    actors.map((actor) => {
+      const existing = group.members.find((m) => m.from === from && m.actor === actor);
+      if (existing) return { ...existing, roleGuard: needsRoleGuard ? roleGuardFor(actor) : null };
+      return {
+        transition_id: `t_${group.action}_${from}_${actor}`,
+        from,
+        actor,
+        roleGuard: needsRoleGuard ? roleGuardFor(actor) : null,
+        order: NEW_ORDER,
+      };
+    }),
+  );
+}
+
 function memberToTransition(group: MoveGroup, member: MoveMember): TransitionDef {
   // Re-insert the absorbed actor_role guard at position 0, which is where
   // both shipped templates put it and where `splitActorRole` found it.
