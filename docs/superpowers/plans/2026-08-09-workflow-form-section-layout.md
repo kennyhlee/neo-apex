@@ -792,7 +792,11 @@ Expected: FAIL — cannot resolve `../sectionCompletion`.
 
 ```ts
 // flow-runtime/src/sectionCompletion.ts
-import type { FlowField, WorkflowDraft, WorkflowSectionDef } from './types';
+import type { FlowField, WorkflowSectionDef } from './types';
+// NOTE: WorkflowDraft is exported from StepRenderer.tsx:163, NOT from types.ts.
+// Importing it from './types' compiles under vitest (which transpiles) but FAILS
+// `tsc -b`, which all three frontends run in CI. Sibling sectionAnswers.ts does this correctly.
+import type { WorkflowDraft } from './StepRenderer';
 
 export interface SectionProgress {
   /** How many REQUIRED fields the section has (per row, for repeats). */
@@ -870,10 +874,13 @@ export function sectionCompletion(
 export * from './sectionCompletion';
 ```
 
-- [ ] **Step 5: Run the tests**
+- [ ] **Step 5: Run the tests AND the typecheck**
 
-Run: `cd flow-runtime && npm test`
-Expected: 16 prior + 13 here = **29 passing**.
+Run: `cd flow-runtime && npm test && npm run typecheck`
+Expected: 16 prior + 13 here = **29 passing**, typecheck clean.
+
+`npm test` alone is NOT sufficient: vitest transpiles rather than type-checks, so a bad
+import passes the suite and then breaks `tsc -b` in all three frontends' CI builds.
 
 - [ ] **Step 6: Commit**
 
@@ -975,7 +982,8 @@ import { sectionCompletion } from './sectionCompletion';
 import { sectionFields } from './sectionFields';
 import { displayTitle } from './sectionTitle';
 import type { ModelFieldSource } from './blockConfig';
-import type { WorkflowDraft, WorkflowSectionDef, WorkflowStepDef } from './types';
+import type { WorkflowSectionDef, WorkflowStepDef } from './types';
+import type { WorkflowDraft } from './StepRenderer';  // NOT from './types' — see Task 5
 
 export interface AccordionSectionsProps {
   step: WorkflowStepDef;
