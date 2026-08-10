@@ -12,3 +12,4 @@ export {
 export { draftToSectionAnswers, sectionAnswersToDraft } from './sectionAnswers';
 export * from './sectionTitle';
 export * from './SectionDescription';
+export * from './sectionCompletion';
