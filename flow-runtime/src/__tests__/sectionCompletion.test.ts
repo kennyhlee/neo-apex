@@ -104,4 +104,15 @@ describe('sectionCompletion — repeat', () => {
   it('treats a missing draft key as zero rows', () => {
     expect(sectionCompletion(s, fields, {}).done).toBe(false);
   });
+
+  it('counts missing from both incomplete rows and missing rows', () => {
+    const s2 = section({ section_id: 'contacts_section', repeat: { min: 2, max: 5 } });
+    const fields2 = [F('first_name', true), F('last_name', true), F('phone', false)];
+    const p = sectionCompletion(s2, fields2, {
+      contacts_section: [{ last_name: 'Smith' }], // missing first_name
+    });
+    // 1 missing field in present row (first_name) + 2 required fields × 1 missing row = 3 total
+    expect(p.remaining).toBe(3);
+    expect(p.done).toBe(false);
+  });
 });

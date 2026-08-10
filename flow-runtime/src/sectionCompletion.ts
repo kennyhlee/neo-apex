@@ -1,5 +1,6 @@
 // flow-runtime/src/sectionCompletion.ts
-import type { FlowField, WorkflowDraft, WorkflowSectionDef } from './types';
+import type { FlowField, WorkflowSectionDef } from './types';
+import type { WorkflowDraft } from './StepRenderer';
 
 export interface SectionProgress {
   /** How many REQUIRED fields the section has (per row, for repeats). */
