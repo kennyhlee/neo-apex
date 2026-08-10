@@ -28,7 +28,7 @@ export function SectionShell({ section, children, showLegend = true }: SectionSh
       <legend className={showLegend ? 'fr-section-title' : 'fr-sr-only'}>
         {displayTitle(section)}
       </legend>
-      {showLegend && <SectionDescription markdown={section.description} />}
+      <SectionDescription markdown={section.description} />
       {children}
     </fieldset>
   );

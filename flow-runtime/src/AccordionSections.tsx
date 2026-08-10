@@ -1,7 +1,6 @@
 // flow-runtime/src/AccordionSections.tsx
 import { useId, useMemo, useState } from 'react';
 import { useFlowT } from './i18n';
-import { SectionDescription } from './SectionDescription';
 import { SectionShell } from './SectionShell';
 import { sectionCompletion } from './sectionCompletion';
 import { sectionFields } from './sectionFields';
@@ -78,7 +77,6 @@ export function AccordionSections(props: AccordionSectionsProps) {
               </button>
             </h3>
             <div id={panelId} className="fr-accordion-panel" hidden={!open}>
-              <SectionDescription markdown={section.description} />
               <SectionShell section={section} showLegend={false}>
                 {renderFields(section)}
               </SectionShell>

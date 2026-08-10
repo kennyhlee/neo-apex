@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { render } from '@testing-library/react';
 import { AccordionSections } from '../AccordionSections';
+import { displayTitle } from '../sectionTitle';
 import type { ModelFieldSource } from '../blockConfig';
 import type { WorkflowSectionDef, WorkflowStepDef } from '../types';
 import type { WorkflowDraft } from '../StepRenderer';
@@ -138,5 +139,41 @@ describe('AccordionSections — collapsed content stays mounted', () => {
     const openPanel = openFields?.closest('.fr-accordion-panel');
     expect(openPanel).not.toBeNull();
     expect(openPanel?.hasAttribute('hidden')).toBe(false);
+  });
+});
+
+/**
+ * Guards the accordion's use of `SectionShell` specifically -- the family
+ * layout's copy of the same fieldset/legend invariant `SectionShell.test.tsx`
+ * guards directly. Nothing in `RailSections.test.tsx` covers this layout,
+ * so without this describe block the parent-facing accordion could lose its
+ * `SectionShell` wrapper (or the legend text could drift from
+ * `displayTitle`) with the full suite staying green.
+ */
+describe('AccordionSections — every panel keeps the fieldset/legend structure', () => {
+  const sections = [
+    section({ section_id: 'student_section', title: 'Student Information' }),
+    section({ section_id: 'contacts_section' }),
+  ];
+
+  it("each panel's fieldset has a direct legend whose text is displayTitle(section)", () => {
+    const draft: WorkflowDraft = {};
+    const { container } = render(
+      <AccordionSections step={step} sections={sections} models={models} draft={draft}
+        onDraftChange={() => {}} renderFields={renderFields} />,
+    );
+
+    const panels = container.querySelectorAll('.fr-accordion-panel');
+    expect(panels).toHaveLength(2);
+
+    for (const [i, panel] of Array.from(panels).entries()) {
+      const fieldset = panel.querySelector('fieldset');
+      expect(fieldset, `panel ${i} is missing its fieldset`).not.toBeNull();
+
+      const legend = fieldset?.querySelector('legend');
+      expect(legend, `panel ${i}'s fieldset is missing its legend`).not.toBeNull();
+      expect(legend?.parentElement).toBe(fieldset);
+      expect(legend?.textContent).toBe(displayTitle(sections[i]));
+    }
   });
 });

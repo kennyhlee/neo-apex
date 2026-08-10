@@ -79,4 +79,29 @@ describe('SectionShell — fieldset/legend structure', () => {
     // must be this one.
     expect(field?.closest('fieldset')).toBe(fieldset);
   });
+
+  it('showLegend={false} still emits a <legend>, visually hidden via fr-sr-only rather than absent', () => {
+    // The layout (e.g. the accordion, which already shows the title in its
+    // own header button) may hide the legend visually, but it must stay in
+    // the a11y tree -- a screen reader user tabbing straight into the
+    // fieldset's fields still needs "Student Information, First name", not
+    // just "First name". Rendering NO legend at all would pass a
+    // text-content-only assertion just as well as the correct fix, so this
+    // asserts the element and its class, not merely that the title text
+    // appears somewhere.
+    const { container } = render(
+      <SectionShell section={section({ title: 'Student Information' })} showLegend={false}>
+        <input aria-label="First name" />
+      </SectionShell>,
+    );
+
+    const fieldset = container.querySelector('fieldset');
+    expect(fieldset).not.toBeNull();
+
+    const legend = fieldset?.querySelector('legend');
+    expect(legend).not.toBeNull();
+    expect(legend?.parentElement).toBe(fieldset);
+    expect(legend?.className).toBe('fr-sr-only');
+    expect(legend?.textContent).toBe('Student Information');
+  });
 });
