@@ -3771,6 +3771,143 @@ five pre-existing lint errors are unchanged and no sixth appeared."
 
 ---
 
+---
+
+## Task 11: Restore the authoring controls the Machine tab had
+
+**Why this task exists, stated plainly:** the plan's original self-review claimed *"Never a blank canvas; adding a stage moves toward valid — already landed (`6a8375d`, `cadd3b8`); Task 7 preserves it."* **That was wrong.** Task 7 preserved nothing of the sort — `newState()` lived in `MachineEditor.tsx`, which Task 10 deleted. On the branch before this task, the stage editor can rename a stage and edit or delete things that already exist, and nothing else. It cannot add a stage, remove a stage, add a move, or add an exit. The old Machine tab could do all four, so this is a regression against what shipped, and it makes the design's "building from scratch is supported but not optimized" false.
+
+No task brief ever mentioned these controls, which is why nine per-task reviews did not catch it.
+
+**Files:**
+- Create: `apexflow/frontend/src/editor/stageOps.ts`
+- Create: `apexflow/frontend/src/editor/__tests__/stageOps.test.ts`
+- Modify: `apexflow/frontend/src/editor/StageEditor.tsx`, `StageCard.tsx`, `ExitsPanel.tsx`
+- Modify: `apexflow/frontend/src/i18n/translations.ts`, `apexflow/frontend/src/editor/editor.css`
+
+**Interfaces:**
+- Consumes: `Stage`, `MoveGroup`, `MoveMember`, `StageModel`, `Who` from `./stage/types.ts`; `NEW_ORDER`, `NEW_STAGE_INDEX`, `roleGuardFor`, `actorsFor` from `./stage/write.ts`; `isExitGroup` from `./stage/read.ts`.
+- Produces, all pure and all exported from `stageOps.ts`:
+  - `function newStage(existing: Stage[]): Stage`
+  - `function addStage(model: StageModel): StageModel`
+  - `function removeStage(model: StageModel, stageId: string, steps: WorkflowStepDef[]): { model: StageModel; steps: WorkflowStepDef[] }`
+  - `function addMove(model: StageModel, fromStageId: string): StageModel`
+  - `function addExit(model: StageModel): StageModel`
+  - `function canAddExit(model: StageModel): boolean`
+
+**The rules these helpers must implement**
+
+1. **`newStage` fills the missing role.** Kind is `initial` if the machine has none, else `terminal` if it has none, else `active` — the exact rule from commit `cadd3b8`, whose message records why: hardcoding `active` made "Add state" *raise* the error count, because a new workflow already reports "no initial state"/"no terminal state" and an `active` addition leaves both standing while adding "non-terminal but has no outgoing transition". Adding a stage must move the machine toward valid. `declaredIndex` is `NEW_STAGE_INDEX`, `step_ids` is `[]`, `name` is `''`, and `stage_id` is a fresh unique id.
+
+2. **`removeStage` removes what cannot survive without the stage.** The stage itself; every group member whose `from` is that stage; every group whose `to` is that stage (those transitions would otherwise dangle and fail `_state_ref_errors` at publish); any group left with zero members; and the stage id from every step's `available_in`. It returns both the model and the updated steps because both change.
+
+3. **`addMove` adds one move out of a stage.** Default `who: 'staff'`, `guards: []`, `effects: []`, a single member with `order: NEW_ORDER` and `roleGuard: null` — a new transition must not acquire an `actor_role` guard it was not authored with. Target defaults to the next stage in model order after the source, or the finish stage if the source is last. Action defaults to a name not already used by another group leaving that stage, so the new move cannot collide into an existing `(from, action)` group and disturb its unguarded-last ordering.
+
+4. **`addExit` adds one cross-cutting exit rule.** `who: 'both'`, target the first terminal stage that is not the finish, one family/staff member pair per non-terminal stage, each carrying `roleGuardFor(actor)` (a pair cannot be expressed without one), all at `order: NEW_ORDER`. `canAddExit` is false when no non-finish terminal stage exists — the button must be disabled with an explanation rather than producing an invalid machine.
+
+- [ ] **Step 1: Add the i18n keys**
+
+Both locale blocks:
+
+```ts
+    'editor.stages.addStage': 'Add a stage',                       // zh-CN: '添加阶段'
+    'editor.stage.removeStage': 'Delete this stage',               // zh-CN: '删除此阶段'
+    'editor.stage.removeStageWarn': 'Deletes {n} move(s) that start or end here.', // zh-CN: '将删除 {n} 个以此为起点或终点的流转。'
+    'editor.stage.addMove': 'Add a move out of this stage',        // zh-CN: '添加从此阶段出发的流转'
+    'editor.exit.addExit': 'Add an exit',                          // zh-CN: '添加退出'
+    'editor.exit.needsTerminal': 'Add a finishing stage before adding an exit.', // zh-CN: '请先添加结束阶段，然后再添加退出。'
+```
+
+Also fix the stale copy this project made wrong. `editor.step.noStates` currently reads "No stages yet. Open the Machine tab and add at least a starting stage and a finishing stage — then come back and tick where this step appears." The Machine tab no longer exists, and the `available_in` grid it refers to is hidden. It is rendered live by `PreviewPane.tsx:134`. Replace in both locales:
+
+```ts
+    'editor.step.noStates': 'No stages yet. Add a starting stage and a finishing stage before this workflow can run.',
+    // zh-CN: '尚无阶段。请先添加一个起始阶段和一个结束阶段，此工作流才能运行。'
+```
+
+- [ ] **Step 2: Write the failing tests**
+
+Create `apexflow/frontend/src/editor/__tests__/stageOps.test.ts`. Cover, at minimum:
+
+- `newStage` returns `initial` for an empty machine, `terminal` when an initial exists but no terminal, and `active` when both exist — the `cadd3b8` rule, asserted for all three branches.
+- `addStage` on the signup fixture leaves every existing stage and every group untouched, and the new stage carries `NEW_STAGE_INDEX`.
+- `removeStage` on signup's `offered`: the stage is gone; `t_offer_spot` (which targets it) is gone; `t_accept_offer`, `t_decline_offer`, `t_rescind_offer` and the `offered` drop pair (which leave it) are gone; every other transition is byte-identical; and no step retains `offered` in `available_in`.
+- `removeStage` drops a group entirely when it loses its last member, and keeps a group that still has members from other stages — use signup's six-member `drop` group.
+- `addMove` produces a member with `order === NEW_ORDER` and `roleGuard === null`, and its action does not equal any existing action leaving that stage.
+- `addExit` on signup produces one member per non-terminal stage per actor, all with a role guard, and `canAddExit` is false for a model whose only terminal stage is the finish.
+- Round-trip safety: for each helper, `writeMachine` of the result parses back through `readStageModel` to the same set of transition ids.
+
+- [ ] **Step 3: Run them red**
+
+Run: `cd apexflow/frontend && npx vitest run --no-cache src/editor/__tests__/stageOps.test.ts`
+Expected: FAIL — cannot resolve `../stageOps.ts`.
+
+- [ ] **Step 4: Implement `stageOps.ts`**
+
+Pure functions only, no React. Reuse `NEW_ORDER`/`NEW_STAGE_INDEX`/`roleGuardFor`/`actorsFor` from `./stage/write.ts` rather than re-deriving them. Do not modify anything under `src/editor/stage/`.
+
+- [ ] **Step 5: Run them green**
+
+Run: `cd apexflow/frontend && npx vitest run --no-cache src/editor`
+Expected: PASS.
+
+- [ ] **Step 6: Mutations — prove each helper's rule bites**
+
+Run the suite after each, then revert:
+
+1. In `newStage`, hardcode `kind: 'active'` — the exact pre-`cadd3b8` bug.
+   Expected: FAIL on the initial-role and terminal-role assertions.
+2. In `removeStage`, stop removing groups whose `to` is the removed stage.
+   Expected: FAIL on the `t_offer_spot` assertion.
+3. In `removeStage`, stop stripping the stage from steps' `available_in`.
+   Expected: FAIL on the steps assertion.
+4. In `addMove`, set `roleGuard: roleGuardFor(actor)` instead of `null`.
+   Expected: FAIL on the `roleGuard === null` assertion.
+5. In `addExit`, emit a single member instead of one per stage per actor.
+   Expected: FAIL on the member-count assertion.
+
+Revert all five, re-run green.
+
+- [ ] **Step 7: Wire the controls**
+
+- `StageEditor`: an "Add a stage" button above or below the stage list, calling `commit(addStage(model))`.
+- `StageCard`: a "Delete this stage" button, showing the move count it will take via `editor.stage.removeStageWarn`, calling back into `StageEditor` so both model and steps commit together. Disable it when only one stage remains.
+- `StageCard`: an "Add a move out of this stage" button calling `commit(addMove(model, stage.stage_id))`.
+- `ExitsPanel`: an "Add an exit" button, disabled with `editor.exit.needsTerminal` when `canAddExit(model)` is false.
+
+All four must respect `readOnly`.
+
+- [ ] **Step 8: Build, lint, test**
+
+Run: `cd flow-runtime && npm ci`
+Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
+Expected: build clean, 0 lint errors, test count above the previous 107.
+
+- [ ] **Step 9: Live check**
+
+Against the running app. Create a **new** workflow from the Workflows page (do not use the shipped enrollment draft for the destructive parts) and confirm on it: adding a stage yields a stage whose role fills what was missing and does not raise the validation-rail error count; adding a move out of a stage produces an editable move; adding an exit produces a card with every non-terminal stage ticked; deleting a stage removes its moves and leaves the rest intact. Then open the enrollment draft read-only and confirm it still renders nine stages and two exits unchanged. **Delete the scratch workflow you created**, and leave the enrollment draft byte-identical — verify by comparing stored JSON, not by eye.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add apexflow/frontend/src/editor apexflow/frontend/src/i18n/translations.ts
+git commit -m "feat(apexflow): restore add/remove stage and add move/exit
+
+The stage editor could rename a stage and edit or delete what already
+existed, and nothing else — MachineEditor.tsx carried Add state, Remove,
+and the transition-adding UI, and Task 10 deleted it. That was a regression
+against what shipped, and it made the design's from-scratch story false.
+
+newStage reinstates commit cadd3b8's rule verbatim: a new stage fills
+whichever role the machine is missing, so adding one moves the machine
+toward valid instead of raising the error count.
+
+The plan's own self-review claimed Task 7 preserved this. It did not, and
+no task brief mentioned these controls, which is why nine per-task reviews
+did not catch it."
+```
+
+
 ## Self-Review
 
 Run against the design spec plus the ruling's three amendments.
