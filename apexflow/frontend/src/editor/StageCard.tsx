@@ -21,8 +21,19 @@ interface StageCardProps {
   models: EntityModelsMap;
   errors: string[];
   readOnly: boolean;
+  /** False when this is the last remaining stage — deleting it would leave
+   * the machine with nothing to add a stage back onto sensibly, so the
+   * control is disabled rather than allowed to empty the workflow. */
+  canRemove: boolean;
+  /** How many moves (stage moves and exits alike) removing this stage would
+   * touch — either because they start here or because they land here.
+   * Surfaced via `editor.stage.removeStageWarn` so deletion is not a
+   * surprise. */
+  removeImpact: number;
   onStepsChange: (next: StepsUpdater) => void;
   onRename: (name: string) => void;
+  onRemoveStage: () => void;
+  onAddMove: () => void;
   /** Rendered beneath the steps — supplied by StageEditor so MoveRow (Task 8)
    * can be dropped in without StageCard learning about moves. */
   renderMoves: (moves: MoveGroup[]) => ReactNode;
@@ -36,8 +47,12 @@ export default function StageCard({
   models,
   errors,
   readOnly,
+  canRemove,
+  removeImpact,
   onStepsChange,
   onRename,
+  onRemoveStage,
+  onAddMove,
   renderMoves,
 }: StageCardProps) {
   const { t } = useTranslation();
@@ -67,7 +82,20 @@ export default function StageCard({
         {stage.kind === 'terminal' && (
           <span className="stage-card-role">{t('editor.stages.finishes')}</span>
         )}
+        <button
+          type="button"
+          className="btn btn-danger btn-sm"
+          disabled={readOnly || !canRemove}
+          onClick={onRemoveStage}
+        >
+          {t('editor.stage.removeStage')}
+        </button>
       </header>
+      {removeImpact > 0 && (
+        <p className="stage-card-remove-warn">
+          {t('editor.stage.removeStageWarn').replace('{n}', String(removeImpact))}
+        </p>
+      )}
 
       <section className="stage-card-steps">
         <h4>{t('editor.stage.stepsHeading')}</h4>
@@ -119,7 +147,17 @@ export default function StageCard({
         </label>
       </section>
 
-      <section className="stage-card-moves">{renderMoves(moves)}</section>
+      <section className="stage-card-moves">
+        {renderMoves(moves)}
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={readOnly}
+          onClick={onAddMove}
+        >
+          {t('editor.stage.addMove')}
+        </button>
+      </section>
     </li>
   );
 }

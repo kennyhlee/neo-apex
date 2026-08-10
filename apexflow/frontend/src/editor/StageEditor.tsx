@@ -15,6 +15,7 @@ import { getPrimitives } from '../api/designer.ts';
 import { readStageModel, isExitGroup } from './stage/read.ts';
 import { writeMachine } from './stage/write.ts';
 import { buildSourceGroups, declaredSectionIds, declaredStepIds } from './stage/sources.ts';
+import { addExit, addMove, addStage, canAddExit, removeStage } from './stageOps.ts';
 import StageCard from './StageCard.tsx';
 import MoveRow from './MoveRow.tsx';
 import ExitsPanel from './ExitsPanel.tsx';
@@ -89,6 +90,15 @@ export default function StageEditor({
     onMachineChange(writeMachine(next));
   }
 
+  // `removeStage` changes both the model and the steps (a step's
+  // `available_in` loses the removed stage), so both must commit together —
+  // `commit` alone only ever touches the model.
+  function commitRemoveStage(stageId: string) {
+    const removed = removeStage(model, stageId, steps);
+    onMachineChange(writeMachine(removed.model));
+    onStepsChange(removed.steps);
+  }
+
   const exits = model.groups.filter((g) => isExitGroup(g, model));
   const movesByStage = new Map<string, MoveGroup[]>();
   for (const group of model.groups) {
@@ -98,6 +108,19 @@ export default function StageEditor({
       if (!list.includes(group)) list.push(group);
       movesByStage.set(member.from, list);
     }
+  }
+
+  // How many moves (of ANY kind — stage moves and exits alike) a stage's
+  // removal would touch, either because they start there or because they
+  // land there — StageCard's delete-confirmation count.
+  const removalImpact = new Map<string, number>();
+  for (const stage of model.stages) {
+    removalImpact.set(
+      stage.stage_id,
+      model.groups.filter(
+        (g) => g.to === stage.stage_id || g.members.some((m) => m.from === stage.stage_id),
+      ).length,
+    );
   }
 
   return (
@@ -116,6 +139,8 @@ export default function StageEditor({
               models={models}
               errors={errors}
               readOnly={readOnly}
+              canRemove={model.stages.length > 1}
+              removeImpact={removalImpact.get(stage.stage_id) ?? 0}
               onStepsChange={onStepsChange}
               onRename={(name) =>
                 commit({
@@ -125,6 +150,8 @@ export default function StageEditor({
                   ),
                 })
               }
+              onRemoveStage={() => commitRemoveStage(stage.stage_id)}
+              onAddMove={() => commit(addMove(model, stage.stage_id))}
               renderMoves={(moves) => (
                 <ul className="move-rows">
                   {moves.map((move) => (
@@ -166,10 +193,19 @@ export default function StageEditor({
             />
           ))}
         </ol>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={readOnly}
+          onClick={() => commit(addStage(model))}
+        >
+          {t('editor.stages.addStage')}
+        </button>
       </section>
 
       <ExitsPanel
         exits={exits}
+        canAddExit={canAddExit(model)}
         stages={model.stages}
         states={machine.states}
         primitives={primitives}
@@ -183,6 +219,7 @@ export default function StageEditor({
           commit({ ...model, groups: model.groups.map((g) => (g.key === next.key ? next : g)) })
         }
         onRemove={(key) => commit({ ...model, groups: model.groups.filter((g) => g.key !== key) })}
+        onAddExit={() => commit(addExit(model))}
       />
 
       {errors.length > 0 && (

@@ -30,8 +30,13 @@ interface ExitsPanelProps {
   declaredStepIds: string[];
   sourceGroups: SourceGroup[];
   readOnly: boolean;
+  /** False when the machine has no terminal stage that is not the finish —
+   * `stageOps.ts`'s `canAddExit`. "Add an exit" is disabled with an
+   * explanation rather than producing an invalid machine. */
+  canAddExit: boolean;
   onChange: (next: MoveGroup) => void;
   onRemove: (key: string) => void;
+  onAddExit: () => void;
 }
 
 export default function ExitsPanel({
@@ -45,8 +50,10 @@ export default function ExitsPanel({
   declaredStepIds,
   sourceGroups,
   readOnly,
+  canAddExit,
   onChange,
   onRemove,
+  onAddExit,
 }: ExitsPanelProps) {
   const { t } = useTranslation();
   /** The stages the default rule covers: everything that is not terminal. */
@@ -139,6 +146,15 @@ export default function ExitsPanel({
           );
         })}
       </ul>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        disabled={readOnly || !canAddExit}
+        onClick={onAddExit}
+      >
+        {t('editor.exit.addExit')}
+      </button>
+      {!canAddExit && <p className="stage-exit-needs-terminal">{t('editor.exit.needsTerminal')}</p>}
     </section>
   );
 }
