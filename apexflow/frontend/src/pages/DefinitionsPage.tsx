@@ -252,7 +252,33 @@ export default function DefinitionsPage() {
         status: 'draft',
         lineage_status: 'active',
         channel_access: 'staff_only',
-        machine: JSON.stringify({ states: [], transitions: [] }),
+        // A new workflow starts as the SMALLEST VALID machine, not an empty
+        // one. An empty machine ({states: [], transitions: []}) fails
+        // validate.py's `_state_errors` immediately ("no initial state", "no
+        // terminal state"), so the editor greeted every new workflow with a
+        // red error rail before the author had done anything — and clicking
+        // "Add state" made it worse, because a new state defaults to
+        // `kind: 'active'` and adds "non-terminal but has no outgoing
+        // transition" on top. This skeleton validates with ZERO errors; the
+        // author renames, re-kinds, and re-wires it from a working starting
+        // point instead of debugging a blank canvas.
+        machine: JSON.stringify({
+          states: [
+            { state_id: 'draft', name: 'Draft', kind: 'initial' },
+            { state_id: 'done', name: 'Done', kind: 'terminal' },
+          ],
+          transitions: [
+            {
+              transition_id: 'submit',
+              from: 'draft',
+              to: 'done',
+              action: 'submit',
+              actor: 'family',
+              guards: [],
+              effects: [],
+            },
+          ],
+        }),
         steps: JSON.stringify([]),
       });
       setShowNewModal(false);
