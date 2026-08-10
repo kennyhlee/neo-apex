@@ -312,6 +312,18 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.machine.param.engineOwnedWarning':
       '"{field}" is an engine-owned instance field and cannot be set by this effect.',
 
+    // Stage editor — plain-language primitive phrases
+    'editor.phrase.all_blocking_items_complete': 'only if every required step is done',
+    'editor.phrase.items_in_status': 'only if the required items are complete',
+    'editor.phrase.capacity_available': 'only if there is space',
+    'editor.phrase.date_window': 'only during the enrolment window',
+    'editor.phrase.commit_sections': 'creates the records from the form',
+    'editor.phrase.set_entity_field': 'records the decision on the application',
+    'editor.phrase.send_email': 'emails the family',
+    'editor.phrase.issue_link': 'sends the family a link',
+    'editor.phrase.start_due_clocks': 'starts the document due dates',
+    'editor.phrase.set_context': 'records a note on the application',
+
     // Templates (gallery page — Task 6)
     'templates.title': 'Templates',
     'templates.loadError': "Couldn't load templates.",
@@ -641,6 +653,18 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.machine.param.fieldPlaceholder': 'field_name',
     'editor.machine.param.selectFieldPlaceholder': '选择一个字段…',
     'editor.machine.param.engineOwnedWarning': '"{field}" 是引擎拥有的实例字段，此效果无法设置它。',
+
+    // Stage editor — plain-language primitive phrases
+    'editor.phrase.all_blocking_items_complete': '仅当所有必填步骤已完成',
+    'editor.phrase.items_in_status': '仅当所需项目已完成',
+    'editor.phrase.capacity_available': '仅当尚有名额',
+    'editor.phrase.date_window': '仅在报名时间段内',
+    'editor.phrase.commit_sections': '根据表单创建记录',
+    'editor.phrase.set_entity_field': '将决定记录到申请上',
+    'editor.phrase.send_email': '向家长发送邮件',
+    'editor.phrase.issue_link': '向家长发送链接',
+    'editor.phrase.start_due_clocks': '开始计算材料截止日期',
+    'editor.phrase.set_context': '在申请上记录一条备注',
 
     // Templates (gallery page — Task 6)
     'templates.title': '模板',
