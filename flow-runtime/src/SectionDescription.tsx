@@ -41,6 +41,20 @@ function HeadingAsParagraph({
   return <p {...rest} />;
 }
 
+/**
+ * Ordered lists render as `<p>` (see overrides below), but markdown-to-jsx
+ * still attaches the list's `start` prop (its first item number) before the
+ * override ever sees it. `start` is a valid attribute on `<ol>`, not on
+ * `<p>` -- passing it through renders `<p start="1">`, which is invalid
+ * HTML. Drop it the same way `HeadingAsParagraph` drops a heading's `id`.
+ */
+function OrderedListAsParagraph({
+  start: _start,
+  ...rest
+}: ComponentPropsWithoutRef<'p'> & { start?: number }) {
+  return <p {...rest} />;
+}
+
 const OPTIONS = {
   // Raw HTML renders as literal text instead of elements.
   disableParsingRawHTML: true,
@@ -66,7 +80,7 @@ const OPTIONS = {
     h6: { component: HeadingAsParagraph },
     img: { component: () => null },
     ul: { component: 'p' },
-    ol: { component: 'p' },
+    ol: { component: OrderedListAsParagraph },
     li: { component: 'span' },
     pre: { component: 'p' },
     code: { component: 'span' },
@@ -76,6 +90,20 @@ const OPTIONS = {
     // <p> -- invalid HTML that React (correctly) warns about.
     blockquote: { component: 'div' },
     hr: { component: () => null },
+    // Footnotes (`text[^1]` / `[^1]: note`) are GFM, not part of the
+    // "inline emphasis + links only" surface this component allows -- but
+    // there is no single `footnote`/`footnoteReference` override key that
+    // suppresses them (verified empirically: markdown-to-jsx 9.10.2 renders
+    // the reference marker via the plain `sup` tag inside an `a`, and the
+    // definition via a `footer` landmark wrapping a `div`, not via any
+    // RuleType-named override). Nulling those two real tag overrides is
+    // what actually removes both: the reference marker (`<sup>1</sup>`,
+    // inside an `<a>` already left href-less by `sanitizer` since "#1"
+    // matches no allowed scheme) and the `<footer><div id="">...</div>
+    // </footer>` block, so no footnote landmark or dead anchor reaches a
+    // parent-facing form.
+    sup: { component: () => null },
+    footer: { component: () => null },
   },
 } as const;
 

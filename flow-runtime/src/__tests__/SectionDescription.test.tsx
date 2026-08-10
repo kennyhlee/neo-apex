@@ -146,6 +146,21 @@ describe('SectionDescription safety', () => {
     expect(out).toContain('Fees');
     expect(out).toContain('apply');
   });
+
+  it('never emits an invalid start="" attribute on the <p> an ordered list becomes', () => {
+    const out = html('1. one\n2. two');
+    expect(out).not.toContain('start=');
+    expect(out).toContain('one');
+    expect(out).toContain('two');
+  });
+
+  it('drops footnote markers and definitions rather than leaking a landmark and a dead anchor', () => {
+    const out = html('text[^1]\n\n[^1]: note');
+    expect(out).not.toContain('<footer');
+    expect(out).not.toContain('<sup');
+    expect(out).not.toContain('note');
+    expect(out).toContain('text');
+  });
 });
 
 // --- structural guards: these are the enforcement mechanism, not decoration.
