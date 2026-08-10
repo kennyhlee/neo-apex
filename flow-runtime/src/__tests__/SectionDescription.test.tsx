@@ -111,11 +111,25 @@ describe('SectionDescription safety', () => {
     expect(html('[x](JaVaScRiPt:alert(1))')).not.toContain('href');
   });
 
-  it('drops headings, images, and lists', () => {
-    const out = html('# Heading\n\n![img](https://x.example.com/a.png)\n\n- one\n- two');
+  it('drops headings and images', () => {
+    const out = html('# Heading\n\n![img](https://x.example.com/a.png)');
     expect(out).not.toContain('<h1');
     expect(out).not.toContain('<img');
+  });
+
+  it('flattens lists to one item per line rather than dropping them or running items together', () => {
+    // `- one\n- two\n- three` used to render as the unreadable concatenation
+    // "onetwothree" (li -> span, no separator) -- exactly the bug this
+    // guards against. Assert the negative explicitly: a test that only
+    // checked the items were present would pass in both the broken and the
+    // fixed world.
+    const out = html('- one\n- two\n- three');
     expect(out).not.toContain('<ul');
+    expect(out).not.toContain('<li');
+    expect(out).not.toContain('onetwothree');
+    expect(out).toContain('<div>one</div>');
+    expect(out).toContain('<div>two</div>');
+    expect(out).toContain('<div>three</div>');
   });
 
   it('never mints a heading id, even though headings render as <p>', () => {
@@ -147,11 +161,14 @@ describe('SectionDescription safety', () => {
     expect(out).toContain('apply');
   });
 
-  it('never emits an invalid start="" attribute on the <p> an ordered list becomes', () => {
+  it('never emits a stray start="" attribute, and keeps ordered-list items on separate lines', () => {
     const out = html('1. one\n2. two');
     expect(out).not.toContain('start=');
-    expect(out).toContain('one');
-    expect(out).toContain('two');
+    // Items land as their own <div> (li -> div), not run together the way
+    // span-based items used to.
+    expect(out).toContain('<div>one</div>');
+    expect(out).toContain('<div>two</div>');
+    expect(out).not.toContain('onetwo');
   });
 
   it('drops footnote markers and definitions rather than leaking a landmark and a dead anchor', () => {

@@ -42,17 +42,20 @@ function HeadingAsParagraph({
 }
 
 /**
- * Ordered lists render as `<p>` (see overrides below), but markdown-to-jsx
- * still attaches the list's `start` prop (its first item number) before the
- * override ever sees it. `start` is a valid attribute on `<ol>`, not on
- * `<p>` -- passing it through renders `<p start="1">`, which is invalid
- * HTML. Drop it the same way `HeadingAsParagraph` drops a heading's `id`.
+ * Ordered lists render as `<div>` (see overrides below -- a block element,
+ * because its `li` children now render as `<div>` too, see `li`'s comment),
+ * but markdown-to-jsx still attaches the list's `start` prop (its first
+ * item number) before the override ever sees it. `start` is a real HTML
+ * attribute name, so even on a `<div>` it would render as inert but
+ * meaningless attribute noise (`<div start="1">`) on an element sitting
+ * inside a live form. Drop it the same way `HeadingAsParagraph` drops a
+ * heading's `id`.
  */
-function OrderedListAsParagraph({
+function OrderedListAsDiv({
   start: _start,
   ...rest
-}: ComponentPropsWithoutRef<'p'> & { start?: number }) {
-  return <p {...rest} />;
+}: ComponentPropsWithoutRef<'div'> & { start?: number }) {
+  return <div {...rest} />;
 }
 
 const OPTIONS = {
@@ -65,9 +68,10 @@ const OPTIONS = {
   // form, so an id collision with a real field breaks
   // getElementById/label-for association.
   slugify: () => '',
-  // Restrict output to inline emphasis + links. Headings, images, lists,
-  // blockquotes, thematic breaks, code blocks and tables are dropped: a
-  // section description is one short orienting paragraph, not a document.
+  // Restrict output to inline emphasis + links, plus flattened lists (see
+  // `li` below). Headings, images, blockquotes, thematic breaks, code
+  // blocks and tables are dropped: a section description is one short
+  // orienting paragraph, not a document.
   overrides: {
     a: {
       props: { target: '_blank', rel: 'noopener noreferrer' },
@@ -79,9 +83,24 @@ const OPTIONS = {
     h5: { component: HeadingAsParagraph },
     h6: { component: HeadingAsParagraph },
     img: { component: () => null },
-    ul: { component: 'p' },
-    ol: { component: OrderedListAsParagraph },
-    li: { component: 'span' },
+    // 'div', not 'p': `li` (below) now renders each item as a `<div>` --
+    // a block element -- and a `<p>` cannot validly contain block children
+    // (React warns "In HTML, <div> cannot be a descendant of <p>"). Same
+    // p-in-p-avoidance reasoning `blockquote` already uses below, just for
+    // div-in-p instead.
+    ul: { component: 'div' },
+    ol: { component: OrderedListAsDiv },
+    // 'div', not 'span': a bulleted/numbered list ("what to bring", "who
+    // counts as an emergency contact") is exactly the kind of thing a
+    // school actually types into a description. `span` ran every item
+    // together with no separator at all (`- one\n- two\n- three` ->
+    // "onetwothree", unreadable, with no warning to the admin who wrote
+    // it). `div` is a block element, so each item lands on its own line --
+    // lists render FLATTENED (no bullet/number glyphs, each item its own
+    // line) rather than dropped, consistent with the "one short orienting
+    // paragraph" intent above. No security implication: `stripRawHtml` and
+    // `sanitizer` are untouched by this override.
+    li: { component: 'div' },
     pre: { component: 'p' },
     code: { component: 'span' },
     table: { component: () => null },
