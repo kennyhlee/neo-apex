@@ -615,6 +615,81 @@ def abandon_instance(ctx: EvalContext) -> dict:
     return ctx.instance
 
 
+def restore_instance(ctx: EvalContext) -> dict:
+    """Staff-only: return ONE abandoned work item to the state it held before
+    its workflow was force-archived (spec R5).
+
+    Three refusals, each a 409 with a machine-readable `reason` the UI maps to
+    its own copy:
+
+    - `not_abandoned` — the instance is not in the synthetic `abandoned`
+      state. This is what makes a deliberate `cancel_instance` and a natural
+      terminal state non-restorable, and it is the entire reason `abandoned`
+      is a state of its own rather than a reuse of `cancelled` (spec D3).
+    - `lineage_archived` — the workflow is still out of circulation. Restoring
+      work into it would produce an instance nobody can act on.
+    - `state_unavailable` — `archived_from_state` names a state the pinned
+      machine does not declare (the definition was edited in place after the
+      abandon). There is nothing coherent to restore into.
+
+    A pinned definition version that no longer resolves never reaches here:
+    `build_eval_context` raises 404 first.
+
+    Clears `closed_at`/`archived_at`/`archived_from_state` by writing `""`,
+    not `None` — `entity_base_data` drops `None` values from the full-replace
+    PUT body, and `""` is already what the open-instance query treats as open.
+    Bumps `token_version` so any magic link issued before the abandon stays
+    dead and the reopened instance gets a fresh one.
+    """
+    if is_family_actor(ctx.actor):
+        raise HTTPException(403, "family actor may not restore an instance")
+
+    if ctx.instance.get("state") != ABANDONED_STATE:
+        raise HTTPException(409, {
+            "reason": "not_abandoned",
+            "state": ctx.instance.get("state"),
+        })
+
+    lineage_id = ctx.instance.get("definition_id")
+    published = defs.get_published_definition(ctx.tenant_id, lineage_id, ctx.token)
+    if published is not None and defs.is_archived(published):
+        raise HTTPException(409, {"reason": "lineage_archived"})
+
+    to_state = ctx.instance.get("archived_from_state") or ""
+    declared = {s.state_id for s in ctx.definition["machine"].states}
+    if to_state not in declared:
+        raise HTTPException(409, {
+            "reason": "state_unavailable",
+            "archived_from_state": to_state,
+        })
+
+    try:
+        token_version = int(ctx.instance.get("token_version") or 1)
+    except (TypeError, ValueError):
+        token_version = 1
+
+    base = entity_base_data(ctx.instance)
+    base["state"] = to_state
+    base["closed_at"] = ""
+    base["archived_at"] = ""
+    base["archived_from_state"] = ""
+    base["token_version"] = token_version + 1
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=engine.row_version(ctx.instance))
+    ctx.instance.update({
+        "state": to_state,
+        "closed_at": "",
+        "archived_at": "",
+        "archived_from_state": "",
+        "token_version": base["token_version"],
+    })
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
+
+    _log_activity(ctx, "state_change", ABANDONED_STATE, to_state)
+    return ctx.instance
+
+
 # --- the single action dispatcher ------------------------------------------
 
 
@@ -635,6 +710,8 @@ def execute_action(ctx: EvalContext, action_name: str, params: dict) -> dict:
         _run_item_builtin(ctx, action_name, params)
     elif action_name == "cancel_instance":
         cancel_instance(ctx)
+    elif action_name == "restore_instance":
+        restore_instance(ctx)
     else:
         _run_transition_action(ctx, action_name, params)
 

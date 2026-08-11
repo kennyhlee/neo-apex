@@ -314,3 +314,95 @@ def test_publishing_a_new_version_keeps_the_lineage_archived(client, fake_dc):
     resp = _act(client, v2, "publish")
     assert resp.status_code == 200
     assert resp.json()["base_data"]["lineage_status"] == "archived"
+
+
+# --- restore_instance -------------------------------------------------------
+
+
+def _instance_act(client, instance_eid, action, **params):
+    return client.post(
+        f"/api/workflows/{TENANT}/instances/{instance_eid}/actions",
+        json={"action": action, **params},
+    )
+
+
+def test_restore_returns_the_work_item_to_its_state_before_archiving(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    def_eid = _seed_definition(fake_dc, definition_id="wd-restore")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-restore", state="submitted")
+
+    assert _act(client, def_eid, "archive", force=True).status_code == 200
+    assert _act(client, def_eid, "unarchive").status_code == 200
+
+    resp = _instance_act(client, inst_eid, "restore_instance")
+    assert resp.status_code == 200
+
+    row = fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)
+    assert row["state"] == "submitted"
+    assert not row["closed_at"]
+    assert not row["archived_from_state"]
+
+    activities = fake_dc.find("workflow_activity", instance_id=inst_eid)
+    assert activities[-1]["to_value"] == "submitted"
+
+
+def test_restore_is_refused_while_the_workflow_is_still_archived(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    def_eid = _seed_definition(fake_dc, definition_id="wd-restore-blocked")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-restore-blocked", state="submitted")
+    assert _act(client, def_eid, "archive", force=True).status_code == 200
+
+    resp = _instance_act(client, inst_eid, "restore_instance")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "lineage_archived"
+
+    assert fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)["state"] == "abandoned"
+
+
+def test_restore_is_refused_on_a_cancelled_work_item(client, fake_dc):
+    """Spec D3: a deliberate staff cancellation is not archive fallout and
+    must not be restorable."""
+    fake_dc.set_model(TENANT, "student", _models())
+    _seed_definition(fake_dc, definition_id="wd-restore-cancelled")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-restore-cancelled",
+                              state="cancelled", closed_at="2026-08-02T00:00:00+00:00")
+
+    resp = _instance_act(client, inst_eid, "restore_instance")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "not_abandoned"
+
+
+def test_restore_is_refused_on_a_naturally_terminal_work_item(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    _seed_definition(fake_dc, definition_id="wd-restore-enrolled")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-restore-enrolled",
+                              state="enrolled", closed_at="2026-08-02T00:00:00+00:00")
+
+    resp = _instance_act(client, inst_eid, "restore_instance")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "not_abandoned"
+
+
+def test_restore_is_refused_when_the_prior_state_is_no_longer_declared(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    _seed_definition(fake_dc, definition_id="wd-restore-gone")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-restore-gone",
+                              state="abandoned", closed_at="2026-08-02T00:00:00+00:00",
+                              archived_from_state="a_state_the_machine_never_declared")
+
+    resp = _instance_act(client, inst_eid, "restore_instance")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "state_unavailable"
+
+
+def test_restored_work_item_can_make_progress_again(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    def_eid = _seed_definition(fake_dc, definition_id="wd-restore-progress")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-restore-progress", state="submitted")
+    assert _act(client, def_eid, "archive", force=True).status_code == 200
+    assert _act(client, def_eid, "unarchive").status_code == 200
+    assert _instance_act(client, inst_eid, "restore_instance").status_code == 200
+
+    resp = _instance_act(client, inst_eid, "approve")
+    assert resp.status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)["state"] == "enrolled"
