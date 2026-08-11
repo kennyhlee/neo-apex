@@ -50,7 +50,7 @@ at all**, and `lead_activity` records only stage transitions with no `at` either
 |---|---|
 | Pipeline section | Stays lead-driven; renamed **"Lead pipeline"**. Same data, honest name. |
 | Work queue source | **Workflows only**, across every published definition. See the amendment below. |
-| Queue presentation | **Fixed count cards** (max four), not a row list. Height must not grow with volume. |
+| Queue presentation | **Fixed count cards** (max three post-amendment), not a row list. Height must not grow with volume. |
 | Detail list | A **new `/attention` route**. No cross-definition instance view exists today. |
 | Nav | **No nav entry.** Reachable from the Home cards. Nav stays at six items. |
 | Data layer | **The generic `POST /api/query`.** No new backend endpoint in AdminDash. |
@@ -74,12 +74,14 @@ navigation.
 Only the two top sections change. "This week", the weekly schedule and the public
 inquiry link are untouched.
 
-**"Needs you today"** renders up to four count cards in the existing
+**"Needs you today"** renders up to three count cards in the existing
 `queue-card` visual language — count, label, one-line detail, one button. A card
 renders only when its count exceeds zero, which is today's rule
-(`HomePage.tsx:252`), so four is the ceiling rather than the norm and the section
-height is bounded by construction. Zero total renders the existing "All clear"
-panel. A section-level "See all N ›" links to `/attention`.
+(`HomePage.tsx:252`), so three is the ceiling rather than the norm and the
+section height is bounded by construction. Zero total renders the existing "All
+clear" panel. A section-level "See all N ›" links to `/attention`.
+
+(The count was four as originally approved; see the amendment under §2.)
 
 **"Enrollment pipeline"** becomes **"Lead pipeline"**. The spine, the stage
 derivation via `leadStages`, and the `/leads` link are unchanged. This is a
@@ -87,7 +89,7 @@ string change plus its `zh-CN` counterpart.
 
 On narrow viewports the cards reflow to a 2×2 grid and stay within one fold.
 
-### 2. The four buckets
+### 2. The buckets
 
 | Card | Rule | Detail line | Destination |
 |---|---|---|---|
@@ -144,7 +146,7 @@ Four rulings embedded above:
 "First stage" for the Inquiries bucket means the first entry of `leadStages`,
 the same derivation the current queue uses (`HomePage.tsx:176`); its detail line
 counts leads sitting there. Every instance receives a `state_change` activity at
-creation (`engine.py:255`), so the silence rule always has at least one row to
+creation (`engine.py:263`), so the silence rule always has at least one row to
 measure from and never mistakes a new instance for a silent one.
 
 The 7-day silence threshold is a named constant beside the existing

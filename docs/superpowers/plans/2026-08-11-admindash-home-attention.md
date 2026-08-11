@@ -413,7 +413,7 @@ export function overdueItemsSql(nowIso: string): string {
  * rows can answer "how quiet is the quietest" without a second query.
  *
  * Every instance receives a `state_change` at creation
- * (apexflow `engine.py:255`), so `last_activity` is null only for genuinely
+ * (apexflow `engine.py:263`), so `last_activity` is null only for genuinely
  * malformed data — never for a brand-new instance.
  */
 export function instanceSilenceSql(): string {
@@ -846,7 +846,7 @@ export function buildAttention(input: AttentionInput): AttentionResult {
     const definitionId = String(row.definition_id ?? '');
     if (isTerminal(definitionId, String(row.state ?? ''))) continue;
     const last = parseIso(row.last_activity);
-    // Every instance gets a state_change at creation (apexflow engine.py:255),
+    // Every instance gets a state_change at creation (apexflow engine.py:263),
     // so a null here is malformed data, not a new instance. Judging it silent
     // would be a guess, so it is skipped.
     if (last === null) continue;
