@@ -1127,7 +1127,26 @@ In the **`zh-CN`** table, add the matching keys:
 
 Also update the existing `zh-CN` `today.pipeline` value if one is already present — there must be exactly one entry per key per locale.
 
-The now-unused lead-queue keys (`today.unassignedLeads`, `today.staleLeads`, `today.unreachableLeads`, `today.readyToEnroll` and their `*Action`/`*Detail` siblings) stay in place for now; `LeadPage` and the translations test both still reference the table, and removing them is a separate cleanup.
+**Delete the old queue's keys from BOTH locales.** Verified before planning: these are referenced only by `HomePage.tsx`, nowhere else in `src/`, so Task 5 leaves every one of them dead. Remove all fourteen:
+
+```
+today.unassignedLeads        today.unassignedLeadsAction
+today.staleLeads             today.staleLeadsAction
+today.unreachableLeads       today.unreachableLeadsAction
+today.unreachableLeadsDetail today.readyToEnroll
+today.readyToEnrollAction    today.readyToEnrollDetail
+today.oldestWaiting          today.oldestWaitingOne
+today.longestWaiting         today.longestWaitingOne
+```
+
+Keep `today.needsYou`, `today.allClear`, `today.allClearBody`, `today.viewAll`, `today.noStages` and everything under `today.thisWeek` / `today.inquiryLink` — those sections are untouched. After the edit, confirm nothing references a deleted key:
+
+```bash
+cd /Users/kennylee/Development/NeoApex/admindash/frontend
+grep -rn "today.unassignedLeads\|today.staleLeads\|today.unreachableLeads\|today.readyToEnroll\|today.oldestWaiting\|today.longestWaiting" src/
+```
+
+Expected: no output.
 
 - [ ] **Step 2: Run the translations test**
 
