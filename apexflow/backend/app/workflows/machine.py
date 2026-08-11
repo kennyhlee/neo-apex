@@ -175,6 +175,15 @@ ITEM_BUILTIN_ACTIONS: frozenset[str] = frozenset(_ITEM_BUILTINS_ALL)
 # module docstring, decision 1.
 _PINNED_STATUSES = ("published", "superseded")
 
+# Synthetic terminal states — never declared `state_id`s in an authored
+# machine. `cancelled` is a deliberate staff cancellation; `abandoned` is
+# force-archive fallout and is the ONLY one `restore_instance` will reverse
+# (spec D3 — keeping them distinct is what makes a real cancellation
+# non-restorable).
+CANCELLED_STATE = "cancelled"
+ABANDONED_STATE = "abandoned"
+_SYNTHETIC_TERMINAL_STATES = frozenset({CANCELLED_STATE, ABANDONED_STATE})
+
 
 def _parse_json(raw) -> dict:
     if isinstance(raw, dict):
@@ -284,11 +293,16 @@ def _refresh_items(ctx: EvalContext) -> None:
 
 
 def _is_terminal_state(ctx: EvalContext) -> bool:
-    """True for the synthetic `"cancelled"` state (never a declared
-    `state_id`, spec: "always terminal-legal") or any declared state whose
-    `kind == "terminal"`."""
+    """True for the synthetic `cancelled`/`abandoned` states (never declared
+    `state_id`s, spec: "always terminal-legal") or any declared state whose
+    `kind == "terminal"`.
+
+    Because every progress path in this module funnels through this check,
+    teaching it `abandoned` is the whole of "no more progress can be made"
+    (spec R3) — item built-ins, explicit transitions, and system auto-advance
+    all refuse an abandoned instance with no further change."""
     current = ctx.instance.get("state")
-    if current == "cancelled":
+    if current in _SYNTHETIC_TERMINAL_STATES:
         return True
     state_def = next((s for s in ctx.definition["machine"].states if s.state_id == current), None)
     return state_def is not None and state_def.kind == "terminal"
@@ -533,18 +547,18 @@ def cancel_instance(ctx: EvalContext) -> dict:
         token_version = 1
 
     base = entity_base_data(ctx.instance)
-    base["state"] = "cancelled"
+    base["state"] = CANCELLED_STATE
     base["closed_at"] = ctx.now.isoformat()
     base["token_version"] = token_version + 1
     updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
                            ctx.token, expected_version=engine.row_version(ctx.instance))
-    ctx.instance["state"] = "cancelled"
+    ctx.instance["state"] = CANCELLED_STATE
     ctx.instance["closed_at"] = base["closed_at"]
     ctx.instance["token_version"] = base["token_version"]
     if "_version" in updated:
         ctx.instance["_version"] = updated["_version"]
 
-    _log_activity(ctx, "state_change", from_state, "cancelled")
+    _log_activity(ctx, "state_change", from_state, CANCELLED_STATE)
     return ctx.instance
 
 
