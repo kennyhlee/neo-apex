@@ -167,8 +167,6 @@ function input(over: Partial<AttentionInput> = {}): AttentionInput {
     submitted: [],
     overdue: [],
     silence: [],
-    leads: [],
-    leadStages: ['New', 'Contacted', 'Enrolled'],
     nowMs: NOW,
     stalledDays: 7,
     ...over,
@@ -298,19 +296,5 @@ describe('buildAttention', () => {
       .reduce((n, b) => n + bucketRows(result, b).length, 0);
     expect(summed).toBe(result.rows.length);
     expect(summed).toBe(3);
-  });
-
-  it('counts a lead that is both first-stage and unreachable exactly once', () => {
-    const { leads } = buildAttention(input({
-      leads: [
-        { stage: 'New', email: '', phone: '' },
-        { stage: 'New', email: 'a@b.c', phone: '' },
-        { stage: 'Contacted', email: '', phone: '' },
-        { stage: 'Contacted', email: 'x@y.z', phone: '1' },
-        { stage: 'New', email: '', phone: '', converted_family_id: 'fam1' },
-      ] as never,
-    }));
-    expect(leads.total).toBe(3);
-    expect(leads.neverContacted).toBe(2);
   });
 });

@@ -1,6 +1,5 @@
 import { ITEM_DONE_STATUSES } from '@neoapex/flow-runtime';
 import { parseMachineStates } from './workflowData.ts';
-import type { Lead } from '../types/models.ts';
 
 /**
  * Pure logic for the AdminDash attention queue — no network, no React, so
@@ -193,17 +192,8 @@ export interface AttentionRow {
   ageMs: number | null;
 }
 
-export interface LeadAttention {
-  /** Union, not sum — a lead that is both first-stage and unreachable is one
-   * piece of work, not two. */
-  total: number;
-  neverContacted: number;
-  unreachable: number;
-}
-
 export interface AttentionResult {
   rows: AttentionRow[];
-  leads: LeadAttention;
 }
 
 export interface AttentionInput {
@@ -211,8 +201,6 @@ export interface AttentionInput {
   submitted: ItemAttentionRow[];
   overdue: ItemAttentionRow[];
   silence: InstanceSilenceRow[];
-  leads: Lead[];
-  leadStages: string[];
   /** Injected, never `Date.now()` inside — otherwise nothing here is testable. */
   nowMs: number;
   stalledDays: number;
@@ -259,18 +247,6 @@ function byUrgency(a: AttentionRow, b: AttentionRow): number {
   if (a.ageMs === null) return 1;
   if (b.ageMs === null) return -1;
   return b.ageMs - a.ageMs;
-}
-
-export function leadAttention(leads: Lead[], stages: string[]): LeadAttention {
-  const first = stages[0];
-  const open = leads.filter((l) => !l.converted_family_id);
-  const isNew = (l: Lead) => !!first && l.stage === first;
-  const isUnreachable = (l: Lead) => !l.email && !l.phone;
-  return {
-    total: open.filter((l) => isNew(l) || isUnreachable(l)).length,
-    neverContacted: open.filter(isNew).length,
-    unreachable: open.filter(isUnreachable).length,
-  };
 }
 
 /**
@@ -337,7 +313,7 @@ export function buildAttention(input: AttentionInput): AttentionResult {
   }
 
   rows.sort(byUrgency);
-  return { rows, leads: leadAttention(input.leads, input.leadStages) };
+  return { rows };
 }
 
 export function bucketRows(result: AttentionResult, bucket: BucketKey): AttentionRow[] {

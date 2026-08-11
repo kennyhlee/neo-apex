@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { postQuery, listLeads } from '../api/client.ts';
+import { postQuery } from '../api/client.ts';
 import { settledSection } from '../utils/workflowData.ts';
-import { leadStages } from '../utils/leadModel.ts';
-import { useModel } from '../contexts/ModelContext.tsx';
 import {
   publishedDefinitionsSql,
   submittedItemsSql,
@@ -15,18 +13,16 @@ import {
   type ItemAttentionRow,
   type InstanceSilenceRow,
 } from '../utils/attentionData.ts';
-import type { Lead } from '../types/models.ts';
 
 export interface AttentionFailures {
   definitions: boolean;
   submitted: boolean;
   overdue: boolean;
   silence: boolean;
-  leads: boolean;
 }
 
 const NO_FAILURES: AttentionFailures = {
-  definitions: false, submitted: false, overdue: false, silence: false, leads: false,
+  definitions: false, submitted: false, overdue: false, silence: false,
 };
 
 export interface AttentionState {
@@ -45,7 +41,6 @@ export interface AttentionState {
  * the same failure hides one card and leaves the rest correct.
  */
 export function useAttention(tenant: string): AttentionState {
-  const { getModel } = useModel();
   const [result, setResult] = useState<AttentionResult | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState<AttentionFailures>(NO_FAILURES);
@@ -59,27 +54,14 @@ export function useAttention(tenant: string): AttentionState {
 
     async function load() {
       setLoaded(false);
-      // The lead model supplies the stage vocabulary. A failure here does NOT
-      // degrade to "no stages" — leadStages(undefined) falls back to
-      // DEFAULT_LEAD_STAGES, a real (if generic) vocabulary — so a swallowed
-      // failure would silently substitute the default stages for whatever
-      // this tenant actually configured, undercounting a renamed bucket like
-      // "Inquiry" with no visible sign anything went wrong. So the failure is
-      // captured and folded into `failed.leads` below, not swallowed.
-      let leadModelFailed = false;
-      const leadModel = await getModel(tenant, 'lead').catch(() => {
-        leadModelFailed = true;
-        return undefined;
-      });
       const nowMs = Date.now();
       const nowIso = new Date(nowMs).toISOString();
 
-      const [defs, submitted, overdue, silence, leads] = await Promise.allSettled([
+      const [defs, submitted, overdue, silence] = await Promise.allSettled([
         postQuery(tenant, 'entities', publishedDefinitionsSql()),
         postQuery(tenant, 'entities', submittedItemsSql()),
         postQuery(tenant, 'entities', overdueItemsSql(nowIso)),
         postQuery(tenant, 'entities', instanceSilenceSql()),
-        listLeads(tenant),
       ]);
 
       if (cancelled) return;
@@ -88,11 +70,10 @@ export function useAttention(tenant: string): AttentionState {
       const s = settledSection(submitted, { data: [], total: 0 });
       const o = settledSection(overdue, { data: [], total: 0 });
       const q = settledSection(silence, { data: [], total: 0 });
-      const l = settledSection(leads, [] as Lead[]);
 
       setFailed({
         definitions: d.failed, submitted: s.failed,
-        overdue: o.failed, silence: q.failed, leads: l.failed || leadModelFailed,
+        overdue: o.failed, silence: q.failed,
       });
 
       setResult(buildAttention({
@@ -100,8 +81,6 @@ export function useAttention(tenant: string): AttentionState {
         submitted: s.data.data as unknown as ItemAttentionRow[],
         overdue: o.data.data as unknown as ItemAttentionRow[],
         silence: q.data.data as unknown as InstanceSilenceRow[],
-        leads: l.data,
-        leadStages: leadStages(leadModel),
         nowMs,
         stalledDays: STALLED_DAYS,
       }));
@@ -110,7 +89,7 @@ export function useAttention(tenant: string): AttentionState {
 
     void load();
     return () => { cancelled = true; };
-  }, [tenant, nonce, getModel]);
+  }, [tenant, nonce]);
 
   return { result, loaded, failed, reload };
 }

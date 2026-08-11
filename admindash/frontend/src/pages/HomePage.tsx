@@ -218,17 +218,6 @@ export default function HomePage({ tenant }: HomePageProps) {
         tone: 'attn',
         onAct: () => navigate('/attention?bucket=stalled'),
       },
-      {
-        key: 'inquiries',
-        count: result.leads.total,
-        label: t('today.inquiries'),
-        detail: result.leads.neverContacted
-          ? t('today.inquiriesDetail').replace('{n}', String(result.leads.neverContacted))
-          : undefined,
-        action: t('today.inquiriesAction'),
-        tone: 'ok',
-        onAct: () => navigate('/leads'),
-      },
     ];
 
     return items.filter((i) => i.count > 0);
