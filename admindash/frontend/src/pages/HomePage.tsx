@@ -4,9 +4,11 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useToast } from '../hooks/useToast.ts';
 import { useDashboard } from '../contexts/DashboardContext.tsx';
 import { useModel } from '../contexts/ModelContext.tsx';
+import { useAttention } from '../hooks/useAttention.ts';
 import { listLeads, postQuery } from '../api/client.ts';
 import { leadStages } from '../utils/leadModel.ts';
 import { stageTone } from '../utils/tone.ts';
+import { ageDays, bucketRows } from '../utils/attentionData.ts';
 import type { Lead } from '../types/models.ts';
 import CalendarChip from '../components/CalendarChip.tsx';
 import ProgramDetailModal from '../components/ProgramDetailModal.tsx';
@@ -23,7 +25,6 @@ import '../components/ProgramCalendar.css';
 import './HomePage.css';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const STALE_DAYS = 7;
 
 interface HomePageProps {
   tenant: string;
@@ -49,19 +50,13 @@ function byStartTime(a: ProgramRow, b: ProgramRow): number {
   return ma - mb;
 }
 
-function daysSince(iso: string | undefined): number | null {
-  if (!iso) return null;
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return null;
-  return Math.floor((Date.now() - ms) / 86_400_000);
-}
-
 export default function HomePage({ tenant }: HomePageProps) {
   const { t, locale } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { getStudentCount } = useDashboard();
   const { getModel, getCachedModel } = useModel();
+  const attention = useAttention(tenant);
 
   const [studentCount, setStudentCount] = useState<number | null>(null);
   const [familyCount, setFamilyCount] = useState<number | null>(null);
@@ -166,91 +161,78 @@ export default function HomePage({ tenant }: HomePageProps) {
   const openInquiries = leads.filter((l) => !l.converted_family_id).length;
 
   // --- Work queue ----------------------------------------------------------
+  /** "1 day" and "4 days" need different strings; there is no plural support. */
+  const days = useCallback(
+    (n: number, oneKey: string, manyKey: string) =>
+      (n === 1 ? t(oneKey) : t(manyKey)).replace('{n}', String(n)),
+    [t],
+  );
+
   const queue = useMemo<QueueItem[]>(() => {
-    if (!leadsLoaded || leads.length === 0) return [];
+    const result = attention.result;
+    if (!result) return [];
 
-    const firstStage = stages[0];
-    const lastStage = stages[stages.length - 1];
-    const open = leads.filter((l) => !l.converted_family_id);
-
-    const untouched = open.filter((l) => l.stage === firstStage);
-    const unreachable = open.filter((l) => !l.email && !l.phone);
-    const stale = open.filter((l) => {
-      if (l.stage === lastStage) return false;
-      const age = daysSince(l._created_at);
-      return age !== null && age > STALE_DAYS;
-    });
-    // The final two stages are where a lead has committed but no family record
-    // exists yet — the conversion is the work that is outstanding.
-    const advanced = new Set(stages.slice(Math.max(0, stages.length - 2), stages.length - 1));
-    const readyToConvert = open.filter((l) => advanced.has(l.stage));
-
-    /** Oldest age in a group, for the line that says why it is urgent. */
-    const oldest = (rows: Lead[]): number | null => {
-      const ages = rows.map((l) => daysSince(l._created_at)).filter((a): a is number => a != null);
+    /** The largest age in a bucket, or null when no row in it has one. */
+    const worst = (bucket: 'overdue' | 'review' | 'stalled'): number | null => {
+      const ages = bucketRows(result, bucket)
+        .map((r) => r.ageMs)
+        .filter((a): a is number => a !== null);
       return ages.length ? Math.max(...ages) : null;
     };
 
-    /** "1 day" and "4 days" need different strings; there is no plural support. */
-    const days = (n: number, oneKey: string, manyKey: string) =>
-      (n === 1 ? t(oneKey) : t(manyKey)).replace('{n}', String(n));
-
-    const untouchedAge = oldest(untouched);
-    const staleAge = oldest(stale);
+    const detail = (bucket: 'overdue' | 'review' | 'stalled', one: string, many: string) => {
+      const ms = worst(bucket);
+      if (ms === null) return undefined;
+      return days(ageDays(ms), one, many);
+    };
 
     const items: QueueItem[] = [
       {
-        key: 'untouched',
-        count: untouched.length,
-        label: t('today.unassignedLeads'),
-        // How long the oldest has been sitting ranks this better than a hue.
-        detail:
-          untouchedAge != null
-            ? days(untouchedAge, 'today.oldestWaitingOne', 'today.oldestWaiting')
-            : undefined,
-        action: t('today.unassignedLeadsAction'),
-        // Deliberately not `danger`: an inquiry awaiting a first call is
-        // routine backlog, not a fault. Red is kept for genuine problems so
-        // it still means something when it appears.
-        tone: 'attn',
-        onAct: () => navigate('/leads'),
+        key: 'overdue',
+        count: bucketRows(result, 'overdue').length,
+        label: t('today.overdue'),
+        detail: detail('overdue', 'today.overdueDetailOne', 'today.overdueDetail'),
+        action: t('today.overdueAction'),
+        // A missed deadline is a genuine fault, which is what `danger` is
+        // reserved for — see the tone comment in HomePage.css.
+        tone: 'danger',
+        onAct: () => navigate('/attention?bucket=overdue'),
       },
       {
-        key: 'stale',
-        count: stale.length,
-        label: t('today.staleLeads'),
-        detail:
-          staleAge != null
-            ? days(staleAge, 'today.longestWaitingOne', 'today.longestWaiting')
-            : undefined,
-        action: t('today.staleLeadsAction'),
+        key: 'review',
+        count: bucketRows(result, 'review').length,
+        label: t('today.review'),
+        detail: detail('review', 'today.reviewDetailOne', 'today.reviewDetail'),
+        action: t('today.reviewAction'),
+        // Deliberately not `danger`: a queue of work awaiting review is
+        // routine backlog, not a fault. Red stays meaningful that way.
         tone: 'attn',
-        onAct: () => navigate('/leads'),
+        onAct: () => navigate('/attention?bucket=review'),
       },
       {
-        key: 'unreachable',
-        count: unreachable.length,
-        // This counts inquiries with no email and no phone — the old label
-        // said "students missing required details", naming the wrong entity.
-        label: t('today.unreachableLeads'),
-        detail: t('today.unreachableLeadsDetail'),
-        action: t('today.unreachableLeadsAction'),
+        key: 'stalled',
+        count: bucketRows(result, 'stalled').length,
+        label: t('today.stalled'),
+        detail: detail('stalled', 'today.stalledDetailOne', 'today.stalledDetail'),
+        action: t('today.stalledAction'),
         tone: 'attn',
-        onAct: () => navigate('/leads'),
+        onAct: () => navigate('/attention?bucket=stalled'),
       },
       {
-        key: 'convert',
-        count: readyToConvert.length,
-        label: t('today.readyToEnroll'),
-        detail: t('today.readyToEnrollDetail'),
-        action: t('today.readyToEnrollAction'),
+        key: 'inquiries',
+        count: result.leads.total,
+        label: t('today.inquiries'),
+        detail: result.leads.neverContacted
+          ? t('today.inquiriesDetail').replace('{n}', String(result.leads.neverContacted))
+          : undefined,
+        action: t('today.inquiriesAction'),
         tone: 'ok',
         onAct: () => navigate('/leads'),
       },
     ];
 
     return items.filter((i) => i.count > 0);
-  }, [leads, leadsLoaded, stages, navigate, t]);
+  }, [attention.result, navigate, t, days]);
 
   // --- Week ----------------------------------------------------------------
   const today = useMemo(() => {
@@ -347,11 +329,25 @@ export default function HomePage({ tenant }: HomePageProps) {
 
         {/* ---- Needs you today ------------------------------------------- */}
         <section className="today-section" aria-labelledby="today-queue-h">
-          <h2 className="today-section-title" id="today-queue-h">
-            {t('today.needsYou')}
-          </h2>
+          <div className="today-section-head">
+            <h2 className="today-section-title" id="today-queue-h">
+              {t('today.needsYou')}
+            </h2>
+            {queue.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-link"
+                onClick={() => navigate('/attention')}
+              >
+                {t('today.seeAll').replace(
+                  '{n}',
+                  String(queue.reduce((n, i) => n + i.count, 0)),
+                )}
+              </button>
+            )}
+          </div>
 
-          {!leadsLoaded ? (
+          {!attention.loaded ? (
             <div className="queue-grid">
               {[0, 1].map((i) => (
                 <div key={i} className="queue-card queue-card-skeleton" aria-hidden="true">
@@ -380,6 +376,15 @@ export default function HomePage({ tenant }: HomePageProps) {
                 </div>
               ))}
             </div>
+          )}
+
+          {attention.loaded && Object.values(attention.failed).some(Boolean) && (
+            <p className="today-muted" role="status">
+              {t('today.queuePartial')}{' '}
+              <button type="button" className="btn btn-link" onClick={attention.reload}>
+                {t('common.retry')}
+              </button>
+            </p>
           )}
         </section>
 
