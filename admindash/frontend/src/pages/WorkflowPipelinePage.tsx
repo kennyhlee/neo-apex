@@ -13,6 +13,7 @@ import {
 import { stageTone } from '../utils/tone.ts';
 import Button from '../components/ui/Button.tsx';
 import WorkflowInstanceDrawer from '../components/WorkflowInstanceDrawer.tsx';
+import WorkflowItemsTable from './WorkflowItemsTable.tsx';
 import './WorkflowPipelinePage.css';
 
 interface WorkflowPipelinePageProps {
@@ -57,6 +58,7 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
   /** A card click sets this; the instance detail drawer below reads it back
    * against `instances` to render (Task 11). */
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'board' | 'items'>('board');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -173,7 +175,31 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
         </div>
       )}
 
-      {!error && (
+      {/* The board answers "what needs attention" and stays the default; the
+          work-items table answers "manage everything" and is the only surface
+          where a closed or abandoned item is reachable. */}
+      <div className="workflow-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'board'}
+          className={tab === 'board' ? 'workflow-tab is-active' : 'workflow-tab'}
+          onClick={() => setTab('board')}
+        >
+          {t('workflows.boardTab')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'items'}
+          className={tab === 'items' ? 'workflow-tab is-active' : 'workflow-tab'}
+          onClick={() => setTab('items')}
+        >
+          {t('workflows.itemsTab')}
+        </button>
+      </div>
+
+      {!error && tab === 'board' && (
         <div className="workflow-board">
           {columns.map((col, i) =>
             renderColumn(col.state.state_id, col.state.name, col.rows, stageTone(i, states.length)),
@@ -181,6 +207,10 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
           {orphans.length > 0 &&
             renderColumn('__orphans__', t('workflows.otherStates'), orphans, 'stage-5')}
         </div>
+      )}
+
+      {tab === 'items' && (
+        <WorkflowItemsTable tenant={tenant} definitionId={definitionId} states={states} />
       )}
 
       {selectedInstance && (
