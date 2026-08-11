@@ -9,7 +9,9 @@
 // "independent copies, not shared code").
 import type { ModelFieldSource, WorkflowStepDef } from '@neoapex/flow-runtime';
 import { ADMINDASH_API_URL } from '../config.ts';
-import { asNumber } from '../utils/workflowData.ts';
+import { asNumber, type LineageInstance } from '../utils/workflowData.ts';
+
+export type { LineageInstance };
 
 const API_BASE = ADMINDASH_API_URL;
 const TOKEN_KEY = 'neoapex_token';
@@ -86,6 +88,51 @@ export async function listWorkflowDefinitions(
       ...entry,
       version: asNumber(entry.version),
       open_instances: asNumber(entry.open_instances),
+    })),
+  };
+}
+
+/** `retired` is the pre-archive name for the same lineage state; rows written
+ * under it are never migrated. One definition, mirroring the backend's
+ * `definitions.is_archived` — never string-compare either value inline. */
+export function isArchived(lineageStatus: string): boolean {
+  return lineageStatus === 'archived' || lineageStatus === 'retired';
+}
+
+/** POST /api/workflows/{tenant_id}/definitions/{entity_id}/actions.
+ * A blocked archive comes back 409 with `detail.open_instances` — callers
+ * catch `WorkflowApiError` and read that off `.body`. */
+export async function postDefinitionAction(
+  tenantId: string,
+  entityId: string,
+  body: { action: string; force?: boolean },
+): Promise<Record<string, unknown>> {
+  const resp = await fetch(
+    `${API_BASE}/api/workflows/${tenantId}/definitions/${entityId}/actions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    },
+  );
+  return parseOrThrow(resp);
+}
+
+/** GET /api/workflows/{tenant_id}/definitions/{definition_id}/instances —
+ * every work item of the lineage, open and closed, including abandoned. */
+export async function listLineageInstances(
+  tenantId: string,
+  definitionId: string,
+): Promise<{ instances: LineageInstance[] }> {
+  const resp = await fetch(
+    `${API_BASE}/api/workflows/${tenantId}/definitions/${definitionId}/instances`,
+    { headers: authHeaders() },
+  );
+  const data = await parseOrThrow<{ instances: LineageInstance[] }>(resp);
+  return {
+    instances: data.instances.map((i) => ({
+      ...i,
+      definition_version: asNumber(i.definition_version),
     })),
   };
 }
