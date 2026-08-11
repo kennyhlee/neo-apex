@@ -562,6 +562,59 @@ def cancel_instance(ctx: EvalContext) -> dict:
     return ctx.instance
 
 
+def abandon_instance(ctx: EvalContext) -> dict:
+    """Force-archive fallout: drive one open instance to the synthetic
+    `abandoned` state, recording the state it held so `restore_instance` can
+    put it back exactly (spec R3/R5).
+
+    NOT routed as a staff action (spec D2/D3): abandoning a single work item
+    by hand is what `cancel_instance` is for, and offering an administrator
+    both would present two controls that look identical and differ only in
+    whether the result can later be restored. The only caller is
+    `archive_definition`'s force path, via the collaborator injected by
+    `app/api/definitions.py`.
+
+    Mirrors `cancel_instance`'s write shape exactly — including the
+    `token_version` bump that revokes any outstanding magic link, since an
+    abandoned instance must stop accepting family traffic immediately — and
+    adds the two archive-provenance columns.
+    """
+    if is_family_actor(ctx.actor):
+        raise HTTPException(403, "family actor may not abandon an instance")
+    if _is_terminal_state(ctx):
+        raise HTTPException(409, {
+            "error": "instance is already terminal",
+            "state": ctx.instance.get("state"),
+        })
+
+    from_state = ctx.instance.get("state")
+    try:
+        token_version = int(ctx.instance.get("token_version") or 1)
+    except (TypeError, ValueError):
+        token_version = 1
+
+    base = entity_base_data(ctx.instance)
+    base["state"] = ABANDONED_STATE
+    base["archived_from_state"] = from_state
+    base["archived_at"] = ctx.now.isoformat()
+    base["closed_at"] = ctx.now.isoformat()
+    base["token_version"] = token_version + 1
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=engine.row_version(ctx.instance))
+    ctx.instance.update({
+        "state": ABANDONED_STATE,
+        "archived_from_state": base["archived_from_state"],
+        "archived_at": base["archived_at"],
+        "closed_at": base["closed_at"],
+        "token_version": base["token_version"],
+    })
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
+
+    _log_activity(ctx, "state_change", from_state, ABANDONED_STATE)
+    return ctx.instance
+
+
 # --- the single action dispatcher ------------------------------------------
 
 

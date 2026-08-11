@@ -149,3 +149,54 @@ def test_abandoned_instance_refuses_transitions_and_item_builtins(client, fake_d
 
     row = fake_dc.get_entity(TENANT, "workflow_instance", eid)
     assert row["state"] == "abandoned"
+
+
+# --- abandon_instance -------------------------------------------------------
+
+
+def test_abandon_instance_records_prior_state_and_closes(fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    _seed_definition(fake_dc, definition_id="wd-abandon-writes")
+    eid = _seed_instance(fake_dc, definition_id="wd-abandon-writes", state="submitted")
+
+    ctx = _ctx(fake_dc, eid)
+    machine.abandon_instance(ctx)
+
+    row = fake_dc.get_entity(TENANT, "workflow_instance", eid)
+    assert row["state"] == "abandoned"
+    assert row["archived_from_state"] == "submitted"
+    assert row["archived_at"]
+    assert row["closed_at"]
+    assert int(row["token_version"]) == 2
+
+    activities = fake_dc.find("workflow_activity", instance_id=eid)
+    assert activities[-1]["type"] == "state_change"
+    assert activities[-1]["from_value"] == "submitted"
+    assert activities[-1]["to_value"] == "abandoned"
+
+
+def test_abandon_instance_refuses_an_already_terminal_instance(fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    _seed_definition(fake_dc, definition_id="wd-abandon-terminal")
+    eid = _seed_instance(fake_dc, definition_id="wd-abandon-terminal",
+                         state="enrolled", closed_at="2026-08-02T00:00:00+00:00")
+
+    ctx = _ctx(fake_dc, eid)
+    with pytest.raises(HTTPException) as exc:
+        machine.abandon_instance(ctx)
+    assert exc.value.status_code == 409
+
+    row = fake_dc.get_entity(TENANT, "workflow_instance", eid)
+    assert row["state"] == "enrolled"
+    assert not row.get("archived_from_state")
+
+
+def test_abandon_instance_refuses_a_family_actor(fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    _seed_definition(fake_dc, definition_id="wd-abandon-family")
+    eid = _seed_instance(fake_dc, definition_id="wd-abandon-family", state="submitted")
+
+    ctx = _ctx(fake_dc, eid, actor="family:tok")
+    with pytest.raises(HTTPException) as exc:
+        machine.abandon_instance(ctx)
+    assert exc.value.status_code == 403
