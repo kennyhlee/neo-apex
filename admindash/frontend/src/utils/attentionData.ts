@@ -1,4 +1,6 @@
 import { ITEM_DONE_STATUSES } from '@neoapex/flow-runtime';
+import { parseMachineStates } from './workflowData.ts';
+import type { Lead } from '../types/models.ts';
 
 /**
  * Pure logic for the AdminDash attention queue — no network, no React, so
@@ -167,4 +169,189 @@ export function instanceSilenceSql(): string {
     `WHERE inst.entity_type = 'workflow_instance' AND inst._status = 'active' ` +
     `GROUP BY 1, 2, 3, 4`
   );
+}
+
+/** Days of silence before an instance counts as stalled. Beside
+ * `HomePage.tsx`'s existing `STALE_DAYS`, and named for the same reason. */
+export const STALLED_DAYS = 7;
+
+/** One row on `/attention`; Home renders only the count of each bucket. */
+export interface AttentionRow {
+  /** Stable React key. Bucket-prefixed because one item can legitimately
+   * appear in two buckets across a fetch. */
+  key: string;
+  bucket: BucketKey;
+  instanceEntityId: string;
+  definitionId: string;
+  workflowName: string;
+  applicant: string;
+  /** Empty for `stalled` rows, which are instance-scoped. */
+  itemTitle: string;
+  /** Milliseconds: lateness for `overdue`, waiting time for `review`,
+   * silence for `stalled`. **null means not derivable** — render nothing,
+   * never zero and never "today". */
+  ageMs: number | null;
+}
+
+export interface LeadAttention {
+  /** Union, not sum — a lead that is both first-stage and unreachable is one
+   * piece of work, not two. */
+  total: number;
+  neverContacted: number;
+  unreachable: number;
+}
+
+export interface AttentionResult {
+  rows: AttentionRow[];
+  leads: LeadAttention;
+}
+
+export interface AttentionInput {
+  definitions: DefinitionRow[];
+  submitted: ItemAttentionRow[];
+  overdue: ItemAttentionRow[];
+  silence: InstanceSilenceRow[];
+  leads: Lead[];
+  leadStages: string[];
+  /** Injected, never `Date.now()` inside — otherwise nothing here is testable. */
+  nowMs: number;
+  stalledDays: number;
+}
+
+export interface DefinitionEntry {
+  name: string;
+  terminal: Set<string>;
+}
+
+/**
+ * definition_id -> display name + terminal state ids.
+ *
+ * Terminality is resolved PER DEFINITION because a state id is only unique
+ * within its own machine: `done` is terminal in enrollment and active in
+ * signup. Filtering client-side (rather than in SQL) avoids a compound
+ * `NOT IN` over `(definition_id, state)` pairs, and volumes are small.
+ */
+export function definitionIndex(rows: DefinitionRow[]): Map<string, DefinitionEntry> {
+  const index = new Map<string, DefinitionEntry>();
+  for (const row of rows) {
+    const id = String(row.definition_id ?? '');
+    if (!id) continue;
+    const states = parseMachineStates(row.machine);
+    index.set(id, {
+      name: String(row.name ?? '') || id,
+      terminal: new Set(states.filter((s) => s.kind === 'terminal').map((s) => s.state_id)),
+    });
+  }
+  return index;
+}
+
+/** ISO string -> epoch ms, or null for absent/unparseable. */
+function parseIso(value: unknown): number | null {
+  if (typeof value !== 'string' || !value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/** Most urgent first; unknown age always last, since an absent age is not a
+ * claim that the work is new. */
+function byUrgency(a: AttentionRow, b: AttentionRow): number {
+  if (a.ageMs === null && b.ageMs === null) return 0;
+  if (a.ageMs === null) return 1;
+  if (b.ageMs === null) return -1;
+  return b.ageMs - a.ageMs;
+}
+
+export function leadAttention(leads: Lead[], stages: string[]): LeadAttention {
+  const first = stages[0];
+  const open = leads.filter((l) => !l.converted_family_id);
+  const isNew = (l: Lead) => !!first && l.stage === first;
+  const isUnreachable = (l: Lead) => !l.email && !l.phone;
+  return {
+    total: open.filter((l) => isNew(l) || isUnreachable(l)).length,
+    neverContacted: open.filter(isNew).length,
+    unreachable: open.filter(isUnreachable).length,
+  };
+}
+
+/**
+ * The single grouping both surfaces read. Home renders each bucket's length;
+ * `/attention` renders its rows. Because a count is never computed separately
+ * from the list it summarizes, the two cannot disagree.
+ */
+export function buildAttention(input: AttentionInput): AttentionResult {
+  const index = definitionIndex(input.definitions);
+  const nameOf = (id: string) => index.get(id)?.name ?? id;
+  const isTerminal = (id: string, state: string) =>
+    index.get(id)?.terminal.has(state) ?? false;
+
+  const rows: AttentionRow[] = [];
+
+  const pushItem = (row: ItemAttentionRow, bucket: BucketKey, ageMs: number | null) => {
+    const definitionId = String(row.definition_id ?? '');
+    if (isTerminal(definitionId, String(row.state ?? ''))) return;
+    rows.push({
+      key: `${bucket}:${String(row.item_entity_id ?? '')}`,
+      bucket,
+      instanceEntityId: String(row.instance_entity_id ?? ''),
+      definitionId,
+      workflowName: nameOf(definitionId),
+      applicant: String(row.applicant_email ?? ''),
+      itemTitle: String(row.title ?? ''),
+      ageMs,
+    });
+  };
+
+  for (const row of input.overdue) {
+    // due_at is a durable base-data field, so lateness needs no activity row.
+    const due = parseIso(row.due_at);
+    pushItem(row, 'overdue', due === null ? null : input.nowMs - due);
+  }
+
+  for (const row of input.submitted) {
+    // The only age that depends on apexflow carrying item_id.
+    const changed = parseIso(row.last_item_change);
+    pushItem(row, 'review', changed === null ? null : input.nowMs - changed);
+  }
+
+  const threshold = input.stalledDays * 86_400_000;
+  for (const row of input.silence) {
+    const definitionId = String(row.definition_id ?? '');
+    if (isTerminal(definitionId, String(row.state ?? ''))) continue;
+    const last = parseIso(row.last_activity);
+    // Every instance gets a state_change at creation (apexflow engine.py:255),
+    // so a null here is malformed data, not a new instance. Judging it silent
+    // would be a guess, so it is skipped.
+    if (last === null) continue;
+    const age = input.nowMs - last;
+    if (age < threshold) continue;
+    rows.push({
+      key: `stalled:${String(row.instance_entity_id ?? '')}`,
+      bucket: 'stalled',
+      instanceEntityId: String(row.instance_entity_id ?? ''),
+      definitionId,
+      workflowName: nameOf(definitionId),
+      applicant: String(row.applicant_email ?? ''),
+      itemTitle: '',
+      ageMs: age,
+    });
+  }
+
+  rows.sort(byUrgency);
+  return { rows, leads: leadAttention(input.leads, input.leadStages) };
+}
+
+export function bucketRows(result: AttentionResult, bucket: BucketKey): AttentionRow[] {
+  return result.rows.filter((r) => r.bucket === bucket);
+}
+
+/**
+ * A millisecond age as whole days, floored, never below 1.
+ *
+ * A row only reaches a bucket by qualifying for it, so it represents at least
+ * a day's worth of waiting; rendering "0 days" would read as "no problem" on
+ * the one surface whose whole job is to say otherwise. Shared by Home's card
+ * detail lines and `/attention`'s rows so the two can never round differently.
+ */
+export function ageDays(ms: number): number {
+  return Math.max(1, Math.floor(ms / 86_400_000));
 }
