@@ -9,7 +9,8 @@
 //   rows are historical and not actionable (api/designer.py's own docstring:
 //   "frontend groups by definition_id into lineages").
 // - v1 badge set is status/lineage_status/health ONLY — no new-fields hint.
-// - deprecate/reactivate/retire all operate on the LINEAGE's published row
+// - deprecate/reactivate/archive/unarchive all operate on the LINEAGE's
+//   published row
 //   (app/workflows/definitions.py's `_require_published_row` 409s on any
 //   other status) — those actions render only on published rows.
 // - "New draft from published" is a generic-write copy: fetch the bundle
@@ -18,11 +19,11 @@
 //   `templates/enrollment.py`'s seed_enrollment_template and
 //   scripts/apexflow-reseed-dev.py's push both write (map §3/§8): machine/
 //   steps are JSON-encoded STRINGS on the wire, not nested objects.
-//   Hidden when lineage_status === "retired" (browser-gate fix): retire is
-//   terminal, and a new draft copies `def.lineage_status` verbatim onto the
-//   new row, so a "New draft" off a retired lineage would carry
-//   lineage_status "retired" forward onto a fresh draft — confusing and
-//   never a legal published-row outcome for that lineage again anyway.
+//   Hidden for an ARCHIVED lineage (`isArchived`, which covers both the
+//   current "archived" value and the legacy "retired" one): a new draft
+//   copies `def.lineage_status` verbatim onto the new row, so a "New draft"
+//   off an archived lineage would carry that status forward onto a fresh
+//   draft. Unarchive first, then draft.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
@@ -35,6 +36,7 @@ import {
   lifecycleAction,
 } from '../api/designer.ts';
 import { createEntity } from '../api/client.ts';
+import { isArchived } from '../types/designer.ts';
 import type {
   DefinitionListEntry,
   DefinitionLifecycleAction,
@@ -49,7 +51,7 @@ import './DefinitionsPage.css';
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 const DEFAULT_PAGE_SIZE = 20;
 
-/** `active` sorts before `deprecated` sorts before `retired`. */
+/** `active` sorts before `deprecated` sorts before `archived`. */
 const STATUS_ORDER: Record<string, number> = { published: 0, draft: 1 };
 
 function slugify(name: string): string {
@@ -343,7 +345,23 @@ export default function DefinitionsPage() {
     }
   }
 
-  // --- Retire -------------------------------------------------------------
+  // --- Archive ------------------------------------------------------------
+
+  /** Unarchive is not gated and destroys nothing, so it needs no confirm — but
+   * its toast must say that abandoned work items were NOT revived, since that
+   * is the one thing an operator is likely to assume it did. */
+  async function handleUnarchive(entry: DefinitionListEntry) {
+    try {
+      await lifecycleAction(tenantId, entry.entity_id, 'unarchive', {});
+      toast({
+        message: t('definitions.unarchiveToast').replace('{name}', entry.name),
+        tone: 'success',
+      });
+      void load();
+    } catch (err) {
+      toast({ message: errorMessage(err, 'definitions.unarchiveFailed'), tone: 'danger' });
+    }
+  }
 
   function openRetireModal(entry: DefinitionListEntry) {
     setRetireTarget(entry);
@@ -354,8 +372,8 @@ export default function DefinitionsPage() {
     if (!retireTarget) return;
     setRetiring(true);
     try {
-      await lifecycleAction(tenantId, retireTarget.entity_id, 'retire', {
-        force_cancel: forceCancel,
+      await lifecycleAction(tenantId, retireTarget.entity_id, 'archive', {
+        force: forceCancel,
       });
       toast({
         message: t('definitions.retireToast').replace('{name}', retireTarget.name),
@@ -472,7 +490,7 @@ export default function DefinitionsPage() {
     // way the backend gates them (see module comment).
     return (
       <div className="definitions-row-actions">
-        {row.lineage_status !== 'retired' && (
+        {!isArchived(row.lineage_status) && (
           <Button
             variant="secondary"
             size="sm"
@@ -501,9 +519,14 @@ export default function DefinitionsPage() {
             {t('definitions.actions.reactivate')}
           </Button>
         )}
-        {row.lineage_status !== 'retired' && (
+        {!isArchived(row.lineage_status) && (
           <Button variant="danger" size="sm" onClick={() => openRetireModal(row)}>
             {t('definitions.actions.retire')}
+          </Button>
+        )}
+        {isArchived(row.lineage_status) && (
+          <Button variant="secondary" size="sm" onClick={() => void handleUnarchive(row)}>
+            {t('definitions.actions.unarchive')}
           </Button>
         )}
       </div>

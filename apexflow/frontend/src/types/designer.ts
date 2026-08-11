@@ -88,7 +88,14 @@ export type EntityModelsMap = Record<string, EntityModelDef>;
 // (api/designer.py:79-119)
 
 export type DefinitionStatus = 'draft' | 'published' | 'superseded';
-export type LineageStatus = 'active' | 'deprecated' | 'retired';
+export type LineageStatus = 'active' | 'deprecated' | 'archived' | 'retired';
+
+/** Mirrors the backend's `definitions.is_archived`. `retired` is the
+ * pre-archive name for the same state and is never migrated, so both values
+ * must read as archived — one definition, never an inline comparison. */
+export function isArchived(status: LineageStatus): boolean {
+  return status === 'archived' || status === 'retired';
+}
 export type ChannelAccess = 'staff_only' | 'family';
 
 /**
@@ -229,7 +236,8 @@ export interface PrimitivesCatalog {
 // ---- Lifecycle actions — POST .../definitions/{entity_id}/actions --------
 // (api/definitions.py:38-56)
 
-export type DefinitionLifecycleAction = 'publish' | 'deprecate' | 'reactivate' | 'retire';
+export type DefinitionLifecycleAction =
+  | 'publish' | 'deprecate' | 'reactivate' | 'archive' | 'unarchive';
 
 /**
  * The raw updated `workflow_definition` DataCore row that every lifecycle
@@ -252,7 +260,7 @@ export interface DefinitionRow {
   [key: string]: unknown;
 }
 
-/** 409 body shape from `retire_definition` when open instances block retirement. */
+/** 409 body shape from `archive_definition` when open work items block archiving. */
 export interface OpenInstancesConflict {
   open_instances: number;
 }
