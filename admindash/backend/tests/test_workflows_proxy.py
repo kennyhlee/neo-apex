@@ -1,4 +1,6 @@
 """Tests for /api/workflows/* thin proxy routes to apexflow-backend."""
+import json
+
 import httpx
 import respx
 
@@ -198,3 +200,45 @@ def test_create_instance_apexflow_unreachable_502(client):
     )
     assert resp.status_code == 502
     assert resp.json()["detail"] == "ApexFlow is unreachable"
+
+
+# ── lineage lifecycle actions + work-item list ─────────────────────────────
+
+
+@respx.mock
+def test_definition_action_proxies_archive_verbatim(client):
+    _stub_auth(respx)
+    route = respx.post(f"{BASE}/api/workflows/t1/definitions/wd-1/actions").mock(
+        return_value=httpx.Response(409, json={"detail": {"open_instances": 3}})
+    )
+    resp = client.post(
+        "/api/workflows/t1/definitions/wd-1/actions",
+        json={"action": "archive", "force": False},
+        headers={"Authorization": "Bearer good"},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["open_instances"] == 3
+    assert route.called
+    # body relayed verbatim, so a future action needs no proxy change
+    assert json.loads(route.calls.last.request.content) == {
+        "action": "archive", "force": False,
+    }
+    assert route.calls.last.request.headers["authorization"] == "Bearer good"
+
+
+@respx.mock
+def test_lineage_instances_proxies(client):
+    _stub_auth(respx)
+    route = respx.get(f"{BASE}/api/workflows/t1/definitions/wd-1/instances").mock(
+        return_value=httpx.Response(
+            200, json={"instances": [{"entity_id": "wi-1", "state": "abandoned"}]}
+        )
+    )
+    resp = client.get(
+        "/api/workflows/t1/definitions/wd-1/instances",
+        headers={"Authorization": "Bearer good"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["instances"][0]["state"] == "abandoned"
+    assert route.called
+    assert route.calls.last.request.headers["authorization"] == "Bearer good"

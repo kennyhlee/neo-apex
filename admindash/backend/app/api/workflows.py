@@ -96,6 +96,41 @@ def allowed_actions(
     )
 
 
+@router.post("/workflows/{tenant_id}/definitions/{entity_id}/actions")
+async def definition_action(
+    tenant_id: str, entity_id: str, request: Request, user=Depends(require_tenant_match)
+) -> Response:
+    """Lineage lifecycle actions — publish / deprecate / reactivate / archive /
+    unarchive. Body relayed verbatim, so a future action needs no change here.
+
+    `async def` + `_relay_bytes` for the same reason the other body-forwarding
+    routes use it (module docstring): read the raw body here, offload the sync
+    httpx call to a threadpool."""
+    content = await request.body()
+    content_type = request.headers.get("content-type", "application/json")
+    return await run_in_threadpool(
+        _relay_bytes,
+        "POST",
+        f"/api/workflows/{tenant_id}/definitions/{entity_id}/actions",
+        user["_token"],
+        content,
+        content_type,
+    )
+
+
+@router.get("/workflows/{tenant_id}/definitions/{definition_id}/instances")
+def lineage_instances(
+    tenant_id: str, definition_id: str, user=Depends(require_tenant_match)
+) -> Response:
+    """Every work item of one lineage, open and closed — backs the work-item
+    management table."""
+    return _relay(
+        "GET",
+        f"/api/workflows/{tenant_id}/definitions/{definition_id}/instances",
+        user["_token"],
+    )
+
+
 @router.post("/workflows/{tenant_id}/instances/{instance_entity_id}/actions")
 async def instance_action(
     tenant_id: str, instance_entity_id: str, request: Request, user=Depends(require_tenant_match)
