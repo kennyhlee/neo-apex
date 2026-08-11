@@ -525,10 +525,13 @@ mechanism Plan 5 introduced. No new plan-defect class emerged this time.
     shared cache object with no per-tenant or per-consumer scoping
     (`admindash/frontend/src/contexts/ModelContext.tsx`). Any successful model
     fetch anywhere in the app changes their identity, which re-fires every
-    consumer effect that lists them as a dependency. On a cold cache
-    `useAttention` therefore issues its five queries twice — the first run is
+    consumer effect that lists them as a dependency — the first run is
     discarded via its `cancelled` flag, but the requests still reach the
-    server. Self-terminating, not an infinite loop, and pre-existing:
-    `HomePage.tsx`'s own model effects have the same shape. Fix by stabilising
-    the callbacks (e.g. a ref-backed cache) so a write does not change their
+    server. Self-terminating, not an infinite loop. Fix by stabilising the
+    callbacks (e.g. a ref-backed cache) so a write does not change their
     identity.
+
+    Found via `useAttention`, which no longer applies: dropping the Inquiries
+    card removed that hook's only use of `ModelContext`. The live instances are
+    `HomePage.tsx`'s own `lead` and `program` effects, which have the same
+    shape.
