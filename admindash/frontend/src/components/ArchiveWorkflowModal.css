@@ -1,0 +1,23 @@
+.archive-workflow-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.archive-workflow-blocked {
+  font-weight: 600;
+}
+
+/* Force-archive destroys in-flight work, so its consequence gets the same
+   danger treatment as the button that performs it. */
+.archive-workflow-warning {
+  color: var(--color-danger-ink, var(--text-primary));
+  background: var(--color-danger-tint, transparent);
+  border-left: 3px solid var(--color-danger, currentColor);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.archive-workflow-error {
+  color: var(--color-danger-ink, var(--text-primary));
+}
