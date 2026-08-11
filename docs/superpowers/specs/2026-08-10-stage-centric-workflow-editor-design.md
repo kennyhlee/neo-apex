@@ -229,3 +229,26 @@ template than halfway through an editor.
 - **Engine, schema, or validator changes.** If the editor appears to need one, that is a
   signal the stage model does not fit — escalate rather than widen the engine.
 - **The AdminDash home page**, which has its own pending spec.
+
+## Amendments (2026-08-10, from the signup coverage test)
+
+Ruled in `docs/superpowers/rulings/2026-08-10-stage-model-coverage-signup.md`
+and implemented by `docs/superpowers/plans/2026-08-10-stage-centric-workflow-editor.md`.
+
+**A. Terminal is derived from having no outgoing move, not from being last
+on the spine.** The rule stated under "The stage model" — "the first stage
+starts the workflow and the last finishes it" — is wrong for any workflow
+with a resting stage. Signup's `confirmed` sits last on the spine and still
+accepts `drop` and `complete_program`; marking it terminal makes
+`machine.allowed_actions()` return `[]` and both moves vanish from the UI
+while remaining fireable by a direct POST.
+
+**B. Exit grouping keys on (action, target, actor, guards, effects) —
+everything except `from`.** The key stated under "The stage model" and
+"Migration" — "a set of transitions sharing an action and target" — cannot
+round-trip signup's `drop` exit, whose eight transitions share an action and
+a target but split into two effect shapes.
+
+**C. The phrase-allowlist test is written before the phrase set.** The
+design already calls for the test; signup showed the table was already
+missing `issue_link`, which its `offer_spot` move uses.

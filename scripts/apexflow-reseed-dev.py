@@ -27,9 +27,9 @@ Three phases, per tenant:
               afterwards is safe but no longer necessary, exactly as
               reset_registration_dev_data.py's docstring notes for its
               narrower scope).
-  3. template — seed_enrollment_template(tenant), which publishes through
-              the real validate_definition gate (app.workflows.definitions.
-              publish_definition) — never re-implemented here.
+  3. templates — every shipped template (enrollment, signup), each seeded
+              through the real validate_definition gate (app.workflows.
+              definitions.publish_definition) — never re-implemented here.
 
 Dev tenants default to every `{tenant}_entities.lance` table found under
 datacore/data/lancedb (task-9-brief.md: "targets the dev tenants found in
@@ -232,17 +232,33 @@ def push_models(base_url: str, tenant: str, base_model: dict, *, dry_run: bool) 
     return reseed
 
 
-def seed_template(tenant: str, *, dry_run: bool) -> str | None:
-    """Seed + publish the enrollment template via the SAME publish_definition
+def seed_templates(tenant: str, *, dry_run: bool) -> list[tuple[str, str | None]]:
+    """Seed + publish EVERY shipped template via the SAME publish_definition
     service function the definitions API uses -- validate_definition runs
     for real here, never re-implemented in this script (task-9-brief.md
     Step 2/3's structural requirement). Deferred import: apexflow-backend's
-    own deps only need to be importable when this actually runs."""
+    own deps only need to be importable when this actually runs.
+
+    Returns `[(definition_id, entity_id), ...]` in seeding order. Was
+    `seed_template` (enrollment only) until the signup template landed; the
+    list of seeders is kept beside the catalog it mirrors so a third
+    template cannot be added to one and forgotten in the other -- the
+    `test_reseed_script.py` cross-check asserts exactly that."""
     if dry_run:
-        return None
+        return []
+    from app.templates.enrollment import DEFINITION_ID as ENROLLMENT_ID
     from app.templates.enrollment import seed_enrollment_template
-    published = seed_enrollment_template(tenant)
-    return published.get("entity_id")
+    from app.templates.signup import DEFINITION_ID as SIGNUP_ID
+    from app.templates.signup import seed_signup_template
+
+    seeders = [(ENROLLMENT_ID, seed_enrollment_template), (SIGNUP_ID, seed_signup_template)]
+    return [(definition_id, seed(tenant).get("entity_id")) for definition_id, seed in seeders]
+
+
+# The template ids this script seeds, available without importing
+# apexflow-backend's deps (the seeders themselves are a deferred import
+# above). Used by --dry-run's output and by the catalog cross-check test.
+SEEDED_TEMPLATE_IDS: tuple[str, ...] = ("enrollment", "signup")
 
 
 def main() -> int:
@@ -283,10 +299,11 @@ def main() -> int:
         print(f"  models: pushed {len(reseed)} entity type(s){suffix}")
 
         if args.dry_run:
-            print("  template: would seed + publish 'enrollment' (dry-run)")
+            for definition_id in SEEDED_TEMPLATE_IDS:
+                print(f"  template: would seed + publish {definition_id!r} (dry-run)")
         else:
-            entity_id = seed_template(tenant, dry_run=args.dry_run)
-            print(f"  template: published 'enrollment' ({entity_id})")
+            for definition_id, entity_id in seed_templates(tenant, dry_run=args.dry_run):
+                print(f"  template: published {definition_id!r} ({entity_id})")
 
     print("\nDone.")
     return 0

@@ -261,7 +261,8 @@ export interface OpenInstancesConflict {
 
 /**
  * Wire mirror of `template_catalog()`'s per-entry `definition` dict
- * (`app/templates/enrollment.py`) — plain nested `machine`/`steps` (NOT the
+ * (`app/templates/catalog.py`, which collects one `catalog_entry()` per
+ * shipped template) — plain nested `machine`/`steps` (NOT the
  * JSON-encoded-string wire shape a `workflow_definition` row stores; see
  * `DefinitionRow`'s own doc comment). The gallery's "Use template" flow
  * `JSON.stringify`s these at instantiate time, same boundary

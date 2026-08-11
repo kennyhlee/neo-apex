@@ -151,3 +151,17 @@ def test_wipe_entity_types_covers_registration_and_workflow_rows():
         "workflow_definition", "workflow_instance", "workflow_item", "workflow_activity",
     ):
         assert expected in types
+
+
+# --- SEEDED_TEMPLATE_IDS: cross-check against the real catalog --------------
+
+
+def test_seeded_template_ids_match_the_shipped_catalog():
+    """The script's `SEEDED_TEMPLATE_IDS` is a hand-written literal (it must
+    be readable without importing apexflow-backend's deps, since the seeders
+    themselves are a deferred import). This is what stops it drifting from
+    `app.templates.catalog.template_catalog()` when a third template lands:
+    add one to the catalog and forget the script, and this fails."""
+    from app.templates.catalog import template_catalog
+
+    assert list(reseed.SEEDED_TEMPLATE_IDS) == [t["template_id"] for t in template_catalog()]

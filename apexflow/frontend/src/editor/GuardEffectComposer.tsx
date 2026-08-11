@@ -1,6 +1,6 @@
-// Per-transition guard/effect list, catalog-driven (task-8-brief.md's
-// binding rule) — one instance handles ONE list (guards OR effects) of ONE
-// transition; TransitionPanel.tsx renders two side by side.
+// Per-move guard/effect list, catalog-driven (task-8-brief.md's binding
+// rule) — one instance handles ONE list (guards OR effects) of ONE move;
+// MoveRow.tsx renders two side by side, behind "Edit as advanced".
 //
 // Param-form generation binds to the ACTUAL catalog shape
 // (`app/api/designer.py`'s `_param_dict`, `PrimitiveParam` in

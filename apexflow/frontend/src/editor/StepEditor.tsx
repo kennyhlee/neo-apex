@@ -9,6 +9,7 @@ import SectionPanel from './SectionPanel.tsx';
 import ShowIfBuilder, { type SourceGroup } from './ShowIfBuilder.tsx';
 import { errorsForStep, errorsForSection } from './validationMatch.ts';
 import { dropForbiddenConditionalFieldsAcross } from './fieldPicker.ts';
+import { removeStepFromStage } from './stagePlacement.ts';
 import type { StepsUpdater } from './draftStore.ts';
 import type {
   ConditionGroupDef,
@@ -28,6 +29,15 @@ interface StepEditorProps {
   /** True when the definition isn't a draft — disables every mutating
    * control (task review fix #6). */
   readOnly: boolean;
+  /** Stage-editor mode: render only steps whose `available_in` contains this
+   * stage, and create new steps into it. The component still operates on the
+   * FULL `steps` array internally — filtering happens at render time only, so
+   * indices, reordering, and `onChange` payloads stay whole-array. */
+  stageId?: string;
+  /** Suppress the `available_in` checkbox grid. In stage-editor mode a step's
+   * placement is which card it sits in, so a second control for the same data
+   * would be two ways to edit one field. */
+  hideAvailableIn?: boolean;
 }
 
 /** Short, non-cryptographic uniqueness suffix — same precedent as
@@ -102,13 +112,29 @@ function buildSourceGroups(steps: WorkflowStepDef[], contextLabel: string): Sour
   return groups;
 }
 
-export default function StepEditor({ steps, onChange, models, states, errors, readOnly }: StepEditorProps) {
+export default function StepEditor({
+  steps,
+  onChange,
+  models,
+  states,
+  errors,
+  readOnly,
+  stageId,
+  hideAvailableIn,
+}: StepEditorProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const sourceGroups = useMemo(
     () => buildSourceGroups(steps, t('editor.showIf.contextGroup')),
     [steps, t],
+  );
+  // Friendly names for the "also in {stages}" note (F2) — built from the
+  // same `states` prop the (now-hidden-in-stage-mode) available_in grid
+  // already used, so no extra prop is needed to name a stage.
+  const stateNames = useMemo(
+    () => new Map(states.map((s) => [s.state_id, s.name || s.state_id])),
+    [states],
   );
 
   function toggleCollapsed(stepId: string) {
@@ -139,7 +165,8 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
   }
 
   function addStep(type: WorkflowStepDef['type']) {
-    onChange((prev) => [...prev, newStep(type, states)]);
+    const created = newStep(type, states);
+    onChange((prev) => [...prev, stageId ? { ...created, available_in: [stageId] } : created]);
   }
 
   /**
@@ -171,7 +198,10 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
   return (
     <div className="step-editor">
       <div className="step-editor-toolbar">
-        <span className="step-editor-heading">{t('editor.steps.heading')}</span>
+        {/* F3: StageCard already renders "What happens here" directly above
+         * this component in stage mode — a second "Steps" heading here would
+         * reintroduce the exact tab-vocabulary this task exists to retire. */}
+        {!stageId && <span className="step-editor-heading">{t('editor.steps.heading')}</span>}
         <div className="step-editor-add-buttons">
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => addStep('form')} disabled={readOnly}>
             {t('editor.step.addForm')}
@@ -195,10 +225,21 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
         </div>
       </div>
 
-      {steps.length === 0 && <p className="step-editor-empty">{t('editor.steps.empty')}</p>}
+      {/* F4: in stage mode, StageCard's own `editor.stage.noSteps` already
+       * covers the empty case for THIS stage — this message tests the FULL
+       * array and would render a second, contradictory empty state
+       * alongside it. */}
+      {!stageId && steps.length === 0 && <p className="step-editor-empty">{t('editor.steps.empty')}</p>}
+
+      {/* Only worth saying where it can bite: in stage mode, with more than
+       * one step in the workflow, and only when the buttons are usable. */}
+      {stageId && steps.length > 1 && !readOnly && (
+        <p className="step-editor-reorder-hint">{t('editor.stage.reorderHint')}</p>
+      )}
 
       <ul className="step-editor-list">
         {steps.map((step, idx) => {
+          if (stageId && !step.available_in.includes(stageId)) return null;
           const isCollapsed = collapsed.has(step.step_id);
           const stepErrors = errorsForStep(errors, step.step_id);
           return (
@@ -225,12 +266,20 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
                   onChange={(e) => updateStepAt(idx, { ...step, title: e.target.value })}
                 />
                 <div className="step-card-actions">
+                  {/* Reordering is scoped to the WHOLE workflow's step order,
+                   * not to this stage: `idx` is the index in the full array
+                   * and `moveStep` swaps neighbours there, so in stage mode a
+                   * press can swap this step past one that isn't on screen.
+                   * That is why the buttons say so — both in their accessible
+                   * names here and in `editor.stage.reorderHint` above the
+                   * list — rather than being disabled, which is how the
+                   * capability silently left the product. */}
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
                     disabled={readOnly || idx === 0}
                     onClick={() => moveStep(idx, -1)}
-                    aria-label={t('editor.step.moveUp')}
+                    aria-label={t(stageId ? 'editor.step.moveUpGlobal' : 'editor.step.moveUp')}
                   >
                     &uarr;
                   </button>
@@ -239,20 +288,56 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
                     className="btn btn-ghost btn-sm"
                     disabled={readOnly || idx === steps.length - 1}
                     onClick={() => moveStep(idx, 1)}
-                    aria-label={t('editor.step.moveDown')}
+                    aria-label={t(stageId ? 'editor.step.moveDownGlobal' : 'editor.step.moveDown')}
                   >
                     &darr;
                   </button>
+                  {/* F1: the only way to take a step out of ONE stage without
+                   * deleting it everywhere else it appears. Uses the pure
+                   * `removeStepFromStage` helper, keyed by step_id — not
+                   * `idx` — so it is correct regardless of the full array's
+                   * ordering. */}
+                  {stageId && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => onChange((prev) => removeStepFromStage(prev, step.step_id, stageId))}
+                      disabled={readOnly}
+                    >
+                      {t('editor.stage.removeFromStage')}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-danger btn-sm"
                     onClick={() => removeStepAt(idx)}
                     disabled={readOnly}
                   >
-                    {t('editor.step.remove')}
+                    {/* F2: this button is global — it deletes the step from
+                     * EVERY stage it appears in, not just this card. Its
+                     * label must read as that, now that "Remove from this
+                     * stage" exists right next to it and the two must not be
+                     * confused. */}
+                    {stageId ? t('editor.stage.deleteEverywhere') : t('editor.step.remove')}
                   </button>
                 </div>
               </div>
+
+              {/* F2: moved onto the step's own row, next to the buttons that
+               * act on it — was previously a separate list rendered above
+               * the whole step list in StageCard, disconnected from the row
+               * a reader would act on. */}
+              {stageId && step.available_in.length > 1 && (
+                <p className="step-card-also-in">
+                  {t('editor.stage.alsoIn').replace(
+                    '{stages}',
+                    step.available_in
+                      .filter((id) => id !== stageId)
+                      .map((id) => stateNames.get(id) ?? id)
+                      .join(', '),
+                  )}
+                </p>
+              )}
 
               {stepErrors.length > 0 && (
                 <ul className="inline-errors" role="alert">
@@ -304,33 +389,35 @@ export default function StepEditor({ steps, onChange, models, states, errors, re
                     </label>
                   </div>
 
-                  <div className="step-available-in">
-                    <span className="step-panel-label">{t('editor.step.availableIn')}</span>
-                    <div className="step-available-in-options">
-                      {states.length === 0 && (
-                        <span className="step-available-in-empty">{t('editor.step.noStates')}</span>
-                      )}
-                      {states.map((s) => {
-                        const checked = step.available_in.includes(s.state_id);
-                        return (
-                          <label key={s.state_id} className="step-state-chip">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={readOnly}
-                              onChange={(e) => {
-                                const next = e.target.checked
-                                  ? [...step.available_in, s.state_id]
-                                  : step.available_in.filter((id) => id !== s.state_id);
-                                updateStepAt(idx, { ...step, available_in: next });
-                              }}
-                            />
-                            {s.state_id}
-                          </label>
-                        );
-                      })}
+                  {!hideAvailableIn && (
+                    <div className="step-available-in">
+                      <span className="step-panel-label">{t('editor.step.availableIn')}</span>
+                      <div className="step-available-in-options">
+                        {states.length === 0 && (
+                          <span className="step-available-in-empty">{t('editor.step.noStates')}</span>
+                        )}
+                        {states.map((s) => {
+                          const checked = step.available_in.includes(s.state_id);
+                          return (
+                            <label key={s.state_id} className="step-state-chip">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={readOnly}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...step.available_in, s.state_id]
+                                    : step.available_in.filter((id) => id !== s.state_id);
+                                  updateStepAt(idx, { ...step, available_in: next });
+                                }}
+                              />
+                              {s.state_id}
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {step.type === 'form' && (
                     <FormStepPanel
