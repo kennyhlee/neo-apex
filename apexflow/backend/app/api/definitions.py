@@ -26,13 +26,13 @@ class ActionRequest(BaseModel):
     action: str
 
 
-def _cancel_one(tenant_id: str, instance_row: dict, actor: str, token: str | None) -> None:
-    """`retire_definition`'s `cancel_instance_fn` collaborator (Task 8) —
-    lives at the API layer (not in `app.workflows.definitions`) specifically
-    to avoid a `definitions.py -> machine.py` import cycle; see
-    `definitions.retire_definition`'s docstring."""
+def _abandon_one(tenant_id: str, instance_row: dict, actor: str, token: str | None) -> None:
+    """`archive_definition`'s `abandon_instance_fn` collaborator — lives at
+    the API layer (not in `app.workflows.definitions`) specifically to avoid a
+    `definitions.py -> machine.py` import cycle; see
+    `definitions.archive_definition`'s docstring."""
     ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
-    machine.cancel_instance(ctx)
+    machine.abandon_instance(ctx)
 
 
 @router.post("/{tenant_id}/definitions/{entity_id}/actions")
@@ -48,10 +48,16 @@ def definition_action(tenant_id: str, entity_id: str, body: ActionRequest,
         return defs.deprecate_definition(tenant_id, entity_id, token)
     if body.action == "reactivate":
         return defs.reactivate_definition(tenant_id, entity_id, token)
-    if body.action == "retire":
-        return defs.retire_definition(
-            tenant_id, entity_id, force_cancel=bool(params.get("force_cancel")),
-            actor=actor, token=token, cancel_instance_fn=_cancel_one)
+    if body.action in ("archive", "retire"):
+        # `retire` is retained for one release as an alias so an unmigrated
+        # caller does not break mid-deploy; its legacy `force_cancel` param
+        # maps onto `force`. Remove both once no caller sends it.
+        force = bool(params.get("force") or params.get("force_cancel"))
+        return defs.archive_definition(
+            tenant_id, entity_id, force=force,
+            actor=actor, token=token, abandon_instance_fn=_abandon_one)
+    if body.action == "unarchive":
+        return defs.unarchive_definition(tenant_id, entity_id, token)
 
     raise HTTPException(400, f"Unknown action: {body.action!r}")
 

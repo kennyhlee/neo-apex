@@ -269,7 +269,7 @@ def test_deprecate_then_reactivate_lineage_status(client, fake_dc):
 
 
 def test_deprecate_against_draft_row_returns_409(client, fake_dc):
-    """Coordinator review finding #2: deprecate/reactivate/retire must only
+    """Coordinator review finding #2: deprecate/reactivate/archive must only
     act on the published row of a lineage."""
     fake_dc.set_model(TENANT, "student", _valid_models()["student"])
     eid = _seed_definition(fake_dc, definition_id="wd-lineage-draft-guard", status="draft")
@@ -291,7 +291,11 @@ def test_reactivate_against_superseded_row_returns_409(client, fake_dc):
     assert resp.status_code == 409
 
 
-# --- retire ------------------------------------------------------------
+# --- archive ------------------------------------------------------------
+#
+# `retire` was this action's name before archive/unarchive made it reversible.
+# The legacy alias's own coverage lives in test_archive_lifecycle.py; these
+# route-wiring tests exercise the current `archive` action only.
 
 
 def _seed_instance(fake_dc, *, definition_id, closed_at=""):
@@ -307,13 +311,13 @@ def _seed_instance(fake_dc, *, definition_id, closed_at=""):
     return fake_dc.dc_create(TENANT, "workflow_instance", base)["entity_id"]
 
 
-def test_retire_with_open_instances_returns_409_with_count(client, fake_dc):
+def test_archive_with_open_instances_returns_409_with_count(client, fake_dc):
     fake_dc.set_model(TENANT, "student", _valid_models()["student"])
     eid = _seed_definition(fake_dc, definition_id="wd-lineage-4", status="published")
     _seed_instance(fake_dc, definition_id="wd-lineage-4", closed_at="")
     _seed_instance(fake_dc, definition_id="wd-lineage-4", closed_at="2026-08-02T00:00:00+00:00")
 
-    resp = act(client, eid, "retire")
+    resp = act(client, eid, "archive")
     assert resp.status_code == 409
     assert resp.json()["detail"]["open_instances"] == 1
 
@@ -321,45 +325,46 @@ def test_retire_with_open_instances_returns_409_with_count(client, fake_dc):
     assert row["lineage_status"] == "active"
 
 
-def test_retire_force_cancel_bulk_cancels_open_instances_then_retires(client, fake_dc):
-    """Task 8: force_cancel now performs a real bulk-cancel (was a 501 stub
-    through Task 5) — every open instance of the lineage is run through
-    `machine.cancel_instance` before the lineage itself flips to retired."""
+def test_archive_force_bulk_abandons_open_instances_then_archives(client, fake_dc):
+    """Force-archive performs a real bulk-abandon — every open instance of the
+    lineage is run through `machine.abandon_instance` before the lineage itself
+    flips to archived."""
     fake_dc.set_model(TENANT, "student", _valid_models()["student"])
     eid = _seed_definition(fake_dc, definition_id="wd-lineage-5", status="published")
     open_eid = _seed_instance(fake_dc, definition_id="wd-lineage-5", closed_at="")
     already_closed_eid = _seed_instance(
         fake_dc, definition_id="wd-lineage-5", closed_at="2026-08-02T00:00:00+00:00")
 
-    resp = act(client, eid, "retire", force_cancel=True)
+    resp = act(client, eid, "archive", force=True)
     assert resp.status_code == 200
 
     row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
-    assert row["lineage_status"] == "retired"
+    assert row["lineage_status"] == "archived"
 
-    cancelled_row = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
-    assert cancelled_row["state"] == "cancelled"
-    assert cancelled_row["closed_at"]
-    assert int(cancelled_row["token_version"]) == 2  # started at 1 via _seed_instance's default
+    abandoned_row = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
+    assert abandoned_row["state"] == "abandoned"
+    assert abandoned_row["archived_from_state"] == "draft"
+    assert abandoned_row["closed_at"]
+    assert int(abandoned_row["token_version"]) == 2  # started at 1 via _seed_instance's default
 
     activities = fake_dc.find("workflow_activity", instance_id=open_eid)
     assert activities[-1]["type"] == "state_change"
-    assert activities[-1]["to_value"] == "cancelled"
+    assert activities[-1]["to_value"] == "abandoned"
 
     # the already-closed instance (excluded from the open-instance query) is untouched.
     untouched_row = fake_dc.get_entity(TENANT, "workflow_instance", already_closed_eid)
     assert untouched_row["state"] == "draft"
 
 
-def test_retire_with_no_open_instances_succeeds(client, fake_dc):
+def test_archive_with_no_open_instances_succeeds(client, fake_dc):
     fake_dc.set_model(TENANT, "student", _valid_models()["student"])
     eid = _seed_definition(fake_dc, definition_id="wd-lineage-6", status="published")
     _seed_instance(fake_dc, definition_id="wd-lineage-6", closed_at="2026-08-02T00:00:00+00:00")
 
-    resp = act(client, eid, "retire")
+    resp = act(client, eid, "archive")
     assert resp.status_code == 200
     row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
-    assert row["lineage_status"] == "retired"
+    assert row["lineage_status"] == "archived"
 
 
 # --- model-impact ---------------------------------------------------------

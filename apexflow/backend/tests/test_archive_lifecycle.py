@@ -200,3 +200,117 @@ def test_abandon_instance_refuses_a_family_actor(fake_dc):
     with pytest.raises(HTTPException) as exc:
         machine.abandon_instance(ctx)
     assert exc.value.status_code == 403
+
+
+# --- archive / unarchive ----------------------------------------------------
+
+
+def _act(client, entity_id, action, **params):
+    return client.post(
+        f"/api/workflows/{TENANT}/definitions/{entity_id}/actions",
+        json={"action": action, **params},
+    )
+
+
+def test_archive_refused_while_any_work_item_is_open(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-gate")
+    _seed_instance(fake_dc, definition_id="wd-gate", state="submitted", closed_at="")
+    _seed_instance(fake_dc, definition_id="wd-gate", state="enrolled",
+                   closed_at="2026-08-02T00:00:00+00:00")
+
+    resp = _act(client, eid, "archive")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["open_instances"] == 1
+
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "active"
+
+
+def test_archive_succeeds_once_every_work_item_is_in_an_end_state(client, fake_dc):
+    """The *iff* direction of R2, asserted explicitly: with nothing open, the
+    gate must not block."""
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-gate-open")
+    _seed_instance(fake_dc, definition_id="wd-gate-open", state="enrolled",
+                   closed_at="2026-08-02T00:00:00+00:00")
+    _seed_instance(fake_dc, definition_id="wd-gate-open", state="cancelled",
+                   closed_at="2026-08-03T00:00:00+00:00")
+
+    resp = _act(client, eid, "archive")
+    assert resp.status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "archived"
+
+
+def test_force_archive_abandons_open_items_and_leaves_closed_ones_alone(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-force")
+    open_eid = _seed_instance(fake_dc, definition_id="wd-force", state="submitted")
+    cancelled_eid = _seed_instance(fake_dc, definition_id="wd-force", state="cancelled",
+                                   closed_at="2026-08-02T00:00:00+00:00")
+
+    resp = _act(client, eid, "archive", force=True)
+    assert resp.status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "archived"
+
+    abandoned = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
+    assert abandoned["state"] == "abandoned"
+    assert abandoned["archived_from_state"] == "submitted"
+
+    # A deliberate cancellation is already closed, so it is not in the open set
+    # and must NOT be rewritten as archive fallout — that distinction is what
+    # keeps it non-restorable.
+    untouched = fake_dc.get_entity(TENANT, "workflow_instance", cancelled_eid)
+    assert untouched["state"] == "cancelled"
+    assert not untouched.get("archived_from_state")
+
+
+def test_archived_workflow_refuses_new_work_items(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-no-new")
+    assert _act(client, eid, "archive").status_code == 200
+
+    resp = client.post(
+        f"/api/workflows/{TENANT}/definitions/wd-no-new/instances",
+        json={"context": {}, "channel": "staff"},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "lineage_not_active"
+
+
+def test_unarchive_returns_lineage_to_active_and_revives_nothing(client, fake_dc):
+    """R5: unarchive is a lineage-level action only. Abandoned work items stay
+    abandoned until an administrator restores each one."""
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-unarchive")
+    open_eid = _seed_instance(fake_dc, definition_id="wd-unarchive", state="submitted")
+    assert _act(client, eid, "archive", force=True).status_code == 200
+
+    resp = _act(client, eid, "unarchive")
+    assert resp.status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "active"
+
+    still_abandoned = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
+    assert still_abandoned["state"] == "abandoned"
+    assert still_abandoned["closed_at"]
+
+
+def test_retire_action_is_accepted_as_a_legacy_alias_of_archive(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-legacy-retire")
+    _seed_instance(fake_dc, definition_id="wd-legacy-retire", state="submitted")
+
+    resp = _act(client, eid, "retire", force_cancel=True)
+    assert resp.status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "archived"
+
+
+def test_publishing_a_new_version_keeps_the_lineage_archived(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    v1 = _seed_definition(fake_dc, definition_id="wd-archived-publish", version=1)
+    assert _act(client, v1, "archive").status_code == 200
+
+    v2 = _seed_definition(fake_dc, definition_id="wd-archived-publish",
+                          version=2, status="draft")
+    resp = _act(client, v2, "publish")
+    assert resp.status_code == 200
+    assert resp.json()["base_data"]["lineage_status"] == "archived"

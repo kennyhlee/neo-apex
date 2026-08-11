@@ -218,52 +218,59 @@ def count_open_instances(tenant_id: str, lineage_definition_id: str,
     return len(list_open_instances(tenant_id, lineage_definition_id, token))
 
 
-def retire_definition(tenant_id: str, entity_id: str, force_cancel: bool = False, *,
-                      actor: str | None = None, token: str | None = None,
-                      cancel_instance_fn: Callable[[str, dict, str, str | None], None] | None = None,
-                      ) -> dict:
-    """lineage_status -> retired, gated on zero open instances.
+def archive_definition(tenant_id: str, entity_id: str, force: bool = False, *,
+                       actor: str | None = None, token: str | None = None,
+                       abandon_instance_fn: Callable[[str, dict, str, str | None], None] | None = None,
+                       ) -> dict:
+    """lineage_status -> archived, gated on zero open work items.
 
-    409 `{"open_instances": N}` when any are open and `force_cancel` is not
-    set. When `force_cancel=True` and open instances exist, each is
-    cancelled via `cancel_instance_fn(tenant_id, instance_row, actor,
-    token)` before retirement proceeds (spec §3 "Definition lifecycle":
-    retire "is terminal and gated on open instances (zero remaining, or
-    explicit bulk-cancel)").
+    409 `{"open_instances": N}` when any work item is still outside an end
+    state and `force` is not set (spec R2). With `force=True`, each open
+    instance is abandoned via `abandon_instance_fn(tenant_id, instance_row,
+    actor, token)` before the lineage flips (spec R3).
 
-    `cancel_instance_fn` is dependency-injected by the caller (`app.api
+    Reversible, unlike the `retire_definition` this replaces — see
+    `unarchive_definition`.
+
+    `abandon_instance_fn` is dependency-injected by the caller (`app.api
     .definitions`) rather than this module importing `app.workflows.machine`
     directly — `machine.py` imports THIS module (`parse_machine_steps`/
     `fetch_models`/`referenced_entity_models`/`_as_int`), so a
     `definitions.py -> machine.py` import back would close a cycle. Callers
-    that pass `force_cancel=True` must supply `cancel_instance_fn` and a
-    real `actor` — an `AssertionError` (a programming error, not a request
-    error: the API layer is responsible for wiring this) if either is
-    missing while there are open instances to cancel.
+    that pass `force=True` must supply `abandon_instance_fn` and a real
+    `actor` — a RuntimeError, not an HTTPException, if either is missing
+    while there are open instances to abandon: that is the API layer failing
+    to wire its collaborator, a programming error rather than a bad request.
+    (A bare `assert` would strip under `python -O`, silently archiving with
+    the instances never abandoned.)
     """
-    row = _require_published_row(tenant_id, entity_id, token, "retire")
+    row = _require_published_row(tenant_id, entity_id, token, "archive")
     lineage_id = row.get("definition_id")
     open_rows = list_open_instances(tenant_id, lineage_id, token)
     if open_rows:
-        if not force_cancel:
+        if not force:
             raise HTTPException(409, {"open_instances": len(open_rows)})
-        if cancel_instance_fn is None or not actor:
-            # Explicit raise rather than a bare `assert`: asserts strip under
-            # `python -O`, which would silently skip bulk-cancel entirely in
-            # that mode and fall straight through to retiring the lineage
-            # with its open instances never cancelled. This is a programming
-            # error in the caller (the API layer failing to wire its
-            # collaborator), not a request error -- RuntimeError, not
-            # HTTPException.
+        if abandon_instance_fn is None or not actor:
             raise RuntimeError(
-                "retire_definition(force_cancel=True) requires both actor and cancel_instance_fn"
+                "archive_definition(force=True) requires both actor and abandon_instance_fn"
             )
         for instance_row in open_rows:
-            cancel_instance_fn(tenant_id, instance_row, actor, token)
+            abandon_instance_fn(tenant_id, instance_row, actor, token)
 
     base = entity_base_data(row)
-    base["lineage_status"] = "retired"
+    base["lineage_status"] = "archived"
     return dc.dc_update(tenant_id, "workflow_definition", entity_id, base, token)
+
+
+def unarchive_definition(tenant_id: str, entity_id: str, token: str | None = None) -> dict:
+    """lineage_status -> active. Inverse of `archive_definition`.
+
+    Deliberately touches NO instances (spec R5): work items abandoned by a
+    force-archive stay abandoned until an administrator restores each one via
+    `machine.restore_instance`. Reviving them here would silently reopen work
+    families had already been told was closed.
+    """
+    return _set_lineage_status(tenant_id, entity_id, "active", "unarchive", token)
 
 
 # --- model-impact ------------------------------------------------------------
