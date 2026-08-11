@@ -64,6 +64,21 @@ export const translations: Record<Locale, Record<string, string>> = {
     'today.copied': 'Link copied',
     'today.noStages': 'No lead stages are defined in this model yet.',
 
+    // Attention (/attention)
+    'attention.title': 'Needs you today',
+    'attention.subtitle': '{n} across your workflows',
+    'attention.all': 'All',
+    'attention.empty': 'Nothing needs your attention right now.',
+    'attention.groupEmpty': 'Nothing in this group.',
+    'attention.noApplicant': 'No email on file',
+    'attention.reviewWhat': '{title} — submitted, needs verifying',
+    'attention.overdueWhat': '{title} — past its due date',
+    'attention.stalledWhat': 'No activity',
+    'attention.daysLate': '{n}d late',
+    'attention.daysWaiting': '{n}d',
+    'attention.ageUnknown': '—',
+    'attention.loadError': 'Some rows could not be loaded.',
+
     // Command palette
     'palette.title': 'Search and jump',
     'palette.placeholder': 'Search students, families, programs…',
@@ -588,6 +603,21 @@ export const translations: Record<Locale, Record<string, string>> = {
     'today.copyLink': '\u590d\u5236\u94fe\u63a5',
     'today.copied': '\u94fe\u63a5\u5df2\u590d\u5236',
     'today.noStages': '\u5f53\u524d\u6a21\u578b\u5c1a\u672a\u5b9a\u4e49\u54a8\u8be2\u9636\u6bb5\u3002',
+
+    // Attention (/attention)
+    'attention.title': '\u4eca\u65e5\u5f85\u529e',
+    'attention.subtitle': '\u5171 {n} \u9879',
+    'attention.all': '\u5168\u90e8',
+    'attention.empty': '\u76ee\u524d\u6ca1\u6709\u9700\u8981\u5904\u7406\u7684\u4e8b\u9879\u3002',
+    'attention.groupEmpty': '\u8be5\u5206\u7ec4\u4e3a\u7a7a\u3002',
+    'attention.noApplicant': '\u672a\u767b\u8bb0\u90ae\u7bb1',
+    'attention.reviewWhat': '{title} \u2014 \u5df2\u63d0\u4ea4\uff0c\u5f85\u5ba1\u6838',
+    'attention.overdueWhat': '{title} \u2014 \u5df2\u8fc7\u671f',
+    'attention.stalledWhat': '\u65e0\u6d3b\u52a8',
+    'attention.daysLate': '\u903e\u671f {n} \u5929',
+    'attention.daysWaiting': '{n} \u5929',
+    'attention.ageUnknown': '\u2014',
+    'attention.loadError': '\u90e8\u5206\u6761\u76ee\u65e0\u6cd5\u52a0\u8f7d\u3002',
 
     // Command palette
     'palette.title': '\u641c\u7d22\u4e0e\u8df3\u8f6c',

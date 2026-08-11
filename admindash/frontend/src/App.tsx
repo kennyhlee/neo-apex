@@ -9,6 +9,7 @@ import Footer from './components/Footer.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import PublicInquiryPage from './pages/PublicInquiryPage.tsx';
 import HomePage from './pages/HomePage.tsx';
+import AttentionPage from './pages/AttentionPage.tsx';
 import StudentsPage from './pages/StudentsPage.tsx';
 import BulkAddStudentsPage from './pages/BulkAddStudentsPage.tsx';
 import LeadPage from './pages/LeadPage.tsx';
@@ -63,6 +64,7 @@ function AppRoutes() {
                   <main className="app-main" id="main-content" tabIndex={-1}>
                     <Routes>
                       <Route path="/home" element={<HomePage tenant={tenant} />} />
+                      <Route path="/attention" element={<AttentionPage tenant={tenant} />} />
                       <Route path="/students" element={<StudentsPage tenant={tenant} />} />
                       <Route
                         path="/students/bulk-add"
