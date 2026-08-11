@@ -499,3 +499,36 @@ mechanism Plan 5 introduced. No new plan-defect class emerged this time.
     `[x][label]` elsewhere in the same description. Introduced by commit
     `e9a42d0`; regression relative to the branch's own starting point, not a
     pre-existing defect.
+
+29. **`lead` has no durable creation timestamp.** Lead staleness cannot be
+    computed honestly: `_created_at` is reset on every write, and
+    `lead_activity` records stage transitions with no timestamp of its own.
+    The home page's "Inquiries to follow up" bucket is therefore state-based
+    only, and the previous "stale > 7 days" bucket was dropped rather than
+    carried forward wrong. Fix: write a `created_at` base-data field at lead
+    creation.
+
+30. **`_created_at` means last-modified, not created.** `store.py:378-388`'s
+    `put_entity` rebuilds the row on every write with `_created_at = now`.
+    Verified against live `acme` data: `workflow_item` rows at `_version: 3`
+    have `_created_at == _updated_at`. Platform-wide, not page-specific — any
+    consumer treating it as a creation time is wrong. The old home-page queue
+    was one such consumer.
+
+31. **`/api/query` applies no row cap.** `unified_routes.py:55` calls
+    `QueryEngine.query` with no `limit`, unlike `/api/query/readonly`, which
+    caps at 200. Fine at current volumes (tens of rows per tenant); a real
+    limit belongs there before a large tenant arrives.
+
+32. **`ModelContext`'s callbacks churn identity on every cache write.**
+    `getModel` and `getCachedModel` are `useCallback(..., [cache])` over one
+    shared cache object with no per-tenant or per-consumer scoping
+    (`admindash/frontend/src/contexts/ModelContext.tsx`). Any successful model
+    fetch anywhere in the app changes their identity, which re-fires every
+    consumer effect that lists them as a dependency. On a cold cache
+    `useAttention` therefore issues its five queries twice — the first run is
+    discarded via its `cancelled` flag, but the requests still reach the
+    server. Self-terminating, not an infinite loop, and pre-existing:
+    `HomePage.tsx`'s own model effects have the same shape. Fix by stabilising
+    the callbacks (e.g. a ref-backed cache) so a write does not change their
+    identity.
