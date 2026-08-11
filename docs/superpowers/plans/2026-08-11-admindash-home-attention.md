@@ -18,7 +18,7 @@
 - **Every scalar from `/api/query` arrives as a string.** `"false"` is truthy in JS. Use `asBool` / `asNumber` from `utils/workflowData.ts`.
 - **SQL literals are escaped by doubling single quotes**, same rule as `workflowData.ts::escapeSqlLiteral`.
 - **New user-facing strings go in `src/i18n/translations.ts` for BOTH `en-US` and `zh-CN`.** A missing key renders the raw key string on screen with no warning. `src/i18n/__tests__/translations.test.ts` fails if the locales drift.
-- **Test baselines to hold:** apexflow 553 (becomes 555), admindash pytest 201, admindash vitest 94, familyhub 89, datacore 354, flow-runtime 59.
+- **Test baselines to hold:** apexflow 585 (becomes 587), admindash pytest 201, admindash vitest 94, familyhub 89, datacore 354, flow-runtime 59.
 - **`admindash npm run lint` has 5 pre-existing errors** (DynamicForm, AuthContext, DashboardContext, ModelContext). Do not fix them. Do notice if a 6th appears.
 - **Branch:** work continues on `feat/item-status-typing`. Do **not** rebase onto `main` — main lacks the ApexFlow Plan 3 merge this depends on.
 
@@ -145,7 +145,7 @@ Expected: both PASS.
 cd /Users/kennylee/Development/NeoApex/apexflow && uv run pytest backend/tests/ -q
 ```
 
-Expected: 555 passed (553 baseline + 2).
+Expected: 587 passed (585 baseline + 2).
 
 - [ ] **Step 7: Commit**
 
@@ -1724,7 +1724,7 @@ cd /Users/kennylee/Development/NeoApex/admindash && uv run pytest backend/tests/
 cd /Users/kennylee/Development/NeoApex/apexflow && uv run pytest backend/tests/ -q
 ```
 
-Expected: admindash vitest above the 94 baseline, admindash pytest 201, apexflow 555.
+Expected: admindash vitest above the 94 baseline, admindash pytest 201, apexflow 587.
 
 - [ ] **Step 9: Commit**
 
@@ -1784,7 +1784,7 @@ git commit -m "docs: log follow-ups 29-31 from the attention-queue work"
 
 | Check | Command | Expected |
 |---|---|---|
-| apexflow | `cd apexflow && uv run pytest backend/tests/ -q` | 555 passed |
+| apexflow | `cd apexflow && uv run pytest backend/tests/ -q` | 587 passed |
 | admindash backend | `cd admindash && uv run pytest backend/tests/ -q` | 201 passed |
 | admindash vitest | `cd admindash/frontend && npm run test` | above 94 baseline |
 | admindash build | `cd admindash/frontend && npm run build` | clean |
