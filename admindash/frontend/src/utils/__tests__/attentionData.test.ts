@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ITEM_DONE_STATUSES } from '@neoapex/flow-runtime';
 import {
   publishedDefinitionsSql,
@@ -93,5 +93,33 @@ describe('SQL builders', () => {
 
   it('escapes a quote in the injected timestamp', () => {
     expect(overdueItemsSql("2026'; DROP")).toContain("2026''; DROP");
+  });
+});
+
+describe('SQL builders with mocked vocabulary', () => {
+  // Test that overdueItemsSql derives from ITEM_DONE_STATUSES at runtime, not hardcoded.
+  // If the vocabulary changes, the SQL must follow. We prove this by mocking
+  // ITEM_DONE_STATUSES to return something different (e.g. ['alpha', 'beta'])
+  // and confirming the SQL reflects those new values, not the hardcoded ones.
+  //
+  // This lives in its own describe block so the mock does not leak into other tests.
+  it('overdueItemsSql derives ITEM_DONE_STATUSES, not hardcoded literals', async () => {
+    // Mock @neoapex/flow-runtime before any module loads it
+    vi.doMock('@neoapex/flow-runtime', () => ({
+      ITEM_DONE_STATUSES: ['alpha', 'beta'],
+    }));
+
+    // Reset modules and reimport after the mock is in place
+    vi.resetModules();
+    const { overdueItemsSql: mockedOverdueItemsSql } = await import('../attentionData.ts');
+
+    // The SQL should contain the mocked statuses
+    const sql = mockedOverdueItemsSql('2026-08-11T00:00:00.000Z');
+    expect(sql).toContain("'alpha'");
+    expect(sql).toContain("'beta'");
+    // And should NOT contain the hardcoded real statuses
+    expect(sql).not.toContain("'submitted'");
+    expect(sql).not.toContain("'verified'");
+    expect(sql).not.toContain("'waived'");
   });
 });
