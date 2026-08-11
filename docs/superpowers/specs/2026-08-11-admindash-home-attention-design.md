@@ -49,7 +49,7 @@ at all**, and `lead_activity` records only stage transitions with no `at` either
 | Decision | Ruling |
 |---|---|
 | Pipeline section | Stays lead-driven; renamed **"Lead pipeline"**. Same data, honest name. |
-| Work queue source | **Workflows**, across every published definition, **plus** one lead bucket. |
+| Work queue source | **Workflows only**, across every published definition. See the amendment below. |
 | Queue presentation | **Fixed count cards** (max four), not a row list. Height must not grow with volume. |
 | Detail list | A **new `/attention` route**. No cross-definition instance view exists today. |
 | Nav | **No nav entry.** Reachable from the Home cards. Nav stays at six items. |
@@ -94,7 +94,33 @@ On narrow viewports the cards reflow to a 2×2 grid and stay within one fold.
 | **Overdue** | Item active, `due_at` set and in the past, status ∉ `ITEM_DONE_STATUSES`, instance not terminal | days late on the worst | `/attention?bucket=overdue` |
 | **Awaiting your review** | Item status = `submitted`, instance not terminal | age of the oldest | `/attention?bucket=review` |
 | **Nothing is moving** | Instance not terminal, newest `workflow_activity.at` older than 7 days | how long the quietest has been silent | `/attention?bucket=stalled` |
-| **Inquiries to follow up** | Lead open (no `converted_family_id`) and either at the first stage or having neither email nor phone | count never contacted | `/leads` |
+| ~~**Inquiries to follow up**~~ | *Removed — see the amendment below.* | | |
+
+> **AMENDMENT (implementation, 2026-08-11).** The **Inquiries to follow up**
+> card is **removed**. Ruling: *"remove inquiries card as it's already showing
+> in leads pipeline."*
+>
+> The card sat directly above the Lead pipeline section, which already displays
+> lead counts by stage — it answered a question the next section answered
+> better. "Needs you today" is now **workflow attention only**: three cards.
+>
+> This also removed a defect the card had introduced. Home's "See all N" summed
+> every visible card, but `/attention` shows `rows.length`, which never contains
+> leads (they route to `/leads`). "See all 12" would therefore have opened a
+> page reading "All 9". With the card gone the sum runs over exactly the three
+> buckets `rows` holds, so the two agree **by construction** rather than by
+> coincidence — which was the point of the one-fetch-one-grouping design. The
+> property is pinned by the partition test.
+>
+> The lead path through the attention pipeline went with the card:
+> `leadAttention()`, `LeadAttention`, `AttentionResult.leads`, the `listLeads`
+> fetch in `useAttention`, and with them the hook's only dependency on
+> `ModelContext`. The Lead pipeline section and the "This week" tiles are
+> unaffected — they read `HomePage.tsx`'s own separate `listLeads` effect.
+>
+> Consequence for the follow-ups: entry 29 (`lead` has no durable creation
+> timestamp) is now purely informational for this page rather than a constraint
+> on it — no lead age is computed anywhere in the attention pipeline.
 
 Four rulings embedded above:
 
