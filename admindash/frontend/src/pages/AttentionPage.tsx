@@ -6,11 +6,12 @@ import { useAttention } from '../hooks/useAttention.ts';
 import {
   ageDays,
   bucketRows,
+  oneInstanceSql,
   publishedMachineSql,
   type AttentionRow,
   type BucketKey,
 } from '../utils/attentionData.ts';
-import { instanceSql, type InstanceRow } from '../utils/workflowData.ts';
+import type { InstanceRow } from '../utils/workflowData.ts';
 import Button from '../components/ui/Button.tsx';
 import WorkflowInstanceDrawer from '../components/WorkflowInstanceDrawer.tsx';
 import './AttentionPage.css';
@@ -68,14 +69,15 @@ export default function AttentionPage({ tenant }: AttentionPageProps) {
     // The drawer needs the full instance row and the lineage's published
     // machine. The machine is fetched by `status = 'published'`, not by a
     // version number — an attention row carries no `definition_version`, and
-    // assuming `1` would silently break on the first republish.
+    // assuming `1` would silently break on the first republish. The instance
+    // is fetched by its own entity_id (`oneInstanceSql`), not the whole
+    // lineage (`instanceSql`) — this is one row click, not the pipeline board.
     const [instances, defs] = await Promise.all([
-      postQuery(tenant, 'entities', instanceSql(row.definitionId)),
+      postQuery(tenant, 'entities', oneInstanceSql(row.instanceEntityId)),
       postQuery(tenant, 'entities', publishedMachineSql(row.definitionId)),
     ]).catch(() => [null, null] as const);
     if (!instances) return;
-    const match = (instances.data as unknown as InstanceRow[])
-      .find((i) => i.entity_id === row.instanceEntityId);
+    const match = (instances.data as unknown as InstanceRow[])[0];
     if (!match) return;
     setOpenMachine(defs?.data[0]?.machine ?? null);
     setOpenInstance(match);
@@ -136,10 +138,11 @@ export default function AttentionPage({ tenant }: AttentionPageProps) {
         </div>
       )}
 
-      <div className="attention-chips">
+      <div className="attention-chips" role="group" aria-label={t('attention.title')}>
         <button
           type="button"
           className={`attention-chip${selected ? '' : ' is-on'}`}
+          aria-pressed={!selected}
           onClick={() => selectBucket(null)}
         >
           {t('attention.all')} {total}
@@ -149,6 +152,7 @@ export default function AttentionPage({ tenant }: AttentionPageProps) {
             key={b.key}
             type="button"
             className={`attention-chip${selected === b.key ? ' is-on' : ''}`}
+            aria-pressed={selected === b.key}
             onClick={() => selectBucket(b.key)}
           >
             {t(b.label)} {countOf(b.key)}

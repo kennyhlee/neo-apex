@@ -7,13 +7,19 @@ import {
   overdueItemsSql,
   instanceSilenceSql,
   dueAtProbeSql,
+  oneInstanceSql,
   definitionIndex,
   buildAttention,
   bucketRows,
+  ageDays,
   type AttentionInput,
 } from '../attentionData.ts';
 
 describe('SQL builders', () => {
+  // `oneInstanceSql` is DELIBERATELY excluded from this list: it is the one
+  // sanctioned `SELECT *` in this module (the drawer reads arbitrary fields
+  // off the row), documented on the function itself. It has its own
+  // dedicated test below instead of being asserted star-free here.
   const all = [
     publishedDefinitionsSql(),
     publishedMachineSql('enrollment'),
@@ -64,11 +70,10 @@ describe('SQL builders', () => {
 
   it('published definitions reads exactly the three columns needed', () => {
     const sql = publishedDefinitionsSql();
-    // Must have all three required columns in the SELECT
-    expect(sql).toContain('SELECT definition_id, name, machine');
-    // Verify no extra columns are selected (spot-check for common accidental adds
-    // that would appear before FROM)
-    expect(sql).not.toContain('SELECT *');
+    // Anchored to the start of the SELECT list, not just a substring check —
+    // a `toContain` here would still pass if a fourth column were prepended
+    // or appended to the same clause.
+    expect(sql).toMatch(/^SELECT definition_id, name, machine FROM/);
     expect(sql).not.toContain('vector');
     // Verify status filtering is applied
     expect(sql).toContain("status = 'published'");
@@ -115,6 +120,16 @@ describe('SQL builders', () => {
     expect(sql).toContain("i._status = 'active'");
     expect(sql).toContain('LIMIT 1');
     expect(sql).not.toMatch(/SELECT\s+\*/i);
+  });
+
+  it('oneInstanceSql filters to one instance by entity_id and escapes it', () => {
+    const sql = oneInstanceSql("in'9");
+    expect(sql).toContain("entity_id = 'in''9'");
+    expect(sql).toContain("entity_type = 'workflow_instance'");
+    expect(sql).toContain("_status = 'active'");
+    // Deliberately wide, unlike every other builder in this module — the
+    // whole point is fetching the full row.
+    expect(sql).toMatch(/SELECT\s+\*/i);
   });
 });
 
@@ -296,6 +311,36 @@ describe('buildAttention', () => {
     expect(rows.map((r) => r.instanceEntityId)).toEqual(['c', 'a', 'b']);
   });
 
+  it('drops a submitted item whose instance was cancelled', () => {
+    // `cancelled` is never a declared state_id — apexflow's cancel path writes
+    // it directly (machine.py:536) and the row stays _status='active', so
+    // nothing but this check keeps closed work out of the queue.
+    const rows = bucketRows(
+      buildAttention(input({
+        submitted: [{
+          item_entity_id: 'it9', title: 'Immunization Record',
+          instance_entity_id: 'in9', definition_id: 'enrollment',
+          state: 'cancelled', last_item_change: new Date(NOW - 4 * DAY).toISOString(),
+        }],
+      })),
+      'review',
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it('drops a cancelled instance from the stalled bucket', () => {
+    const rows = bucketRows(
+      buildAttention(input({
+        silence: [{
+          instance_entity_id: 'in9', definition_id: 'enrollment',
+          state: 'cancelled', last_activity: new Date(NOW - 30 * DAY).toISOString(),
+        }],
+      })),
+      'stalled',
+    );
+    expect(rows).toHaveLength(0);
+  });
+
   it('partitions every row into exactly one bucket, so counts sum to the total', () => {
     // The property Home depends on: a card's number IS the length of the list
     // /attention renders for that bucket, because both call bucketRows on the
@@ -314,5 +359,15 @@ describe('buildAttention', () => {
       .reduce((n, b) => n + bucketRows(result, b).length, 0);
     expect(summed).toBe(result.rows.length);
     expect(summed).toBe(3);
+  });
+});
+
+describe('ageDays', () => {
+  it('floors to whole days but never reports zero', () => {
+    // A row only reaches a bucket by qualifying for it, so "0 days" would
+    // misreport genuine waiting time as no problem at all.
+    expect(ageDays(0)).toBe(1);
+    expect(ageDays(0.5 * DAY)).toBe(1);
+    expect(ageDays(3.7 * DAY)).toBe(3);
   });
 });

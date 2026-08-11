@@ -18,7 +18,8 @@ import { parseMachineStates } from './workflowData.ts';
  * SQL notes: `SELECT *` is banned here — the flattened table carries a
  * 1024-float `vector` column and `/api/query` returns it (unlike
  * `/api/query/readonly`, which pops it). `at` is quoted because it is a
- * DuckDB reserved keyword.
+ * DuckDB reserved keyword. `oneInstanceSql` is the sole deliberate exception
+ * to the `SELECT *` ban — see its own doc comment for why.
  */
 
 export type BucketKey = 'overdue' | 'review' | 'stalled';
@@ -184,7 +185,7 @@ export function dueAtProbeSql(): string {
  * rows can answer "how quiet is the quietest" without a second query.
  *
  * Every instance receives a `state_change` at creation
- * (apexflow `engine.py:255`), so `last_activity` is null only for genuinely
+ * (apexflow `engine.py:263`), so `last_activity` is null only for genuinely
  * malformed data — never for a brand-new instance.
  */
 export function instanceSilenceSql(): string {
@@ -200,9 +201,17 @@ export function instanceSilenceSql(): string {
   );
 }
 
-/** Days of silence before an instance counts as stalled. Beside
- * `HomePage.tsx`'s existing `STALE_DAYS`, and named for the same reason. */
+/** Days of silence before an instance counts as stalled. A week of no
+ * activity — no item change, no state change — is long enough to say a
+ * workflow has gone quiet without flagging normal turnaround time. */
 export const STALLED_DAYS = 7;
+
+/** apexflow's `cancel_instance` writes this synthetic state
+ * (`machine.py:536`). It is NEVER a declared `state_id` in any machine — the
+ * backend's own `_is_terminal_state` special-cases it for exactly that reason
+ * — so it can never come from `definitionIndex`, and a cancelled instance
+ * would otherwise read as open work forever. */
+export const CANCELLED_STATE = 'cancelled';
 
 /** One row on `/attention`; Home renders only the count of each bucket. */
 export interface AttentionRow {
@@ -288,7 +297,7 @@ export function buildAttention(input: AttentionInput): AttentionResult {
   const index = definitionIndex(input.definitions);
   const nameOf = (id: string) => index.get(id)?.name ?? id;
   const isTerminal = (id: string, state: string) =>
-    index.get(id)?.terminal.has(state) ?? false;
+    state === CANCELLED_STATE || (index.get(id)?.terminal.has(state) ?? false);
 
   const rows: AttentionRow[] = [];
 
@@ -324,7 +333,7 @@ export function buildAttention(input: AttentionInput): AttentionResult {
     const definitionId = String(row.definition_id ?? '');
     if (isTerminal(definitionId, String(row.state ?? ''))) continue;
     const last = parseIso(row.last_activity);
-    // Every instance gets a state_change at creation (apexflow engine.py:255),
+    // Every instance gets a state_change at creation (apexflow engine.py:263),
     // so a null here is malformed data, not a new instance. Judging it silent
     // would be a guess, so it is skipped.
     if (last === null) continue;
@@ -360,4 +369,21 @@ export function bucketRows(result: AttentionResult, bucket: BucketKey): Attentio
  */
 export function ageDays(ms: number): number {
   return Math.max(1, Math.floor(ms / 86_400_000));
+}
+
+/** One instance row by entity_id, for the drawer. `workflowData.ts`'s
+ * `instanceSql` fetches a whole lineage — the right shape for the pipeline
+ * board, wasteful for a single row click here (it drags every sibling
+ * instance, and the 1024-float `vector` column, across the wire for a row we
+ * throw away). This is a deliberate exception to the module's no-`SELECT *`
+ * rule, not a violation of it: the drawer (`WorkflowInstanceDrawer`, via
+ * `InstanceRow`'s index signature) reads arbitrary fields off the row, so the
+ * projection has to stay wide. What changes — and what actually saves the
+ * wire cost — is filtering to the one instance server-side instead of
+ * fetching the lineage and finding it client-side. */
+export function oneInstanceSql(instanceEntityId: string): string {
+  return (
+    `SELECT * FROM data WHERE entity_type = 'workflow_instance' ` +
+    `AND _status = 'active' AND entity_id = '${escapeSqlLiteral(instanceEntityId)}'`
+  );
 }

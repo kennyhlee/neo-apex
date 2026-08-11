@@ -36,7 +36,7 @@ interface QueueItem {
   label: string;
   detail?: string;
   action: string;
-  tone: 'danger' | 'attn' | 'ok';
+  tone: 'danger' | 'attn';
   onAct: () => void;
 }
 
@@ -91,7 +91,8 @@ export default function HomePage({ tenant }: HomePageProps) {
     };
   }, [tenant]);
 
-  // Leads drive both the pipeline spine and the work queue.
+  // Leads drive the pipeline spine and the "This week" inquiry tile. The work
+  // queue is workflow-sourced — see useAttention.
   useEffect(() => {
     if (!tenant) return;
     let cancelled = false;

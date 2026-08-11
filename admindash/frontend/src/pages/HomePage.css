@@ -65,12 +65,12 @@
   border-radius: var(--card-r);
 }
 
-/* Two tones, ~122 apart in RGB, so the one distinction colour still makes —
-   needs a person vs ready to go — is unmistakable. `danger` stays defined for
-   genuine faults (duplicate suspects, failed imports); routine backlog uses
-   `attn`, because red on ordinary work dilutes red where it matters. */
+/* Two tones only. `danger` is reserved for a genuine fault — a missed
+   deadline (the overdue card); `attn` is routine backlog — work waiting on
+   staff that isn't late (review, stalled). Kept distinct on purpose: if
+   ordinary backlog were also `danger`, red would stop meaning "something
+   went wrong" and just mean "there is a queue card here". */
 .queue-attn   { --queue-c: var(--attn); }
-.queue-ok     { --queue-c: var(--success); }
 .queue-danger { --queue-c: var(--danger); }
 
 .queue-count {
