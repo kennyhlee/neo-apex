@@ -6,6 +6,7 @@ import {
   submittedItemsSql,
   overdueItemsSql,
   instanceSilenceSql,
+  dueAtProbeSql,
   definitionIndex,
   buildAttention,
   bucketRows,
@@ -97,6 +98,23 @@ describe('SQL builders', () => {
 
   it('escapes a quote in the injected timestamp', () => {
     expect(overdueItemsSql("2026'; DROP")).toContain("2026''; DROP");
+  });
+
+  it('the review query never references due_at, which some tenants lack', () => {
+    // DataCore's per-tenant table is the union of the fields that tenant's rows
+    // carry. A tenant whose workflow items never got a due date has no `due_at`
+    // column at all, and referencing it is a Binder Error — which took out the
+    // review bucket too, purely because it shared a projection with overdue.
+    expect(submittedItemsSql()).not.toContain('due_at');
+  });
+
+  it('probes for due_at against workflow_item rows only', () => {
+    const sql = dueAtProbeSql();
+    expect(sql).toContain('i.due_at');
+    expect(sql).toContain("i.entity_type = 'workflow_item'");
+    expect(sql).toContain("i._status = 'active'");
+    expect(sql).toContain('LIMIT 1');
+    expect(sql).not.toMatch(/SELECT\s+\*/i);
   });
 });
 

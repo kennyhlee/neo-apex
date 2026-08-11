@@ -93,13 +93,17 @@ export function publishedMachineSql(definitionId: string): string {
   );
 }
 
-/** Shared SELECT list for both item buckets. Eight columns, the last an
- * aggregate — hence `GROUP BY 1..7`. */
-const ITEM_SELECT =
-  `SELECT i.entity_id AS item_entity_id, i.title AS title, i.due_at AS due_at, ` +
+/** Columns both item buckets need, unqualified by SELECT so each builder can
+ * prepend/append its own extra columns (`due_at`, the activity aggregate)
+ * without duplicating this list. `due_at` is NOT here: it is written only by
+ * `start_due_clocks`, so a tenant with no due-dated item ever has no `due_at`
+ * column at all, and referencing an absent column is a Binder Error, not a
+ * null result (Task 8). `submittedItemsSql` never uses the value — a review
+ * row's age comes from `last_item_change` — so it must not select it. */
+const ITEM_SELECT_COMMON =
+  `i.entity_id AS item_entity_id, i.title AS title, ` +
   `i.instance_id AS instance_entity_id, inst.definition_id AS definition_id, ` +
-  `inst.state AS state, inst.applicant_email AS applicant_email, ` +
-  `MAX(a."at") AS last_item_change`;
+  `inst.state AS state, inst.applicant_email AS applicant_email`;
 
 /** The item -> instance -> activity join. `a.item_id = i.entity_id` is what
  * makes the age per-ITEM rather than per-instance (Task 1). The column
@@ -115,14 +119,24 @@ const ITEM_JOIN =
   `AND a.entity_type = 'workflow_activity' AND a._status = 'active' ` +
   `AND a.type = 'item_change' AND a.item_id = i.entity_id`;
 
-const ITEM_GROUP = ` GROUP BY 1, 2, 3, 4, 5, 6, 7`;
+/** `ITEM_SELECT_COMMON` is 6 non-aggregate columns; `submittedItemsSql` adds
+ * none, `overdueItemsSql` adds `due_at` as a 7th. Each builder's `GROUP BY`
+ * ordinals must match its own non-aggregate column count exactly. */
+const ITEM_GROUP_6 = ` GROUP BY 1, 2, 3, 4, 5, 6`;
+const ITEM_GROUP_7 = ` GROUP BY 1, 2, 3, 4, 5, 6, 7`;
 
-/** Items a family has sent in that staff must verify or reject. */
+/** Items a family has sent in that staff must verify or reject.
+ *
+ * Deliberately does not select `due_at` — a review row's age comes from
+ * `last_item_change`, never `due_at`, and `due_at` is absent entirely from a
+ * tenant's flattened table until some item gets a due date. Selecting it here
+ * would 400 the review bucket on such a tenant for a column it never needed
+ * (Task 8). */
 export function submittedItemsSql(): string {
   return (
-    ITEM_SELECT + ITEM_JOIN +
+    `SELECT ${ITEM_SELECT_COMMON}, MAX(a."at") AS last_item_change` + ITEM_JOIN +
     ` WHERE i.entity_type = 'workflow_item' AND i._status = 'active' ` +
-    `AND i.status = 'submitted'` + ITEM_GROUP
+    `AND i.status = 'submitted'` + ITEM_GROUP_6
   );
 }
 
@@ -140,11 +154,27 @@ export function submittedItemsSql(): string {
 export function overdueItemsSql(nowIso: string): string {
   const done = ITEM_DONE_STATUSES.map((s) => `'${escapeSqlLiteral(s)}'`).join(', ');
   return (
-    ITEM_SELECT + ITEM_JOIN +
+    `SELECT ${ITEM_SELECT_COMMON}, i.due_at AS due_at, MAX(a."at") AS last_item_change` +
+    ITEM_JOIN +
     ` WHERE i.entity_type = 'workflow_item' AND i._status = 'active' ` +
     `AND i.due_at IS NOT NULL AND i.due_at <> '' ` +
     `AND i.due_at < '${escapeSqlLiteral(nowIso)}' ` +
-    `AND i.status NOT IN (${done})` + ITEM_GROUP
+    `AND i.status NOT IN (${done})` + ITEM_GROUP_7
+  );
+}
+
+/**
+ * Cheapest possible check that this tenant's flattened table HAS a `due_at`
+ * column. DataCore's per-tenant table is the union of the fields that tenant's
+ * rows actually carry, so `due_at` is absent entirely until some workflow item
+ * gets a due date — and referencing an absent column is a Binder Error, not a
+ * null result. Used to tell "this tenant has no due dates" (an empty overdue
+ * bucket) apart from "the query failed" (a card that must report itself).
+ */
+export function dueAtProbeSql(): string {
+  return (
+    `SELECT i.due_at FROM data i WHERE i.entity_type = 'workflow_item' ` +
+    `AND i._status = 'active' LIMIT 1`
   );
 }
 

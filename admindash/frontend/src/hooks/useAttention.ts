@@ -6,6 +6,7 @@ import {
   submittedItemsSql,
   overdueItemsSql,
   instanceSilenceSql,
+  dueAtProbeSql,
   buildAttention,
   STALLED_DAYS,
   type AttentionResult,
@@ -68,8 +69,31 @@ export function useAttention(tenant: string): AttentionState {
 
       const d = settledSection(defs, { data: [], total: 0 });
       const s = settledSection(submitted, { data: [], total: 0 });
-      const o = settledSection(overdue, { data: [], total: 0 });
+      let o = settledSection(overdue, { data: [], total: 0 });
       const q = settledSection(silence, { data: [], total: 0 });
+
+      // A rejected overdue query has two possible causes that must not be
+      // reported the same way. DataCore's per-tenant table only carries the
+      // columns that tenant's rows actually have, so a tenant where no item
+      // has ever gotten a due date has no `due_at` column at all — referencing
+      // it is a Binder Error, not a null result. That case means "nothing is
+      // overdue" (an empty, non-failed bucket), not "the query failed" (a card
+      // that must report itself). The cheap probe disambiguates: if it ALSO
+      // rejects, `due_at` is genuinely absent and the overdue rejection was
+      // that expected case; if the probe resolves, `due_at` exists and the
+      // overdue rejection was a real failure. Do not simplify this back into
+      // a plain failure flag — that is exactly the bug this exists to avoid.
+      if (o.failed) {
+        try {
+          await postQuery(tenant, 'entities', dueAtProbeSql());
+          // Probe resolved: due_at exists on this tenant, so the overdue
+          // rejection above was a genuine failure. Leave `o` as-is.
+        } catch {
+          o = { data: { data: [], total: 0 }, failed: false };
+        }
+      }
+
+      if (cancelled) return;
 
       setFailed({
         definitions: d.failed, submitted: s.failed,
