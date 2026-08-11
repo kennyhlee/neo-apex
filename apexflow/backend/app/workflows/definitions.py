@@ -50,6 +50,23 @@ def parse_machine_steps(row: dict) -> tuple[MachineDef, list[StepDef]]:
     return machine, steps
 
 
+# `retired` was this value's name before archive/unarchive made the state
+# reversible (spec D1). Rows written under the old name are still valid and
+# are NOT migrated — every read goes through `is_archived`, so the alias has
+# exactly one definition. Never string-compare either value at a call site.
+ARCHIVED_STATUSES: frozenset[str] = frozenset({"archived", "retired"})
+
+
+def is_archived(row: dict) -> bool:
+    """True when this definition row's lineage is out of circulation.
+
+    Tolerates a row with no `lineage_status` key at all — a tenant whose
+    table predates the column reads back sparse, and `.get` returning None
+    must be False rather than a KeyError (same tolerance the recent
+    `due_at` fix established for flattened rows generally)."""
+    return row.get("lineage_status") in ARCHIVED_STATUSES
+
+
 def referenced_entity_models(steps: list[StepDef]) -> set[str]:
     """Every `entity_model` named by a declared section across `form`
     steps — the set of models publish must fetch to build validate_definition's
