@@ -210,7 +210,7 @@ export default function DefinitionsPage() {
   }
 
   /**
-   * Task review fix (Task 10, important): `retire_definition`'s
+   * Task review fix (Task 10, important): `archive_definition`'s
    * `HTTPException(409, {"open_instances": N})` — like every non-string
    * `HTTPException` detail in this backend — comes back on the wire as
    * `{"detail": {"open_instances": N}}` (FastAPI wraps it), NOT

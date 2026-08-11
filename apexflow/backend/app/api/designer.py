@@ -20,7 +20,7 @@ which were made module-public (dropped their leading underscore) by this
 task specifically so this module could reuse them instead of re-implementing
 the same walk (`app.workflows.definitions`'s own `publish_definition` is the
 other caller of the parse/fetch/referenced trio; `count_open_instances` is
-shared with `retire_definition`'s gate, via this same module's own function
+shared with `archive_definition`'s gate, via this same module's own function
 of that name).
 
 `GET .../validate` (POST, actually — see below) reuses this EXACT recipe —

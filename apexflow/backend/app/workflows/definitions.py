@@ -194,9 +194,9 @@ def reactivate_definition(tenant_id: str, entity_id: str, token: str | None = No
 def list_open_instances(tenant_id: str, lineage_definition_id: str,
                         token: str | None = None) -> list[dict]:
     """Open (`closed_at` empty/absent) `workflow_instance` rows of one
-    lineage — the same query `count_open_instances` and `retire_definition`
-    gate on, exposed as rows (not just a count) so `retire_definition` can
-    bulk-cancel each one by name (Task 8)."""
+    lineage — the same query `count_open_instances` and `archive_definition`
+    gate on, exposed as rows (not just a count) so `archive_definition`'s
+    force path can abandon each one by name."""
     rows = dc.list_entities(tenant_id, "workflow_instance", "", token)
     rows = [r for r in rows if str(r.get("definition_id", "")) == str(lineage_definition_id)]
     return [r for r in rows if not r.get("closed_at")]

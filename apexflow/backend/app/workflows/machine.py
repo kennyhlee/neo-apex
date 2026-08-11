@@ -81,13 +81,13 @@ DECISIONS this task makes (surfaced in task-8-report.md for Task 9/10):
    object to build the `{"item": ...}` response key when an item built-in
    (other than `save_draft`) ran. `None` for every non-item-mutating action.
 
-7. **`retire_definition`'s bulk-cancel is wired via a caller-supplied
-   `cancel_instance_fn` callback**, not a direct import of this module into
+7. **`archive_definition`'s bulk-abandon is wired via a caller-supplied
+   `abandon_instance_fn` callback**, not a direct import of this module into
    `definitions.py`. `machine.py` imports `definitions.py` (for
    `parse_machine_steps`/`fetch_models`/`referenced_entity_models`/
    `_as_int`) — a `definitions.py -> machine.py` import back would close a
    cycle. `app/api/definitions.py` (which already imports both) supplies
-   the callback (`build_eval_context` + `cancel_instance`), keeping
+   the callback (`build_eval_context` + `abandon_instance`), keeping
    `definitions.py` itself free of any machine-execution import.
 
 8. **The "capacity_available negated" mechanism the enrollment template
