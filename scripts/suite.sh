@@ -19,7 +19,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFEST="$REPO_ROOT/deploy/suite-manifest.json"
 MARKER_TAG="deployable"
-MODULES=(datacore launchpad papermite admindash)
+MODULES=(datacore launchpad papermite admindash apexflow familyhub)
 
 # datacore is the only module whose Fly app is not "<module>-api".
 fly_app_for() { [ "$1" = "datacore" ] && echo "datacore" || echo "$1-api"; }

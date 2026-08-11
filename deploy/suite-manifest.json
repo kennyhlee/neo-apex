@@ -10,14 +10,14 @@
     "actually running on Fly, so it records reality rather than intention.",
     "The `deployable` git tag points at the commit where it was last promoted."
   ],
-  "promoted_at": "2026-08-03T08:00:20Z",
-  "promoted_from": "a935752",
+  "promoted_at": "2026-08-11T18:00:14Z",
+  "promoted_from": "056ac84",
   "modules": {
-    "datacore": "datacore-v0.5.0",
-    "launchpad": "launchpad-v0.3.1",
-    "papermite": "papermite-v0.8.2",
-    "admindash": "admindash-v0.10.4",
-    "apexflow": null,
-    "familyhub": null
+    "datacore": "datacore-v0.6.0",
+    "launchpad": "launchpad-v0.4.0",
+    "papermite": "papermite-v0.9.0",
+    "admindash": "admindash-v0.11.0",
+    "apexflow": "apexflow-v0.2.0",
+    "familyhub": "familyhub-v0.1.1"
   }
 }
