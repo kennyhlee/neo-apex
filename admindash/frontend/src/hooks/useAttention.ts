@@ -45,7 +45,7 @@ export interface AttentionState {
  * the same failure hides one card and leaves the rest correct.
  */
 export function useAttention(tenant: string): AttentionState {
-  const { getModel, getCachedModel } = useModel();
+  const { getModel } = useModel();
   const [result, setResult] = useState<AttentionResult | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState<AttentionFailures>(NO_FAILURES);
@@ -59,9 +59,18 @@ export function useAttention(tenant: string): AttentionState {
 
     async function load() {
       setLoaded(false);
-      // The lead model supplies the stage vocabulary; a failure degrades the
-      // lead bucket to "no stages", not the whole page.
-      await getModel(tenant, 'lead').catch(() => undefined);
+      // The lead model supplies the stage vocabulary. A failure here does NOT
+      // degrade to "no stages" — leadStages(undefined) falls back to
+      // DEFAULT_LEAD_STAGES, a real (if generic) vocabulary — so a swallowed
+      // failure would silently substitute the default stages for whatever
+      // this tenant actually configured, undercounting a renamed bucket like
+      // "Inquiry" with no visible sign anything went wrong. So the failure is
+      // captured and folded into `failed.leads` below, not swallowed.
+      let leadModelFailed = false;
+      const leadModel = await getModel(tenant, 'lead').catch(() => {
+        leadModelFailed = true;
+        return undefined;
+      });
       const nowMs = Date.now();
       const nowIso = new Date(nowMs).toISOString();
 
@@ -83,7 +92,7 @@ export function useAttention(tenant: string): AttentionState {
 
       setFailed({
         definitions: d.failed, submitted: s.failed,
-        overdue: o.failed, silence: q.failed, leads: l.failed,
+        overdue: o.failed, silence: q.failed, leads: l.failed || leadModelFailed,
       });
 
       setResult(buildAttention({
@@ -92,7 +101,7 @@ export function useAttention(tenant: string): AttentionState {
         overdue: o.data.data as unknown as ItemAttentionRow[],
         silence: q.data.data as unknown as InstanceSilenceRow[],
         leads: l.data,
-        leadStages: leadStages(getCachedModel('lead')),
+        leadStages: leadStages(leadModel),
         nowMs,
         stalledDays: STALLED_DAYS,
       }));
@@ -101,7 +110,7 @@ export function useAttention(tenant: string): AttentionState {
 
     void load();
     return () => { cancelled = true; };
-  }, [tenant, nonce, getModel, getCachedModel]);
+  }, [tenant, nonce, getModel]);
 
   return { result, loaded, failed, reload };
 }
