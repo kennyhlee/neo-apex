@@ -403,3 +403,53 @@ def test_create_instance_response_items_carry_only_contract_fields(client, fake_
             "status", "blocking", "payload_ref", "due_at", "completed_by",
             "_version",
         }
+
+
+# --- lineage work-item list ------------------------------------------------
+
+
+def _seed_raw_instance(fake_dc, *, definition_id, state="draft", closed_at="",
+                       archived_from_state=None):
+    base = {
+        "instance_id": fake_dc.next_id(TENANT, "workflow_instance"),
+        "definition_id": definition_id,
+        "definition_version": 1,
+        "state": state,
+        "channel_started": "staff",
+        "opened_at": "2026-08-01T00:00:00+00:00",
+        "closed_at": closed_at,
+    }
+    if archived_from_state is not None:
+        base["archived_from_state"] = archived_from_state
+    return fake_dc.dc_create(TENANT, "workflow_instance", base)["entity_id"]
+
+
+def test_lineage_instance_list_returns_open_and_closed_work_items(client, fake_dc):
+    """The management surface needs the WHOLE set — the pipeline board already
+    covers open-only, so a list that hid closed/abandoned items would leave the
+    administrator no way to reach them (spec R6)."""
+    _seed_published(fake_dc, definition_id="wd-list")
+    _seed_raw_instance(fake_dc, definition_id="wd-list", closed_at="")
+    _seed_raw_instance(fake_dc, definition_id="wd-list",
+                       closed_at="2026-08-02T00:00:00+00:00")
+    _seed_raw_instance(fake_dc, definition_id="wd-other-lineage", closed_at="")
+
+    resp = client.get(f"/api/workflows/{TENANT}/definitions/wd-list/instances")
+    assert resp.status_code == 200
+    instances = resp.json()["instances"]
+    assert len(instances) == 2
+    assert {i["closed_at"] for i in instances} == {"", "2026-08-02T00:00:00+00:00"}
+    assert all("archived_from_state" in i for i in instances)
+
+
+def test_lineage_instance_list_tolerates_a_tenant_without_the_archive_columns(client, fake_dc):
+    """A tenant whose table predates `archived_from_state` reads back rows with
+    the key absent. The route must default it, never KeyError, and must never
+    put it in a SQL where-clause (that would be a binder error, not an empty
+    result)."""
+    _seed_published(fake_dc, definition_id="wd-legacy-cols")
+    _seed_raw_instance(fake_dc, definition_id="wd-legacy-cols", closed_at="")
+
+    resp = client.get(f"/api/workflows/{TENANT}/definitions/wd-legacy-cols/instances")
+    assert resp.status_code == 200
+    assert resp.json()["instances"][0]["archived_from_state"] == ""
