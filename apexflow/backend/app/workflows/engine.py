@@ -117,12 +117,20 @@ def _item_base_data(item_row: dict) -> dict:
 
 
 def _log_activity(tenant_id: str, instance_entity_id: str, type_: str, from_value: str,
-                   to_value: str, actor: str, token: str | None, now: datetime) -> dict:
+                   to_value: str, actor: str, token: str | None, now: datetime,
+                   item_entity_id: str = "") -> dict:
+    """`item_entity_id` is set only for `item_change` — it carries the
+    `workflow_item`'s DataCore entity_id, symmetric with `instance_id` above,
+    which likewise holds an entity_id rather than a business id (convention
+    documented at admindash `utils/workflowData.ts:148`). Without it, two
+    items changing on one instance are indistinguishable in the log, so no
+    consumer can say how long a specific item has been waiting."""
     activity_id = dc.next_id(tenant_id, "workflow_activity", token)
     return dc.dc_create(tenant_id, "workflow_activity", {
         "activity_id": activity_id,
         "workflow_activity_id": activity_id,
         "instance_id": instance_entity_id,
+        "item_id": item_entity_id,
         "type": type_,
         "from_value": from_value or "",
         "to_value": to_value or "",
@@ -407,7 +415,8 @@ def _update_item(tenant_id: str, instance_row: dict, item_row: dict, changes: di
     updated = dc.dc_update(tenant_id, "workflow_item", item_row["entity_id"], base, token,
                            expected_version=row_version(item_row))
     _log_activity(tenant_id, instance_row.get("entity_id"), "item_change",
-                 old_status, changes.get("status", old_status), actor, token, now)
+                 old_status, changes.get("status", old_status), actor, token, now,
+                 item_entity_id=item_row["entity_id"])
     return updated
 
 

@@ -879,3 +879,31 @@ def test_applicable_items_ignores_repeat_section_list_answers():
     draft_data = {"contacts_section": [{"name": "Bob"}]}  # list-shaped
 
     assert engine.applicable_items(steps, items, draft_data, {}) == []
+
+
+# --- item_change activity attribution (Task 1: admindash home attention) ---
+
+
+def test_item_change_activity_records_which_item_changed(fake_dc):
+    """Two items on one instance must be distinguishable in the activity log —
+    the AdminDash attention queue derives per-item waiting time from this."""
+    instance_row, items = _setup(fake_dc)
+    item_eid = items["form_staff"]["entity_id"]
+
+    engine.complete_item(TENANT, instance_row, item_eid, "family:tok1")
+
+    activities = fake_dc.find("workflow_activity", instance_id=instance_row["entity_id"],
+                              type="item_change")
+    assert len(activities) == 1
+    assert activities[0]["item_id"] == item_eid
+
+
+def test_state_change_activity_carries_no_item_id(fake_dc):
+    """Only item_change is item-scoped. A state_change belongs to the
+    instance, and must not claim an item."""
+    instance_row, _items = _setup(fake_dc)
+
+    activities = fake_dc.find("workflow_activity", instance_id=instance_row["entity_id"],
+                              type="state_change")
+    assert activities
+    assert all(not a.get("item_id") for a in activities)
