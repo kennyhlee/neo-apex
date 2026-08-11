@@ -535,3 +535,25 @@ mechanism Plan 5 introduced. No new plan-defect class emerged this time.
     card removed that hook's only use of `ModelContext`. The live instances are
     `HomePage.tsx`'s own `lead` and `program` effects, which have the same
     shape.
+
+33. **The `due_at` probe can only ask "did a second query also fail?"**
+    `useAttention` disambiguates an overdue-query rejection by running
+    `dueAtProbeSql`: if the probe also rejects, the tenant has no `due_at`
+    column and the overdue bucket is legitimately empty rather than failed
+    (`admindash/frontend/src/hooks/useAttention.ts`). It cannot inspect the
+    actual error, because `postQuery` (`api/client.ts`) throws a bare
+    `Error("HTTP 400")` that preserves neither status nor body. A failure
+    confined specifically to the two `due_at`-referencing queries — not caused
+    by a missing column — would therefore be misreported as an empty bucket
+    with no banner. A total outage is unaffected: the other three queries still
+    set their own flags and the retry banner fires. Fix by giving `postQuery`
+    an error type that carries status and body, the way `api/workflows.ts`'s
+    `WorkflowApiError` already does, so the probe can match the Binder Error
+    specifically.
+
+34. **`/attention` renders nothing for an unrecognised `?bucket=` value.**
+    A URL like `/attention?bucket=foo` selects no group and highlights no chip,
+    so the page is blank without explanation
+    (`admindash/frontend/src/pages/AttentionPage.tsx`). Should fall back to the
+    all-buckets view. Same file: clicking a row whose instance fetch finds no
+    match returns silently, giving no feedback that the click did nothing.
