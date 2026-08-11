@@ -151,8 +151,12 @@ set**, never in SQL. This matches the existing `rows_matching` pattern in
   Logs a `state_change` activity. Two further 409s:
   - the lineage is still archived — you cannot restore work into a workflow
     that is out of circulation;
-  - the pinned definition version no longer resolves as published/superseded,
-    so there is no machine to restore *into*.
+  - `archived_from_state` is not a declared state in the pinned machine, so
+    there is nothing coherent to restore *into*.
+
+  A pinned definition version that no longer resolves as published/superseded
+  never reaches this function: `build_eval_context` raises 404 first. That is
+  existing behaviour and is left alone rather than duplicated here.
 
 Because `_is_terminal_state` returns true for `abandoned`, every existing
 progress path — item built-ins, explicit transitions, system auto-advance —
@@ -256,7 +260,8 @@ Every failure is a 409 with a machine-readable body, matching the existing
 | any action on an abandoned instance | 409 — `_is_terminal_state` |
 | restore a `cancelled` or naturally-terminal instance | 409 `{"reason": "not_abandoned", "state": ...}` |
 | restore into a still-archived lineage | 409 `{"reason": "lineage_archived"}` |
-| restore where the pinned version no longer resolves | 409 `{"reason": "definition_unavailable"}` |
+| restore where the prior state is no longer declared in the pinned machine | 409 `{"reason": "state_unavailable"}` |
+| restore where the pinned version no longer resolves | 404 — existing `build_eval_context` behaviour, not re-implemented |
 | start a work item on an archived workflow | 409 `{"reason": "lineage_not_active"}` — already implemented |
 
 ## Testing
