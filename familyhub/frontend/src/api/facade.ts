@@ -10,9 +10,9 @@ import {
 
 // Re-exported, not reimplemented -- both channels need the identical
 // WorkflowDraft <-> section_answers mapping (Plan 3 Task 12 hoisted this
-// out of this file, where Task 7 first built it, into flow-runtime so
+// out of this file, where Task 7 first built it, into workflow-forms so
 // admindash's staff-assisted entry page can share it byte-for-byte).
-export { draftToSectionAnswers, sectionAnswersToDraft } from '@neoapex/flow-runtime';
+export { draftToSectionAnswers, sectionAnswersToDraft } from '@neoapex/workflow-forms';
 
 /**
  * Native fetch only -- familyhub-frontend holds NO credential of its own.
@@ -213,7 +213,7 @@ export async function createDocumentSlot(
  * against the same item.
  *
  * @param itemId MUST be the document item's `entity_id` -- this is exactly
- * the value `flow-runtime`'s `StepRenderer` `onUploadDocument(itemEntityId, file)`
+ * the value `workflow-forms`'s `StepRenderer` `onUploadDocument(itemEntityId, file)`
  * carries through, so pass it straight through. The Content-Type sent in
  * the PUT must match the one declared when presigning -- R2's signature
  * binds it.

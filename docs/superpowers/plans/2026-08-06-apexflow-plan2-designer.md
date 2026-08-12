@@ -4,7 +4,7 @@
 
 **Goal:** Build apexflow-frontend — the workflow designer (definitions list, template gallery, step editor with live model-driven field pickers, machine editor over the primitive library, live preview, publish flow) — plus the backend read/validate surface it needs.
 
-**Architecture:** React 19 + TS + Vite app on port 5900, patterned on admindash-frontend (auth, i18n, theme, components ported, not reinvented). apexflow-backend gains generic entity/query proxies (drafting surface), a designer read API with computed definition health, and a dry-run validate endpoint. flow-runtime gains a generalized step/section preview renderer alongside its registration-era exports (familyhub untouched until Phase 3). Spec: `docs/superpowers/specs/2026-08-05-apexflow-workflow-platform-design.md` §3 §5 — **spec wins over this plan on any conflict.**
+**Architecture:** React 19 + TS + Vite app on port 5900, patterned on admindash-frontend (auth, i18n, theme, components ported, not reinvented). apexflow-backend gains generic entity/query proxies (drafting surface), a designer read API with computed definition health, and a dry-run validate endpoint. workflow-forms gains a generalized step/section preview renderer alongside its registration-era exports (familyhub untouched until Phase 3). Spec: `docs/superpowers/specs/2026-08-05-apexflow-workflow-platform-design.md` §3 §5 — **spec wins over this plan on any conflict.**
 
 **Tech Stack:** React 19 + TypeScript + Vite, native fetch, CSS variables + `@neoapex/ui-tokens`, FastAPI backend additions, pytest.
 
@@ -33,7 +33,7 @@
   1. admindash-frontend reusable patterns: `AuthContext` + login page + exchange-code flow, `config.ts` services.json import pattern, api client fetch wrapper + error shape, `useTranslation`/i18n file layout, `DataTable`, `Toast`/`useToast`, `Modal`, `Button`, `StatusBadge`, theme.css structure, eslint config.
   2. apexflow-backend current surface: every route in `api/*.py` with exact request/response shapes (definitions actions, model-impact, instances, actions, internal, documents); `Settings` fields; `workflows/validate.py` param-validator table (primitive → required/optional params — copy the table verbatim, the frontend catalog binds to it); `workflows/schema.py` TS-relevant shapes (MachineDef/StateDef/TransitionDef/StepDef/SectionDef/Condition/ConditionGroup, alias spellings, ENGINE_OWNED_FIELDS).
   3. `templates/enrollment.py`: the template's definition dict shape + `seed_enrollment_template` signature (the gallery instantiates from this).
-  4. flow-runtime: current package exports, build/consumption mechanism (file: dep? workspace?), what familyhub imports (must not break).
+  4. workflow-forms: current package exports, build/consumption mechanism (file: dep? workspace?), what familyhub imports (must not break).
   5. DataCore generic routes apexflow will proxy (`POST /api/entities/...`, `PUT`, `/api/query` readonly) + the SQL-guard block source (`datacore/src/datacore/api/readonly_query.py` guard functions + the two drift-test `_GUARD_FILES` lists) + models read route.
   6. admindash-backend's generic proxy routes (`entities.py`, `query.py`) as the porting source for Task 1.
   7. **Configuration-facts table**: every port, URL, env var, localStorage key, and services.json entry the designer touches, each with its source file:line.
@@ -74,17 +74,17 @@
 - [ ] **Step 1:** Failing tests per endpoint incl.: health computed (stale fixture), family_url only for family+published, validate returns the same errors publish would 409 with (assert equality on a broken fixture), primitives catalog matches the validator table (introspection test: every primitive in GUARDS/EFFECTS appears; params match).
 - [ ] **Step 2:** Implement; suites green. Commit: `feat(apexflow): designer read API, dry-run validate, primitives catalog`
 
-### Task 3: flow-runtime — generalized step/section preview renderer
+### Task 3: workflow-forms — generalized step/section preview renderer
 
 **Files:**
-- Modify: `flow-runtime/src/types.ts` (add apexflow types: `WorkflowStepDef`, `WorkflowSectionDef`, `ConditionGroupDef`, matching schema.py aliases exactly), `flow-runtime/src/` (new `StepRenderer.tsx` + `sectionFields.ts`)
+- Modify: `workflow-forms/src/types.ts` (add apexflow types: `WorkflowStepDef`, `WorkflowSectionDef`, `ConditionGroupDef`, matching schema.py aliases exactly), `workflow-forms/src/` (new `StepRenderer.tsx` + `sectionFields.ts`)
 - Keep: every existing export unchanged (familyhub compiles untouched — verify)
 
 **Interfaces:**
 - Consumes: map §4 (package build story), Task 2's bundle shape.
 - Produces: `<StepRenderer steps={...} models={...} mode="preview" draft={...} onDraftChange={...} />` — renders form sections (fields from the model definition, required markers, repeat add-another UI), documents steps (doc list w/ sensitive badge), message steps (body + ack checkbox); `show_if` evaluated client-side (a TS port of the condition evaluator — cite conditions.py semantics incl. missing-source rules and the in-op list guard; unit-testable? no framework — keep the evaluator a pure function so Plan 3 can test it server-parity).
 - [ ] **Step 1:** Implement types + renderer; `cd familyhub/frontend && npm run build` must stay green (proves no export broke).
-- [ ] **Step 2:** Commit: `feat(flow-runtime): generalized step/section preview renderer`
+- [ ] **Step 2:** Commit: `feat(workflow-forms): generalized step/section preview renderer`
 
 ### Task 4: apexflow-frontend scaffold
 
@@ -145,7 +145,7 @@
 **Interfaces:**
 - Consumes: Task 3 `StepRenderer`, draftStore. Produces: side-by-side preview mounting the real renderer in `preview` mode against the current draft + bundle models, with an in-memory draft-answers state so `show_if` reveals work live; a state selector to preview `available_in` filtering per machine state.
 - [ ] **Step 1:** Implement; build/lint clean.
-- [ ] **Step 2:** Commit: `feat(apexflow): live preview via flow-runtime`
+- [ ] **Step 2:** Commit: `feat(apexflow): live preview via workflow-forms`
 
 ### Task 10: Publish flow
 

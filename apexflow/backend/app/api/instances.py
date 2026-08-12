@@ -63,7 +63,7 @@ def create_instance_route(tenant_id: str, definition_id: str, body: CreateInstan
 
     Staff-authenticated (`require_staff_tenant`) even for `channel: "family"`
     — this is the staff-assisted entry path (spec §6 "AdminDash tracking":
-    "staff-assisted entry mounts flow-runtime in staff mode"). The
+    "staff-assisted entry mounts workflow-forms in staff mode"). The
     unauthenticated family self-serve path is Task 10's internal/token-scoped
     `/internal/workflows/{tenant_id}/{definition_id}/start` route.
 

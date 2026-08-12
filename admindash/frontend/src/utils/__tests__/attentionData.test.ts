@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ITEM_DONE_STATUSES } from '@neoapex/flow-runtime';
+import { ITEM_DONE_STATUSES } from '@neoapex/workflow-forms';
 import {
   publishedDefinitionsSql,
   publishedMachineSql,
@@ -141,8 +141,8 @@ describe('SQL builders with mocked vocabulary', () => {
   //
   // This lives in its own describe block so the mock does not leak into other tests.
   it('overdueItemsSql derives ITEM_DONE_STATUSES, not hardcoded literals', async () => {
-    // Mock @neoapex/flow-runtime before any module loads it
-    vi.doMock('@neoapex/flow-runtime', () => ({
+    // Mock @neoapex/workflow-forms before any module loads it
+    vi.doMock('@neoapex/workflow-forms', () => ({
       ITEM_DONE_STATUSES: ['alpha', 'beta'],
     }));
 

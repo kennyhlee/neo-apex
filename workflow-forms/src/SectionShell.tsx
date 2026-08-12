@@ -1,4 +1,4 @@
-// flow-runtime/src/SectionShell.tsx
+// workflow-forms/src/SectionShell.tsx
 import type { ReactNode } from 'react';
 import { SectionDescription } from './SectionDescription';
 import { displayTitle } from './sectionTitle';

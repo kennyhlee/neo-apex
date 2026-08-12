@@ -470,10 +470,10 @@ def test_engine_owned_fields_is_frozenset():
 # schema.py's ENGINE_OWNED_FIELDS, with a failure message naming exactly
 # which file drifted rather than a bare set-inequality assertion.
 #
-# Deliberately EXCLUDES `@neoapex/flow-runtime`'s
-# `ENGINE_OWNED_APPLICATION_FIELDS` (`flow-runtime/src/types.ts`) —
+# Deliberately EXCLUDES `@neoapex/workflow-forms`'s
+# `ENGINE_OWNED_APPLICATION_FIELDS` (`workflow-forms/src/types.ts`) —
 # `designer.ts`'s own doc comment: "Deliberately NOT
-# `@neoapex/flow-runtime`'s `ENGINE_OWNED_APPLICATION_FIELDS`... that
+# `@neoapex/workflow-forms`'s `ENGINE_OWNED_APPLICATION_FIELDS`... that
 # constant is the registration-era `registration_application`-scoped field
 # set (a completely different entity)". Folding it into this equality check
 # would be a permanent false positive, not real drift coverage.

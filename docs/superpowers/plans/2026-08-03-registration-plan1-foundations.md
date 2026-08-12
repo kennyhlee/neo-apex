@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Harden tenant isolation in AdminDash, scaffold the enrollx and familyhub modules plus the shared `flow-runtime` package, seed the new registration entity definitions and ID abbreviations, and add an R2-backed document blob API to DataCore.
+**Goal:** Harden tenant isolation in AdminDash, scaffold the enrollx and familyhub modules plus the shared `workflow-forms` package, seed the new registration entity definitions and ID abbreviations, and add an R2-backed document blob API to DataCore.
 
-**Architecture:** enrollx and familyhub are new NeoApex modules following the admindash shape exactly (React 19 + Vite frontend, FastAPI backend that persists nothing and proxies to DataCore). DataCore remains the only persistence layer and gains a small blob API with R2 behind it. `flow-runtime` is a shared frontend package (sibling of `ui-tokens`) holding the flow types now and the FlowRenderer later.
+**Architecture:** enrollx and familyhub are new NeoApex modules following the admindash shape exactly (React 19 + Vite frontend, FastAPI backend that persists nothing and proxies to DataCore). DataCore remains the only persistence layer and gains a small blob API with R2 behind it. `workflow-forms` is a shared frontend package (sibling of `ui-tokens`) holding the flow types now and the FlowRenderer later.
 
 **Tech Stack:** Python 3.12 + FastAPI + pydantic_settings + httpx + pytest (backends); React 19 + TypeScript + Vite (frontends); boto3 for R2 presigning (DataCore); uv for Python deps.
 
@@ -466,22 +466,22 @@ git commit -m "feat(familyhub): scaffold backend shell (health only, no staff su
 
 ---
 
-### Task 5: flow-runtime shared package
+### Task 5: workflow-forms shared package
 
 **Files:**
-- Create: `flow-runtime/package.json`, `flow-runtime/tsconfig.json`, `flow-runtime/src/index.ts`, `flow-runtime/src/types.ts`, `flow-runtime/src/FlowRenderer.tsx`
+- Create: `workflow-forms/package.json`, `workflow-forms/tsconfig.json`, `workflow-forms/src/index.ts`, `workflow-forms/src/types.ts`, `workflow-forms/src/FlowRenderer.tsx`
 
 **Interfaces:**
-- Produces: npm package `@neoapex/flow-runtime` exporting `FlowRenderer` (placeholder), and the types `BlockType`, `FlowBlock`, `RegistrationConfigDef`, `FlowMode` exactly as in the roadmap's interface contracts. Plans 4–5 replace the placeholder body but MUST keep these exports.
+- Produces: npm package `@neoapex/workflow-forms` exporting `FlowRenderer` (placeholder), and the types `BlockType`, `FlowBlock`, `RegistrationConfigDef`, `FlowMode` exactly as in the roadmap's interface contracts. Plans 4–5 replace the placeholder body but MUST keep these exports.
 
 - [ ] **Step 1:** Look at how `ui-tokens/package.json` is set up and how `admindash/frontend/package.json` consumes it (`@neoapex/ui-tokens` — note whether it's a `file:` dependency). Mirror that consumption mechanism.
 
 - [ ] **Step 2:** Package files:
 
 ```json
-// flow-runtime/package.json
+// workflow-forms/package.json
 {
-  "name": "@neoapex/flow-runtime",
+  "name": "@neoapex/workflow-forms",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -501,7 +501,7 @@ git commit -m "feat(familyhub): scaffold backend shell (health only, no staff su
 ```
 
 ```json
-// flow-runtime/tsconfig.json
+// workflow-forms/tsconfig.json
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -517,7 +517,7 @@ git commit -m "feat(familyhub): scaffold backend shell (health only, no staff su
 ```
 
 ```ts
-// flow-runtime/src/types.ts
+// workflow-forms/src/types.ts
 export type BlockType = 'form' | 'documents' | 'payment_plan' | 'payment' | 'message' | 'review';
 
 export interface FlowBlock {
@@ -542,7 +542,7 @@ export type FlowMode = 'parent' | 'staff' | 'preview';
 ```
 
 ```tsx
-// flow-runtime/src/FlowRenderer.tsx
+// workflow-forms/src/FlowRenderer.tsx
 import type { FlowMode, RegistrationConfigDef } from './types';
 
 export interface FlowRendererProps {
@@ -565,18 +565,18 @@ export function FlowRenderer({ config, mode }: FlowRendererProps) {
 ```
 
 ```ts
-// flow-runtime/src/index.ts
+// workflow-forms/src/index.ts
 export * from './types';
 export { FlowRenderer, type FlowRendererProps } from './FlowRenderer';
 ```
 
-- [ ] **Step 3:** Run: `cd /Users/kennylee/Development/NeoApex/flow-runtime && npm install && npm run typecheck` — expect clean exit.
+- [ ] **Step 3:** Run: `cd /Users/kennylee/Development/NeoApex/workflow-forms && npm install && npm run typecheck` — expect clean exit.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add flow-runtime
-git commit -m "feat(flow-runtime): shared package with flow types and placeholder renderer"
+git add workflow-forms
+git commit -m "feat(workflow-forms): shared package with flow types and placeholder renderer"
 ```
 
 ---
@@ -587,17 +587,17 @@ git commit -m "feat(flow-runtime): shared package with flow types and placeholde
 - Create: `enrollx/frontend/` — Vite React TS app (structure mirrors `admindash/frontend/`)
 
 **Interfaces:**
-- Consumes: `@neoapex/ui-tokens`, `@neoapex/flow-runtime` (Task 5), enrollx-backend `/auth/login` (Task 3).
+- Consumes: `@neoapex/ui-tokens`, `@neoapex/workflow-forms` (Task 5), enrollx-backend `/auth/login` (Task 3).
 - Produces: authenticated shell at localhost:5900 — login page, AuthContext, an empty `HomePage` ("EnrollX") — the mount point for Plan 4's builder/tracking pages.
 
-- [ ] **Step 1:** Copy these files/directories from `admindash/frontend/` into `enrollx/frontend/`, unchanged unless noted: `package.json` (rename to `enrollx-frontend`; add `"@neoapex/flow-runtime"` dependency using the same mechanism as `@neoapex/ui-tokens`; remove admindash-only deps if any beyond react/react-dom/react-router-dom/typescript/vite tooling), `vite.config.ts` (change dev server port to **5900**), `tsconfig*.json`, `index.html` (title "EnrollX"), `src/main.tsx`, `src/index.css`, `src/styles/` (keep theme.css as-is for now), `src/config.ts` (change service lookups from `admindash-*` keys to `enrollx-frontend` / `enrollx-backend`), `src/contexts/AuthContext.tsx`, `src/pages/LoginPage.tsx`, `src/api/auth.ts` (or wherever login fetch lives — follow imports from LoginPage), `src/hooks/useTranslation` + `src/i18n/` (trim `translations` to only keys the copied pages use; keep both locales), `src/components/ui/Button.tsx` and `Modal.tsx` plus any CSS they import.
+- [ ] **Step 1:** Copy these files/directories from `admindash/frontend/` into `enrollx/frontend/`, unchanged unless noted: `package.json` (rename to `enrollx-frontend`; add `"@neoapex/workflow-forms"` dependency using the same mechanism as `@neoapex/ui-tokens`; remove admindash-only deps if any beyond react/react-dom/react-router-dom/typescript/vite tooling), `vite.config.ts` (change dev server port to **5900**), `tsconfig*.json`, `index.html` (title "EnrollX"), `src/main.tsx`, `src/index.css`, `src/styles/` (keep theme.css as-is for now), `src/config.ts` (change service lookups from `admindash-*` keys to `enrollx-frontend` / `enrollx-backend`), `src/contexts/AuthContext.tsx`, `src/pages/LoginPage.tsx`, `src/api/auth.ts` (or wherever login fetch lives — follow imports from LoginPage), `src/hooks/useTranslation` + `src/i18n/` (trim `translations` to only keys the copied pages use; keep both locales), `src/components/ui/Button.tsx` and `Modal.tsx` plus any CSS they import.
 
 - [ ] **Step 2:** Create `src/App.tsx` with a minimal router: unauthenticated → LoginPage; authenticated → `src/pages/HomePage.tsx` rendering `<h1>EnrollX</h1>` inside the app shell. Follow admindash's `App.tsx` route-guard pattern but with only these two routes.
 
 - [ ] **Step 3:** Smoke-import the shared package in `HomePage.tsx` to lock the dependency in CI:
 
 ```tsx
-import type { RegistrationConfigDef } from '@neoapex/flow-runtime';
+import type { RegistrationConfigDef } from '@neoapex/workflow-forms';
 // (a type-only import is enough; renders nothing yet)
 ```
 
@@ -607,7 +607,7 @@ import type { RegistrationConfigDef } from '@neoapex/flow-runtime';
 
 ```bash
 git add enrollx/frontend
-git commit -m "feat(enrollx): scaffold frontend shell with auth and flow-runtime wiring"
+git commit -m "feat(enrollx): scaffold frontend shell with auth and workflow-forms wiring"
 ```
 
 ---
@@ -618,10 +618,10 @@ git commit -m "feat(enrollx): scaffold frontend shell with auth and flow-runtime
 - Create: `familyhub/frontend/` — Vite React TS app
 
 **Interfaces:**
-- Consumes: `@neoapex/ui-tokens`, `@neoapex/flow-runtime`.
+- Consumes: `@neoapex/ui-tokens`, `@neoapex/workflow-forms`.
 - Produces: public (no-auth) shell at localhost:6000 with a placeholder landing page — Plan 5 adds `/register/:tenantId/:programId` and `/application/:token` routes.
 
-- [ ] **Step 1:** Same copy recipe as Task 6 but: port **6000**, title "FamilyHub", package name `familyhub-frontend`, and **no AuthContext / LoginPage / auth api** — this app never sees staff JWTs. `src/App.tsx` has one route `/` rendering `src/pages/LandingPage.tsx` (`<h1>FamilyHub</h1>` + a paragraph explaining registration links are program-specific). Include the flow-runtime type-only smoke import in LandingPage.
+- [ ] **Step 1:** Same copy recipe as Task 6 but: port **6000**, title "FamilyHub", package name `familyhub-frontend`, and **no AuthContext / LoginPage / auth api** — this app never sees staff JWTs. `src/App.tsx` has one route `/` rendering `src/pages/LandingPage.tsx` (`<h1>FamilyHub</h1>` + a paragraph explaining registration links are program-specific). Include the workflow-forms type-only smoke import in LandingPage.
 
 - [ ] **Step 2:** Run: `cd /Users/kennylee/Development/NeoApex/familyhub/frontend && npm install && npm run build` — expect success.
 
@@ -832,7 +832,7 @@ cd /Users/kennylee/Development/NeoApex/familyhub && uv run pytest backend/tests/
 cd /Users/kennylee/Development/NeoApex/datacore && uv run python -m pytest tests/ -v
 cd /Users/kennylee/Development/NeoApex/enrollx/frontend && npm run build
 cd /Users/kennylee/Development/NeoApex/familyhub/frontend && npm run build
-cd /Users/kennylee/Development/NeoApex/flow-runtime && npm run typecheck
+cd /Users/kennylee/Development/NeoApex/workflow-forms && npm run typecheck
 ```
 
 Expected: everything green. Fix regressions before proceeding; do not skip.

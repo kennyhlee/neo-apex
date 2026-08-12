@@ -736,7 +736,7 @@ def test_instance_items_carry_only_contract_fields(client, fake_dc):
     item = resp.json()["items"][0]
 
     assert set(item) == ITEM_WIRE_FIELDS
-    # the consumer contract specifically (flow-runtime WorkflowItemView,
+    # the consumer contract specifically (workflow-forms WorkflowItemView,
     # admindash toItemView, FamilyHub HubPage)
     for required in ("entity_id", "step_id", "kind", "title", "status",
                      "blocking", "payload_ref"):

@@ -4,9 +4,9 @@
 
 **Goal:** Give workflow form sections a human title and a markdown description, and render them through per-surface layouts — a completion-aware accordion for parents, a section rail for staff — so a 40-field form stops reading as one undifferentiated wall.
 
-**Architecture:** `SectionDef` gains two defaulted string fields, validated at publish time. In `flow-runtime`, a shared `SectionShell` wraps every section in `fieldset`/`legend` (the actual accessibility fix), and two layout components consume it — `AccordionSections` for `family`/`preview`/narrow-`staff`, `RailSections` for wide `staff`. A pure `sectionCompletion` module drives both layouts' progress indicators so they cannot disagree. Descriptions render limited markdown through a single hardened wrapper around `markdown-to-jsx`.
+**Architecture:** `SectionDef` gains two defaulted string fields, validated at publish time. In `workflow-forms`, a shared `SectionShell` wraps every section in `fieldset`/`legend` (the actual accessibility fix), and two layout components consume it — `AccordionSections` for `family`/`preview`/narrow-`staff`, `RailSections` for wide `staff`. A pure `sectionCompletion` module drives both layouts' progress indicators so they cannot disagree. Descriptions render limited markdown through a single hardened wrapper around `markdown-to-jsx`.
 
-**Tech Stack:** Python 3.11+/pydantic v2/FastAPI/pytest; React 19 + TypeScript in `flow-runtime`; `markdown-to-jsx` 9.10; vitest (new to `flow-runtime`, existing in admindash).
+**Tech Stack:** Python 3.11+/pydantic v2/FastAPI/pytest; React 19 + TypeScript in `workflow-forms`; `markdown-to-jsx` 9.10; vitest (new to `workflow-forms`, existing in admindash).
 
 **Spec:** `docs/superpowers/specs/2026-08-09-workflow-form-section-layout-design.md`
 
@@ -15,14 +15,14 @@
 - **Branch:** work on `docs/form-section-layout`, already cut from `feat/item-status-typing`. Do **not** rebase onto `main` — it lacks both the Plan 3 merge and the item-status work whose files this touches.
 - **Both new schema fields default to `""`.** Never make `title` or `description` required. A stored definition without them must keep validating, publishing, and reading healthy.
 - **`fieldset`/`legend` in every layout.** The visual treatment is not the fix; the grouping semantics are. A layout that drops `SectionShell` reintroduces the bug.
-- **`markdown-to-jsx` is imported in exactly ONE file** — `flow-runtime/src/SectionDescription.tsx`. It is unsafe with default options. A second call site is an XSS hole and Task 4 adds a test that fails on one.
-- **`dangerouslySetInnerHTML` must never appear in `flow-runtime/src`.** Pinned by a test.
+- **`markdown-to-jsx` is imported in exactly ONE file** — `workflow-forms/src/SectionDescription.tsx`. It is unsafe with default options. A second call site is an XSS hole and Task 4 adds a test that fails on one.
+- **`dangerouslySetInnerHTML` must never appear in `workflow-forms/src`.** Pinned by a test.
 - **Link scheme allowlist is positive:** `http`, `https`, `mailto`. Not a deny-list. Enforced independently in the validator (publish time) and the renderer (render time).
 - **Completion counts required fields only.** `false` is an answer; `undefined`/`null`/`""`/`[]` are not.
 - **Draft keys are unchanged.** Non-repeat values at `"{section_id}.{field}"`, repeat rows at the bare `section_id` key. Never invent a new key shape — in-flight drafts depend on these.
 - **Test baselines (must not regress):** apexflow **531**, familyhub **89**, admindash **201**, datacore **354**, admindash vitest **94**.
-- Suite commands: `cd apexflow && uv run pytest backend/tests/ -q`; `cd familyhub && uv run pytest backend/tests/ -q`; `cd admindash && uv run pytest backend/tests/ -q`; `cd admindash/frontend && npx vitest run`; `cd flow-runtime && npm test` (exists from Task 3 onward).
-- Frontend builds: `cd <module>/frontend && npm run build && npm run lint` for admindash, apexflow, familyhub. **Run `cd flow-runtime && npm ci` first** — a green local build can otherwise be an artifact of a stray `~/node_modules`.
+- Suite commands: `cd apexflow && uv run pytest backend/tests/ -q`; `cd familyhub && uv run pytest backend/tests/ -q`; `cd admindash && uv run pytest backend/tests/ -q`; `cd admindash/frontend && npx vitest run`; `cd workflow-forms && npm test` (exists from Task 3 onward).
+- Frontend builds: `cd <module>/frontend && npm run build && npm run lint` for admindash, apexflow, familyhub. **Run `cd workflow-forms && npm ci` first** — a green local build can otherwise be an artifact of a stray `~/node_modules`.
 - **admindash `npm run lint` reports 5 pre-existing errors** (`DynamicForm.tsx`, `AuthContext.tsx`, `DashboardContext.tsx`, `ModelContext.tsx`). They are unrelated to this work and present on the base branch. Do not fix them; do not let them mask a *new* 6th error.
 - Conventional commits; one task may make several.
 
@@ -227,14 +227,14 @@ git commit -m "feat(apexflow): section title/description with publish-time caps 
 ### Task 2: TypeScript mirror and title fallback
 
 **Files:**
-- Modify: `flow-runtime/src/types.ts:89-95` (`WorkflowSectionDef`)
-- Create: `flow-runtime/src/sectionTitle.ts`
+- Modify: `workflow-forms/src/types.ts:89-95` (`WorkflowSectionDef`)
+- Create: `workflow-forms/src/sectionTitle.ts`
 
 **Interfaces:**
 - Consumes: the schema shape from Task 1.
-- Produces: `WorkflowSectionDef.title?: string`, `.description?: string`; `displayTitle(section: WorkflowSectionDef): string` and `humanizeSectionId(id: string): string` from `flow-runtime/src/sectionTitle.ts`. Tasks 5, 6, and 7 all call `displayTitle`. Tested in Task 3 once vitest exists.
+- Produces: `WorkflowSectionDef.title?: string`, `.description?: string`; `displayTitle(section: WorkflowSectionDef): string` and `humanizeSectionId(id: string): string` from `workflow-forms/src/sectionTitle.ts`. Tasks 5, 6, and 7 all call `displayTitle`. Tested in Task 3 once vitest exists.
 
-- [ ] **Step 1: Add the two optional properties** to `flow-runtime/src/types.ts`:
+- [ ] **Step 1: Add the two optional properties** to `workflow-forms/src/types.ts`:
 
 ```ts
 export interface WorkflowSectionDef {
@@ -252,10 +252,10 @@ export interface WorkflowSectionDef {
 
 Both are optional, so every existing consumer compiles unchanged.
 
-- [ ] **Step 2: Create `flow-runtime/src/sectionTitle.ts`:**
+- [ ] **Step 2: Create `workflow-forms/src/sectionTitle.ts`:**
 
 ```ts
-// flow-runtime/src/sectionTitle.ts
+// workflow-forms/src/sectionTitle.ts
 import type { WorkflowSectionDef } from './types';
 
 /**
@@ -279,7 +279,7 @@ export function displayTitle(section: WorkflowSectionDef): string {
 }
 ```
 
-- [ ] **Step 3: Export both from the barrel.** Append to `flow-runtime/src/index.ts`:
+- [ ] **Step 3: Export both from the barrel.** Append to `workflow-forms/src/index.ts`:
 
 ```ts
 export * from './sectionTitle';
@@ -288,47 +288,47 @@ export * from './sectionTitle';
 - [ ] **Step 4: Typecheck**
 
 ```bash
-cd flow-runtime && npm ci && npx tsc -b
+cd workflow-forms && npm ci && npx tsc -b
 ```
 Expected: clean, no output.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add flow-runtime/src/types.ts flow-runtime/src/sectionTitle.ts flow-runtime/src/index.ts
-git commit -m "feat(flow-runtime): section title/description types and humanized title fallback"
+git add workflow-forms/src/types.ts workflow-forms/src/sectionTitle.ts workflow-forms/src/index.ts
+git commit -m "feat(workflow-forms): section title/description types and humanized title fallback"
 ```
 
 ---
 
-### Task 3: vitest in flow-runtime
+### Task 3: vitest in workflow-forms
 
 This task adds the test runner the next three tasks depend on. It is deliberately separate so a reviewer can reject the tooling choice without rejecting the feature.
 
 **Files:**
-- Modify: `flow-runtime/package.json`
-- Create: `flow-runtime/vitest.config.ts`
-- Test: `flow-runtime/src/__tests__/sectionTitle.test.ts` (new — proves the runner works against real code)
+- Modify: `workflow-forms/package.json`
+- Create: `workflow-forms/vitest.config.ts`
+- Test: `workflow-forms/src/__tests__/sectionTitle.test.ts` (new — proves the runner works against real code)
 
 **Interfaces:**
-- Produces: `npm test` in `flow-runtime`. Tasks 4 and 5 add test files under `flow-runtime/src/__tests__/`.
+- Produces: `npm test` in `workflow-forms`. Tasks 4 and 5 add test files under `workflow-forms/src/__tests__/`.
 
 - [ ] **Step 1: Install vitest**
 
 ```bash
-cd flow-runtime && npm i -D vitest@^3 jsdom@^25 @testing-library/react@^16 react-dom@^19 @types/react-dom@^19
+cd workflow-forms && npm i -D vitest@^3 jsdom@^25 @testing-library/react@^16 react-dom@^19 @types/react-dom@^19
 ```
 
 `jsdom` and `@testing-library/react` are needed by Task 4's component test.
 
 **`react-dom` is not optional here.** npm auto-installs `react` because it is a
 declared peer dependency, but `react-dom` is not declared anywhere in
-`flow-runtime/package.json`, so it is absent after `npm ci` — verified. Without it
+`workflow-forms/package.json`, so it is absent after `npm ci` — verified. Without it
 `@testing-library/react` cannot render and every component test fails to import. It goes
 in `devDependencies`, never `dependencies`: the frontends supply their own React DOM at
 runtime, and shipping a second copy would be a duplicate-React bug.
 
-- [ ] **Step 2: Add the test script** to `flow-runtime/package.json`'s `scripts`:
+- [ ] **Step 2: Add the test script** to `workflow-forms/package.json`'s `scripts`:
 
 ```json
   "scripts": {
@@ -337,7 +337,7 @@ runtime, and shipping a second copy would be a duplicate-React bug.
   }
 ```
 
-- [ ] **Step 3: Create `flow-runtime/vitest.config.ts`:**
+- [ ] **Step 3: Create `workflow-forms/vitest.config.ts`:**
 
 ```ts
 import { defineConfig } from 'vitest/config';
@@ -351,7 +351,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Write a real test against Task 2's code** — `flow-runtime/src/__tests__/sectionTitle.test.ts`:
+- [ ] **Step 4: Write a real test against Task 2's code** — `workflow-forms/src/__tests__/sectionTitle.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -399,14 +399,14 @@ describe('displayTitle', () => {
 - [ ] **Step 5: Run it**
 
 ```bash
-cd flow-runtime && npm test
+cd workflow-forms && npm test
 ```
 Expected: **5 passing**.
 
 - [ ] **Step 6: Confirm the frontends still build with the new devDeps**
 
 ```bash
-cd flow-runtime && npm ci
+cd workflow-forms && npm ci
 cd ../familyhub/frontend && npm run build
 cd ../../admindash/frontend && npm run build
 ```
@@ -415,8 +415,8 @@ Expected: both clean. (A devDependency must not reach a frontend bundle; if a bu
 - [ ] **Step 7: Commit**
 
 ```bash
-git add flow-runtime/package.json flow-runtime/package-lock.json flow-runtime/vitest.config.ts flow-runtime/src/__tests__/sectionTitle.test.ts
-git commit -m "test(flow-runtime): add vitest; cover section title fallback"
+git add workflow-forms/package.json workflow-forms/package-lock.json workflow-forms/vitest.config.ts workflow-forms/src/__tests__/sectionTitle.test.ts
+git commit -m "test(workflow-forms): add vitest; cover section title fallback"
 ```
 
 ---
@@ -424,8 +424,8 @@ git commit -m "test(flow-runtime): add vitest; cover section title fallback"
 ### Task 4: `SectionDescription` — the single hardened markdown call site
 
 **Files:**
-- Create: `flow-runtime/src/SectionDescription.tsx`
-- Test: `flow-runtime/src/__tests__/SectionDescription.test.tsx` (new)
+- Create: `workflow-forms/src/SectionDescription.tsx`
+- Test: `workflow-forms/src/__tests__/SectionDescription.test.tsx` (new)
 
 **Interfaces:**
 - Consumes: vitest from Task 3.
@@ -434,12 +434,12 @@ git commit -m "test(flow-runtime): add vitest; cover section title fallback"
 - [ ] **Step 1: Install the dependency**
 
 ```bash
-cd flow-runtime && npm i markdown-to-jsx@^9.10
+cd workflow-forms && npm i markdown-to-jsx@^9.10
 ```
 
-This is flow-runtime's first runtime dependency. `deploy.yml` already runs `npm ci` in `flow-runtime` before every frontend build (`:325`, `:369`, `:409`), so no workflow change is needed.
+This is workflow-forms's first runtime dependency. `deploy.yml` already runs `npm ci` in `workflow-forms` before every frontend build (`:325`, `:369`, `:409`), so no workflow change is needed.
 
-- [ ] **Step 2: Write the failing tests** — `flow-runtime/src/__tests__/SectionDescription.test.tsx`:
+- [ ] **Step 2: Write the failing tests** — `workflow-forms/src/__tests__/SectionDescription.test.tsx`:
 
 ```tsx
 import { describe, it, expect } from 'vitest';
@@ -555,13 +555,13 @@ describe('markdown containment', () => {
 
 - [ ] **Step 3: Run, confirm failure**
 
-Run: `cd flow-runtime && npm test`
+Run: `cd workflow-forms && npm test`
 Expected: FAIL — cannot resolve `../SectionDescription`.
 
-- [ ] **Step 4: Create `flow-runtime/src/SectionDescription.tsx`:**
+- [ ] **Step 4: Create `workflow-forms/src/SectionDescription.tsx`:**
 
 ```tsx
-// flow-runtime/src/SectionDescription.tsx
+// workflow-forms/src/SectionDescription.tsx
 //
 // THE ONLY module in this package permitted to import `markdown-to-jsx`.
 // `src/__tests__/SectionDescription.test.tsx` fails if a second file does.
@@ -630,7 +630,7 @@ export function SectionDescription({ markdown }: SectionDescriptionProps) {
 }
 ```
 
-- [ ] **Step 5: Export it** — append to `flow-runtime/src/index.ts`:
+- [ ] **Step 5: Export it** — append to `workflow-forms/src/index.ts`:
 
 ```ts
 export * from './SectionDescription';
@@ -638,12 +638,12 @@ export * from './SectionDescription';
 
 - [ ] **Step 6: Run the tests**
 
-Run: `cd flow-runtime && npm test`
+Run: `cd workflow-forms && npm test`
 Expected: PASS — 5 from Task 3 + 11 here = **16 passing**.
 
 If the "drops disallowed link schemes" case fails because an anchor still renders, the `sanitizer` is not being consulted for that attribute — do **not** relax the assertion. Verify the option name against the installed version's types and fix the option.
 
-- [ ] **Step 7: Add the description style** to `flow-runtime/src/flow-runtime.css`:
+- [ ] **Step 7: Add the description style** to `workflow-forms/src/workflow-forms.css`:
 
 ```css
 .fr-section-desc { font-size: 13px; color: var(--text-secondary); margin: 0 0 10px; max-width: 60ch; line-height: 1.5; }
@@ -655,8 +655,8 @@ If the "drops disallowed link schemes" case fails because an anchor still render
 - [ ] **Step 8: Commit**
 
 ```bash
-git add flow-runtime/package.json flow-runtime/package-lock.json flow-runtime/src/SectionDescription.tsx flow-runtime/src/index.ts flow-runtime/src/flow-runtime.css flow-runtime/src/__tests__/SectionDescription.test.tsx
-git commit -m "feat(flow-runtime): hardened SectionDescription as the single markdown call site"
+git add workflow-forms/package.json workflow-forms/package-lock.json workflow-forms/src/SectionDescription.tsx workflow-forms/src/index.ts workflow-forms/src/workflow-forms.css workflow-forms/src/__tests__/SectionDescription.test.tsx
+git commit -m "feat(workflow-forms): hardened SectionDescription as the single markdown call site"
 ```
 
 ---
@@ -664,14 +664,14 @@ git commit -m "feat(flow-runtime): hardened SectionDescription as the single mar
 ### Task 5: `sectionCompletion` — one source of truth for progress
 
 **Files:**
-- Create: `flow-runtime/src/sectionCompletion.ts`
-- Test: `flow-runtime/src/__tests__/sectionCompletion.test.ts` (new)
+- Create: `workflow-forms/src/sectionCompletion.ts`
+- Test: `workflow-forms/src/__tests__/sectionCompletion.test.ts` (new)
 
 **Interfaces:**
-- Consumes: `sectionFields` (`flow-runtime/src/sectionFields.ts`), `WorkflowDraft` and `ModelFieldSource` from existing types.
+- Consumes: `sectionFields` (`workflow-forms/src/sectionFields.ts`), `WorkflowDraft` and `ModelFieldSource` from existing types.
 - Produces: `sectionCompletion(section, fields, draft) -> SectionProgress` where `SectionProgress = { required: number; remaining: number; done: boolean; optional: boolean }`. Task 6's pill and Task 7's rail dot both read this.
 
-- [ ] **Step 1: Write the failing tests** — `flow-runtime/src/__tests__/sectionCompletion.test.ts`:
+- [ ] **Step 1: Write the failing tests** — `workflow-forms/src/__tests__/sectionCompletion.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -785,13 +785,13 @@ describe('sectionCompletion — repeat', () => {
 
 - [ ] **Step 2: Run, confirm failure**
 
-Run: `cd flow-runtime && npm test`
+Run: `cd workflow-forms && npm test`
 Expected: FAIL — cannot resolve `../sectionCompletion`.
 
-- [ ] **Step 3: Create `flow-runtime/src/sectionCompletion.ts`:**
+- [ ] **Step 3: Create `workflow-forms/src/sectionCompletion.ts`:**
 
 ```ts
-// flow-runtime/src/sectionCompletion.ts
+// workflow-forms/src/sectionCompletion.ts
 import type { FlowField, WorkflowSectionDef } from './types';
 // NOTE: WorkflowDraft is exported from StepRenderer.tsx:163, NOT from types.ts.
 // Importing it from './types' compiles under vitest (which transpiles) but FAILS
@@ -868,7 +868,7 @@ export function sectionCompletion(
 }
 ```
 
-- [ ] **Step 4: Export it** — append to `flow-runtime/src/index.ts`:
+- [ ] **Step 4: Export it** — append to `workflow-forms/src/index.ts`:
 
 ```ts
 export * from './sectionCompletion';
@@ -876,7 +876,7 @@ export * from './sectionCompletion';
 
 - [ ] **Step 5: Run the tests AND the typecheck**
 
-Run: `cd flow-runtime && npm test && npm run typecheck`
+Run: `cd workflow-forms && npm test && npm run typecheck`
 Expected: 16 prior + 13 here = **29 passing**, typecheck clean.
 
 `npm test` alone is NOT sufficient: vitest transpiles rather than type-checks, so a bad
@@ -885,28 +885,28 @@ import passes the suite and then breaks `tsc -b` in all three frontends' CI buil
 - [ ] **Step 6: Commit**
 
 ```bash
-git add flow-runtime/src/sectionCompletion.ts flow-runtime/src/index.ts flow-runtime/src/__tests__/sectionCompletion.test.ts
-git commit -m "feat(flow-runtime): sectionCompletion as the single progress source"
+git add workflow-forms/src/sectionCompletion.ts workflow-forms/src/index.ts workflow-forms/src/__tests__/sectionCompletion.test.ts
+git commit -m "feat(workflow-forms): sectionCompletion as the single progress source"
 ```
 
 ---
 
 ### Task 6: `SectionShell` + accordion layout
 
-The accessibility fix lands here. Read `flow-runtime/src/StepRenderer.tsx:336-412` (SectionRenderer) and `:542-558` (FormStep) fully before starting.
+The accessibility fix lands here. Read `workflow-forms/src/StepRenderer.tsx:336-412` (SectionRenderer) and `:542-558` (FormStep) fully before starting.
 
 **Files:**
-- Create: `flow-runtime/src/SectionShell.tsx`
-- Create: `flow-runtime/src/AccordionSections.tsx`
-- Modify: `flow-runtime/src/StepRenderer.tsx` (`FormStep` at `:542`, threading `mode`)
-- Modify: `flow-runtime/src/flow-runtime.css`
-- Modify: `flow-runtime/src/i18n.ts` (new strings, both locales)
+- Create: `workflow-forms/src/SectionShell.tsx`
+- Create: `workflow-forms/src/AccordionSections.tsx`
+- Modify: `workflow-forms/src/StepRenderer.tsx` (`FormStep` at `:542`, threading `mode`)
+- Modify: `workflow-forms/src/workflow-forms.css`
+- Modify: `workflow-forms/src/i18n.ts` (new strings, both locales)
 
 **Interfaces:**
 - Consumes: `displayTitle` (Task 2), `SectionDescription` (Task 4), `sectionCompletion` (Task 5).
 - Produces: `<SectionShell section fields idPrefix children />` rendering `fieldset`/`legend`; `<AccordionSections step models draft onDraftChange />`. Task 7's rail reuses `SectionShell`.
 
-- [ ] **Step 1: Add i18n strings** to both locales in `flow-runtime/src/i18n.ts`:
+- [ ] **Step 1: Add i18n strings** to both locales in `workflow-forms/src/i18n.ts`:
 
 ```ts
     'section.done': 'Done',
@@ -930,10 +930,10 @@ and the `zh-CN` equivalents:
 
 A missing key renders the raw key string with no warning, so both locales must be added together.
 
-- [ ] **Step 2: Create `flow-runtime/src/SectionShell.tsx`:**
+- [ ] **Step 2: Create `workflow-forms/src/SectionShell.tsx`:**
 
 ```tsx
-// flow-runtime/src/SectionShell.tsx
+// workflow-forms/src/SectionShell.tsx
 import type { ReactNode } from 'react';
 import { SectionDescription } from './SectionDescription';
 import { displayTitle } from './sectionTitle';
@@ -970,10 +970,10 @@ export function SectionShell({ section, children, showLegend = true }: SectionSh
 }
 ```
 
-- [ ] **Step 3: Create `flow-runtime/src/AccordionSections.tsx`:**
+- [ ] **Step 3: Create `workflow-forms/src/AccordionSections.tsx`:**
 
 ```tsx
-// flow-runtime/src/AccordionSections.tsx
+// workflow-forms/src/AccordionSections.tsx
 import { useId, useMemo, useState } from 'react';
 import { useFlowT } from './i18n';
 import { SectionDescription } from './SectionDescription';
@@ -1107,7 +1107,7 @@ function FormStep({ step, models, draft, onDraftChange, mode }: {
 
 `RailSections` does not exist until Task 7. **For this task, temporarily route `staff` to the accordion too** by omitting the `mode === 'staff'` branch entirely, then add it in Task 7. Do not import a module that does not exist yet.
 
-- [ ] **Step 5: Create the `useMediaQuery` hook** — `flow-runtime/src/useMediaQuery.ts`:
+- [ ] **Step 5: Create the `useMediaQuery` hook** — `workflow-forms/src/useMediaQuery.ts`:
 
 ```ts
 import { useEffect, useState } from 'react';
@@ -1152,7 +1152,7 @@ import { useMediaQuery } from './useMediaQuery';
             )}
 ```
 
-- [ ] **Step 8: Add CSS** to `flow-runtime/src/flow-runtime.css`:
+- [ ] **Step 8: Add CSS** to `workflow-forms/src/workflow-forms.css`:
 
 ```css
 .fr-section { border: 1px solid var(--border-primary); border-radius: var(--radius-sm);
@@ -1181,7 +1181,7 @@ import { useMediaQuery } from './useMediaQuery';
 
 - [ ] **Step 9: Export and build**
 
-Append to `flow-runtime/src/index.ts`:
+Append to `workflow-forms/src/index.ts`:
 
 ```ts
 export * from './SectionShell';
@@ -1190,7 +1190,7 @@ export * from './useMediaQuery';
 ```
 
 ```bash
-cd flow-runtime && npm test && npx tsc -b
+cd workflow-forms && npm test && npx tsc -b
 cd ../familyhub/frontend && npm run build && npm run lint
 cd ../../apexflow/frontend && npm run build && npm run lint
 ```
@@ -1199,8 +1199,8 @@ Expected: 29 tests passing, builds clean, lint clean.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add flow-runtime/src flow-runtime/src/flow-runtime.css
-git commit -m "feat(flow-runtime): fieldset/legend SectionShell and completion-aware accordion"
+git add workflow-forms/src workflow-forms/src/workflow-forms.css
+git commit -m "feat(workflow-forms): fieldset/legend SectionShell and completion-aware accordion"
 ```
 
 ---
@@ -1208,16 +1208,16 @@ git commit -m "feat(flow-runtime): fieldset/legend SectionShell and completion-a
 ### Task 7: Rail layout for wide staff screens
 
 **Files:**
-- Create: `flow-runtime/src/RailSections.tsx`
-- Modify: `flow-runtime/src/StepRenderer.tsx` (`FormStep` — add the `staff && wide` branch deferred in Task 6)
-- Modify: `flow-runtime/src/flow-runtime.css`
-- Test: `flow-runtime/src/__tests__/RailSections.test.tsx` (new). The rail lives in `flow-runtime`, so its test does too — not in admindash's suite, which would only exercise it when that app's tests happen to run.
+- Create: `workflow-forms/src/RailSections.tsx`
+- Modify: `workflow-forms/src/StepRenderer.tsx` (`FormStep` — add the `staff && wide` branch deferred in Task 6)
+- Modify: `workflow-forms/src/workflow-forms.css`
+- Test: `workflow-forms/src/__tests__/RailSections.test.tsx` (new). The rail lives in `workflow-forms`, so its test does too — not in admindash's suite, which would only exercise it when that app's tests happen to run.
 
 **Interfaces:**
 - Consumes: `SectionShell` (Task 6), `sectionCompletion` (Task 5), `displayTitle` (Task 2), `useMediaQuery` (Task 6).
 - Produces: `<RailSections step sections models draft onDraftChange renderFields />` — same prop shape as `AccordionSections`, so `FormStep` can swap them.
 
-- [ ] **Step 1: Write the failing test** — `flow-runtime/src/__tests__/RailSections.test.tsx`:
+- [ ] **Step 1: Write the failing test** — `workflow-forms/src/__tests__/RailSections.test.tsx`:
 
 ```tsx
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -1268,13 +1268,13 @@ describe('RailSections', () => {
 
 - [ ] **Step 2: Run, confirm failure**
 
-Run: `cd flow-runtime && npm test`
+Run: `cd workflow-forms && npm test`
 Expected: FAIL — cannot resolve `../RailSections`.
 
-- [ ] **Step 3: Create `flow-runtime/src/RailSections.tsx`:**
+- [ ] **Step 3: Create `workflow-forms/src/RailSections.tsx`:**
 
 ```tsx
-// flow-runtime/src/RailSections.tsx
+// workflow-forms/src/RailSections.tsx
 import { useEffect, useId, useRef, useState } from 'react';
 import { useFlowT } from './i18n';
 import { SectionShell } from './SectionShell';
@@ -1371,7 +1371,7 @@ export function RailSections(props: AccordionSectionsProps) {
 
 with `import { RailSections } from './RailSections';` at the top.
 
-- [ ] **Step 5: Add CSS** to `flow-runtime/src/flow-runtime.css`:
+- [ ] **Step 5: Add CSS** to `workflow-forms/src/workflow-forms.css`:
 
 ```css
 .fr-rail-layout { display: grid; grid-template-columns: 200px 1fr; gap: 18px; align-items: start; }
@@ -1390,19 +1390,19 @@ with `import { RailSections } from './RailSections';` at the top.
 
 - [ ] **Step 6: Export and verify**
 
-Append `export * from './RailSections';` to `flow-runtime/src/index.ts`, then:
+Append `export * from './RailSections';` to `workflow-forms/src/index.ts`, then:
 
 ```bash
-cd flow-runtime && npm test && npx tsc -b
+cd workflow-forms && npm test && npx tsc -b
 cd ../admindash/frontend && npm run build && npx vitest run
 ```
-Expected: flow-runtime 29 + 2 = **31 passing**; admindash builds clean; admindash vitest **94** (unchanged).
+Expected: workflow-forms 29 + 2 = **31 passing**; admindash builds clean; admindash vitest **94** (unchanged).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add flow-runtime/src
-git commit -m "feat(flow-runtime): section rail layout for wide staff screens"
+git add workflow-forms/src
+git commit -m "feat(workflow-forms): section rail layout for wide staff screens"
 ```
 
 ---
@@ -1517,7 +1517,7 @@ Expected: PASS. Then `cd apexflow && uv run pytest backend/tests/ -q` — **547 
       </label>
 ```
 
-with `import { humanizeSectionId } from '@neoapex/flow-runtime';` at the top. The placeholder shows the admin exactly what parents see if they leave the title blank.
+with `import { humanizeSectionId } from '@neoapex/workflow-forms';` at the top. The placeholder shows the admin exactly what parents see if they leave the title blank.
 
 - [ ] **Step 6: Add translations** to `apexflow/frontend/src/i18n/translations.ts`, both locales:
 
@@ -1568,19 +1568,19 @@ git commit -m "feat(apexflow): author section title/description in the designer;
 - [ ] **Step 1: Run every suite from a clean install**
 
 ```bash
-cd flow-runtime && npm ci && npm test
+cd workflow-forms && npm ci && npm test
 cd ../apexflow && uv run pytest backend/tests/ -q
 cd ../familyhub && uv run pytest backend/tests/ -q
 cd ../admindash && uv run pytest backend/tests/ -q
 cd ../datacore && uv run python -m pytest tests/ -q
 cd ../admindash/frontend && npx vitest run
 ```
-Expected: flow-runtime **31**, apexflow **547**, familyhub **89**, admindash **201**, datacore **354**, admindash vitest **94**.
+Expected: workflow-forms **31**, apexflow **547**, familyhub **89**, admindash **201**, datacore **354**, admindash vitest **94**.
 
 - [ ] **Step 2: Build and lint all three frontends**
 
 ```bash
-cd flow-runtime && npm ci
+cd workflow-forms && npm ci
 cd ../admindash/frontend && npm run build && npm run lint
 cd ../../familyhub/frontend && npm run build && npm run lint
 cd ../../apexflow/frontend && npm run build && npm run lint
@@ -1591,13 +1591,13 @@ Expected: all builds clean. familyhub and apexflow lint clean. admindash lint sh
 
 Run `cd familyhub/frontend && npm run build` and read the reported gzip size. The spec predicted ~112 kB (from 84 kB). Record the actual number in the commit message. **If it exceeds 130 kB, stop and report** — that means markdown-to-jsx is not tree-shaking as measured and the dependency choice needs revisiting.
 
-- [ ] **Step 4: Verify the containment tests actually bite.** Temporarily add `import Markdown from 'markdown-to-jsx';` to `flow-runtime/src/SectionShell.tsx`, run `npm test`, confirm the "imports markdown-to-jsx in exactly one file" test FAILS, then revert. Record that you did this — an unverified guard is not a guard.
+- [ ] **Step 4: Verify the containment tests actually bite.** Temporarily add `import Markdown from 'markdown-to-jsx';` to `workflow-forms/src/SectionShell.tsx`, run `npm test`, confirm the "imports markdown-to-jsx in exactly one file" test FAILS, then revert. Record that you did this — an unverified guard is not a guard.
 
 - [ ] **Step 5: Log the two follow-ups** this work deliberately deferred, appending to `docs/superpowers/plans/2026-08-05-apexflow-plan1-followups.md`:
 
 ```markdown
 25. **`message`-step bodies are still plain text while section descriptions
-    render markdown.** `MessageStep` (`flow-runtime/src/StepRenderer.tsx`)
+    render markdown.** `MessageStep` (`workflow-forms/src/StepRenderer.tsx`)
     splits `config.body` on newlines into escaped paragraphs. Now that
     `SectionDescription` exists as a hardened, single-call-site markdown
     renderer, pointing message bodies at it is a small change — but it is a
@@ -1607,7 +1607,7 @@ Run `cd familyhub/frontend && npm run build` and read the reported gzip size. Th
 26. **No CI runs any test suite.** `.github/workflows/` contains only
     `deploy.yml` and `discord-release.yml`; neither invokes pytest or vitest.
     Every suite is run locally by whoever remembers. This matters more now
-    than it did: `flow-runtime`'s new vitest suite contains the markdown
+    than it did: `workflow-forms`'s new vitest suite contains the markdown
     containment and link-scheme tests, which are a security boundary. A
     guard that only runs when someone remembers is weaker than it looks.
     Wiring a test workflow covering the four Python suites and two JS suites
@@ -1628,5 +1628,5 @@ git commit -m "docs: log message-body markdown and missing CI test workflow as f
 - **Spec coverage:** schema + validation (Task 1), TS mirror + title fallback (Task 2), vitest infrastructure (Task 3), markdown wrapper + containment tests (Task 4), completion (Task 5), `SectionShell` + accordion + single-section rule (Task 6), rail + breakpoint fallback (Task 7), authoring + template backfill (Task 8), verification + follow-ups (Task 9).
 - **Type consistency:** `SectionProgress` fields (`required`/`remaining`/`done`/`optional`) are defined in Task 5 and consumed unchanged in Tasks 6 and 7. `AccordionSectionsProps` is defined in Task 6 and reused as `RailSections`' prop type in Task 7, which is what lets `FormStep` swap them. `displayTitle`/`humanizeSectionId` are defined in Task 2 and used in Tasks 6, 7, and 8.
 - **Ordering hazard:** Task 6 Step 4 shows the final `FormStep` including the `RailSections` branch, but Step 4's note explicitly says to omit that branch until Task 7 Step 4 restores it. Following Task 6 literally without reading that note produces an unresolvable import.
-- **Verified while writing this plan, not assumed:** `npm ci` in `flow-runtime` installs `react` (declared peer) but **not** `react-dom`, so Task 3 installs it explicitly — otherwise every component test in Tasks 4 and 7 fails to import. `flow-runtime/tsconfig.json` already sets `"jsx": "react-jsx"`, so vitest's esbuild handles the `.tsx` test files with no React plugin. `_SectionEntry` and `SectionDef`/`StepDef` were confirmed importable and constructible with the exact fixture arguments Task 1 uses.
+- **Verified while writing this plan, not assumed:** `npm ci` in `workflow-forms` installs `react` (declared peer) but **not** `react-dom`, so Task 3 installs it explicitly — otherwise every component test in Tasks 4 and 7 fails to import. `workflow-forms/tsconfig.json` already sets `"jsx": "react-jsx"`, so vitest's esbuild handles the `.tsx` test files with no React plugin. `_SectionEntry` and `SectionDef`/`StepDef` were confirmed importable and constructible with the exact fixture arguments Task 1 uses.
 - **The riskiest task is 4.** Its safety depends on option names matching the installed `markdown-to-jsx` version. If `sanitizer` or `disableParsingRawHTML` has been renamed, the tests fail loudly rather than silently passing unsafe markup — which is why the negative cases are written as assertions about rendered output rather than about the options object.

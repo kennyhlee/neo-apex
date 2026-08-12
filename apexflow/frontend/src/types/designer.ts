@@ -1,7 +1,7 @@
 // TS mirrors of apexflow-backend's designer read/write API (interface map
-// §2). Reuses flow-runtime's own wire mirrors of `workflows/schema.py`
+// §2). Reuses workflow-forms's own wire mirrors of `workflows/schema.py`
 // (WorkflowStepDef, WorkflowSectionDef, ConditionGroupDef, etc. — map §2i /
-// §4) rather than redeclaring them; flow-runtime does NOT export
+// §4) rather than redeclaring them; workflow-forms does NOT export
 // machine-level types (StateDef/TransitionDef/GuardRef/EffectRef), which
 // this file adds.
 import type {
@@ -12,7 +12,7 @@ import type {
   RepeatSpec,
   WorkflowSectionDef,
   WorkflowStepDef,
-} from '@neoapex/flow-runtime';
+} from '@neoapex/workflow-forms';
 
 export type {
   Condition,
@@ -24,7 +24,7 @@ export type {
   WorkflowStepDef,
 };
 
-// ---- Machine (workflows/schema.py — not exported by flow-runtime) --------
+// ---- Machine (workflows/schema.py — not exported by workflow-forms) --------
 
 /** Wire mirror of `schema.py`'s `StateDef` (`:126-129`). */
 export interface StateDef {
@@ -193,8 +193,8 @@ export type PrimitiveParamKind = 'string' | 'list' | 'string_or_list' | 'conditi
  * (`validate.py:501-518`) rejects exactly this shape server-side at publish
  * time; this is the client-side mirror so the editor can hint before that.
  *
- * Deliberately NOT `@neoapex/flow-runtime`'s `ENGINE_OWNED_APPLICATION_FIELDS`
- * (`flow-runtime/src/types.ts:101`'s own doc comment: "NOT the same list as
+ * Deliberately NOT `@neoapex/workflow-forms`'s `ENGINE_OWNED_APPLICATION_FIELDS`
+ * (`workflow-forms/src/types.ts:101`'s own doc comment: "NOT the same list as
  * apexflow's `schema.ENGINE_OWNED_FIELDS`") — that constant is the
  * registration-era `registration_application`-scoped field set (a
  * completely different entity), and using it here would silently pass the

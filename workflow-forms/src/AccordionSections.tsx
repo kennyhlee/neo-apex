@@ -1,4 +1,4 @@
-// flow-runtime/src/AccordionSections.tsx
+// workflow-forms/src/AccordionSections.tsx
 import { useId, useMemo, useState } from 'react';
 import { useFlowT } from './i18n';
 import { SectionShell } from './SectionShell';

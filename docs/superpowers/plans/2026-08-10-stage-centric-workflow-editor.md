@@ -13,8 +13,8 @@
 - **No engine, schema, or validator changes.** Nothing under `apexflow/backend/app/workflows/` may be modified. If a task appears to need one, stop and write a ruling into `docs/superpowers/rulings/` rather than widening the engine.
 - **Do not modify** `apexflow/backend/app/templates/enrollment.py` or `apexflow/backend/app/templates/signup.py` machine/steps content. They are the round-trip fixtures; changing them to make a test pass invalidates the test.
 - **Round-trip is the top correctness property.** `writeMachine(readStageModel(m, steps))` must equal `m` for both shipped templates. Any transition that does not fit a group renders as an explicit move on its stage — never silently dropped.
-- **Suite baselines — every task must leave these at or above:** flow-runtime **59** · apexflow backend **584** · familyhub **89** · admindash backend **201** · datacore **354** · admindash vitest **94** · apexflow vitest **0 before Task 2, then never lower than the previous task left it**.
-- **`cd flow-runtime && npm ci` FIRST**, before any frontend build. A green local build without this does not prove CI.
+- **Suite baselines — every task must leave these at or above:** workflow-forms **59** · apexflow backend **584** · familyhub **89** · admindash backend **201** · datacore **354** · admindash vitest **94** · apexflow vitest **0 before Task 2, then never lower than the previous task left it**.
+- **`cd workflow-forms && npm ci` FIRST**, before any frontend build. A green local build without this does not prove CI.
 - **Every test-adding step is followed by a mutation step**: break the implementation in a stated way, prove the named test fails, revert, prove green. A green suite has meant nothing in this repo four separate times.
 - **Clear `__pycache__` and vitest's cache between mutation runs.** A same-byte-length Python mutation inside one second produced a false green during Task 1 because the `.pyc` `(mtime, size)` check did not invalidate. Use `find . -name __pycache__ -type d -not -path "./.venv/*" -exec rm -rf {} +` for Python and `npx vitest run --no-cache` for TS.
 - **Two locales.** Every new i18n key must be added to BOTH `'en-US'` and `'zh-CN'` in `apexflow/frontend/src/i18n/translations.ts`. Task 2 adds the parity test that enforces this.
@@ -177,7 +177,7 @@ Restore the line. Run again. Expected: PASS, 3 tests.
 
 - [ ] **Step 7: Verify the build and lint are unaffected**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint`
 Expected: build succeeds, lint reports 0 errors.
 
@@ -1306,7 +1306,7 @@ Revert all three. Run again. Expected: PASS, 22 tests.
 
 - [ ] **Step 12: Typecheck, lint, commit**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
 Expected: build succeeds, 0 lint errors, 25 tests pass (3 i18n + 22 stage).
 
@@ -1888,7 +1888,7 @@ Revert. Expected: PASS.
 
 - [ ] **Step 10: Build, lint, commit**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
 
 ```bash
@@ -2146,7 +2146,7 @@ Run again. Expected: PASS.
 
 - [ ] **Step 7: Build, lint, commit**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
 
 ```bash
@@ -2456,7 +2456,7 @@ Append to `apexflow/frontend/src/editor/editor.css`:
 
 - [ ] **Step 5: Build and lint**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
 Expected: build succeeds, 0 lint errors, all tests pass.
 
@@ -2801,7 +2801,7 @@ Revert. Expected: PASS.
 
 - [ ] **Step 8: Build, lint, verify, commit**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
 
 Open the enrollment definition. Confirm: `application_form` appears inside both `Draft` and `Pending Items` with an "also in" note in each; `review_notice` appears in three stages; renaming `In Review` to `Under Review` updates the card and the save indicator shows "Saved"; reload shows the new name.
@@ -3258,7 +3258,7 @@ Revert both. Expected: PASS.
 
 - [ ] **Step 6: Build, lint, verify, commit**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
 
 Open the enrollment definition. Confirm on the `In Review` stage: `approve` reads "Staff / approve / goes to Approved" with "And then creates the records from the form; records the decision on the application; starts the document due dates; emails the family"; `flag_pending_items` reads "Automatically"; "Edit as advanced" opens the unchanged `GuardEffectComposer` and a change made there is reflected in the sentence when closed.
@@ -3620,7 +3620,7 @@ Revert. Expected: PASS.
 
 - [ ] **Step 8: Build, lint, verify, commit**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
 
 Open the enrollment definition. Confirm the `withdraw` exit reads `expands to 12 transition(s) · 6 stage(s) × 2 actor(s)` with `enrolled`/`declined`/`withdrawn` absent from the scope list (terminal) and every other stage ticked; the `decline` exit reads `2 transition(s) · 2 stage(s) × 1 actor(s)` and shows "4 stage(s) not covered by this rule". Untick `Approved` on `withdraw`, confirm the count drops to 10, re-tick it, confirm it returns to 12, save, reload, and confirm the machine is intact.
@@ -3704,7 +3704,7 @@ missing `issue_link`, which its `offer_spot` move uses.
 - [ ] **Step 5: Full verification — every suite, in order**
 
 ```bash
-cd flow-runtime && npm ci && npm test
+cd workflow-forms && npm ci && npm test
 cd ../apexflow/backend && find . -name __pycache__ -type d -not -path "./.venv/*" -exec rm -rf {} + ; uv run python -m pytest tests/ -q
 cd ../../familyhub/backend && uv run python -m pytest tests/ -q
 cd ../../admindash && uv run pytest backend/tests/ -q
@@ -3713,12 +3713,12 @@ cd ../admindash/frontend && npm test
 cd ../../apexflow/frontend && npm test
 ```
 
-Expected, at or above: flow-runtime **59** · apexflow backend **584** · familyhub **89** · admindash backend **201** · datacore **354** · admindash vitest **94** · apexflow vitest — whatever Task 9 left it at.
+Expected, at or above: workflow-forms **59** · apexflow backend **584** · familyhub **89** · admindash backend **201** · datacore **354** · admindash vitest **94** · apexflow vitest — whatever Task 9 left it at.
 
 - [ ] **Step 6: Full verification — every frontend builds**
 
 ```bash
-cd flow-runtime && npm ci
+cd workflow-forms && npm ci
 cd ../apexflow/frontend && npm run build && npm run lint
 cd ../../admindash/frontend && npm run build && npm run lint
 cd ../../familyhub/frontend && npm run build && npm run lint
@@ -3879,7 +3879,7 @@ All four must respect `readOnly`.
 
 - [ ] **Step 8: Build, lint, test**
 
-Run: `cd flow-runtime && npm ci`
+Run: `cd workflow-forms && npm ci`
 Run: `cd apexflow/frontend && npm run build && npm run lint && npm test`
 Expected: build clean, 0 lint errors, test count above the previous 107.
 

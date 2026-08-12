@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** AdminDash gains generic workflow tracking (definitions list, per-definition pipeline with columns from the pinned machine's states, instance detail with items/activity/documents/allowed actions) and staff-assisted entry; FamilyHub's parent runtime generalizes from registration-era blocks to workflow instances rendered by flow-runtime's StepRenderer — closing the Plan 1/2 follow-ups assigned to this phase (blocks-compiler gap, deprecated-lineage friendly page, PARENT_ACTIONS derivation, validate-422 hijack, lost-update CAS precondition).
+**Goal:** AdminDash gains generic workflow tracking (definitions list, per-definition pipeline with columns from the pinned machine's states, instance detail with items/activity/documents/allowed actions) and staff-assisted entry; FamilyHub's parent runtime generalizes from registration-era blocks to workflow instances rendered by workflow-forms's StepRenderer — closing the Plan 1/2 follow-ups assigned to this phase (blocks-compiler gap, deprecated-lineage friendly page, PARENT_ACTIONS derivation, validate-422 hijack, lost-update CAS precondition).
 
-**Architecture:** admindash-backend adds thin proxies to apexflow-backend following its existing papermite-proxy pattern (plain `def` + sync httpx, threadpooled by FastAPI); tracking reads go through the existing generic `/api/query` proxy with `_status = 'active'` scoping. apexflow-backend grows a minimal allowed-actions read surface (promoting the private `_allowed_actions` the 409 path already uses), enriches the internal config bundle with models + lineage_status, derives token-upload sensitivity server-side, and adopts a DataCore compare-and-swap precondition (`expected_version`) on instance/item writes. flow-runtime's StepRenderer widens from `mode: 'preview'` to `'preview' | 'family' | 'staff'` with optional items/callback props; FamilyHub's facade reshapes the apexflow config/instance bundles instead of shipping `blocks: []`, and the registration-era block renderer is retired once nothing consumes it.
+**Architecture:** admindash-backend adds thin proxies to apexflow-backend following its existing papermite-proxy pattern (plain `def` + sync httpx, threadpooled by FastAPI); tracking reads go through the existing generic `/api/query` proxy with `_status = 'active'` scoping. apexflow-backend grows a minimal allowed-actions read surface (promoting the private `_allowed_actions` the 409 path already uses), enriches the internal config bundle with models + lineage_status, derives token-upload sensitivity server-side, and adopts a DataCore compare-and-swap precondition (`expected_version`) on instance/item writes. workflow-forms's StepRenderer widens from `mode: 'preview'` to `'preview' | 'family' | 'staff'` with optional items/callback props; FamilyHub's facade reshapes the apexflow config/instance bundles instead of shipping `blocks: []`, and the registration-era block renderer is retired once nothing consumes it.
 
 **Tech Stack:** FastAPI + Uvicorn + pydantic_settings (backends), React 19 + TypeScript + Vite, native Fetch, LanceDB via DataCore only, pytest + respx (admindash) / monkeypatched-seam fakes (apexflow, familyhub), no frontend test framework beyond vitest-node for pure utils (admindash) — verification is build+lint + backend contract tests + a coordinator-run browser gate.
 
@@ -18,9 +18,9 @@
 - **admindash proxy routes are plain `def`, never `async def` with sync httpx** — the open item-15 event-loop debt (`admindash/backend/app/api/entities.py:11-37`) must not grow. New routes follow `admindash/backend/app/api/extract.py:63-79` / `leads.py`'s shape.
 - **admindash routes needing tenant scoping use `require_tenant_match` (`admindash/backend/app/tenancy.py:290`)**, which binds the `{tenant_id}` path param — every new proxy route is shaped `/api/workflows/{tenant_id}/...`.
 - **i18n: every new UI string lands in BOTH `en-US` and `zh-CN`** — admindash's `src/i18n/__tests__/translations.test.ts` fails on key-set drift; familyhub/apexflow follow the same two-locale convention.
-- **flow-runtime stays raw-TS** (`main`/`types` → `src/index.ts`, no build step); any package.json change must preserve `file:` resolution for familyhub, apexflow, and (new) admindash.
+- **workflow-forms stays raw-TS** (`main`/`types` → `src/index.ts`, no build step); any package.json change must preserve `file:` resolution for familyhub, apexflow, and (new) admindash.
 - **familyhub keeps its no-staff-surface property:** token always a URL path segment on the facade, no JWT anywhere, 4xx relayed verbatim / ≥500 masked (`familyhub/backend/app/relay.py:25-48`), anti-enumeration request-link.
-- **TDD throughout:** every behavioral change starts with a failing test; frontends without a test framework verify via `npm run build` + `npm run lint` (+ `npx tsc --noEmit` for flow-runtime) plus the Task 15 browser gate.
+- **TDD throughout:** every behavioral change starts with a failing test; frontends without a test framework verify via `npm run build` + `npm run lint` (+ `npx tsc --noEmit` for workflow-forms) plus the Task 15 browser gate.
 - **Commits:** one per task minimum, `feat(scope):`/`fix(scope):`/`refactor(scope):` conventional style as in Plans 1–2.
 - **Branch:** `feat/apexflow-plan3-channels` off `docs/registration-flow-design`; merged back with `--no-ff` at Task 16.
 
@@ -40,7 +40,7 @@
 1. **apexflow-backend surface** — all routes in `api/{designer,definitions,instances,documents,internal,entities,query,auth_proxy}.py` (method/path/handler/auth/request model/response keys); `machine.py`'s `_allowed_actions` (`:331`), `execute_action` (`:511`), `build_eval_context` (`:226`), `run_system_transitions` (`:450`), the two 409 raise sites (`:431`, `:443`) and wire shape `{"detail": {"allowed": [...]}}`; `engine.py` signatures (`create_instance:159`, `save_draft:276`, `complete_item:435`, `verify_item:497`, `reject_item:514`, `waive_item:524`, `_update_item:369`, `_write_state` in machine.py:294); `internal.py`'s route table, `workflow_config` (`:273-290`), `_capacity_summary` (`:249-270`), `_require_family_channel_definition` (`:162-175`), `BLOCKED_TOKEN_ACTIONS` (`:90`); `definitions.py` service helpers `fetch_models`/`referenced_entity_models` (`app/workflows/definitions.py:53,:67`) and `parse_machine_steps` (`:46-47`).
 2. **DataCore write/version surface** — `store.put_entity` (`store.py:307-386`) with the archive-then-insert flow and `_get_max_version` (`:150`); route `update_entity` (`api/routes.py:294-308`); confirm flattened `/api/query` rows carry `_version`/`_status` and that `_status='active'` is latest-only; DataCore test-suite fixture pattern for store-level tests (name the file/fixtures used by existing `put_entity` tests).
 3. **apexflow DataCore client** — `workflows/datacore.py`: `dc_update` (`:92-110`), `list_entities`, `get_entity`, `dc_query`; `tests/fakes.py`'s `FakeDataCore` (`dc_update` signature, `_store_row` stringification, `install_fake_datacore:218-224`).
-4. **flow-runtime** — `StepRenderer.tsx` props (`:477-492`), the exact **draft key scheme** SectionRenderer reads/writes (verbatim code: how a field value is keyed in `WorkflowDraft`, incl. repeat sections) and how that maps (or fails to map) onto `engine.save_draft`'s `section_answers` shape (`engine.py:276-355`: dict per section_id, list for repeat sections); `evaluateCondition` (`:139`); `index.ts` exports; the `available_in` caller-side-filter contract (`:509-514`) and PreviewPane's filter precedent (`apexflow/frontend/src/editor/PreviewPane.tsx:101-104`, empty = NO state).
+4. **workflow-forms** — `StepRenderer.tsx` props (`:477-492`), the exact **draft key scheme** SectionRenderer reads/writes (verbatim code: how a field value is keyed in `WorkflowDraft`, incl. repeat sections) and how that maps (or fails to map) onto `engine.save_draft`'s `section_answers` shape (`engine.py:276-355`: dict per section_id, list for repeat sections); `evaluateCondition` (`:139`); `index.ts` exports; the `available_in` caller-side-filter contract (`:509-514`) and PreviewPane's filter precedent (`apexflow/frontend/src/editor/PreviewPane.tsx:101-104`, empty = NO state).
 5. **familyhub backend** — full route table, `upstream.py` seam, `relay.py` conventions, `ratelimit` decorators, `PARENT_ACTIONS` (`api/application.py:54`) and guard (`:75-86`), `_config_bundle_from_apexflow` (`api/registration.py:47-61`), `_application_view_from_instance` (`:115-126`), `_school_year_for_date` (`:102-112`), test fixture pattern (`FakeHTTP` copies, autouse fixtures).
 6. **familyhub frontend** — `facade.ts` exports + `RawHubBundle`/`RawConfigBundle` mismatch note, `types/registration.ts`, page structure (RegisterPage phases `:38`, HubPage OUTSTANDING/TERMINAL `:62-63`), i18n key namespaces.
 7. **admindash backend** — `Settings` (config.py:8-56), papermite proxy shapes (`extract.py:18-79`), `require_tenant_match` (tenancy.py:290), `assert_query_tenant_match`/`assert_sql_is_safe_read` (`:299,:311`), main.py mounts (`:34-42`), respx test pattern (`test_extract.py`, `test_entities.py`, `test_leads.py` responder), the open sync-httpx-in-async items (entities.py:18, query.py:34) — confirm current status on the branch.
@@ -429,13 +429,13 @@ For sensitivity: drop `sensitive` from `TokenCreateDocumentRequest` (extra="igno
 
 ---
 
-### Task 5: flow-runtime — StepRenderer runtime generalization
+### Task 5: workflow-forms — StepRenderer runtime generalization
 
 **Files:**
-- Modify: `flow-runtime/src/StepRenderer.tsx`
-- Modify: `flow-runtime/src/types.ts` (new view types)
-- Modify: `flow-runtime/src/index.ts` (export additions)
-- Verify: `cd flow-runtime && npx tsc --noEmit`; `cd apexflow/frontend && npm run build` (PreviewPane must compile unchanged)
+- Modify: `workflow-forms/src/StepRenderer.tsx`
+- Modify: `workflow-forms/src/types.ts` (new view types)
+- Modify: `workflow-forms/src/index.ts` (export additions)
+- Verify: `cd workflow-forms && npx tsc --noEmit`; `cd apexflow/frontend && npm run build` (PreviewPane must compile unchanged)
 
 **Interfaces:**
 - Consumes: existing `StepRendererProps` (`StepRenderer.tsx:477-492`), `WorkflowStepDef`/`WorkflowSectionDef` (`types.ts:198-220`), `evaluateCondition` (`:139`), the caller-side `available_in` filter contract (`:509-514` — unchanged: StepRenderer still never reads `available_in`).
@@ -485,9 +485,9 @@ Behavior:
 - Export `StepRendererMode`, `WorkflowItemView`, `InstanceDocumentView` from `index.ts`.
 
 - [ ] **Step 1:** Implement types + props + rendering as specified. Keep the `void mode;` escape removed; keep all existing preview-path code intact (guard the new UI behind `items !== undefined`).
-- [ ] **Step 2:** `cd flow-runtime && npx tsc --noEmit` → clean.
+- [ ] **Step 2:** `cd workflow-forms && npx tsc --noEmit` → clean.
 - [ ] **Step 3:** `cd apexflow/frontend && npm run build && npm run lint` → clean (PreviewPane unchanged — `mode="preview"` still type-checks).
-- [ ] **Step 4: Commit** — `feat(flow-runtime): StepRenderer runtime modes (family/staff) with item status + complete/upload affordances`.
+- [ ] **Step 4: Commit** — `feat(workflow-forms): StepRenderer runtime modes (family/staff) with item status + complete/upload affordances`.
 
 ---
 
@@ -577,7 +577,7 @@ Plus mechanical renames of the existing 40+ facade tests to the new paths (start
 export interface WorkflowDefinitionView {
   definition_id: string; name: string; version: number;
   machine: { states: { state_id: string; name: string; kind: string }[]; transitions: unknown[] };
-  steps: WorkflowStepDef[];                    // re-export type from flow-runtime
+  steps: WorkflowStepDef[];                    // re-export type from workflow-forms
 }
 export interface WorkflowBundle {
   definition: WorkflowDefinitionView;
@@ -638,15 +638,15 @@ export const runAction = (token: string, action: string) => putAction(token, { a
 ### Task 8: retire the registration-era block runtime
 
 **Files:**
-- Delete: `flow-runtime/src/FlowRenderer.tsx`, `flow-runtime/src/blocks/` (all six), payment-era exports in `flow-runtime/src/blockConfig.ts` + `flow-runtime/src/money.ts`
-- Modify: `flow-runtime/src/index.ts`, `flow-runtime/src/types.ts`, `flow-runtime/src/blockConfig.ts`
-- Verify: flow-runtime typecheck + all three consumer builds
+- Delete: `workflow-forms/src/FlowRenderer.tsx`, `workflow-forms/src/blocks/` (all six), payment-era exports in `workflow-forms/src/blockConfig.ts` + `workflow-forms/src/money.ts`
+- Modify: `workflow-forms/src/index.ts`, `workflow-forms/src/types.ts`, `workflow-forms/src/blockConfig.ts`
+- Verify: workflow-forms typecheck + all three consumer builds
 
 **Interfaces:**
 - Consumes: Task 7 having removed familyhub's last `FlowRenderer`/`FlowBlock`/payment imports (`RegisterPage.tsx:3` was the only `FlowRenderer` mount repo-wide).
 - Produces: `index.ts` no longer exports `FlowRenderer`, `FlowRendererProps`, `formFields`, `docsOf`, `plansOf`, `planAmounts`, `messageBody`, `resolvePlanKind`, `paymentAmountFor`, `formatCents`; `types.ts` drops `FlowBlock`, `BlockType`, `RegistrationConfigDef`, `PaymentPlanKind`, `PaymentPlanOption` (KEEP `ApplicationItem`/`ApplicationStatus`/`ItemStatus`/`DONE_ITEM_STATUSES`/`FlowField`/`RequiredDoc`/`ModelFieldSource` and everything the workflow path uses — verify each drop by grepping ALL of `familyhub/frontend`, `apexflow/frontend`, `admindash/frontend` first; anything still imported stays and is noted in the task report).
 
-- [ ] **Step 1:** Grep-audit every candidate export across the three frontends; delete only zero-consumer symbols. **Step 2:** Delete files, prune `index.ts`/`types.ts`/`blockConfig.ts`. **Step 3:** `npx tsc --noEmit` (flow-runtime), `npm run build && npm run lint` in familyhub/frontend AND apexflow/frontend. **Step 4: Commit** — `refactor(flow-runtime): retire registration-era block renderer and payment-era exports`.
+- [ ] **Step 1:** Grep-audit every candidate export across the three frontends; delete only zero-consumer symbols. **Step 2:** Delete files, prune `index.ts`/`types.ts`/`blockConfig.ts`. **Step 3:** `npx tsc --noEmit` (workflow-forms), `npm run build && npm run lint` in familyhub/frontend AND apexflow/frontend. **Step 4: Commit** — `refactor(workflow-forms): retire registration-era block renderer and payment-era exports`.
 
 ---
 
@@ -868,11 +868,11 @@ export function asNumber(v: unknown): number   // port of designer.ts:56-77's co
 
 **Files:**
 - Create: `admindash/frontend/src/pages/StaffEntryPage.tsx` (+ `.css`)
-- Modify: `admindash/frontend/src/App.tsx` (route `/workflows/:definitionId/new`), `admindash/frontend/package.json` (add `"@neoapex/flow-runtime": "file:../../flow-runtime"`), `admindash/frontend/src/i18n/translations.ts`
+- Modify: `admindash/frontend/src/App.tsx` (route `/workflows/:definitionId/new`), `admindash/frontend/package.json` (add `"@neoapex/workflow-forms": "file:../../workflow-forms"`), `admindash/frontend/src/i18n/translations.ts`
 - Verify: build + lint + vitest; `npm install` for the file: link
 
 **Interfaces:**
-- Consumes: Task 5's `StepRenderer` (`mode="staff"`, items props), Task 9's `createWorkflowInstance`/`postInstanceAction`/`getAllowedActions`, Task 10's `getDefinitionBundle` (models + steps + machine), `defaultSchoolYear` (flow-runtime — still exported; verify at Task 8's audit), Task 7's `draftToSectionAnswers` equivalent — **implement the same converter in `utils/workflowData.ts`** (or import from flow-runtime if Task 7 hoisted it there; `# ADJUST(bindings)` per map §4 — hoisting into flow-runtime is PREFERRED if both channels need it: one converter, two consumers).
+- Consumes: Task 5's `StepRenderer` (`mode="staff"`, items props), Task 9's `createWorkflowInstance`/`postInstanceAction`/`getAllowedActions`, Task 10's `getDefinitionBundle` (models + steps + machine), `defaultSchoolYear` (workflow-forms — still exported; verify at Task 8's audit), Task 7's `draftToSectionAnswers` equivalent — **implement the same converter in `utils/workflowData.ts`** (or import from workflow-forms if Task 7 hoisted it there; `# ADJUST(bindings)` per map §4 — hoisting into workflow-forms is PREFERRED if both channels need it: one converter, two consumers).
 - Produces: route `/workflows/:definitionId/new` — flow: load definitions list → published row → `getDefinitionBundle(entity_id)`; context form (`school_year` defaulted via `defaultSchoolYear()`, optional applicant email); "Start" → `createWorkflowInstance(tenant, definition_id, { context, channel: 'staff', applicant_email? })`; then mount:
 
 ```tsx
@@ -891,7 +891,7 @@ export function asNumber(v: unknown): number   // port of designer.ts:56-77's co
 
 plus an actions bar identical in behavior to Task 11's (from `getAllowedActions`, refreshed after every action — after `submit` the state changes and the step filter re-renders). A "View in pipeline" link back to `/workflows/{definition_id}`. Upload path: `createDocument` proxy (POST `/api/workflows/{tenant}/documents` with `{instance_id, item_id, filename, content_type, size}`) → returned presign upload → then `complete_item` with `payload_ref` (`# ADJUST(bindings)`: mirror familyhub's `uploadDocumentFile` two-phase flow per map §6; if R2 creds are absent in dev the upload leg is exercised only manually, per the browser-gate scope).
 
-- [ ] **Step 1:** package.json link + `npm install`; smoke-import compile. **Step 2:** implement page/route/i18n (both locales). **Step 3:** build + lint + `npm test` clean. **Step 4: Commit** — `feat(admindash): staff-assisted workflow entry mounting flow-runtime in staff mode`.
+- [ ] **Step 1:** package.json link + `npm install`; smoke-import compile. **Step 2:** implement page/route/i18n (both locales). **Step 3:** build + lint + `npm test` clean. **Step 4: Commit** — `feat(admindash): staff-assisted workflow entry mounting workflow-forms in staff mode`.
 
 ---
 
@@ -927,7 +927,7 @@ cd papermite && uv run python -m pytest backend/tests/ --ignore=backend/tests/te
 cd apexflow/frontend && npm run build && npm run lint
 cd familyhub/frontend && npm run build && npm run lint
 cd admindash/frontend && npm run build && npm run lint && npm test
-cd flow-runtime && npx tsc --noEmit
+cd workflow-forms && npx tsc --noEmit
 bash -n start-services.sh
 ```
 

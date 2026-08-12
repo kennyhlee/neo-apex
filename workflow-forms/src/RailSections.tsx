@@ -1,4 +1,4 @@
-// flow-runtime/src/RailSections.tsx
+// workflow-forms/src/RailSections.tsx
 import { useEffect, useId, useRef, useState } from 'react';
 import { useFlowT } from './i18n';
 import { SectionShell } from './SectionShell';

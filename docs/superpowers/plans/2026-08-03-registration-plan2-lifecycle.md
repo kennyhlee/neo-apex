@@ -682,7 +682,7 @@ git commit -m "feat(enrollx): application and item status transition guard table
 - Test: `enrollx/backend/tests/test_registration_items.py` (create)
 
 **Interfaces:**
-- Consumes: block schema from spec section 4 / `flow-runtime` `FlowBlock` (Plan 1); `BLOCKS` fixture (Task 2).
+- Consumes: block schema from spec section 4 / `workflow-forms` `FlowBlock` (Plan 1); `BLOCKS` fixture (Task 2).
 - Produces: `derive_items(blocks: list[dict]) -> list[dict]` — item field dicts WITHOUT `item_id`/`application_id` (engine adds those): keys `block_id, kind, title, status ("not_started"), blocking (bool)`, optional `due_days_after_approval (int)`. Derivation rule (roadmap): form → 1 form item; documents → 1 item per doc; payment_plan → NO item (plan choice lives at `draft_data.payment_plan_selection`); payment → 1 payment item; message/review → none. Also `validate_blocks(blocks) -> list[str]` (empty list = valid) used by `publish_config` (Task 13) and Plan 4's builder.
 
 - [ ] **Step 1: Write failing tests**

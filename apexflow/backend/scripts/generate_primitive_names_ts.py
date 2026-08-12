@@ -10,10 +10,10 @@ registry and the frontend hasn't accounted for it yet -- the whole reason
 that test exists.
 
 Why a generated `.ts` inside `apexflow/frontend/src` rather than in
-`flow-runtime` (contrast `generate_item_status_ts.py`, which targets
-`flow-runtime`): this file is consumed only by `apexflow/frontend`, not by
+`workflow-forms` (contrast `generate_item_status_ts.py`, which targets
+`workflow-forms`): this file is consumed only by `apexflow/frontend`, not by
 all three frontends, so there's no reason to route it through the
-`flow-runtime` `file:` dependency -- doing so would add exactly the
+`workflow-forms` `file:` dependency -- doing so would add exactly the
 cross-package resolution risk that dependency has already caused once
 (`TS2307: Cannot find module 'react'`). An intra-package import has no
 such concern.

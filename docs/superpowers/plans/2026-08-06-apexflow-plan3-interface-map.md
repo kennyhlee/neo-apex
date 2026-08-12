@@ -305,9 +305,9 @@ system columns on fake rows, `dc_update` raises on an unknown `entity_id`
 
 ---
 
-## 4. flow-runtime — draft key scheme (Section 4's highest-value finding)
+## 4. workflow-forms — draft key scheme (Section 4's highest-value finding)
 
-Source: `flow-runtime/src/StepRenderer.tsx` (full file, 540 lines).
+Source: `workflow-forms/src/StepRenderer.tsx` (full file, 540 lines).
 
 ### 4a. Exact key scheme `SectionRenderer`/`FieldControl` read/write
 
@@ -375,7 +375,7 @@ Expects a **nested, per-section-id dict**, not the flat dotted-key shape
 
 **`WorkflowDraft` and `section_answers` are NOT the same shape — no
 converter exists anywhere in this codebase today.** `grep -rn
-"section_answers"` across `flow-runtime/`, `apexflow/frontend/`,
+"section_answers"` across `workflow-forms/`, `apexflow/frontend/`,
 `familyhub/frontend/` returns zero matches outside test files and the
 backend itself. A converter from `WorkflowDraft` to `section_answers`,
 given the same `steps: WorkflowStepDef[]` `StepRenderer` already consumes,
@@ -405,7 +405,7 @@ section, spread `draft_data[section_id]`'s entries as
 `` `${section_id}.${field}` `` keys; for a repeat section, copy
 `draft_data[section_id]` straight across to the bare `section_id` key.
 
-**No such hydration/flattening step exists in `flow-runtime` today either**
+**No such hydration/flattening step exists in `workflow-forms` today either**
 — `StepRenderer`'s `draft` prop is caller-supplied with no built-in loader.
 Plan 3 tasks that wire `save_draft`/draft-hydration between apexflow and
 either channel need to build BOTH directions of this converter; there is
@@ -417,7 +417,7 @@ no existing "just call this function" shortcut to point to.
 `conditions.py`; dispatches on `Array.isArray(group.all/any/not)`, not
 `!== undefined`, because the backend's `model_dump(by_alias=True)` emits
 all three keys with `null` on the unset ones). `index.ts` exports (full
-file, `flow-runtime/src/index.ts:1-15`):
+file, `workflow-forms/src/index.ts:1-15`):
 ```ts
 export * from './types';
 export { FlowRenderer, type FlowRendererProps } from './FlowRenderer';
@@ -498,7 +498,7 @@ always — no steps/sections -> `FlowBlock[]` compiler exists yet (Phase 3,
 explicitly out of scope). `_school_year_for_date` rolls over each July
 (`start_year = ref.year if ref.month >= 7 else ref.year - 1`) — threaded
 into apexflow's `start` body as `context.school_year`, which the
-enrollment template's `capacity_available` guard scopes on; flow-runtime's
+enrollment template's `capacity_available` guard scopes on; workflow-forms's
 own `defaultSchoolYear()` must agree (not verified byte-identical here —
 flag for a Plan 3 task if not already covered by a cross-service test).
 `_application_view_from_instance` is a pure rename (`state` -> `status`),
@@ -649,7 +649,7 @@ inside `base_data`). `TenantSummary` (`:75-78`), `CapacityState`
 (`:90-94`, matches apexflow's `_capacity_summary` shape exactly, §1g),
 `RegistrationBundle`/`StartResponse`/`HubBundle`/`DocumentSlot`/`DecodedToken`
 (`:96-154`). `ApplicationStatus`/`ItemStatus` are RE-EXPORTED from
-`@neoapex/flow-runtime` (`:6`), not redeclared — no drift risk there by
+`@neoapex/workflow-forms` (`:6`), not redeclared — no drift risk there by
 construction.
 
 ### 6c. Page structure
@@ -932,7 +932,7 @@ across locales for every key (`:28-35`).
 | admindash-frontend `ADMINDASH_API_URL` resolution | `import.meta.env.VITE_ADMINDASH_API_URL \|\| svcUrl("admindash-backend")` | `admindash/frontend/src/config.ts:9` |
 | familyhub-frontend `FAMILYHUB_API_URL` resolution | `import.meta.env.VITE_FAMILYHUB_API_URL \|\| svcUrl("familyhub-backend")` | `familyhub/frontend/src/config.ts:9` |
 | localStorage: JWT token | key `neoapex_token` | `admindash/frontend/src/contexts/AuthContext.tsx:4`; `apexflow/frontend/src/contexts/AuthContext.tsx:12`, `apexflow/frontend/src/api/{designer,client}.ts:18,13` (independent copies, not shared code) |
-| localStorage: locale | key `preferredLanguage` | `admindash/frontend/src/hooks/useTranslation.ts:4`; `familyhub/frontend/src/hooks/useTranslation.ts:4`; `apexflow/frontend/src/hooks/useTranslation.ts:8`; also read directly at `flow-runtime/src/i18n.ts:93` (drift from Plan 2 map's `:87` citation — corrected here) |
+| localStorage: locale | key `preferredLanguage` | `admindash/frontend/src/hooks/useTranslation.ts:4`; `familyhub/frontend/src/hooks/useTranslation.ts:4`; `apexflow/frontend/src/hooks/useTranslation.ts:8`; also read directly at `workflow-forms/src/i18n.ts:93` (drift from Plan 2 map's `:87` citation — corrected here) |
 | localStorage: admindash density | key `admindash_density` | `admindash/frontend/src/hooks/useDensity.ts:3` |
 | localStorage: admindash table prefs | key `admindash_table_prefs_${namespace}_${userId}_${tenantId}` | `admindash/frontend/src/hooks/useTablePreferences.ts:38-40` |
 | sessionStorage: admindash chat history | key `admindash_chat_history` | `admindash/frontend/src/contexts/AuthContext.tsx:63` |
@@ -1039,7 +1039,7 @@ trusting the prior map's snapshot. No other value changed between passes.
    (§4c) — this is new code for Plan 3, in both directions (write:
    flatten `WorkflowDraft`'s dotted/bare keys into nested
    `section_answers`; read: hydrate a fetched `instance.draft_data` back
-   into a flat `WorkflowDraft`). Neither `flow-runtime` nor either channel
+   into a flat `WorkflowDraft`). Neither `workflow-forms` nor either channel
    frontend has a partial implementation to build on.
 
 9. **`workflows/definitions.py::parse_machine_steps`'s signature is at

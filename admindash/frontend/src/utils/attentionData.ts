@@ -1,4 +1,4 @@
-import { ITEM_DONE_STATUSES } from '@neoapex/flow-runtime';
+import { ITEM_DONE_STATUSES } from '@neoapex/workflow-forms';
 import { parseMachineStates } from './workflowData.ts';
 
 /**

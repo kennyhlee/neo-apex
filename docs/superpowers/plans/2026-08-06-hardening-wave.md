@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Scope guard (verbatim from the wave goal):** "nothing else rides along — no template work, no designer features. If a fix reveals something bigger (e.g., the DataCore write-ordering change gets risky), it gets parked with a written ruling rather than expanding the wave."
-- Test baselines at wave start (must not regress): datacore **352**, apexflow backend **483**, familyhub backend **74**, admindash backend **194**, admindash frontend vitest **92**. Frontend `npm run build` and `npm run lint` clean for apexflow/familyhub/admindash frontends and `flow-runtime`.
+- Test baselines at wave start (must not regress): datacore **352**, apexflow backend **483**, familyhub backend **74**, admindash backend **194**, admindash frontend vitest **92**. Frontend `npm run build` and `npm run lint` clean for apexflow/familyhub/admindash frontends and `workflow-forms`.
 - Suite commands: `cd datacore && uv run python -m pytest tests/ -q`; `cd apexflow && uv run pytest backend/tests/ -q`; `cd familyhub && uv run pytest backend/tests/ -q`; `cd admindash && uv run pytest backend/tests/ -q`; `cd admindash/frontend && npx vitest run`.
 - Frontend rules: native Fetch (no axios), CSS variables, no global state lib.
 - Config facts (verified this wave — trust these over memory):
@@ -121,7 +121,7 @@ def list_documents(token: str) -> Response:
 - Modify: `familyhub/frontend/src/pages/RegisterPage.tsx` (`documents={[]}` at `:464` and its apology comment at `:459-463`)
 
 **Interfaces:**
-- Consumes: Task 1's `GET /api/instance/{token}/documents` → `InstanceDocumentView[]` (`flow-runtime/src/types.ts:123-127`: `{document_id, filename, item_id?}`; wire rows are a superset — extra keys are fine).
+- Consumes: Task 1's `GET /api/instance/{token}/documents` → `InstanceDocumentView[]` (`workflow-forms/src/types.ts:123-127`: `{document_id, filename, item_id?}`; wire rows are a superset — extra keys are fine).
 - Produces: `listDocuments(token: string): Promise<InstanceDocumentView[]>` in facade.ts; RegisterPage state `documents` passed to StepRenderer.
 
 - [ ] **Step 1: Add the API function** to `facade.ts`, matching the file's existing fetch/error idiom (read neighbors like `getDocumentUrl`/`fetchInstance` first and copy their shape):
@@ -204,7 +204,7 @@ if body.item_id is not None and not any(
 - Test: `apexflow/backend/tests/test_engine.py` or the file holding `save_draft` tests (locate `save_draft` tests first; add the republish regression there)
 
 **Interfaces:**
-- Consumes: `instance.definition.steps` — the instance's PINNED steps, already returned by `GET /internal/instance-by-token/{token}` (`internal.py:353`) and typed at `familyhub/frontend/src/types/workflow.ts:143-151`; converters `draftToSectionAnswers` / `sectionAnswersToDraft` (`flow-runtime/src/sectionAnswers.ts:42-67`, `:81-104`) which take a steps array.
+- Consumes: `instance.definition.steps` — the instance's PINNED steps, already returned by `GET /internal/instance-by-token/{token}` (`internal.py:353`) and typed at `familyhub/frontend/src/types/workflow.ts:143-151`; converters `draftToSectionAnswers` / `sectionAnswersToDraft` (`workflow-forms/src/sectionAnswers.ts:42-67`, `:81-104`) which take a steps array.
 - Produces: autosave payloads keyed by the pinned definition's section ids, so `save_draft`'s pinned-steps validation (`engine.py:323-332`) can never 400 on a republish rename. Rendering (`visibleSteps` at `:403`) is NOT in scope — only the conversion arrays change.
 
 - [ ] **Step 1: Write the failing backend regression test** — this encodes the goal line "republish, then autosave the old instance, expect 200" at the engine level, proving the pinned contract end-to-end (find the existing `save_draft` tests and copy their fixture setup; use the fake DataCore + template seeding idiom the suite already has):
@@ -755,7 +755,7 @@ Preconditions: services up via `./start-services.sh`; reseed ONLY with `--models
 
 ### Task L4: Exit gate
 
-- [ ] All suites at new baselines, recorded: datacore, apexflow, familyhub, admindash backends; admindash vitest; `npm run build && npm run lint` for admindash/apexflow/familyhub frontends + flow-runtime build.
+- [ ] All suites at new baselines, recorded: datacore, apexflow, familyhub, admindash backends; admindash vitest; `npm run build && npm run lint` for admindash/apexflow/familyhub frontends + workflow-forms build.
 - [ ] Re-run of the affected browser-gate legs = Task L2's two channel upload flows (that IS the re-run, for real this time).
 - [ ] Update `docs/superpowers/plans/2026-08-06-apexflow-plan3-followups.md`: mark items 1, 2 (all three boxes), 3, 4, 5, 11, and 10b's first two bullets CLOSED with commit hashes; note where each live proof lives. Add the closed items' canonical deploy entries to `docs/deployment/follow-ups.md` where they were missing.
 - [ ] Record the wave's parked rulings (in the follow-ups doc, new section):

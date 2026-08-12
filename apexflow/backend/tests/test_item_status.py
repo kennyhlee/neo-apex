@@ -56,12 +56,12 @@ def test_engine_writes_no_bare_status_literals():
 
 
 def test_generated_ts_matches_the_enum():
-    """`flow-runtime/src/itemStatus.generated.ts` is generated from this enum
+    """`workflow-forms/src/itemStatus.generated.ts` is generated from this enum
     by `apexflow/backend/scripts/generate_item_status_ts.py` and committed.
     This test is the drift alarm: change the enum without re-running the
     generator and it fails."""
     repo = Path(__file__).resolve().parents[3]
-    generated = (repo / "flow-runtime/src/itemStatus.generated.ts").read_text()
+    generated = (repo / "workflow-forms/src/itemStatus.generated.ts").read_text()
     for s in ItemStatus:
         assert f"'{s.value}'" in generated, f"{s.value} missing from generated TS"
     assert "in_progress" not in generated
@@ -73,7 +73,7 @@ def test_generated_ts_matches_the_enum():
 
 def test_generated_ts_done_statuses_match():
     repo = Path(__file__).resolve().parents[3]
-    generated = (repo / "flow-runtime/src/itemStatus.generated.ts").read_text()
+    generated = (repo / "workflow-forms/src/itemStatus.generated.ts").read_text()
     # split on "= [" so the `readonly ItemStatus[]` annotation's own bracket
     # doesn't truncate the list
     block = generated.split("ITEM_DONE_STATUSES")[1].split("= [")[1]

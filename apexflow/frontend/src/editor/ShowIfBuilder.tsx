@@ -7,7 +7,7 @@
 // JSON with an "Edit as JSON" escape hatch (parse+validate on blur), rather
 // than recursing the structured UI another level deep.
 //
-// Wire shape reminder (map §2i / flow-runtime's `ConditionGroupDef` doc
+// Wire shape reminder (map §2i / workflow-forms's `ConditionGroupDef` doc
 // comment): `all`/`any`/`not` are ALL THREE present on the wire, with `null`
 // for the two that are unset — never omitted. `withCombinator` below always
 // emits all three keys so a round-trip through this builder never drops one.

@@ -1,4 +1,4 @@
-// flow-runtime/src/i18n.ts
+// workflow-forms/src/i18n.ts
 import { createContext, useContext } from 'react';
 
 export type Locale = 'en-US' | 'zh-CN';
@@ -115,7 +115,7 @@ function translate(locale: Locale, key: string): string {
 }
 
 /**
- * Translate a flow-runtime string, reading the locale fresh from
+ * Translate a workflow-forms string, reading the locale fresh from
  * localStorage on every call. Non-reactive: use this only from non-component
  * call sites (e.g. deriving a plain string outside render). Block components
  * must use `useFlowT()` instead, or a locale toggle stops reaching them the
@@ -133,7 +133,7 @@ export function flowT(key: string): string {
  * which cannot use `useFlowT()` because they are not components, but must
  * still be able to honour a locale their caller already knows. Passing a
  * `Locale` rather than a `t` function keeps those functions pure and keeps
- * callers from having to know flow-runtime's key names.
+ * callers from having to know workflow-forms's key names.
  */
 export function flowTWith(locale: Locale | undefined, key: string): string {
   return translate(locale ?? flowLocale(), key);

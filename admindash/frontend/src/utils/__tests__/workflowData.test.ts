@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ITEM_STATUSES } from '@neoapex/flow-runtime';
+import { ITEM_STATUSES } from '@neoapex/workflow-forms';
 import {
   parseMachineStates,
   instancesByState,

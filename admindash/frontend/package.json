@@ -12,7 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@neoapex/flow-runtime": "file:../../flow-runtime",
+    "@neoapex/workflow-forms": "file:../../workflow-forms",
     "@neoapex/ui-tokens": "file:../../ui-tokens",
     "idb": "^8.0.3",
     "papaparse": "^5.5.3",

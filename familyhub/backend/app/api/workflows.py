@@ -20,7 +20,7 @@ apexflow's config bundle VERBATIM -- no more `_config_bundle_from_apexflow`
 reshape. apexflow's Task 4 work made the internal
 `/internal/workflows/{tenant_id}/{definition_id}/config` route itself
 return the exact `{definition, models, tenant, capacity, lineage_status}`
-shape the family runtime (flow-runtime's `StepRenderer`) needs, so there is
+shape the family runtime (workflow-forms's `StepRenderer`) needs, so there is
 no longer a `blocks: []` compiler-placeholder to ship -- the placeholder,
 and the function that emitted it, are deleted. Likewise the `start` route
 no longer renames `instance.state` to `application.status`
@@ -96,7 +96,7 @@ def _school_year_for_date(ref: datetime.date) -> str:
     `ref.year - 1`. Threaded into apexflow's `start` body as
     `context.school_year` -- apexflow's `capacity_available` guard
     (enrollment template) scopes on exactly this context key. All three
-    channels (this rule, flow-runtime's `defaultSchoolYear()`, apexflow's
+    channels (this rule, workflow-forms's `defaultSchoolYear()`, apexflow's
     enrollment template) must agree.
     """
     start_year = ref.year if ref.month >= 7 else ref.year - 1

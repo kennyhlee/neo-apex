@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { ItemStatus, WorkflowItemView } from '@neoapex/flow-runtime';
+import type { ItemStatus, WorkflowItemView } from '@neoapex/workflow-forms';
 import {
   decodeToken,
   FacadeError,

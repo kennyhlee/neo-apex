@@ -18,7 +18,7 @@ Tenants (afterschool programs/schools) design their own student registration flo
 | Waitlist v1 | Programs get a capacity number; when full, submissions land `Waitlisted`; admins promote manually. Automated offers Phase 3 |
 | Tenant isolation | All config, applications, documents, payments, and tracking are strictly per-tenant (see §3) |
 | Parent identity v1 | Magic links (no parent accounts); parent accounts are Phase 3 |
-| Service topology | Two placeholder modules activated: **enrollx** (staff: builder, lifecycle, tracking) and **familyhub** (parents: runtime, hub); shared `flow-runtime` frontend package; AdminDash scope unchanged |
+| Service topology | Two placeholder modules activated: **enrollx** (staff: builder, lifecycle, tracking) and **familyhub** (parents: runtime, hub); shared `workflow-forms` frontend package; AdminDash scope unchanged |
 
 ## 2. Architecture
 
@@ -33,7 +33,7 @@ Tenants (afterschool programs/schools) design their own student registration flo
 - **admindash** — unchanged scope (day-to-day ops: students, families, leads, programs). Cross-links to enrollx; its AI chatbot can query registration entities anyway since all data is in DataCore.
 - **datacore** — ID abbreviations + the document blob API (§8).
 - **papermite** — image extensions; enrollx (not admindash) hosts the un-hardcoded extraction proxy for extract-to-prefill.
-- **flow-runtime** (new shared frontend package, sibling of `ui-tokens`) — the FlowRenderer + block components, consumed by both enrollx (admin-assisted entry, builder live preview) and familyhub (parent runtime). One implementation, two hosts.
+- **workflow-forms** (new shared frontend package, sibling of `ui-tokens`) — the FlowRenderer + block components, consumed by both enrollx (admin-assisted entry, builder live preview) and familyhub (parent runtime). One implementation, two hosts.
 
 Physically separating the parent surface (familyhub) from the staff API (enrollx) also strengthens tenant isolation: the public-internet-facing service simply has no admin routes to leak.
 
@@ -45,7 +45,7 @@ Parent (magic link)                          Staff (JWT, role + tenant-checked)
       ▼                                                ▼
 familyhub-frontend (6000)                    enrollx-frontend (5900)
   registration runtime · parent hub            flow builder · pipeline · matrix · detail
-      │  [flow-runtime pkg]                        │  [flow-runtime pkg]
+      │  [workflow-forms pkg]                        │  [workflow-forms pkg]
       ▼                                            ▼
 familyhub-backend (6010)                     enrollx-backend (5910)
   token-scoped public facade ──private──►      generic query/entity proxy → DataCore
@@ -87,7 +87,7 @@ The Flow Builder needs no bespoke authoring API: configs are drafted via generic
 ### Components
 
 1. **Flow Builder** (enrollx-frontend) — authors `registration_config` per program.
-2. **FlowRenderer** (`flow-runtime` shared package) — walks the config's step blocks; mounted by familyhub (parent runtime) and enrollx (staff-assisted entry, builder live preview).
+2. **FlowRenderer** (`workflow-forms` shared package) — walks the config's step blocks; mounted by familyhub (parent runtime) and enrollx (staff-assisted entry, builder live preview).
 3. **Parent Hub** (familyhub-frontend, via magic link) — application status + outstanding actions after first submission.
 4. **Application service** (enrollx-backend) — application/item lifecycle, status derivation, transition validation, activity logging.
 5. **Document blob API** (DataCore) — R2-backed blob storage behind DataCore; enrollx/familyhub backends proxy presign requests and enforce sensitive-doc gating.
@@ -204,7 +204,7 @@ All tracking views read exclusively through the generic query endpoint (server-s
 
 ## 13. Phasing
 
-- **Phase 1 (v1):** prerequisites (scaffold enrollx + familyhub modules and `flow-runtime` package, services.json + deploy pipeline entries, AdminDash tenant-match fix, `require_role`, DataCore blob API on R2, Resend, Stripe Connect onboarding); entities + status engine; builder with `form`/`documents`/`payment_plan`/`payment`/`message` blocks; FlowRenderer in both channels; magic links + hub; pipeline + detail views; basic capacity/waitlist; v1 notifications.
+- **Phase 1 (v1):** prerequisites (scaffold enrollx + familyhub modules and `workflow-forms` package, services.json + deploy pipeline entries, AdminDash tenant-match fix, `require_role`, DataCore blob API on R2, Resend, Stripe Connect onboarding); entities + status engine; builder with `form`/`documents`/`payment_plan`/`payment`/`message` blocks; FlowRenderer in both channels; magic links + hub; pipeline + detail views; basic capacity/waitlist; v1 notifications.
 - **Phase 2:** question-level conditional logic, `esign` block, requirements matrix, scheduled reminders, installment plans + autopay + retry, per-tenant email branding, extract-to-prefill polish.
 - **Phase 3:** parent accounts (activate `parent` role, user↔family link, household prefill/re-enrollment, multi-child), automated waitlist offer-accept-expire, discounts (sibling/early-bird), refund workflows tied to withdrawal.
 
@@ -218,4 +218,4 @@ Lottery-based admission (SchoolMint-style), attendance, subscription billing for
 - Stripe Connect onboarding adds tenant-setup friction; offline recording keeps tenants unblocked meanwhile.
 - Draft PII lives on the application entity pre-approval; DataCore version trimming (5 versions) bounds accumulation but frequent autosave may need batching (autosave debounce + dirty-field patch, not whole-form writes).
 - Two new modules mean two more Fly apps + Workers + cert renewals + deploy jobs; scale-to-zero bounds cost, but ops surface grows. The consolidation fallback (both surfaces in enrollx, familyhub split at Phase 3) is in §2 if this proves heavy.
-- The `flow-runtime` shared package is the first cross-frontend code package beyond ui-tokens; it needs a clean build/consumption story (npm workspace or file: dependency) so the two frontends don't drift.
+- The `workflow-forms` shared package is the first cross-frontend code package beyond ui-tokens; it needs a clean build/consumption story (npm workspace or file: dependency) so the two frontends don't drift.

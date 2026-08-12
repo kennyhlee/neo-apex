@@ -1,4 +1,4 @@
-// flow-runtime/src/useMediaQuery.ts
+// workflow-forms/src/useMediaQuery.ts
 import { useEffect, useState } from 'react';
 
 /**

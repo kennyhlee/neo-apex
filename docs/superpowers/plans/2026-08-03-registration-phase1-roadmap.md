@@ -9,10 +9,10 @@ Phase 1 spans five subsystems. Each plan below produces working, testable softwa
 
 | # | Plan | Delivers | Depends on |
 |---|---|---|---|
-| 1 | **Foundations** | AdminDash tenant-match/role hardening; enrollx + familyhub modules scaffolded (backends with auth/generic proxies, frontends with shells); `flow-runtime` package with shared types; new entity definitions in `base_model.json`; DataCore ID abbrevs; DataCore R2 blob API | — |
+| 1 | **Foundations** | AdminDash tenant-match/role hardening; enrollx + familyhub modules scaffolded (backends with auth/generic proxies, frontends with shells); `workflow-forms` package with shared types; new entity definitions in `base_model.json`; DataCore ID abbrevs; DataCore R2 blob API | — |
 | 2 | **Application lifecycle engine** (enrollx-backend) | Status engine, single action endpoint, capacity/waitlist, activity logging, magic-link token module, Resend email | 1 |
 | 3 | **Payments** (enrollx-backend + settings UI) | Stripe Connect onboarding, checkout session action, webhook, offline payment recording | 2 |
-| 4 | **Builder + staff channel** (enrollx-frontend + flow-runtime) | Real FlowRenderer + block components, Flow Builder with live preview + publish, staff-assisted entry, tracking views (pipeline, detail) | 2 (3 for payment block) |
+| 4 | **Builder + staff channel** (enrollx-frontend + workflow-forms) | Real FlowRenderer + block components, Flow Builder with live preview + publish, staff-assisted entry, tracking views (pipeline, detail) | 2 (3 for payment block) |
 | 5 | **Family channel** (familyhub) | Token-scoped facade (5 routes), parent registration runtime, parent hub, request-link; end-to-end tests both channels | 2, 4 (3 for checkout) |
 
 ## Interface contracts (binding across all plans)
@@ -45,7 +45,7 @@ Parent-uploaded documents are tagged `uploaded_by = "parent:{application entity_
 
 **Magic-link token** (Plan 2 issues; Plan 5 consumes via the internal routes): HMAC-SHA256 over `{tenant_id}.{application_id}.{token_version}` with server secret `ENROLLX_LINK_SECRET`; URL-safe base64 of `{tenant_id}.{application_id}.{signature}`; `token_version` stored on the application entity, incremented to revoke.
 
-**flow-runtime types** (Plan 1 defines in `flow-runtime/src/types.ts`; Plans 4–5 consume):
+**workflow-forms types** (Plan 1 defines in `workflow-forms/src/types.ts`; Plans 4–5 consume):
 ```ts
 export type BlockType = 'form' | 'documents' | 'payment_plan' | 'payment' | 'message' | 'review';
 export interface FlowBlock {

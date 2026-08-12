@@ -4,7 +4,7 @@ Plan 2 lands on `feat/apexflow-plan2-designer`, 26+ commits on top of Plan 1's
 base (`cae062b..HEAD`), taking apexflow's backend suite from 350 to 456 (462
 after the final-review fix wave below) tests and standing up
 `apexflow/frontend` (templates gallery, definitions list, step editor,
-machine editor, live preview, publish flow) plus `flow-runtime` (the shared
+machine editor, live preview, publish flow) plus `workflow-forms` (the shared
 preview-renderer package). Task 11's live browser gate passed end-to-end
 against a real DataCore (login → instantiate → edit → autosave → break
 machine → inline validation → fix → publish → verify `status="published"`
@@ -29,7 +29,7 @@ fix wave; see the note at the end of item 15 and item 16 below.
 | apexflow frontend | `npm run build` / `npm run lint` | both clean |
 | familyhub frontend | `npm run build` / `npm run lint` | both clean |
 | admindash frontend | `npm run build` / `npm run lint` | build clean; lint has 5 pre-existing errors, all in files this branch never touched (see below) |
-| flow-runtime | `npx tsc --noEmit` | clean |
+| workflow-forms | `npx tsc --noEmit` | clean |
 | `start-services.sh` | `bash -n start-services.sh` | syntax OK |
 
 **Papermite's 2 failures are pre-existing, not introduced by this
@@ -396,7 +396,7 @@ pass in admindash's own lane.
     independently re-verified by a second background pass with "findings
     matched almost exactly." Result: this gate found zero port/URL/config
     bugs anywhere in Plan 2's surface (apexflow frontend/backend,
-    flow-runtime, the definitions/templates/editor routes) — the
+    workflow-forms, the definitions/templates/editor routes) — the
     countermeasure held on its first real test. Worth keeping as standard
     practice in every future plan's interface map, not just a one-off
     reaction to the Plan 1 incident.

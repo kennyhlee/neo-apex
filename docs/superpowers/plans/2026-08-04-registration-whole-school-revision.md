@@ -4,9 +4,9 @@
 
 **Goal:** Re-scope registration from "one program" to "the whole school, per school year", and make the tenant's `registration_application` model definition usable inside the flow.
 
-**Architecture:** `program_id` is deleted outright (no shims) from `registration_config`, `registration_application`, every enrollx/familyhub route, both frontends and `flow-runtime`. A tenant has exactly one registration-config lineage; capacity moves onto the `tenant` entity and is counted per `school_year` over applications only. Papermite's finalize merges into the existing model instead of replacing it, so engine-owned base fields survive model setup. A `form` block may now draw from `entity_type: "registration_application"`, and its answers are written onto the application's own `base_data`.
+**Architecture:** `program_id` is deleted outright (no shims) from `registration_config`, `registration_application`, every enrollx/familyhub route, both frontends and `workflow-forms`. A tenant has exactly one registration-config lineage; capacity moves onto the `tenant` entity and is counted per `school_year` over applications only. Papermite's finalize merges into the existing model instead of replacing it, so engine-owned base fields survive model setup. A `form` block may now draw from `entity_type: "registration_application"`, and its answers are written onto the application's own `base_data`.
 
-**Tech Stack:** Python 3.12 / FastAPI / pytest (enrollx, familyhub, papermite backends) · React 19 + TypeScript + Vite (enrollx, familyhub frontends) · `@neoapex/flow-runtime` (shared TS package) · LanceDB via DataCore HTTP API.
+**Tech Stack:** Python 3.12 / FastAPI / pytest (enrollx, familyhub, papermite backends) · React 19 + TypeScript + Vite (enrollx, familyhub frontends) · `@neoapex/workflow-forms` (shared TS package) · LanceDB via DataCore HTTP API.
 
 ## Global Constraints
 
@@ -50,9 +50,9 @@ Note `registration_application_id` is in the list: DataCore auto-assigns `"{enti
 - `papermite/backend/tests/test_finalize_merge.py` — merge rule (Task 7).
 
 **Modified — shared contract**
-- `flow-runtime/src/types.ts` — drop `program_id`; add `ENGINE_OWNED_APPLICATION_FIELDS`, `APPLICATION_ENTITY_TYPE`.
-- `flow-runtime/src/blockConfig.ts` — add `hydratedFormFields`, `defaultSchoolYear`.
-- `flow-runtime/src/index.ts` — export the new names.
+- `workflow-forms/src/types.ts` — drop `program_id`; add `ENGINE_OWNED_APPLICATION_FIELDS`, `APPLICATION_ENTITY_TYPE`.
+- `workflow-forms/src/blockConfig.ts` — add `hydratedFormFields`, `defaultSchoolYear`.
+- `workflow-forms/src/index.ts` — export the new names.
 
 **Modified — enrollx backend**
 - `app/registration/engine.py` — config lookup, capacity, `create_application`, `tenant_label`, `default_school_year`, `hydrate_config_blocks`; delete `get_program`.
@@ -87,12 +87,12 @@ Note `registration_application_id` is in the list: DataCore auto-assigns `"{enti
 
 ---
 
-## Task 1: flow-runtime contract
+## Task 1: workflow-forms contract
 
 **Files:**
-- Modify: `flow-runtime/src/types.ts`
-- Modify: `flow-runtime/src/blockConfig.ts`
-- Modify: `flow-runtime/src/index.ts`
+- Modify: `workflow-forms/src/types.ts`
+- Modify: `workflow-forms/src/blockConfig.ts`
+- Modify: `workflow-forms/src/index.ts`
 
 **Interfaces:**
 - Consumes: nothing (first task).
@@ -105,11 +105,11 @@ Note `registration_application_id` is in the list: DataCore auto-assigns `"{enti
   - `export interface ModelFieldSource { base_fields: FlowField[]; custom_fields: FlowField[] }`
   - `export function hydratedFormFields(entityType: string, model: ModelFieldSource): FlowField[]`
 
-This package has no test runner (`flow-runtime/package.json` has no `test` script); its verification is that both consuming frontends typecheck against it (Tasks 9 and 10) and `npx tsc --noEmit -p flow-runtime/tsconfig.json` passes here.
+This package has no test runner (`workflow-forms/package.json` has no `test` script); its verification is that both consuming frontends typecheck against it (Tasks 9 and 10) and `npx tsc --noEmit -p workflow-forms/tsconfig.json` passes here.
 
 - [ ] **Step 1: Drop `program_id` from the two types and add the two constants**
 
-In `flow-runtime/src/types.ts`, replace the `RegistrationConfigDef` interface with:
+In `workflow-forms/src/types.ts`, replace the `RegistrationConfigDef` interface with:
 
 ```ts
 export interface RegistrationConfigDef {
@@ -172,7 +172,7 @@ export const ENGINE_OWNED_APPLICATION_FIELDS: readonly string[] = [
 
 - [ ] **Step 2: Add `defaultSchoolYear` and `hydratedFormFields` to blockConfig.ts**
 
-At the top of `flow-runtime/src/blockConfig.ts`, extend the type import to include what the new helpers need:
+At the top of `workflow-forms/src/blockConfig.ts`, extend the type import to include what the new helpers need:
 
 ```ts
 import type {
@@ -239,7 +239,7 @@ export function hydratedFormFields(
 
 - [ ] **Step 3: Export the new names**
 
-Replace `flow-runtime/src/index.ts` with:
+Replace `workflow-forms/src/index.ts` with:
 
 ```ts
 export * from './types';
@@ -258,14 +258,14 @@ export { formatCents } from './money';
 
 - [ ] **Step 4: Typecheck the package**
 
-Run: `cd /Users/kennylee/Development/NeoApex && npx tsc --noEmit -p flow-runtime/tsconfig.json`
+Run: `cd /Users/kennylee/Development/NeoApex && npx tsc --noEmit -p workflow-forms/tsconfig.json`
 Expected: no output (clean). If `FlowRenderer.tsx` or a block file references `config.program_id` / `application.program_id`, it will error here — fix by deleting the reference, not by re-adding the field.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add flow-runtime/src
-git commit -m "refactor(flow-runtime): drop program_id, add application-model field helpers"
+git add workflow-forms/src
+git commit -m "refactor(workflow-forms): drop program_id, add application-model field helpers"
 ```
 
 ---
@@ -505,7 +505,7 @@ from datetime import date, datetime, timezone
 ADMITTED_STATUSES = {"approved", "enrolled"}
 
 # Base fields of registration_application owned by this engine. Restated in
-# TypeScript as flow-runtime's ENGINE_OWNED_APPLICATION_FIELDS — the two
+# TypeScript as workflow-forms's ENGINE_OWNED_APPLICATION_FIELDS — the two
 # lists MUST stay identical. A form block answer naming one of these is
 # rejected with a 400 (actions._apply_application_fields); the hosts also
 # exclude them when hydrating an application-model form block.
@@ -586,7 +586,7 @@ def tenant_label(tenant_id, token=None) -> str:
 def default_school_year(ref: date | None = None) -> str:
     """The academic year straddling `ref`, rolling over each July.
 
-    Restates flow-runtime's `defaultSchoolYear()` and familyhub's
+    Restates workflow-forms's `defaultSchoolYear()` and familyhub's
     `_school_year_for_date` so all three channels agree. Used server-side
     for the capacity snapshot in the public config bundle, which has no
     school_year of its own to key on.
@@ -1065,7 +1065,7 @@ Add near the top of `enrollx/backend/app/registration/actions.py`, under `COMPLE
 
 ```python
 # The `form` block entity_type naming the application itself. Restated in
-# TypeScript as flow-runtime's APPLICATION_ENTITY_TYPE.
+# TypeScript as workflow-forms's APPLICATION_ENTITY_TYPE.
 APPLICATION_ENTITY_TYPE = "registration_application"
 ```
 
@@ -1223,7 +1223,7 @@ git commit -m "feat(enrollx): application-model form blocks write to application
   - `POST /internal/registration/{tenant_id}/request-link` body `{email}`.
 - Test helper produced: `tests.fakes.install_fake_datacore` also stubs `get_model_definition`; `FakeDataCore.set_model(tenant, entity_type, definition)`.
 
-**Why hydration is here (beyond the spec's literal text):** `flow-runtime` never fetches anything — the host supplies `config.fields` for a form block that draws from an entity model. The enrollx frontend does that itself, but **familyhub holds no DataCore credential at all**, so on the parent channel an entity-sourced form block currently renders zero fields. Spec §4 says a tenant's customized application fields must appear "without touching the builder"; on the parent channel that is only true if enrollx hydrates before serving the config. This closes that gap for both `student`-style blocks and the new application-model block.
+**Why hydration is here (beyond the spec's literal text):** `workflow-forms` never fetches anything — the host supplies `config.fields` for a form block that draws from an entity model. The enrollx frontend does that itself, but **familyhub holds no DataCore credential at all**, so on the parent channel an entity-sourced form block currently renders zero fields. Spec §4 says a tenant's customized application fields must appear "without touching the builder"; on the parent channel that is only true if enrollx hydrates before serving the config. This closes that gap for both `student`-style blocks and the new application-model block.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1447,7 +1447,7 @@ Append to `enrollx/backend/app/registration/engine.py`:
 def model_form_fields(tenant_id, entity_type, token=None) -> list[dict]:
     """The fields a form block sourced from `entity_type` should render.
 
-    Python twin of flow-runtime's `hydratedFormFields` — the two must agree,
+    Python twin of workflow-forms's `hydratedFormFields` — the two must agree,
     because the same config is rendered by the staff host (which hydrates in
     TypeScript) and the parent host (which receives this).
 
@@ -1480,7 +1480,7 @@ def hydrate_config_blocks(tenant_id, config_row, token=None):
     """Return `config_row` with every entity-sourced form block carrying a
     resolved `config.fields` list.
 
-    flow-runtime never fetches anything: the HOST supplies `config.fields`.
+    workflow-forms never fetches anything: the HOST supplies `config.fields`.
     The enrollx frontend does that itself, but familyhub holds no DataCore
     credential at all, so without this an entity-sourced form block renders
     zero fields on the parent channel — the channel that matters most.
@@ -1689,7 +1689,7 @@ Delete `test_start_derives_school_year_from_program_start_date_not_from_today` a
 ])
 def test_start_derives_school_year_with_the_july_rollover(
         client, fake_http, monkeypatch, today, expected):
-    """Same rule as flow-runtime's defaultSchoolYear() and enrollx's
+    """Same rule as workflow-forms's defaultSchoolYear() and enrollx's
     engine.default_school_year() — all three channels must agree."""
     monkeypatch.setattr("app.api.registration._today", lambda: today)
     fake_http.add("POST", "/internal/registration/acme/start",
@@ -1789,7 +1789,7 @@ def _school_year_for_date(ref: datetime.date) -> str:
     `${y}-${y+1}` where `y` is `ref`'s year if `ref.month >= 7` else
     `ref.year - 1`.
 
-    Restates flow-runtime's `defaultSchoolYear()` (its JS `getMonth() >= 6`
+    Restates workflow-forms's `defaultSchoolYear()` (its JS `getMonth() >= 6`
     is the same July boundary, 0-indexed) and enrollx's
     `engine.default_school_year`. All three must agree: the parent sees this
     value on the start page, enrollx's capacity snapshot is computed for it,
@@ -2225,14 +2225,14 @@ and render the option labels through i18n so `registration_application` does not
 
 Apply these edits to `enrollx/frontend/src/pages/ConfigBuilderPage.tsx`:
 
-(a) Imports — drop `useParams` and `ProgramRow`, add the flow-runtime helpers:
+(a) Imports — drop `useParams` and `ProgramRow`, add the workflow-forms helpers:
 
 ```tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlowRenderer, hydratedFormFields } from '@neoapex/flow-runtime';
+import { FlowRenderer, hydratedFormFields } from '@neoapex/workflow-forms';
 import type {
   BlockType, FlowBlock, PaymentPlanOption, RegistrationConfigDef, RequiredDoc,
-} from '@neoapex/flow-runtime';
+} from '@neoapex/workflow-forms';
 ```
 and change `import type { ConfigRow, ProgramRow } from '../types/registration.ts';` to `import type { ConfigRow } from '../types/registration.ts';`.
 
@@ -2345,7 +2345,7 @@ Replace the whole of `enrollx/frontend/src/pages/NewApplicationPage.tsx` with:
 // enrollx/frontend/src/pages/NewApplicationPage.tsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { defaultSchoolYear } from '@neoapex/flow-runtime';
+import { defaultSchoolYear } from '@neoapex/workflow-forms';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useToast } from '../hooks/useToast.ts';
@@ -2359,7 +2359,7 @@ import './ProgramsPage.css';
  * (spec §5). An application is admission to the school as a whole for that
  * year — there is no program to pick.
  *
- * `defaultSchoolYear()` comes from flow-runtime so this prefill, the parent
+ * `defaultSchoolYear()` comes from workflow-forms so this prefill, the parent
  * start page's read-only line, and enrollx's own capacity snapshot all agree
  * on the July rollover.
  */
@@ -2443,7 +2443,7 @@ In `ApplicationDetailPage.tsx`, replace the header subtitle line:
 ```
 
 In `ApplicationEntryPage.tsx`:
-- Add `hydratedFormFields` to the flow-runtime value import.
+- Add `hydratedFormFields` to the workflow-forms value import.
 - Replace SQL #3 and its comment:
 
 ```tsx
@@ -2646,7 +2646,7 @@ export async function requestLink(tenantId: string, email: string): Promise<void
 - [ ] **Step 4: RegisterPage**
 
 In `familyhub/frontend/src/pages/RegisterPage.tsx`:
-- Import `defaultSchoolYear` from `@neoapex/flow-runtime`.
+- Import `defaultSchoolYear` from `@neoapex/workflow-forms`.
 - Change `const { tenantId = '', programId = '' } = useParams();` to `const { tenantId = '' } = useParams();`.
 - In `toApplicationSummary`, delete the `program_id` line.
 - In the bundle-loading effect, call `fetchRegistrationBundle(tenantId)` and change the dep array to `[tenantId]`.
@@ -3056,7 +3056,7 @@ git commit -m "docs: whole-school registration revision follow-ups"
 | §3 | Creation body `{school_year, channel, applicant_email?}`, 404 message | 5 |
 | §3 | Internal start / config / request-link signatures | 5 |
 | §3 | familyhub facade + `/register/{tenant_id}` | 6, 10 |
-| §3 | `RegistrationConfigDef` drops `program_id`; `defaultSchoolYear()` in flow-runtime | 1 |
+| §3 | `RegistrationConfigDef` drops `program_id`; `defaultSchoolYear()` in workflow-forms | 1 |
 | §3 | `publish_config` validates against the single lineage | 3(d) |
 | §4.1 | Papermite finalize merges, never removes base fields | 7 |
 | §4.2 | `form` block `entity_type` gains `registration_application`; renderer shows custom fields only; answers → application `base_data`; engine-owned rejected 400 | 1, 4, 5, 9 |

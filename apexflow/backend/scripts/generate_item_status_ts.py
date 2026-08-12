@@ -1,16 +1,16 @@
 #!/usr/bin/env python
-"""Generate `flow-runtime/src/itemStatus.generated.ts` from `ItemStatus`.
+"""Generate `workflow-forms/src/itemStatus.generated.ts` from `ItemStatus`.
 
 `app/workflows/shared.py::ItemStatus` is the single authority for the
 `workflow_item.status` vocabulary. The three frontends all consume the
-`flow-runtime` package, so emitting the TS constants there gives them the
+`workflow-forms` package, so emitting the TS constants there gives them the
 same vocabulary without any of them hardcoding it.
 
-Why a generated `.ts` inside `flow-runtime` rather than a root-level JSON
-imported across the package boundary: `flow-runtime` is wired into each
+Why a generated `.ts` inside `workflow-forms` rather than a root-level JSON
+imported across the package boundary: `workflow-forms` is wired into each
 frontend as a symlinked npm `file:` dependency, and that resolution path is
 exactly what broke the CI frontend build once already (`TS2307: Cannot find
-module 'react'`, fixed by installing flow-runtime's own deps). An
+module 'react'`, fixed by installing workflow-forms's own deps). An
 intra-package import has no cross-directory or Vite `fs.allow` concerns.
 
 Run after any change to `ItemStatus`:
@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.workflows.shared import ITEM_DONE_STATUSES, ItemStatus  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-TARGET = REPO_ROOT / "flow-runtime" / "src" / "itemStatus.generated.ts"
+TARGET = REPO_ROOT / "workflow-forms" / "src" / "itemStatus.generated.ts"
 
 BANNER = """// GENERATED FILE -- DO NOT EDIT BY HAND.
 //

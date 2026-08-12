@@ -7,7 +7,7 @@
 // `authHeaders` per API client module (apexflow-frontend's `designer.ts`
 // does the same — interface map §9's localStorage table notes these are
 // "independent copies, not shared code").
-import type { ModelFieldSource, WorkflowStepDef } from '@neoapex/flow-runtime';
+import type { ModelFieldSource, WorkflowStepDef } from '@neoapex/workflow-forms';
 import { ADMINDASH_API_URL } from '../config.ts';
 import { asNumber, type LineageInstance } from '../utils/workflowData.ts';
 
@@ -169,7 +169,7 @@ export interface DefinitionDetail {
   lineage_status: string;
   channel_access: string;
   machine: { states: MachineStateDef[]; transitions: MachineTransitionDef[] };
-  /** Wire mirror of `schema.py`'s `StepDef` list — typed via flow-runtime's
+  /** Wire mirror of `schema.py`'s `StepDef` list — typed via workflow-forms's
    * own `WorkflowStepDef` (Task 12) rather than a loose `Record<string,
    * unknown>[]`, since `StaffEntryPage` feeds this straight into
    * `StepRenderer`/`draftToSectionAnswers`/`sectionAnswersToDraft`, all of

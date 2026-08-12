@@ -4,7 +4,7 @@ import {
   type ItemStatus,
   type ModelFieldSource,
   type WorkflowItemView,
-} from '@neoapex/flow-runtime';
+} from '@neoapex/workflow-forms';
 
 /**
  * Pure logic for the AdminDash Workflows area — no network, no React, so it
@@ -282,7 +282,7 @@ export function asNumber(value: unknown, fallback = 0): number {
  * lookup can miss). `StepRenderer` types `models` as
  * `Record<string, ModelFieldSource>` with no null — filtering here means a
  * section bound to a dropped key resolves to `undefined` in `StepRenderer`'s
- * own lookup, and `sectionFields` (flow-runtime) already renders that as
+ * own lookup, and `sectionFields` (workflow-forms) already renders that as
  * "no fields" rather than crashing. Used by `StaffEntryPage` (Task 12);
  * familyhub's `RegisterPage` carries an unexported equivalent (`usableModels`)
  * since that app has no shared pure-logic test module to hoist into.

@@ -18,7 +18,7 @@
 - **Every scalar from `/api/query` arrives as a string.** `"false"` is truthy in JS. Use `asBool` / `asNumber` from `utils/workflowData.ts`.
 - **SQL literals are escaped by doubling single quotes**, same rule as `workflowData.ts::escapeSqlLiteral`.
 - **New user-facing strings go in `src/i18n/translations.ts` for BOTH `en-US` and `zh-CN`.** A missing key renders the raw key string on screen with no warning. `src/i18n/__tests__/translations.test.ts` fails if the locales drift.
-- **Test baselines to hold:** apexflow 585 (becomes 587), admindash pytest 201, admindash vitest 94, familyhub 89, datacore 354, flow-runtime 59.
+- **Test baselines to hold:** apexflow 585 (becomes 587), admindash pytest 201, admindash vitest 94, familyhub 89, datacore 354, workflow-forms 59.
 - **`admindash npm run lint` has 5 pre-existing errors** (DynamicForm, AuthContext, DashboardContext, ModelContext). Do not fix them. Do notice if a 6th appears.
 - **Branch:** work continues on `feat/item-status-typing`. Do **not** rebase onto `main` — main lacks the ApexFlow Plan 3 merge this depends on.
 
@@ -168,7 +168,7 @@ waiting. Additive: pre-existing rows read as absent."
 - Test: `admindash/frontend/src/utils/__tests__/attentionData.test.ts`
 
 **Interfaces:**
-- Consumes: `parseMachineStates`, `asNumber` from `./workflowData.ts`; `ITEM_DONE_STATUSES` from `@neoapex/flow-runtime`.
+- Consumes: `parseMachineStates`, `asNumber` from `./workflowData.ts`; `ITEM_DONE_STATUSES` from `@neoapex/workflow-forms`.
 - Produces: `BucketKey`, `DefinitionRow`, `ItemAttentionRow`, `InstanceSilenceRow`, and four builders — `publishedDefinitionsSql()`, `submittedItemsSql()`, `overdueItemsSql(nowIso)`, `instanceSilenceSql()`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -258,7 +258,7 @@ Expected: FAIL — `Failed to resolve import "../attentionData.ts"`.
 Create `admindash/frontend/src/utils/attentionData.ts`:
 
 ```ts
-import { ITEM_DONE_STATUSES } from '@neoapex/flow-runtime';
+import { ITEM_DONE_STATUSES } from '@neoapex/workflow-forms';
 
 /**
  * Pure logic for the AdminDash attention queue — no network, no React, so

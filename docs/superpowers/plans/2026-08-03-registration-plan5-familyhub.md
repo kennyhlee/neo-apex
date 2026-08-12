@@ -24,7 +24,7 @@ Parent (phone) ── familyhub-frontend (6000)
 
 **Contract gap this plan bridges (flagged, deliberate):** the roadmap's internal request-link route is token-scoped (`POST /internal/application-by-token/{token}/request-link`), but the facade's `POST /api/application/request-link` takes `{tenant_id, program_id?, email}` with NO token — that is the lost-link flow, where the parent by definition has no working token. Only enrollx can look up applications by email, so Task 2 adds `POST /internal/registration/{tenant_id}/request-link` (email match → re-send link, reusing Plan 2's resend machinery). The facade route additions for documents (`POST /api/application/{token}/documents`, `GET /api/application/{token}/documents/{document_id}/url`) are pre-authorized by spec §8 (familyhub proxies presign for parents), and `POST /api/application/{token}/checkout` exposes Plan 3's parent payment path (spec §7 parent path; the hub's "pay" affordance is dead weight without it).
 
-**Tech Stack:** Python 3.12 + FastAPI + pydantic_settings + httpx + pytest/TestClient (backend); React 19 + TypeScript + Vite + react-router-dom v7 + native fetch (frontend); `@neoapex/ui-tokens` + `@neoapex/flow-runtime` (file: deps); custom i18n hook (en-US, zh-CN) copied from admindash by Plan 1. No new heavy dependencies anywhere — the rate limiter is stdlib-only.
+**Tech Stack:** Python 3.12 + FastAPI + pydantic_settings + httpx + pytest/TestClient (backend); React 19 + TypeScript + Vite + react-router-dom v7 + native fetch (frontend); `@neoapex/ui-tokens` + `@neoapex/workflow-forms` (file: deps); custom i18n hook (en-US, zh-CN) copied from admindash by Plan 1. No new heavy dependencies anywhere — the rate limiter is stdlib-only.
 
 ## Global Constraints
 
@@ -57,7 +57,7 @@ git checkout -b feat/registration-plan5-familyhub
 
 ```bash
 ls familyhub/backend/app/main.py familyhub/frontend/package.json \
-   enrollx/backend/app/main.py flow-runtime/src/FlowRenderer.tsx
+   enrollx/backend/app/main.py workflow-forms/src/FlowRenderer.tsx
 grep -rln "application-by-token" enrollx/backend/app
 ```
 
@@ -100,7 +100,7 @@ Every `ADJUST(bindings)` line in later tasks resolves against this file. This ta
 - 201 response keys → 
 - GET /api/documents/{tenant_id}/{document_id}/url auth + response keys → 
 
-## flow-runtime (open flow-runtime/src/FlowRenderer.tsx and its use in enrollx-frontend)
+## workflow-forms (open workflow-forms/src/FlowRenderer.tsx and its use in enrollx-frontend)
 - Full FlowRendererProps interface (verbatim) → 
 - enrollx-frontend file that mounts FlowRenderer for staff-assisted entry (path) → 
 - Callback props and their exact signatures (save, complete item, submit, upload) → 
@@ -123,7 +123,7 @@ grep -rn "X-Internal-Key\|internal_key" enrollx/backend/app | head -30
 grep -rn "application-by-token\|request-link\|checkout" enrollx/backend/app/api | head -40
 grep -rn "registration_config\|capacity" enrollx/backend/app | head -40
 grep -rn "def \|Depends\|BaseModel" datacore/src/datacore/api/document_routes.py | head -30
-sed -n '1,80p' flow-runtime/src/FlowRenderer.tsx
+sed -n '1,80p' workflow-forms/src/FlowRenderer.tsx
 grep -rn "FlowRenderer" enrollx/frontend/src | head
 grep -n "API_URL\|svcUrl" familyhub/frontend/src/config.ts
 ls familyhub/frontend/src/i18n familyhub/frontend/src/hooks
@@ -1596,13 +1596,13 @@ git commit -m "feat(familyhub): token-scoped document upload slots and ownership
 - Modify: `familyhub/frontend/src/i18n/translations.ts` (path per bindings — Plan 1 copied admindash's i18n in)
 
 **Interfaces:**
-- Consumes: every facade route from Tasks 4–6; `RegistrationConfigDef` from `@neoapex/flow-runtime`; the API-base constant from `src/config.ts`.
+- Consumes: every facade route from Tasks 4–6; `RegistrationConfigDef` from `@neoapex/workflow-forms`; the API-base constant from `src/config.ts`.
 - Produces: `fetchRegistrationBundle`, `startRegistration`, `fetchApplication`, `saveDraft`, `completeItem`, `submitApplication`, `requestLink`, `createDocumentSlot`, `uploadDocumentFile`, `getDocumentUrl`, `startCheckout`, `decodeToken`, `entityData` + the types — consumed by Tasks 8–10.
 
 - [ ] **Step 1: `src/types/registration.ts`**
 
 ```ts
-import type { RegistrationConfigDef } from '@neoapex/flow-runtime';
+import type { RegistrationConfigDef } from '@neoapex/workflow-forms';
 
 /** DataCore entities arrive base_data-wrapped; tolerate both shapes. */
 export interface EntityRecord {
@@ -1966,7 +1966,7 @@ git commit -m "feat(familyhub): facade API client, registration types, en/zh str
 - Create: `familyhub/frontend/src/pages/RegisterPage.css`
 
 **Interfaces:**
-- Consumes: `fetchRegistrationBundle`, `startRegistration`, `fetchApplication`, `saveDraft`, `completeItem`, `submitApplication`, `uploadDocumentFile` (Task 7); `FlowRenderer` mode `'parent'` from `@neoapex/flow-runtime` (Plan 4's real renderer).
+- Consumes: `fetchRegistrationBundle`, `startRegistration`, `fetchApplication`, `saveDraft`, `completeItem`, `submitApplication`, `uploadDocumentFile` (Task 7); `FlowRenderer` mode `'parent'` from `@neoapex/workflow-forms` (Plan 4's real renderer).
 - Produces: route component for `/register/:tenantId/:programId`, resumable via `?token=` (the hub's "Continue form" link target).
 
 - [ ] **Step 1 (binding step — do this BEFORE writing the JSX):** Read the FlowRendererProps interface and the enrollx-frontend staff-entry wiring recorded in bindings. The `<FlowRenderer …>` element below carries the roadmap-guaranteed props (`config`, `mode`) plus callback props under the names this plan expects; rename/reshape ONLY those callback props to Plan 4's actual interface, keeping each one bound to the same facade function. Every facade function the renderer could need already exists in Task 7 — no new fetch code may be written here.
@@ -1976,7 +1976,7 @@ git commit -m "feat(familyhub): facade API client, registration types, en/zh str
 ```tsx
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { FlowRenderer } from '@neoapex/flow-runtime';
+import { FlowRenderer } from '@neoapex/workflow-forms';
 import {
   completeItem,
   fetchApplication,

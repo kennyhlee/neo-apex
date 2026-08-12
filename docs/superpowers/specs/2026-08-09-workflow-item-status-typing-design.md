@@ -16,7 +16,7 @@ already produced three distinct defects:
    but **no code path ever writes `in_progress`** — not `engine.py`, not
    `primitives.py`, not `machine.py` — and no test references it. It is also
    documented as legal in two engine docstrings and in
-   `flow-runtime/src/types.ts:118`'s comment. Logged as Plan 1 follow-up #23:
+   `workflow-forms/src/types.ts:118`'s comment. Logged as Plan 1 follow-up #23:
    "a dead-but-declared status is a minor trap for a future guard author who
    assumes it's reachable."
 
@@ -134,24 +134,24 @@ Python remains authoritative and never reads the generated file at runtime: the
 engine's correctness must not depend on an artifact that can be absent from a
 Fly image.
 
-Fixing `flow-runtime/src/types.ts:118`'s stale `in_progress` comment is part of
+Fixing `workflow-forms/src/types.ts:118`'s stale `in_progress` comment is part of
 this step.
 
 > **AMENDMENT (implementation, `feat/item-status-typing`).** This section
 > originally specified a **root-level JSON** imported by TS "the way
 > `services.json` is." The implementation instead emits a **TypeScript module
-> inside `flow-runtime`** — `flow-runtime/src/itemStatus.generated.ts`, written
+> inside `workflow-forms`** — `workflow-forms/src/itemStatus.generated.ts`, written
 > by `apexflow/backend/scripts/generate_item_status_ts.py`.
 >
-> Reason: `flow-runtime` is wired into each frontend as a symlinked npm `file:`
+> Reason: `workflow-forms` is wired into each frontend as a symlinked npm `file:`
 > dependency, and a root-level JSON would have to be imported across that
 > package boundary. That is the exact resolution path that already broke the CI
 > frontend build once (`TS2307: Cannot find module 'react'`, fixed by
-> installing `flow-runtime`'s own deps — see the `flow-runtime` CI dep note in
+> installing `workflow-forms`'s own deps — see the `workflow-forms` CI dep note in
 > `docs/deployment/follow-ups.md`), and it would additionally need a Vite
 > `fs.allow` entry in three frontends. A generated `.ts` inside the package is
 > a plain intra-package import with none of that, and
-> `flow-runtime/src/types.ts` was already the canonical home of the TS
+> `workflow-forms/src/types.ts` was already the canonical home of the TS
 > `ItemStatus` union and `DONE_ITEM_STATUSES`. Same single-source property,
 > strictly less resolution risk.
 >
@@ -165,7 +165,7 @@ this step.
 
 Measured, not assumed:
 
-- `flow-runtime/src/types.ts::WorkflowItemView` — `entity_id`, `step_id`,
+- `workflow-forms/src/types.ts::WorkflowItemView` — `entity_id`, `step_id`,
   `kind`, `title`, `status`, `blocking`. Shared by AdminDash and FamilyHub.
 - `admindash/frontend/src/utils/workflowData.ts::toItemView` — the same six.
 - FamilyHub `HubPage` additionally reads `payload_ref`.

@@ -99,7 +99,7 @@
   margin-top: var(--space-4);
 }
 
-/* Running phase: StepRenderer's own `.fr-*` classes (flow-runtime.css)
+/* Running phase: StepRenderer's own `.fr-*` classes (workflow-forms.css)
    handle the form itself -- this only gives its blocks the same vertical
    rhythm as the rest of this page's sections, matching StaffEntryPage's
    `.staff-entry-page .fr-step-renderer` precedent. */

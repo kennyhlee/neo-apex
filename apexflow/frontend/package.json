@@ -12,7 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@neoapex/flow-runtime": "file:../../flow-runtime",
+    "@neoapex/workflow-forms": "file:../../workflow-forms",
     "@neoapex/ui-tokens": "file:../../ui-tokens",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

@@ -3,7 +3,7 @@
 // The status vocabulary is GENERATED from apexflow's `ItemStatus` StrEnum
 // (`apexflow/backend/app/workflows/shared.py`) -- see
 // `./itemStatus.generated.ts`. Re-exported here so every existing
-// `from '@neoapex/flow-runtime'` import keeps resolving, and so there is
+// `from '@neoapex/workflow-forms'` import keeps resolving, and so there is
 // still exactly one place a consumer needs to know about.
 import type { ItemStatus } from './itemStatus.generated';
 

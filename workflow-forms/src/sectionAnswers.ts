@@ -1,4 +1,4 @@
-// flow-runtime/src/sectionAnswers.ts
+// workflow-forms/src/sectionAnswers.ts
 //
 // `WorkflowDraft` <-> `save_draft`'s `section_answers` converter. Hoisted
 // here (Plan 3 Task 12) from familyhub-frontend's `api/facade.ts`, where

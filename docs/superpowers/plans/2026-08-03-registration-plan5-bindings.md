@@ -35,9 +35,9 @@ branch).
    `application_id` field, i.e. the RA-prefixed business id) — contrast with
    the same file's item mapping at line 161, `item_id: i.entity_id`, which
    deliberately uses `entity_id`. This field is display-only in every block
-   that reads it (grep of `flow-runtime/src/blocks/*.tsx` for
+   that reads it (grep of `workflow-forms/src/blocks/*.tsx` for
    `application.application_id`/`application_id` found no consumer — the
-   flow-runtime blocks never dispatch on it); it is not used to key any
+   workflow-forms blocks never dispatch on it); it is not used to key any
    action call. **Not a plan-vs-reality conflict**, but a trap for Plan 5:
    whatever familyhub sends to `FlowRenderer`'s `application` prop for
    display should follow the same convention (business id for display), but
@@ -82,7 +82,7 @@ branch).
 | translations file path + export shape | `familyhub/frontend/src/i18n/translations.ts` exports `type Locale = 'en-US' | 'zh-CN'` and `const translations: Record<Locale, Record<string, string>>` | `familyhub/frontend/src/i18n/translations.ts:1-20` |
 | App.tsx route structure | Single `<Route path="/" element={<LandingPage />} />` inside a `BrowserRouter`; no auth context anywhere; docstring explicitly earmarks Plan 5 to add `/register/:tenantId/:programId` and `/application/:token` | `familyhub/frontend/src/App.tsx:1-23` |
 | theme.css token names | Present and pre-wired: `--bg-card: var(--surface)` (line 254), `--text-primary: var(--ink)` (line 266); `--accent-ink` is NOT redefined locally — it is inherited from `@neoapex/ui-tokens` (`ui-tokens/tokens.css:30`, `--accent-ink: #2B6FB5`), per this file's own comment | `familyhub/frontend/src/styles/theme.css:37,44,58,254,266` |
-| useTranslation localStorage key | `'preferredLanguage'` — matches `flowLocale()`'s read exactly | `familyhub/frontend/src/hooks/useTranslation.ts:4,7-8`; `flow-runtime/src/i18n.ts:83` |
+| useTranslation localStorage key | `'preferredLanguage'` — matches `flowLocale()`'s read exactly | `familyhub/frontend/src/hooks/useTranslation.ts:4,7-8`; `workflow-forms/src/i18n.ts:83` |
 | program entity name field | `name` (str) — **not** `program_name` | `launchpad/backend/app/data/base_model.json` → `program.base_fields` (verified via `python3 -c` extraction: fields are `program_id, name, description, start_date, end_date, capacity, status`) |
 
 ## 3. Routes
@@ -117,7 +117,7 @@ Confirmed staff `uploaded_by` derivation: `user.get("user_id", "staff")` at `doc
 
 `document.entity_id == document.document_id` confirmed: `_store.put_entity(..., entity_id=document_id, ...)` at `datacore/src/datacore/api/document_routes.py:131-137` — the business id IS the entity_id for this one entity type, exactly the stated exception.
 
-## 4. flow-runtime barrel surface (verbatim, `flow-runtime/src/index.ts`)
+## 4. workflow-forms barrel surface (verbatim, `workflow-forms/src/index.ts`)
 
 **enrollx-frontend file that mounts `FlowRenderer` for staff-assisted entry:**
 `enrollx/frontend/src/pages/ApplicationEntryPage.tsx` (`FlowRenderer` call at
@@ -138,13 +138,13 @@ export { formatCents } from './money';
 ```
 
 Confirmed signatures:
-- `FlowRendererProps` (`flow-runtime/src/FlowRenderer.tsx:18-68`): `config`, `mode: FlowMode`, `locale?: Locale`, `application: ApplicationSummary | null`, `items: ApplicationItem[]`, `values: Record<string, unknown>`, `onSaveDraft: (values) => Promise<void>`, `onCompleteItem: (itemId: string) => Promise<void>` (**no `payload` param**), `onUploadDocument: (blockId: string, doc: RequiredDoc, file: File, itemId?: string) => Promise<void>` (carries `itemId`), `onCheckout: (itemId: string) => Promise<void>`, `onSubmit: () => Promise<void>`, `onRecordOfflinePayment?: (itemId: string) => void` (staff-mode only).
-- `validateFlowField(field: FlowField, value: unknown, locale?: Locale): string | null` — `flow-runtime/src/validateField.ts:28-30`.
-- `resolvePlanKind(config: RegistrationConfigDef, planChoice: string): PaymentPlanKind | null` — `flow-runtime/src/blockConfig.ts:60-62`.
-- `paymentAmountFor(config, planChoice: string, item: ApplicationItem | null, paymentBlockId): number | null` — `flow-runtime/src/blockConfig.ts:96-99` (signature continues past the read window but matches the plan's claimed shape).
-- `useFlowLocale()`/`useFlowT()` read from `FlowLocaleContext`, which `FlowRenderer` populates from its `locale` prop, falling back to `flowLocale()` (a `localStorage.getItem('preferredLanguage')` read) when no `FlowRenderer` ancestor supplies one — `flow-runtime/src/i18n.ts:81-87,126,143-145`.
+- `FlowRendererProps` (`workflow-forms/src/FlowRenderer.tsx:18-68`): `config`, `mode: FlowMode`, `locale?: Locale`, `application: ApplicationSummary | null`, `items: ApplicationItem[]`, `values: Record<string, unknown>`, `onSaveDraft: (values) => Promise<void>`, `onCompleteItem: (itemId: string) => Promise<void>` (**no `payload` param**), `onUploadDocument: (blockId: string, doc: RequiredDoc, file: File, itemId?: string) => Promise<void>` (carries `itemId`), `onCheckout: (itemId: string) => Promise<void>`, `onSubmit: () => Promise<void>`, `onRecordOfflinePayment?: (itemId: string) => void` (staff-mode only).
+- `validateFlowField(field: FlowField, value: unknown, locale?: Locale): string | null` — `workflow-forms/src/validateField.ts:28-30`.
+- `resolvePlanKind(config: RegistrationConfigDef, planChoice: string): PaymentPlanKind | null` — `workflow-forms/src/blockConfig.ts:60-62`.
+- `paymentAmountFor(config, planChoice: string, item: ApplicationItem | null, paymentBlockId): number | null` — `workflow-forms/src/blockConfig.ts:96-99` (signature continues past the read window but matches the plan's claimed shape).
+- `useFlowLocale()`/`useFlowT()` read from `FlowLocaleContext`, which `FlowRenderer` populates from its `locale` prop, falling back to `flowLocale()` (a `localStorage.getItem('preferredLanguage')` read) when no `FlowRenderer` ancestor supplies one — `workflow-forms/src/i18n.ts:81-87,126,143-145`.
 
-Reference type shapes consumed (`flow-runtime/src/types.ts:1-70`): `FlowBlock`, `RegistrationConfigDef{config_id, program_id, version, status, blocks}`, `FlowMode = 'parent'|'staff'|'preview'`, `ApplicationStatus`/`ItemStatus`/`ItemKind` enums, `ApplicationSummary{application_id, program_id, school_year, status, channel_started, config_version, applicant_email?}`, `ApplicationItem{item_id, application_id, block_id, kind, title, status, blocking, due_at?, completed_by?, payload_ref?, due_days_after_approval?}`, `FlowField{name, type, required, options?, multiple?, default?}`.
+Reference type shapes consumed (`workflow-forms/src/types.ts:1-70`): `FlowBlock`, `RegistrationConfigDef{config_id, program_id, version, status, blocks}`, `FlowMode = 'parent'|'staff'|'preview'`, `ApplicationStatus`/`ItemStatus`/`ItemKind` enums, `ApplicationSummary{application_id, program_id, school_year, status, channel_started, config_version, applicant_email?}`, `ApplicationItem{item_id, application_id, block_id, kind, title, status, blocking, due_at?, completed_by?, payload_ref?, due_days_after_approval?}`, `FlowField{name, type, required, options?, multiple?, default?}`.
 
 ## 5. The identifier convention (the "trap" — verified end to end)
 

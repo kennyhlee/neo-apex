@@ -1,4 +1,4 @@
-// flow-runtime/src/sectionFields.ts
+// workflow-forms/src/sectionFields.ts
 import type { FlowField, WorkflowSectionDef } from './types';
 import type { ModelFieldSource } from './blockConfig';
 

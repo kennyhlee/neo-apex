@@ -1,4 +1,4 @@
-// flow-runtime/src/validateField.ts
+// workflow-forms/src/validateField.ts
 import type { FlowField } from './types';
 import { flowTWith, type Locale } from './i18n';
 
@@ -14,7 +14,7 @@ const PHONE_RE = /^[+]?[\d\s\-().]{7,}$/;
  * change today and a two-host breaking change afterwards.
  *
  * Why a `locale` and not a `t`: the function is pure, so it cannot call
- * `useFlowT()`, and every message it can produce is a flow-runtime key — a
+ * `useFlowT()`, and every message it can produce is a workflow-forms key — a
  * caller-supplied `t` would force both hosts to know those key names. A
  * `Locale` keeps the function pure and self-contained.
  *

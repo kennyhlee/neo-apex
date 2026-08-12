@@ -1,4 +1,4 @@
-// flow-runtime/src/sectionCompletion.ts
+// workflow-forms/src/sectionCompletion.ts
 import type { FlowField, WorkflowSectionDef } from './types';
 import type { WorkflowDraft } from './StepRenderer';
 

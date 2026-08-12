@@ -1,4 +1,4 @@
-// flow-runtime/src/StepRenderer.tsx
+// workflow-forms/src/StepRenderer.tsx
 import { useId, useState } from 'react';
 import type {
   Condition, ConditionGroupDef, ConditionItem, FlowField, InstanceDocumentView, WorkflowItemView,

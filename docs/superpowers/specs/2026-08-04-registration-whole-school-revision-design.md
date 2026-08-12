@@ -48,7 +48,7 @@ Replacements for the roadmap's binding contracts. Unlisted contracts (magic-link
 
 **familyhub facade**: `GET /api/registration/{tenant_id}` (config bundle) · `POST /api/registration/{tenant_id}/start` · token routes unchanged. Public URL: `familyhub.floatify.com/register/{tenant_id}`.
 
-**flow-runtime types**: `RegistrationConfigDef` drops `program_id`. `FlowBlock` unchanged except the `form` block config (§4). `defaultSchoolYear()` (July rollover) moves into flow-runtime so both channels derive the same default; the parent start page shows it as a read-only line, staff can edit it.
+**workflow-forms types**: `RegistrationConfigDef` drops `program_id`. `FlowBlock` unchanged except the `form` block config (§4). `defaultSchoolYear()` (July rollover) moves into workflow-forms so both channels derive the same default; the parent start page shows it as a read-only line, staff can edit it.
 
 **`publish_config`** validates against the tenant's single lineage (archive prior published version, as today) — the program existence check is removed.
 
@@ -57,7 +57,7 @@ Replacements for the roadmap's binding contracts. Unlisted contracts (magic-link
 Two rules keep the `registration_application` model definition truthful, then the flow consumes it:
 
 1. **Engine-owned fields are seeded and protected.** `base_model.json` declares the §2 base fields; LaunchPad seeds them as today. **Papermite finalization must merge, not replace**: when committing a model for an entity type that already exists in the tenant's models table, extracted fields that match existing base fields by name are dropped, and the remainder are appended to `custom_fields` — base fields are never removed. (This is what turned the acme-afterschool model into the extraction shape; `school_id` and similar extraction-only fields simply become custom fields. The merge rule applies to all entity types, not just this one.)
-2. **Form blocks can draw from the application model.** The builder's `form` block `entity_type` choices become `student | family | contact | registration_application`. When `entity_type = "registration_application"`, the renderer shows the model's `custom_fields` only (engine base fields are excluded — same mechanism as the existing `{et}_id` exclusion, extended to the engine-owned list, which flow-runtime exports as a constant). On `complete_item`/`submit`, answers for such a block are written onto the application entity's `base_data` (they are application-level facts: signatures, initials), not into `draft_data`'s student/family staging. The engine rejects writes to engine-owned field names with a 400.
+2. **Form blocks can draw from the application model.** The builder's `form` block `entity_type` choices become `student | family | contact | registration_application`. When `entity_type = "registration_application"`, the renderer shows the model's `custom_fields` only (engine base fields are excluded — same mechanism as the existing `{et}_id` exclusion, extended to the engine-owned list, which workflow-forms exports as a constant). On `complete_item`/`submit`, answers for such a block are written onto the application entity's `base_data` (they are application-level facts: signatures, initials), not into `draft_data`'s student/family staging. The engine rejects writes to engine-owned field names with a 400.
 
 The default seeded flow template should include a `form` block with `entity_type: "registration_application"` so tenants who customized their application model during model setup see their fields without touching the builder.
 
@@ -80,7 +80,7 @@ The default seeded flow template should include a `form` block with `entity_type
 
 - Wipe registration data in dev tenants: `registration_config`, `registration_application`, `application_item`, `application_activity`, `document`, `payment` rows (LanceDB archive is acceptable; these are all test rows).
 - Reseed models: update `base_model.json` (`registration_config` minus `program_id`; `registration_application` per §2; `tenant` + `capacity`), run LaunchPad's sync-defaults path, then re-run the Papermite merge for acme-afterschool so its agreement fields survive as `custom_fields`.
-- Delete program-scoped code paths outright (no deprecation): `get_published_config(tenant, program_id)` → `get_published_config(tenant)`, `capacity_state` rewrite, route signature changes, `ProgramsPage`/`ProgramRow` removal from EnrollX, `flow-runtime` type change.
+- Delete program-scoped code paths outright (no deprecation): `get_published_config(tenant, program_id)` → `get_published_config(tenant)`, `capacity_state` rewrite, route signature changes, `ProgramsPage`/`ProgramRow` removal from EnrollX, `workflow-forms` type change.
 - Test suites follow the contracts: enrollx backend tests updating creation/config/capacity fixtures; familyhub tests updating start/config routes; the Plan 4/5 follow-up items remain tracked separately and are not absorbed here.
 
 ## 7. Out of scope

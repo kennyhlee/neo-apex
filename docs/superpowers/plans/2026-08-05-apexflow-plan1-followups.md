@@ -358,14 +358,14 @@ convention, not fixed in this wave.
     `ItemStatus` StrEnum rather than re-spelled), from `verify_item`'s
     source-status guard (now `VERIFIABLE_STATUSES = {SUBMITTED}`), and from
     two `engine.py` docstrings. `5ddc03c` removed it from the four
-    TypeScript sites — `flow-runtime/src/types.ts` (the union and the
+    TypeScript sites — `workflow-forms/src/types.ts` (the union and the
     `WorkflowItemView.status` comment), `familyhub HubPage.tsx`
     (`ITEM_TONE`, `ALL_ITEM_STATUSES`, `OUTSTANDING`), and `admindash
     workflowData.ts::itemActionVisibility` — plus the two now-dead i18n keys
-    (`flow-runtime/src/i18n.ts`, `familyhub .../translations.ts`). The
+    (`workflow-forms/src/i18n.ts`, `familyhub .../translations.ts`). The
     vocabulary now has exactly one spelling, in
     `apexflow/backend/app/workflows/shared.py::ItemStatus`; the TS side is
-    GENERATED from it (`flow-runtime/src/itemStatus.generated.ts`) with a
+    GENERATED from it (`workflow-forms/src/itemStatus.generated.ts`) with a
     drift test that fails if the two disagree. See
     `docs/superpowers/plans/2026-08-09-workflow-item-status-typing.md`.
 24. **Process lesson: interface maps must also pin cross-service
@@ -385,7 +385,7 @@ convention, not fixed in this wave.
     for a field/function name.
 
 25. **`message`-step bodies are still plain text while section descriptions
-    render markdown.** `MessageStep` (`flow-runtime/src/StepRenderer.tsx`)
+    render markdown.** `MessageStep` (`workflow-forms/src/StepRenderer.tsx`)
     splits `config.body` on newlines into escaped paragraphs. Now that
     `SectionDescription` exists as a hardened, single-call-site markdown
     renderer, pointing message bodies at it is a small change — but it is a
@@ -395,7 +395,7 @@ convention, not fixed in this wave.
 26. **No CI runs any test suite.** `.github/workflows/` contains only
     `deploy.yml` and `discord-release.yml`; neither invokes pytest or vitest.
     Every suite is run locally by whoever remembers. This matters more now
-    than it did: `flow-runtime`'s new vitest suite contains the markdown
+    than it did: `workflow-forms`'s new vitest suite contains the markdown
     containment and link-scheme tests, which are a security boundary. A
     guard that only runs when someone remembers is weaker than it looks.
     Wiring a test workflow covering the four Python suites and two JS suites

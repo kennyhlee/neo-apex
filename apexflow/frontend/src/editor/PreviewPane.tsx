@@ -1,5 +1,5 @@
 // Live preview tab (Task 9, replaces EditorPage.tsx's stub pane) — mounts
-// flow-runtime's real `StepRenderer` against the CURRENT in-memory draft
+// workflow-forms's real `StepRenderer` against the CURRENT in-memory draft
 // (draftStore's `steps`/`machine`/`models`, passed straight through as
 // props — not a re-fetch of the persisted row), so edits made in the
 // Steps/Machine tabs re-render here live: same store, same objects, no
@@ -10,8 +10,8 @@
 // an autosave (binding rule: "Preview is inert with respect to
 // persistence"). "Reset answers" just clears this local state.
 import { useMemo, useState } from 'react';
-import { StepRenderer, type ModelFieldSource, type WorkflowDraft } from '@neoapex/flow-runtime';
-import '@neoapex/flow-runtime/src/flow-runtime.css';
+import { StepRenderer, type ModelFieldSource, type WorkflowDraft } from '@neoapex/workflow-forms';
+import '@neoapex/workflow-forms/src/workflow-forms.css';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { Button } from '../components/ui/Button.tsx';
 import type { EntityModelsMap, MachineDef, WorkflowStepDef } from '../types/designer.ts';
@@ -58,7 +58,7 @@ export default function PreviewPane({ steps, machine, models }: PreviewPaneProps
 
   /**
    * `available_in` pre-filter — `StepRenderer` itself does NOT consult
-   * `available_in` (`flow-runtime/src/StepRenderer.tsx`'s
+   * `available_in` (`workflow-forms/src/StepRenderer.tsx`'s
    * `StepRendererProps` doc comment: "Callers that DO have a state to
    * preview against ... must pre-filter `steps` to those whose
    * `available_in` includes the selected state before passing them in

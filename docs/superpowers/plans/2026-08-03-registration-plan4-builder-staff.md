@@ -2,18 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the flow-runtime placeholder with the real FlowRenderer and its six block components, and build the staff side of registration in enrollx-frontend: a Flow Builder with live preview and publish, staff-assisted application entry, and the tracking views (applications pipeline + application detail). Everything consumes backend endpoints that already exist after Plans 1–3; this plan adds **zero** backend code.
+**Goal:** Replace the workflow-forms placeholder with the real FlowRenderer and its six block components, and build the staff side of registration in enrollx-frontend: a Flow Builder with live preview and publish, staff-assisted application entry, and the tracking views (applications pipeline + application detail). Everything consumes backend endpoints that already exist after Plans 1–3; this plan adds **zero** backend code.
 
-**Architecture:** `flow-runtime` (shared package, sibling of `ui-tokens`) owns the flow-walking renderer and block components; it is consumed here by enrollx (staff entry, builder live preview) and later by familyhub (Plan 5, parent runtime) — one implementation, two hosts. enrollx-frontend hosts the builder and tracking pages. All reads go through the generic query proxy (`POST /api/query` → DataCore SQL over the tenant's entities); invariant-free writes (builder drafts) use the generic entity proxy; lifecycle writes go through the single action endpoint from Plan 2. Entity-model-sourced form fields are resolved by the HOST app (via ModelContext) and injected into block config before the config reaches FlowRenderer — flow-runtime never fetches anything.
+**Architecture:** `workflow-forms` (shared package, sibling of `ui-tokens`) owns the flow-walking renderer and block components; it is consumed here by enrollx (staff entry, builder live preview) and later by familyhub (Plan 5, parent runtime) — one implementation, two hosts. enrollx-frontend hosts the builder and tracking pages. All reads go through the generic query proxy (`POST /api/query` → DataCore SQL over the tenant's entities); invariant-free writes (builder drafts) use the generic entity proxy; lifecycle writes go through the single action endpoint from Plan 2. Entity-model-sourced form fields are resolved by the HOST app (via ModelContext) and injected into block config before the config reaches FlowRenderer — workflow-forms never fetches anything.
 
-**Tech Stack:** React 19 + TypeScript + Vite (enrollx-frontend, port 5900); TypeScript-only npm package `@neoapex/flow-runtime` (typechecked with `tsc --noEmit`, compiled by the host's Vite); native Fetch; CSS variables from `@neoapex/ui-tokens` (no CSS-in-JS); enrollx-backend (FastAPI, port 5910) is consumed, not modified.
+**Tech Stack:** React 19 + TypeScript + Vite (enrollx-frontend, port 5900); TypeScript-only npm package `@neoapex/workflow-forms` (typechecked with `tsc --noEmit`, compiled by the host's Vite); native Fetch; CSS variables from `@neoapex/ui-tokens` (no CSS-in-JS); enrollx-backend (FastAPI, port 5910) is consumed, not modified.
 
 ## Global Constraints
 
 - **Branch:** `git checkout main && git pull` then `git checkout -b feat/registration-plan4-builder-staff`. Commit per task. SSH remotes only.
-- **No frontend test framework exists in this repo.** Verification for every task is: `cd /Users/kennylee/Development/NeoApex/flow-runtime && npm run typecheck`, `cd /Users/kennylee/Development/NeoApex/enrollx/frontend && npm run build` (tsc + Vite) and `npm run lint`, plus the concrete manual smoke steps in Task 11. Do not invent a test runner.
+- **No frontend test framework exists in this repo.** Verification for every task is: `cd /Users/kennylee/Development/NeoApex/workflow-forms && npm run typecheck`, `cd /Users/kennylee/Development/NeoApex/enrollx/frontend && npm run build` (tsc + Vite) and `npm run lint`, plus the concrete manual smoke steps in Task 11. Do not invent a test runner.
 - **Do not modify any backend** (`enrollx/backend`, `datacore`, `launchpad`, `familyhub`). If a backend contract seems wrong, re-check with the greps in Task 0 and adapt the frontend call — never the backend.
-- **Keep flow-runtime's exported names**: `FlowRenderer`, `FlowRendererProps`, `BlockType`, `FlowBlock`, `RegistrationConfigDef`, `FlowMode` (Plan 1 contract; Plan 5 imports them).
+- **Keep workflow-forms's exported names**: `FlowRenderer`, `FlowRendererProps`, `BlockType`, `FlowBlock`, `RegistrationConfigDef`, `FlowMode` (Plan 1 contract; Plan 5 imports them).
 - **Binding contracts consumed** (from the roadmap `docs/superpowers/plans/2026-08-03-registration-phase1-roadmap.md` and Plans 2–3):
   - `POST /api/registration/{tenant_id}/applications` body `{program_id, school_year, channel: "parent"|"admin", applicant_email?}` → 201 application entity.
   - `POST /api/registration/{tenant_id}/applications/{application_id}/actions` body `{"action": <name>, ...params}`; names used here: `save_draft, complete_item, submit, approve, decline, request_changes, verify_item, reject_item, waive_item, record_offline_payment, promote_waitlist, publish_config, resend_link`.
@@ -24,8 +24,8 @@
   - The chosen plan is stored at `draft_data.payment_plan_selection` (Plan 3 contract).
   - Application status values: `draft|submitted|in_review|pending_items|approved|enrolled|waitlisted|declined|withdrawn`. Item status values: `not_started|in_progress|submitted|verified|rejected|waived`.
 - **Query SQL convention:** the query proxy takes `{tenant_id, table: 'entities'|'models', sql}` and the SQL always reads `FROM data` — DataCore resolves `data` to the caller's tenant table (this is how every admindash client call works; see `admindash/frontend/src/api/client.ts`). Never put a tenant-prefixed table name in client SQL. If enrollx-backend's `assert_tenant_scoped_sql` guard rejects the bare `data` alias, that guard already broke Plans 2–3's own reads — re-check Task 0 Step 3 before concluding anything.
-- **Design system (from `admindash/CLAUDE.md`, applies to enrollx and flow-runtime):** tokens only — no raw hex/rgba outside a theme file; anything that IS text or sits under white text uses `--accent-ink`, while `border-color`/`accent-color`/focus rings use `--accent`; every control has a bound label (`htmlFor`/`id`); radio and checkbox groups use `<fieldset>` + `<legend>`; interactive elements are `<button>`, never `<div onClick>`; never `outline: none` without a visible replacement; every overlay uses the copied `Modal` primitive; every mutation reports via `useToast`; **every new user-facing string goes into i18n for BOTH `en-US` and `zh-CN`** (enrollx: `src/i18n/translations.ts`; flow-runtime: its own `src/i18n.ts`).
-- **Import style:** enrollx-frontend uses explicit `.ts`/`.tsx` extensions in relative imports (admindash convention, its tsconfig allows it). flow-runtime uses extensionless relative imports (its Plan 1 tsconfig does not set `allowImportingTsExtensions`).
+- **Design system (from `admindash/CLAUDE.md`, applies to enrollx and workflow-forms):** tokens only — no raw hex/rgba outside a theme file; anything that IS text or sits under white text uses `--accent-ink`, while `border-color`/`accent-color`/focus rings use `--accent`; every control has a bound label (`htmlFor`/`id`); radio and checkbox groups use `<fieldset>` + `<legend>`; interactive elements are `<button>`, never `<div onClick>`; never `outline: none` without a visible replacement; every overlay uses the copied `Modal` primitive; every mutation reports via `useToast`; **every new user-facing string goes into i18n for BOTH `en-US` and `zh-CN`** (enrollx: `src/i18n/translations.ts`; workflow-forms: its own `src/i18n.ts`).
+- **Import style:** enrollx-frontend uses explicit `.ts`/`.tsx` extensions in relative imports (admindash convention, its tsconfig allows it). workflow-forms uses extensionless relative imports (its Plan 1 tsconfig does not set `allowImportingTsExtensions`).
 - **Plan 3 owns enrollx Settings** (`PaymentsSettingsPage`, a Settings nav entry/route). Never remove or rename what Plan 3 added to `App.tsx`/nav — only add.
 
 ---
@@ -49,10 +49,10 @@ cd /Users/kennylee/Development/NeoApex && git checkout main && git pull && git c
 - [ ] **Step 2: Verify the scaffold exists** (Plan 1 outputs; all must exist):
 
 ```bash
-ls /Users/kennylee/Development/NeoApex/flow-runtime/src   # expect: FlowRenderer.tsx  index.ts  types.ts
+ls /Users/kennylee/Development/NeoApex/workflow-forms/src   # expect: FlowRenderer.tsx  index.ts  types.ts
 ls /Users/kennylee/Development/NeoApex/enrollx/frontend/src
 ls /Users/kennylee/Development/NeoApex/enrollx/frontend/src/pages /Users/kennylee/Development/NeoApex/enrollx/frontend/src/components/ui
-grep -n "flow-runtime" /Users/kennylee/Development/NeoApex/enrollx/frontend/package.json   # expect a file: dependency
+grep -n "workflow-forms" /Users/kennylee/Development/NeoApex/enrollx/frontend/package.json   # expect a file: dependency
 ```
 
 - [ ] **Step 3: Record the backend contract details.** Run each grep and write down the answers — Tasks 5, 7, 8 and 10 reference them as CONTRACT-1..5:
@@ -81,22 +81,22 @@ Where a later task says e.g. `draft_data` or `checkout_url`, and CONTRACT-2/4 sh
 
 ---
 
-### Task 1: flow-runtime foundations — types, i18n, validation, config accessors, stylesheet
+### Task 1: workflow-forms foundations — types, i18n, validation, config accessors, stylesheet
 
 **Files:**
-- Modify: `flow-runtime/src/types.ts` (append; keep everything Plan 1 put there)
-- Create: `flow-runtime/src/i18n.ts`
-- Create: `flow-runtime/src/validateField.ts`
-- Create: `flow-runtime/src/blockConfig.ts`
-- Create: `flow-runtime/src/money.ts`
-- Create: `flow-runtime/src/flow-runtime.css`
+- Modify: `workflow-forms/src/types.ts` (append; keep everything Plan 1 put there)
+- Create: `workflow-forms/src/i18n.ts`
+- Create: `workflow-forms/src/validateField.ts`
+- Create: `workflow-forms/src/blockConfig.ts`
+- Create: `workflow-forms/src/money.ts`
+- Create: `workflow-forms/src/workflow-forms.css`
 
 **Interfaces:**
 - Consumes: Plan 1's `types.ts` (`BlockType`, `FlowBlock`, `RegistrationConfigDef`, `FlowMode`).
 - Produces: `ApplicationStatus`, `ItemStatus`, `ItemKind`, `ApplicationSummary`, `ApplicationItem`, `FlowField`, `RequiredDoc`, `PaymentPlanKind`, `DONE_ITEM_STATUSES`; `flowT(key)`; `validateFlowField(field, value)`; `formFields/docsOf/plansOf/planAmounts/messageBody`; `formatCents(cents)`. All consumed by Tasks 2–4 and by Plan 5.
 - **Binding for Plan 5 — draft values shape:** `values` / `draft_data` is `{ [block_id]: Record<fieldName, unknown>, payment_plan_selection?: 'pay_in_full' | 'deposit' }`.
 
-- [ ] **Step 1: Append to `flow-runtime/src/types.ts`** (below Plan 1's existing content, do not edit the existing declarations):
+- [ ] **Step 1: Append to `workflow-forms/src/types.ts`** (below Plan 1's existing content, do not edit the existing declarations):
 
 ```ts
 // ---- Runtime data shapes (Plan 4) -----------------------------------------
@@ -167,10 +167,10 @@ export interface PaymentPlanOption {
 export const DONE_ITEM_STATUSES: readonly ItemStatus[] = ['submitted', 'verified', 'waived'];
 ```
 
-- [ ] **Step 2: Create `flow-runtime/src/i18n.ts`.** flow-runtime cannot import a host's translations; it ships its own strings and resolves the locale the same way the hosts persist it (`localStorage['preferredLanguage']`, written by `useTranslation`). Hosts re-render on locale change, which re-renders these components, so no listener is needed here.
+- [ ] **Step 2: Create `workflow-forms/src/i18n.ts`.** workflow-forms cannot import a host's translations; it ships its own strings and resolves the locale the same way the hosts persist it (`localStorage['preferredLanguage']`, written by `useTranslation`). Hosts re-render on locale change, which re-renders these components, so no listener is needed here.
 
 ```ts
-// flow-runtime/src/i18n.ts
+// workflow-forms/src/i18n.ts
 const STRINGS: Record<'en-US' | 'zh-CN', Record<string, string>> = {
   'en-US': {
     required: 'required',
@@ -252,16 +252,16 @@ export function flowLocale(): 'en-US' | 'zh-CN' {
   }
 }
 
-/** Translate a flow-runtime string. Falls back en-US, then the key itself. */
+/** Translate a workflow-forms string. Falls back en-US, then the key itself. */
 export function flowT(key: string): string {
   return STRINGS[flowLocale()][key] ?? STRINGS['en-US'][key] ?? key;
 }
 ```
 
-- [ ] **Step 3: Create `flow-runtime/src/validateField.ts`** (port of `admindash/frontend/src/utils/validateField.ts`, messages localized):
+- [ ] **Step 3: Create `workflow-forms/src/validateField.ts`** (port of `admindash/frontend/src/utils/validateField.ts`, messages localized):
 
 ```ts
-// flow-runtime/src/validateField.ts
+// workflow-forms/src/validateField.ts
 import type { FlowField } from './types';
 import { flowT } from './i18n';
 
@@ -297,10 +297,10 @@ export function validateFlowField(field: FlowField, value: unknown): string | nu
 }
 ```
 
-- [ ] **Step 4: Create `flow-runtime/src/blockConfig.ts`** — typed accessors over `FlowBlock.config` (which is `Record<string, unknown>`), including the Plan 3 cents contract:
+- [ ] **Step 4: Create `workflow-forms/src/blockConfig.ts`** — typed accessors over `FlowBlock.config` (which is `Record<string, unknown>`), including the Plan 3 cents contract:
 
 ```ts
-// flow-runtime/src/blockConfig.ts
+// workflow-forms/src/blockConfig.ts
 import type { FlowBlock, FlowField, PaymentPlanOption, RequiredDoc } from './types';
 
 /**
@@ -346,10 +346,10 @@ export function messageBody(block: FlowBlock): string {
 }
 ```
 
-- [ ] **Step 5: Create `flow-runtime/src/money.ts`:**
+- [ ] **Step 5: Create `workflow-forms/src/money.ts`:**
 
 ```ts
-// flow-runtime/src/money.ts
+// workflow-forms/src/money.ts
 /** Format integer cents as a currency string ("$1,234.50"). */
 export function formatCents(cents: number | undefined | null): string {
   if (typeof cents !== 'number' || Number.isNaN(cents)) return '—';
@@ -357,10 +357,10 @@ export function formatCents(cents: number | undefined | null): string {
 }
 ```
 
-- [ ] **Step 6: Create `flow-runtime/src/flow-runtime.css`.** Tokens only — every value references a `--token` from `@neoapex/ui-tokens` (loaded by the host). Text/filled-button colors use `--accent-ink`; borders and focus use `--accent`.
+- [ ] **Step 6: Create `workflow-forms/src/workflow-forms.css`.** Tokens only — every value references a `--token` from `@neoapex/ui-tokens` (loaded by the host). Text/filled-button colors use `--accent-ink`; borders and focus use `--accent`.
 
 ```css
-/* flow-runtime/src/flow-runtime.css — block/renderer styles, ui-tokens only */
+/* workflow-forms/src/workflow-forms.css — block/renderer styles, ui-tokens only */
 .flow-renderer { display: flex; flex-direction: column; gap: 16px; }
 
 .fr-preview-notice {
@@ -452,28 +452,28 @@ input[type='radio'], input[type='checkbox'] { accent-color: var(--accent); }
 - [ ] **Step 7: Typecheck and commit.**
 
 ```bash
-cd /Users/kennylee/Development/NeoApex/flow-runtime && npm run typecheck
-git add flow-runtime
-git commit -m "feat(flow-runtime): runtime types, i18n, validation, block-config accessors, stylesheet"
+cd /Users/kennylee/Development/NeoApex/workflow-forms && npm run typecheck
+git add workflow-forms
+git commit -m "feat(workflow-forms): runtime types, i18n, validation, block-config accessors, stylesheet"
 ```
 
 ---
 
-### Task 2: flow-runtime FormBlock (the DynamicForm port)
+### Task 2: workflow-forms FormBlock (the DynamicForm port)
 
 Port of `admindash/frontend/src/components/DynamicForm.tsx`, reshaped for the flow runtime: it takes a flat `FlowField[]` (no base/custom split), is fully controlled (FlowRenderer owns values and persistence — no submit/cancel buttons, no internal state), and shows errors only after a failed step-advance. Entity-model-sourced fields are resolved by the HOST and arrive already merged into the field list (see `formFields` in Task 1).
 
 **Files:**
-- Create: `flow-runtime/src/blocks/FormBlock.tsx`
+- Create: `workflow-forms/src/blocks/FormBlock.tsx`
 
 **Interfaces:**
-- Consumes: `FlowField`, `flowT`, `flow-runtime.css` classes.
+- Consumes: `FlowField`, `flowT`, `workflow-forms.css` classes.
 - Produces: `FormBlock`, `FormBlockProps` — used by FlowRenderer (Task 4); a11y contract mirrors DynamicForm (bound labels, `fieldset/legend` for selection groups, `aria-invalid`/`aria-describedby`).
 
-- [ ] **Step 1: Create `flow-runtime/src/blocks/FormBlock.tsx`:**
+- [ ] **Step 1: Create `workflow-forms/src/blocks/FormBlock.tsx`:**
 
 ```tsx
-// flow-runtime/src/blocks/FormBlock.tsx
+// workflow-forms/src/blocks/FormBlock.tsx
 import { useId } from 'react';
 import type { FlowField } from '../types';
 import { flowT } from '../i18n';
@@ -629,30 +629,30 @@ export function FormBlock({
 - [ ] **Step 2: Typecheck and commit.**
 
 ```bash
-cd /Users/kennylee/Development/NeoApex/flow-runtime && npm run typecheck
-git add flow-runtime/src/blocks/FormBlock.tsx
-git commit -m "feat(flow-runtime): FormBlock — controlled DynamicForm port with a11y contract"
+cd /Users/kennylee/Development/NeoApex/workflow-forms && npm run typecheck
+git add workflow-forms/src/blocks/FormBlock.tsx
+git commit -m "feat(workflow-forms): FormBlock — controlled DynamicForm port with a11y contract"
 ```
 
 ---
 
-### Task 3: flow-runtime remaining blocks — Documents, PaymentPlan, Payment, Message, Review
+### Task 3: workflow-forms remaining blocks — Documents, PaymentPlan, Payment, Message, Review
 
 **Files:**
-- Create: `flow-runtime/src/blocks/DocumentsBlock.tsx`
-- Create: `flow-runtime/src/blocks/PaymentPlanBlock.tsx`
-- Create: `flow-runtime/src/blocks/PaymentBlock.tsx`
-- Create: `flow-runtime/src/blocks/MessageBlock.tsx`
-- Create: `flow-runtime/src/blocks/ReviewBlock.tsx`
+- Create: `workflow-forms/src/blocks/DocumentsBlock.tsx`
+- Create: `workflow-forms/src/blocks/PaymentPlanBlock.tsx`
+- Create: `workflow-forms/src/blocks/PaymentBlock.tsx`
+- Create: `workflow-forms/src/blocks/MessageBlock.tsx`
+- Create: `workflow-forms/src/blocks/ReviewBlock.tsx`
 
 **Interfaces:**
 - Consumes: Task 1 types/accessors/i18n/money; items are matched to a documents block's docs by `item.block_id === block.block_id && item.title === doc.name` (Plan 2 derives item titles from doc names — this equality is the join key).
 - Produces: the five components used by FlowRenderer (Task 4). PaymentPlanBlock writes `payment_plan_selection`; PaymentBlock consumes `onCheckout(itemId)` / `onRecordOfflinePayment(itemId)`.
 
-- [ ] **Step 1: Create `flow-runtime/src/blocks/DocumentsBlock.tsx`:**
+- [ ] **Step 1: Create `workflow-forms/src/blocks/DocumentsBlock.tsx`:**
 
 ```tsx
-// flow-runtime/src/blocks/DocumentsBlock.tsx
+// workflow-forms/src/blocks/DocumentsBlock.tsx
 import { useRef, useState } from 'react';
 import type { ApplicationItem, FlowBlock, FlowMode, RequiredDoc } from '../types';
 import { docsOf } from '../blockConfig';
@@ -737,10 +737,10 @@ export function DocumentsBlock({ block, items, mode, onUpload }: DocumentsBlockP
 }
 ```
 
-- [ ] **Step 2: Create `flow-runtime/src/blocks/PaymentPlanBlock.tsx`** (radio group in fieldset/legend; amounts shown from the cents fields):
+- [ ] **Step 2: Create `workflow-forms/src/blocks/PaymentPlanBlock.tsx`** (radio group in fieldset/legend; amounts shown from the cents fields):
 
 ```tsx
-// flow-runtime/src/blocks/PaymentPlanBlock.tsx
+// workflow-forms/src/blocks/PaymentPlanBlock.tsx
 import type { FlowBlock, PaymentPlanKind } from '../types';
 import { planAmounts, plansOf } from '../blockConfig';
 import { formatCents } from '../money';
@@ -783,10 +783,10 @@ export function PaymentPlanBlock({ block, value, disabled, onChange }: PaymentPl
 }
 ```
 
-- [ ] **Step 3: Create `flow-runtime/src/blocks/PaymentBlock.tsx`.** The due amount derives from the config's payment_plan block plus the chosen plan; the item's status carries paid-ness (Plan 2/3 mark the payment item done on webhook/offline recording). Staff mode additionally offers offline recording when the host injects the callback:
+- [ ] **Step 3: Create `workflow-forms/src/blocks/PaymentBlock.tsx`.** The due amount derives from the config's payment_plan block plus the chosen plan; the item's status carries paid-ness (Plan 2/3 mark the payment item done on webhook/offline recording). Staff mode additionally offers offline recording when the host injects the callback:
 
 ```tsx
-// flow-runtime/src/blocks/PaymentBlock.tsx
+// workflow-forms/src/blocks/PaymentBlock.tsx
 import type { ApplicationItem, FlowMode, RegistrationConfigDef } from '../types';
 import { planAmounts, plansOf } from '../blockConfig';
 import { formatCents } from '../money';
@@ -852,10 +852,10 @@ export function PaymentBlock({
 }
 ```
 
-- [ ] **Step 4: Create `flow-runtime/src/blocks/MessageBlock.tsx`** (v1 renders the body as plain-text paragraphs split on newlines — rich text is a Phase 2 concern; never inject HTML):
+- [ ] **Step 4: Create `workflow-forms/src/blocks/MessageBlock.tsx`** (v1 renders the body as plain-text paragraphs split on newlines — rich text is a Phase 2 concern; never inject HTML):
 
 ```tsx
-// flow-runtime/src/blocks/MessageBlock.tsx
+// workflow-forms/src/blocks/MessageBlock.tsx
 import type { FlowBlock } from '../types';
 import { messageBody } from '../blockConfig';
 
@@ -869,10 +869,10 @@ export function MessageBlock({ block }: { block: FlowBlock }) {
 }
 ```
 
-- [ ] **Step 5: Create `flow-runtime/src/blocks/ReviewBlock.tsx`:**
+- [ ] **Step 5: Create `workflow-forms/src/blocks/ReviewBlock.tsx`:**
 
 ```tsx
-// flow-runtime/src/blocks/ReviewBlock.tsx
+// workflow-forms/src/blocks/ReviewBlock.tsx
 import type { ApplicationItem, FlowMode, RegistrationConfigDef } from '../types';
 import { DONE_ITEM_STATUSES } from '../types';
 import { flowT } from '../i18n';
@@ -937,9 +937,9 @@ export function ReviewBlock({
 - [ ] **Step 6: Typecheck and commit.**
 
 ```bash
-cd /Users/kennylee/Development/NeoApex/flow-runtime && npm run typecheck
-git add flow-runtime/src/blocks
-git commit -m "feat(flow-runtime): documents, payment-plan, payment, message and review blocks"
+cd /Users/kennylee/Development/NeoApex/workflow-forms && npm run typecheck
+git add workflow-forms/src/blocks
+git commit -m "feat(workflow-forms): documents, payment-plan, payment, message and review blocks"
 ```
 
 ---
@@ -949,17 +949,17 @@ git commit -m "feat(flow-runtime): documents, payment-plan, payment, message and
 Replaces Plan 1's placeholder body while keeping the `FlowRenderer` / `FlowRendererProps` export names. Ordered walk with a step rail; a form block validates before advancing; blocking items gate ONLY submission (spec §5 — non-blocking/post-approval items never gate, and documents steps can be skipped and returned to). Field edits autosave (1.5 s debounce) — server-side drafts are what let staff and parents hand off mid-application (spec §6).
 
 **Files:**
-- Modify: `flow-runtime/src/FlowRenderer.tsx` (full replacement)
-- Modify: `flow-runtime/src/index.ts` (full replacement)
+- Modify: `workflow-forms/src/FlowRenderer.tsx` (full replacement)
+- Modify: `workflow-forms/src/index.ts` (full replacement)
 
 **Interfaces:**
 - Consumes: Tasks 1–3 exports.
 - Produces — **THE Plan 4/Plan 5 contract.** `FlowRendererProps` exactly as below; familyhub (Plan 5) passes the same `onSaveDraft, onCompleteItem, onUploadDocument, onCheckout, onSubmit` names; `onRecordOfflinePayment` is the optional staff-only extra that familyhub never passes. `values` follows the Task 1 draft-data shape (`{[block_id]: {...fields}, payment_plan_selection?}`).
 
-- [ ] **Step 1: Replace `flow-runtime/src/FlowRenderer.tsx` entirely with:**
+- [ ] **Step 1: Replace `workflow-forms/src/FlowRenderer.tsx` entirely with:**
 
 ```tsx
-// flow-runtime/src/FlowRenderer.tsx
+// workflow-forms/src/FlowRenderer.tsx
 import { useEffect, useRef, useState } from 'react';
 import type {
   ApplicationItem, ApplicationSummary, FlowBlock, FlowMode,
@@ -975,7 +975,7 @@ import { PaymentPlanBlock } from './blocks/PaymentPlanBlock';
 import { PaymentBlock } from './blocks/PaymentBlock';
 import { MessageBlock } from './blocks/MessageBlock';
 import { ReviewBlock } from './blocks/ReviewBlock';
-import './flow-runtime.css';
+import './workflow-forms.css';
 
 export interface FlowRendererProps {
   config: RegistrationConfigDef;
@@ -1222,10 +1222,10 @@ export function FlowRenderer({
 }
 ```
 
-- [ ] **Step 2: Replace `flow-runtime/src/index.ts` entirely with:**
+- [ ] **Step 2: Replace `workflow-forms/src/index.ts` entirely with:**
 
 ```ts
-// flow-runtime/src/index.ts
+// workflow-forms/src/index.ts
 export * from './types';
 export { FlowRenderer, type FlowRendererProps } from './FlowRenderer';
 export { formFields, docsOf, plansOf, planAmounts, messageBody } from './blockConfig';
@@ -1240,10 +1240,10 @@ export { MessageBlock } from './blocks/MessageBlock';
 export { ReviewBlock, type ReviewBlockProps } from './blocks/ReviewBlock';
 ```
 
-- [ ] **Step 3: Typecheck flow-runtime AND rebuild both consumers** (the placeholder's `{ config, mode }`-only props are gone; Plan 1's smoke imports are type-only and must still pass):
+- [ ] **Step 3: Typecheck workflow-forms AND rebuild both consumers** (the placeholder's `{ config, mode }`-only props are gone; Plan 1's smoke imports are type-only and must still pass):
 
 ```bash
-cd /Users/kennylee/Development/NeoApex/flow-runtime && npm run typecheck
+cd /Users/kennylee/Development/NeoApex/workflow-forms && npm run typecheck
 cd /Users/kennylee/Development/NeoApex/enrollx/frontend && npm run build
 cd /Users/kennylee/Development/NeoApex/familyhub/frontend && npm run build
 ```
@@ -1264,8 +1264,8 @@ const noopSubmit = async () => {};
 - [ ] **Step 4: Commit.**
 
 ```bash
-git add flow-runtime enrollx/frontend familyhub/frontend
-git commit -m "feat(flow-runtime): real FlowRenderer — ordered walk, autosave, item-based submit gating"
+git add workflow-forms enrollx/frontend familyhub/frontend
+git commit -m "feat(workflow-forms): real FlowRenderer — ordered walk, autosave, item-based submit gating"
 ```
 
 ---
@@ -1443,7 +1443,7 @@ export async function fetchNextEntityId(
 
 ```ts
 // enrollx/frontend/src/types/registration.ts
-import type { ApplicationStatus, ItemKind, ItemStatus } from '@neoapex/flow-runtime';
+import type { ApplicationStatus, ItemKind, ItemStatus } from '@neoapex/workflow-forms';
 
 export interface ApplicationRow {
   entity_id: string;
@@ -1541,7 +1541,7 @@ export interface ProgramRow {
 
 ```ts
 // enrollx/frontend/src/api/registration.ts
-import type { RequiredDoc } from '@neoapex/flow-runtime';
+import type { RequiredDoc } from '@neoapex/workflow-forms';
 import { ENROLLX_API_URL } from '../config.ts';
 import { authHeaders, jsonOrThrow } from './client.ts';
 import type { ApplicationRow } from '../types/registration.ts';
@@ -2018,7 +2018,7 @@ The builder edits an ordered `FlowBlock[]` matching spec §4 exactly: each block
 ```tsx
 // enrollx/frontend/src/components/BlockConfigPanel.tsx
 import { useId } from 'react';
-import type { FlowBlock, FlowField, PaymentPlanKind, PaymentPlanOption, RequiredDoc } from '@neoapex/flow-runtime';
+import type { FlowBlock, FlowField, PaymentPlanKind, PaymentPlanOption, RequiredDoc } from '@neoapex/workflow-forms';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import Button from './ui/Button.tsx';
 
@@ -2289,10 +2289,10 @@ export default function BlockConfigPanel({ block, onChange }: BlockConfigPanelPr
 // enrollx/frontend/src/pages/ConfigBuilderPage.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FlowRenderer } from '@neoapex/flow-runtime';
+import { FlowRenderer } from '@neoapex/workflow-forms';
 import type {
   BlockType, FlowBlock, RegistrationConfigDef, RequiredDoc,
-} from '@neoapex/flow-runtime';
+} from '@neoapex/workflow-forms';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useToast } from '../hooks/useToast.ts';
@@ -2876,10 +2876,10 @@ export default function NewApplicationPage() {
 // enrollx/frontend/src/pages/ApplicationEntryPage.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FlowRenderer } from '@neoapex/flow-runtime';
+import { FlowRenderer } from '@neoapex/workflow-forms';
 import type {
   ApplicationSummary, FlowBlock, RegistrationConfigDef, RequiredDoc,
-} from '@neoapex/flow-runtime';
+} from '@neoapex/workflow-forms';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useToast } from '../hooks/useToast.ts';
@@ -3215,7 +3215,7 @@ SELECT * FROM data WHERE entity_type = 'program' AND _status = 'active'
 // enrollx/frontend/src/pages/ApplicationsPage.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { ApplicationStatus } from '@neoapex/flow-runtime';
+import type { ApplicationStatus } from '@neoapex/workflow-forms';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { escapeSql, postQuery } from '../api/client.ts';
@@ -3550,8 +3550,8 @@ SELECT * FROM data WHERE entity_type = 'payment' AND _status = 'active' AND appl
 // enrollx/frontend/src/pages/ApplicationDetailPage.tsx
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { ApplicationStatus } from '@neoapex/flow-runtime';
-import { formatCents } from '@neoapex/flow-runtime';
+import type { ApplicationStatus } from '@neoapex/workflow-forms';
+import { formatCents } from '@neoapex/workflow-forms';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useToast } from '../hooks/useToast.ts';
@@ -3955,7 +3955,7 @@ git commit -m "feat(enrollx): application detail — checklist actions, timeline
 - [ ] **Step 1: Static verification — all must pass with zero errors:**
 
 ```bash
-cd /Users/kennylee/Development/NeoApex/flow-runtime && npm run typecheck
+cd /Users/kennylee/Development/NeoApex/workflow-forms && npm run typecheck
 cd /Users/kennylee/Development/NeoApex/enrollx/frontend && npm run build && npm run lint
 cd /Users/kennylee/Development/NeoApex/familyhub/frontend && npm run build   # must not regress
 ```

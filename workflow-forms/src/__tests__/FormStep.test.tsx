@@ -1,4 +1,4 @@
-// flow-runtime/src/__tests__/FormStep.test.tsx
+// workflow-forms/src/__tests__/FormStep.test.tsx
 //
 // Layout selection is `FormStep`'s job (inside `StepRenderer.tsx`), but
 // `FormStep` itself is not exported -- these tests drive it through the

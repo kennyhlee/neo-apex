@@ -196,7 +196,7 @@ context) is the "global listener pattern" CLAUDE.md's own Architecture
 section names. `familyhub/frontend/src/hooks/useTranslation.ts` uses the
 identical `STORAGE_KEY = 'preferredLanguage'` (`:4`) — same key, same
 pattern, a second independent copy (not shared code) — familyhub's own
-`flow-runtime/src/i18n.ts:87` also reads `localStorage.getItem('preferredLanguage')`
+`workflow-forms/src/i18n.ts:87` also reads `localStorage.getItem('preferredLanguage')`
 directly. Any new frontend sharing this convention should read/write the
 same `'preferredLanguage'` key so locale choice is consistent if a user
 crosses services in one browser (it is NOT currently synced across
@@ -825,14 +825,14 @@ return defs.publish_definition(tenant_id, created["entity_id"], token)
 
 ---
 
-## 4. flow-runtime
+## 4. workflow-forms
 
-Source: `flow-runtime/package.json` (18 lines, full), `flow-runtime/src/index.ts`
-(10 lines, full), `flow-runtime/tsconfig.json` (13 lines, full).
+Source: `workflow-forms/package.json` (18 lines, full), `workflow-forms/src/index.ts`
+(10 lines, full), `workflow-forms/tsconfig.json` (13 lines, full).
 
 ```json
 {
-  "name": "@neoapex/flow-runtime",
+  "name": "@neoapex/workflow-forms",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -845,7 +845,7 @@ Source: `flow-runtime/package.json` (18 lines, full), `flow-runtime/src/index.ts
 ```
 
 ```ts
-// flow-runtime/src/index.ts — full current exports
+// workflow-forms/src/index.ts — full current exports
 export * from './types';
 export { FlowRenderer, type FlowRendererProps } from './FlowRenderer';
 export { flowT, flowTWith, useFlowT, useFlowLocale, type Locale } from './i18n';
@@ -866,19 +866,19 @@ Consumers (Vite/esbuild) resolve the raw `.ts`/`.tsx` files directly.
 
 **familyhub's consumption** — `familyhub/frontend/package.json:13`:
 ```json
-"@neoapex/flow-runtime": "file:../../flow-runtime",
+"@neoapex/workflow-forms": "file:../../workflow-forms",
 ```
 an npm `file:` link, no registry publish. `familyhub/frontend/vite.config.ts`
-has no flow-runtime-specific handling — the `file:` link is what makes
+has no workflow-forms-specific handling — the `file:` link is what makes
 resolution work. Import sites, verbatim:
-- `familyhub/frontend/src/api/facade.ts:2` — `import type { RegistrationConfigDef, FlowBlock } from '@neoapex/flow-runtime';`
-- `familyhub/frontend/src/pages/LandingPage.tsx:1` — `import type { RegistrationConfigDef } from '@neoapex/flow-runtime';` (a deliberate type-only "smoke import" that locks the dependency in CI, per the file's own comment)
-- `familyhub/frontend/src/pages/HubPage.tsx:3-8` — `import { DONE_ITEM_STATUSES, formatCents, paymentAmountFor, type ApplicationItem } from '@neoapex/flow-runtime';`
-- `familyhub/frontend/src/types/registration.ts:1,6` — `import type { RegistrationConfigDef, FlowBlock } from '@neoapex/flow-runtime';` and `export type { ApplicationStatus, ItemStatus } from '@neoapex/flow-runtime';` (re-export, not redeclare, to avoid drift)
-- `familyhub/frontend/src/pages/RegisterPage.tsx:3-4` — `import { FlowRenderer, defaultSchoolYear } from '@neoapex/flow-runtime';` and `import type { ApplicationItem, ApplicationSummary } from '@neoapex/flow-runtime';`
+- `familyhub/frontend/src/api/facade.ts:2` — `import type { RegistrationConfigDef, FlowBlock } from '@neoapex/workflow-forms';`
+- `familyhub/frontend/src/pages/LandingPage.tsx:1` — `import type { RegistrationConfigDef } from '@neoapex/workflow-forms';` (a deliberate type-only "smoke import" that locks the dependency in CI, per the file's own comment)
+- `familyhub/frontend/src/pages/HubPage.tsx:3-8` — `import { DONE_ITEM_STATUSES, formatCents, paymentAmountFor, type ApplicationItem } from '@neoapex/workflow-forms';`
+- `familyhub/frontend/src/types/registration.ts:1,6` — `import type { RegistrationConfigDef, FlowBlock } from '@neoapex/workflow-forms';` and `export type { ApplicationStatus, ItemStatus } from '@neoapex/workflow-forms';` (re-export, not redeclare, to avoid drift)
+- `familyhub/frontend/src/pages/RegisterPage.tsx:3-4` — `import { FlowRenderer, defaultSchoolYear } from '@neoapex/workflow-forms';` and `import type { ApplicationItem, ApplicationSummary } from '@neoapex/workflow-forms';`
 
 **Constraint for later Plan 2 tasks:** any change to
-`flow-runtime/package.json` or `tsconfig.json` (e.g. adding a real build
+`workflow-forms/package.json` or `tsconfig.json` (e.g. adding a real build
 step, changing `main`) must preserve raw-TS resolution or familyhub's Vite
 dev/build breaks. Do not add a `dist/` build without updating both
 `package.json`'s `main` AND verifying familyhub's Vite config still
@@ -1139,7 +1139,7 @@ committed state, not a stale intermediate one.
 | `VITE_ADMINDASH_API_URL` (frontend override env) | — | `admindash/frontend/src/config.ts:9` |
 | `VITE_FAMILYHUB_API_URL` (frontend override env) | — | `familyhub/frontend/src/config.ts:9` |
 | localStorage: JWT token | key `neoapex_token` | `admindash/frontend/src/contexts/AuthContext.tsx:4`; also `admindash/backend`-adjacent frontends `launchpad/frontend/src/api/client.ts:5`, `papermite/frontend/src/api/client.ts:15` (each an independent copy of the same literal, not shared code) |
-| localStorage: locale | key `preferredLanguage` | `admindash/frontend/src/hooks/useTranslation.ts:4`; `familyhub/frontend/src/hooks/useTranslation.ts:4`; also read directly (not via the hook) at `flow-runtime/src/i18n.ts:87` |
+| localStorage: locale | key `preferredLanguage` | `admindash/frontend/src/hooks/useTranslation.ts:4`; `familyhub/frontend/src/hooks/useTranslation.ts:4`; also read directly (not via the hook) at `workflow-forms/src/i18n.ts:87` |
 | localStorage: admindash density | key `admindash_density` | `admindash/frontend/src/hooks/useDensity.ts:3` |
 | sessionStorage: admindash chat history | key `admindash_chat_history` | `admindash/frontend/src/contexts/AuthContext.tsx:63` |
 | DataCore models write route | `PUT /api/models/{tenant_id}` | `datacore/src/datacore/api/routes.py:205` |
@@ -1223,7 +1223,7 @@ list's synthetic/self-referential entries rather than literal
 6. **A third copy of the SQL guard is a drift risk** (§5c/§5d) — if
    apexflow-backend proxies `/api/query`, extend `_GUARD_FILES` in both
    existing test files rather than adding a silent fourth copy.
-7. **flow-runtime has no build step** (§4) — preserve raw-TS `file:`
+7. **workflow-forms has no build step** (§4) — preserve raw-TS `file:`
    resolution or familyhub's Vite build breaks.
 8. **apexflow-backend's `main.py` docstring is stale** (§2f) — it claims no
    business routers are mounted; all four (`definitions`, `instances`,

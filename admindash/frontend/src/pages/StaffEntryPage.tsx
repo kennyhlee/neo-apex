@@ -8,8 +8,8 @@ import {
   type InstanceDocumentView,
   type WorkflowDraft,
   type WorkflowItemView,
-} from '@neoapex/flow-runtime';
-import '@neoapex/flow-runtime/src/flow-runtime.css';
+} from '@neoapex/workflow-forms';
+import '@neoapex/workflow-forms/src/workflow-forms.css';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useToast } from '../hooks/useToast.ts';
 import { postQuery } from '../api/client.ts';

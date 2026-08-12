@@ -1,4 +1,4 @@
-// flow-runtime/src/SectionDescription.tsx
+// workflow-forms/src/SectionDescription.tsx
 //
 // THE ONLY module in this package permitted to import `markdown-to-jsx`.
 // `src/__tests__/SectionDescription.test.tsx` fails if a second file does.

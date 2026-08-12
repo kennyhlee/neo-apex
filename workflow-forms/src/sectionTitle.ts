@@ -1,4 +1,4 @@
-// flow-runtime/src/sectionTitle.ts
+// workflow-forms/src/sectionTitle.ts
 import type { WorkflowSectionDef } from './types';
 
 /**

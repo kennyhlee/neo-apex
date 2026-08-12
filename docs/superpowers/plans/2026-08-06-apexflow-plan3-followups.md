@@ -4,7 +4,7 @@ Plan 3 lands on `feat/apexflow-plan3-channels` (Tasks 0–16; datacore 346→352
 apexflow backend 462→481, familyhub backend 82→74 (facade suite reshaped —
 coverage-parity PASS verified by the Task 6 review's direct baseline
 measurement), admindash backend 183→194, admindash frontend vitest 0→92,
-plus `apexflow/frontend`/`familyhub/frontend`/`flow-runtime` builds clean).
+plus `apexflow/frontend`/`familyhub/frontend`/`workflow-forms` builds clean).
 The Task 15 browser gate passed end-to-end on BOTH channels after two fix
 rounds (below): staff entry → autosave → complete → submit → auto-advance →
 approve → commit → drawer verify/waive → auto-advance enrolled; family
@@ -41,7 +41,7 @@ tracking SQL builder pins `_status = 'active'`, unit-tested).
     functional; the waive → `approved → enrolled` auto-advance ran and the
     activity feed shows the full causal chain.
 0b. **familyhub's runtime form rendered unstyled** — RegisterPage mounted
-    StepRenderer without importing `@neoapex/flow-runtime/src/flow-runtime.css`
+    StepRenderer without importing `@neoapex/workflow-forms/src/workflow-forms.css`
     (apexflow's PreviewPane precedent). Fixed (`cdb3056`); live re-verified
     styled.
 

@@ -1,4 +1,4 @@
-// flow-runtime/src/blockConfig.ts
+// workflow-forms/src/blockConfig.ts
 import type { FlowField } from './types';
 
 /** `snake_case` field name -> "Title Case" display label. Used by `StepRenderer.tsx`. */

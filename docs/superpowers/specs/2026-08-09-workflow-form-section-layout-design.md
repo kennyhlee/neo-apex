@@ -1,11 +1,11 @@
 # Workflow form sections: named, described, and laid out — design
 
 **Status:** approved 2026-08-09, pending implementation plan
-**Scope:** `SectionDef` schema (apexflow backend), section rendering in `flow-runtime`,
+**Scope:** `SectionDef` schema (apexflow backend), section rendering in `workflow-forms`,
 section authoring in the apexflow designer, and the enrollment template's own copy.
 Does **not** include the AdminDash home page or `message`-step bodies.
 **Branch:** `docs/form-section-layout`, cut from `feat/item-status-typing` (the
-implementation edits `flow-runtime/src/types.ts` and `StepRenderer.tsx`, which that
+implementation edits `workflow-forms/src/types.ts` and `StepRenderer.tsx`, which that
 branch also modified).
 
 ## Problem
@@ -15,10 +15,10 @@ A workflow form section is a data-binding construct with no human face. `Section
 `fields`, `mode`, and `repeat` — **no title and no description**. There is nowhere for an
 admin to say what a section is.
 
-The renderer matches. `SectionRenderer` (`flow-runtime/src/StepRenderer.tsx:344`) emits a
+The renderer matches. `SectionRenderer` (`workflow-forms/src/StepRenderer.tsx:344`) emits a
 bare `<div class="fr-form-fields">` per section with no heading and no margin between
 consecutive sections, and `.fr-form-fields` is a `repeat(auto-fill, minmax(240px, 1fr))`
-grid (`flow-runtime/src/flow-runtime.css:7`). Adjacent sections therefore fuse into one
+grid (`workflow-forms/src/workflow-forms.css:7`). Adjacent sections therefore fuse into one
 continuous field grid. Only the *step* gets a heading — an `<h2 class="fr-block-title">`
 at `StepRenderer.tsx:640`.
 
@@ -76,7 +76,7 @@ class SectionDef(BaseModel):
     repeat: RepeatSpec | None = None
 ```
 
-Mirrored in `flow-runtime/src/types.ts:89` (`WorkflowSectionDef`).
+Mirrored in `workflow-forms/src/types.ts:89` (`WorkflowSectionDef`).
 
 Both fields default to `""`, so every stored `workflow_definition` continues to validate,
 publish, and pass `definition_health` untouched. No migration and no backfill are required
@@ -104,7 +104,7 @@ displayTitle(section) = section.title.trim() || humanize(section.section_id)
 
 `humanize` strips a trailing `_section`, replaces `_` with spaces, and capitalizes the first
 word: `student_section` → "Student", `contacts_section` → "Contacts". Implemented once in
-`flow-runtime` and used by every layout.
+`workflow-forms` and used by every layout.
 
 ## Markdown
 
@@ -126,7 +126,7 @@ property that motivated it — rendering to React elements rather than an HTML s
 `dangerouslySetInnerHTML` never appears.
 
 `markdown-to-jsx` is chosen for its dependency footprint: one package to audit rather than
-77, which was the only real objection to taking a dependency into `flow-runtime` (a package
+77, which was the only real objection to taking a dependency into `workflow-forms` (a package
 with zero runtime dependencies today, consumed by three frontends).
 
 ### Required configuration
@@ -146,15 +146,15 @@ configured as:
 ### The single-call-site rule
 
 Because safety depends on those options being passed, **`markdown-to-jsx` is imported in
-exactly one module**: `flow-runtime/src/SectionDescription.tsx`. Everything else renders a
+exactly one module**: `workflow-forms/src/SectionDescription.tsx`. Everything else renders a
 description by using that component.
 
 This is enforced mechanically, not by convention — but **not** with eslint:
-`flow-runtime` has no eslint config, and the frontends' `eslint .` runs never reach
-`flow-runtime/src`, so a `no-restricted-imports` rule there would be enforcement in name
+`workflow-forms` has no eslint config, and the frontends' `eslint .` runs never reach
+`workflow-forms/src`, so a `no-restricted-imports` rule there would be enforcement in name
 only.
 
-Instead a **source-grep test** in flow-runtime's own vitest suite asserts that
+Instead a **source-grep test** in workflow-forms's own vitest suite asserts that
 `markdown-to-jsx` is imported in exactly one file, and that
 `dangerouslySetInnerHTML` appears nowhere in `src/`. This reuses the test infrastructure
 this work already adds, needs no second toolchain, and follows a pattern the codebase
@@ -223,7 +223,7 @@ header, anchor target) is supplied by the enclosing layout.
 
 ## Completion
 
-`flow-runtime/src/sectionCompletion.ts` — a pure, React-free, unit-tested module.
+`workflow-forms/src/sectionCompletion.ts` — a pure, React-free, unit-tested module.
 
 ```ts
 sectionCompletion(section, fields, draft) -> { required, remaining, done }
@@ -274,20 +274,20 @@ ambiguity for the one workflow that actually ships today.
 |---|---|---|
 | Schema defaults | apexflow pytest | `title`/`description` default `""`; a definition without them still validates and publishes. |
 | Publish validation | apexflow pytest | Over-length title/description rejected; `javascript:` and `data:` link targets rejected; `http`/`https`/`mailto` accepted; the enrollment template publishes clean. |
-| Markdown rendering | **flow-runtime vitest** | `**bold**`/`*italic*`/`[text](url)` render as `strong`/`em`/`a`; raw HTML renders as literal text; disallowed schemes render as plain text, not anchors; headings/images are dropped. |
-| Completion | **flow-runtime vitest** | Required-only counting; `false` counts as answered; repeat-section `min` and per-row requirements. |
-| Title fallback | flow-runtime vitest | `student_section` → "Student"; an explicit title wins. |
+| Markdown rendering | **workflow-forms vitest** | `**bold**`/`*italic*`/`[text](url)` render as `strong`/`em`/`a`; raw HTML renders as literal text; disallowed schemes render as plain text, not anchors; headings/images are dropped. |
+| Completion | **workflow-forms vitest** | Required-only counting; `false` counts as answered; repeat-section `min` and per-row requirements. |
+| Title fallback | workflow-forms vitest | `student_section` → "Student"; an explicit title wins. |
 | Layout selection | admindash vitest | `staff` + wide → rail; `staff` + narrow → accordion; `family`/`preview` → accordion. |
 
-**New infrastructure:** `flow-runtime` has no test runner today, and neither does familyhub's
+**New infrastructure:** `workflow-forms` has no test runner today, and neither does familyhub's
 frontend — only admindash has vitest. The markdown wrapper is a security boundary and its
 tests must not live in a different package that might not run, so **this work adds vitest to
-`flow-runtime`** (devDependency plus a `test` script). That is new infrastructure, not just a
+`workflow-forms`** (devDependency plus a `test` script). That is new infrastructure, not just a
 feature, and it is the main non-obvious cost in this design.
 
 Note that **this repository has no CI test workflow** — `.github/workflows/` contains only
 `deploy.yml` and `discord-release.yml`, neither of which runs pytest or vitest. Every suite
-is run locally today. Adding flow-runtime's `npm test` therefore gives a local command and
+is run locally today. Adding workflow-forms's `npm test` therefore gives a local command and
 nothing more; wiring a test job that covers the four Python suites and two JS suites is a
 separate piece of work and is **out of scope here**, but it is worth logging as a follow-up,
 because a security-boundary test that only runs when someone remembers is weaker protection
@@ -313,7 +313,7 @@ than it looks.
   unchanged.
 - No wire-shape change to `workflow_item`, instances, or drafts. Draft keys are untouched, so
   in-flight drafts keep resolving.
-- `flow-runtime` gains its first runtime dependency. `deploy.yml` already runs `npm ci` in
-  `flow-runtime` before the admindash, apexflow, and familyhub frontend builds
+- `workflow-forms` gains its first runtime dependency. `deploy.yml` already runs `npm ci` in
+  `workflow-forms` before the admindash, apexflow, and familyhub frontend builds
   (`deploy.yml:325`, `:369`, `:409`), so the new dependency is installed in CI with no
   workflow change at all.

@@ -1,12 +1,12 @@
-import { ITEM_STATUSES, type ItemStatus, type ModelFieldSource, type WorkflowStepDef } from '@neoapex/flow-runtime';
+import { ITEM_STATUSES, type ItemStatus, type ModelFieldSource, type WorkflowStepDef } from '@neoapex/workflow-forms';
 
-// Re-exported rather than redeclared: flow-runtime's barrel already exports
-// these (`flow-runtime/src/types.ts` via `export * from './types'`), and
+// Re-exported rather than redeclared: workflow-forms's barrel already exports
+// these (`workflow-forms/src/types.ts` via `export * from './types'`), and
 // duplicating the literal unions here would let the two definitions drift.
 // `ItemStatus` is GENERATED from apexflow's `ItemStatus` StrEnum
-// (`flow-runtime/src/itemStatus.generated.ts`), so this file -- and every
+// (`workflow-forms/src/itemStatus.generated.ts`), so this file -- and every
 // page below it -- never spells a status value.
-export type { ItemStatus, WorkflowStepDef, WorkflowItemView, InstanceDocumentView } from '@neoapex/flow-runtime';
+export type { ItemStatus, WorkflowStepDef, WorkflowItemView, InstanceDocumentView } from '@neoapex/workflow-forms';
 export type { ModelFieldSource };
 
 /**

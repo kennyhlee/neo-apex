@@ -204,7 +204,7 @@ def test_start_is_rate_limited_per_ip(client, fake_http):
 ])
 def test_start_derives_school_year_with_the_july_rollover(
         client, fake_http, monkeypatch, today, expected):
-    """Same rule as flow-runtime's defaultSchoolYear() and apexflow's
+    """Same rule as workflow-forms's defaultSchoolYear() and apexflow's
     enrollment template's `context.school_year` scoping -- all channels must
     agree, because the capacity snapshot the parent was shown was computed
     for this year."""

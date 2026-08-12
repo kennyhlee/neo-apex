@@ -4,7 +4,7 @@
 
 **Goal:** Make `workflow_item.status` a typed, single-sourced vocabulary end-to-end — one Python `StrEnum`, typed engine writes, publish-time validation of authored references, a typed runtime row model with an explicit wire boundary, and a generated TypeScript constant so no frontend hardcodes the list.
 
-**Architecture:** `ItemStatus(StrEnum)` in `apexflow/backend/app/workflows/shared.py` becomes the single authority. Derived sets (`ITEM_DONE_STATUSES`, `COMPLETABLE_STATUSES`) are computed from it rather than re-spelled. A mutable `WorkflowItem` pydantic model replaces `EvalContext.items: list[dict]`, giving typed reads and letting the API serialize a narrow payload instead of ~200-key sparse rows. A generator emits a TypeScript module into `flow-runtime` (the shared package all three frontends already consume), with a Python drift test.
+**Architecture:** `ItemStatus(StrEnum)` in `apexflow/backend/app/workflows/shared.py` becomes the single authority. Derived sets (`ITEM_DONE_STATUSES`, `COMPLETABLE_STATUSES`) are computed from it rather than re-spelled. A mutable `WorkflowItem` pydantic model replaces `EvalContext.items: list[dict]`, giving typed reads and letting the API serialize a narrow payload instead of ~200-key sparse rows. A generator emits a TypeScript module into `workflow-forms` (the shared package all three frontends already consume), with a Python drift test.
 
 **Tech Stack:** Python 3.11+ (StrEnum), pydantic v2, FastAPI, pytest; TypeScript/React for the consumers; vitest for admindash frontend.
 
@@ -17,18 +17,18 @@
 - **Derived sets are derived.** `ITEM_DONE_STATUSES = frozenset({SUBMITTED, VERIFIED, WAIVED})`, `COMPLETABLE_STATUSES = frozenset({NOT_STARTED, SUBMITTED, REJECTED})`. Do not re-spell literals.
 - **The `WorkflowItem` model must stay MUTABLE** (no `frozen=True`). `primitives.py:607-609` mutates items in place so later guards/effects in the SAME action observe `due_at`/`_version` without a re-fetch — a documented invariant.
 - **`_version` requires an alias.** Pydantic v2 treats leading-underscore names as private attributes. Declare `version: int | None = Field(default=None, alias="_version")` with `model_config = ConfigDict(populate_by_name=True, extra="ignore")`. Getting this wrong silently disables CAS preconditions — a lost-update risk, not a type nit.
-- **Consumer contract that must not break** (measured, not assumed): `entity_id`, `step_id`, `kind`, `title`, `status`, `blocking` (`flow-runtime/src/types.ts::WorkflowItemView`, `admindash .../workflowData.ts::toItemView`), plus `payload_ref` (FamilyHub `HubPage`). Carry `due_at`, `item_id`, `instance_id` for the home-page spec.
+- **Consumer contract that must not break** (measured, not assumed): `entity_id`, `step_id`, `kind`, `title`, `status`, `blocking` (`workflow-forms/src/types.ts::WorkflowItemView`, `admindash .../workflowData.ts::toItemView`), plus `payload_ref` (FamilyHub `HubPage`). Carry `due_at`, `item_id`, `instance_id` for the home-page spec.
 - **Test baselines (must not regress):** apexflow **510**, familyhub **89**, admindash **201**, datacore **354**, admindash vitest **92**.
 - Suite commands: `cd apexflow && uv run pytest backend/tests/ -q`; `cd familyhub && uv run pytest backend/tests/ -q`; `cd admindash && uv run pytest backend/tests/ -q`; `cd admindash/frontend && npx vitest run`.
-- Frontend builds: `cd <module>/frontend && npm run build && npm run lint` for admindash, apexflow, familyhub. **`cd flow-runtime && npm ci` first** — its `react` types must resolve from its own `node_modules`, or `tsc -b` fails with TS2307 (a green local build can be an artifact of a stray `~/node_modules`).
+- Frontend builds: `cd <module>/frontend && npm run build && npm run lint` for admindash, apexflow, familyhub. **`cd workflow-forms && npm ci` first** — its `react` types must resolve from its own `node_modules`, or `tsc -b` fails with TS2307 (a green local build can be an artifact of a stray `~/node_modules`).
 - Branch: work on `feat/item-status-typing`, cut from `docs/registration-flow-design` (**not** `main`, which lacks the Plan 3 merge).
 - Conventional commits; one task may make several.
 
 ### Plan amendment vs the spec (deliberate, flag if you disagree)
 
-The spec said the generated artifact would be a **root-level JSON** imported by TS "the way `services.json` is." This plan instead generates a **TypeScript module inside `flow-runtime`** (`flow-runtime/src/itemStatus.generated.ts`).
+The spec said the generated artifact would be a **root-level JSON** imported by TS "the way `services.json` is." This plan instead generates a **TypeScript module inside `workflow-forms`** (`workflow-forms/src/itemStatus.generated.ts`).
 
-Reason: a root-level JSON would be imported across a package boundary through npm's **symlinked `file:` dep** — the exact resolution path that already broke the CI frontend build (`TS2307: Cannot find module 'react'`, fixed by installing `flow-runtime`'s own deps). A generated `.ts` inside the package is a plain intra-package import with no cross-directory or `fs.allow` concerns, and `flow-runtime/src/types.ts` is already the canonical home of the TS `ItemStatus` union and `DONE_ITEM_STATUSES`. Same single-source property, strictly less resolution risk.
+Reason: a root-level JSON would be imported across a package boundary through npm's **symlinked `file:` dep** — the exact resolution path that already broke the CI frontend build (`TS2307: Cannot find module 'react'`, fixed by installing `workflow-forms`'s own deps). A generated `.ts` inside the package is a plain intra-package import with no cross-directory or `fs.allow` concerns, and `workflow-forms/src/types.ts` is already the canonical home of the TS `ItemStatus` union and `DONE_ITEM_STATUSES`. Same single-source property, strictly less resolution risk.
 
 ---
 
@@ -467,7 +467,7 @@ def test_instance_items_carry_only_contract_fields(client, ...):
 - [ ] **Step 4: Verify consumers still build**
 
 ```bash
-cd flow-runtime && npm ci
+cd workflow-forms && npm ci
 cd ../familyhub/frontend && npm run build && npm run lint
 cd ../../admindash/frontend && npm run build && npm run lint && npx vitest run
 ```
@@ -487,13 +487,13 @@ git commit -am "feat(apexflow): serialize items through WorkflowItem, narrowing 
 
 **Files:**
 - Create: `apexflow/backend/scripts/generate_item_status_ts.py`
-- Create: `flow-runtime/src/itemStatus.generated.ts` (committed, generated)
-- Modify: `flow-runtime/src/types.ts:4,17-18` (union + `DONE_ITEM_STATUSES`, and the stale `in_progress` comment at `:118`)
+- Create: `workflow-forms/src/itemStatus.generated.ts` (committed, generated)
+- Modify: `workflow-forms/src/types.ts:4,17-18` (union + `DONE_ITEM_STATUSES`, and the stale `in_progress` comment at `:118`)
 - Modify: `familyhub/frontend/src/pages/HubPage.tsx:28,34`; `admindash/frontend/src/utils/workflowData.ts:219`
 - Test: `apexflow/backend/tests/test_item_status.py` (drift test)
 
 **Interfaces:**
-- Produces: `ITEM_STATUSES`, `ITEM_DONE_STATUSES`, and the `ItemStatus` union type, generated from Python. All TS consumers import from `flow-runtime` instead of hardcoding.
+- Produces: `ITEM_STATUSES`, `ITEM_DONE_STATUSES`, and the `ItemStatus` union type, generated from Python. All TS consumers import from `workflow-forms` instead of hardcoding.
 
 - [ ] **Step 1: Write the failing drift test:**
 
@@ -503,7 +503,7 @@ from pathlib import Path
 
 def test_generated_ts_matches_the_enum():
     repo = Path(__file__).resolve().parents[3]
-    generated = (repo / "flow-runtime/src/itemStatus.generated.ts").read_text()
+    generated = (repo / "workflow-forms/src/itemStatus.generated.ts").read_text()
     for s in ItemStatus:
         assert f"'{s.value}'" in generated, f"{s.value} missing from generated TS"
     assert "in_progress" not in generated
@@ -528,13 +528,13 @@ export const ITEM_DONE_STATUSES: readonly ItemStatus[] = [
 
 Run it: `cd apexflow/backend && uv run python scripts/generate_item_status_ts.py`
 
-- [ ] **Step 4: Re-point the TS consumers.** `flow-runtime/src/types.ts` re-exports from the generated module instead of declaring its own union and `DONE_ITEM_STATUSES`; delete the stale `in_progress` from the `:118` comment. `HubPage.tsx` imports `ITEM_STATUSES` for `ALL_ITEM_STATUSES` and drops `in_progress` from `OUTSTANDING`. `workflowData.ts:219` becomes `verify: status === 'submitted'`.
+- [ ] **Step 4: Re-point the TS consumers.** `workflow-forms/src/types.ts` re-exports from the generated module instead of declaring its own union and `DONE_ITEM_STATUSES`; delete the stale `in_progress` from the `:118` comment. `HubPage.tsx` imports `ITEM_STATUSES` for `ALL_ITEM_STATUSES` and drops `in_progress` from `OUTSTANDING`. `workflowData.ts:219` becomes `verify: status === 'submitted'`.
 
 - [ ] **Step 5: Verify everything**
 
 ```bash
 cd apexflow && uv run pytest backend/tests/ -q            # 526
-cd flow-runtime && npm ci
+cd workflow-forms && npm ci
 cd ../admindash/frontend && npm run build && npm run lint && npx vitest run
 cd ../../familyhub/frontend && npm run build && npm run lint
 cd ../../apexflow/frontend && npm run build && npm run lint
@@ -558,7 +558,7 @@ git commit -am "feat: generate the TS item-status vocabulary from Python; drop i
 
 - [ ] **Step 1: Mark follow-up #23 CLOSED** with the commit that dropped `in_progress`, noting it was removed from `COMPLETABLE_STATUSES`, two engine docstrings, and four TypeScript sites.
 
-- [ ] **Step 2: Record the amendment** in the spec — generated `.ts` inside `flow-runtime` rather than root JSON, with the symlinked-`file:`-dep resolution rationale.
+- [ ] **Step 2: Record the amendment** in the spec — generated `.ts` inside `workflow-forms` rather than root JSON, with the symlinked-`file:`-dep resolution rationale.
 
 - [ ] **Step 3: Commit**
 
@@ -571,5 +571,5 @@ git commit -am "docs: close Plan 1 follow-up #23; record the generated-TS amendm
 ## Self-review notes
 
 - Every spec requirement maps to a task: vocabulary (1), typed writes (2), authored validation (3), typed reads + `_version`/CAS (4), wire narrowing (5), TS sharing + `in_progress` removal (6), bookkeeping (7).
-- Type consistency: `ItemStatus` imported from `app.workflows.shared` everywhere; `WorkflowItem` from `app.workflows.rows`; TS imports from `flow-runtime`.
+- Type consistency: `ItemStatus` imported from `app.workflows.shared` everywhere; `WorkflowItem` from `app.workflows.rows`; TS imports from `workflow-forms`.
 - The riskiest step is Task 4 Step 5 (porting dict access to attributes). It is deliberately paired with the CAS regression test in Step 6, because that is the failure mode that would otherwise pass tests and lose data silently.

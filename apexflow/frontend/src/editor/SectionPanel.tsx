@@ -3,7 +3,7 @@
 // exclusion rules and the model-required-field auto-include/lock behavior
 // live in `./fieldPicker.ts` — this file is presentation + wiring only.
 import { useEffect } from 'react';
-import { humanizeSectionId } from '@neoapex/flow-runtime';
+import { humanizeSectionId } from '@neoapex/workflow-forms';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import {
   dropForbiddenConditionalFields,
