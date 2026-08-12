@@ -313,3 +313,30 @@ if a tenant needs rows genuinely gone while the record survives).
    alone (the safe default, and what the chosen approach implies) or delete
    the object too — otherwise orphaned files accrue storage cost with nothing
    referencing them.
+
+## Bug: DataCore `restore_entity` creates multiple active rows (found 2026-08-12)
+
+`POST /api/entities/{tenant}/{type}/restore` flips **every** archived row for an
+entity to `_status='active'`, not just the newest. Restoring one entity with
+five historical rows left five active rows.
+
+The function's own docstring says it "Refuses to act if an active version
+already exists, which would otherwise leave two active rows for the same
+entity_id" — but that guard only covers the case where an active row exists
+*before* the restore. The restore itself then produces exactly the state the
+guard exists to prevent (`store.py::restore_entity`).
+
+**Impact.** Single-entity reads survive: `get_active_entity` resolves by max
+`_version`. Query/list paths do NOT — they filter on `_status='active'` and
+return one row per duplicate, so a restored workflow appeared five times in the
+ApexFlow list.
+
+**Workaround.** Any subsequent `put_entity` on that entity collapses it:
+`put_entity` archives all active rows with `_version < next_version` and inserts
+one. In the UI that means one edit (autosave) is enough.
+
+**Fix.** `restore_entity` should restore only the row with the highest
+`_version` and leave the rest archived.
+
+Related: `restore` is not reachable from any product UI, so this is currently
+only hit by direct API use.

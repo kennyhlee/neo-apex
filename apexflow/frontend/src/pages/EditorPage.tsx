@@ -32,6 +32,8 @@ export default function EditorPage() {
   const [publishBusy, setPublishBusy] = useState(false);
   const [showDiscard, setShowDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const [showRevert, setShowRevert] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
 
   async function handleOpenPublish() {
@@ -104,6 +106,55 @@ export default function EditorPage() {
           : null;
 
   /**
+   * The draft as it was when this editor opened.
+   *
+   * No snapshot machinery needed: `store.definition` is written only on load,
+   * while `setMachine`/`setSteps` write to separate state — so
+   * `definition.machine`/`.steps` stay pristine for the whole session and are
+   * already the baseline. (Serialised for comparison because these are nested
+   * objects that change identity on every edit.)
+   */
+  const baseline = store.definition
+    ? JSON.stringify({ machine: store.definition.machine, steps: store.definition.steps })
+    : null;
+  const current = store.definition
+    ? JSON.stringify({ machine: store.machine, steps: store.steps })
+    : null;
+  const hasSessionChanges = baseline !== null && current !== null && baseline !== current;
+
+  /**
+   * Undo everything changed since this editor opened.
+   *
+   * NOT a literal "cancel — nothing was saved": the editor autosaves on an
+   * 800ms debounce, so edits are already persisted long before anyone reaches
+   * for this. Restoring the opening state and flushing is the honest
+   * equivalent — the workflow ends up exactly as it was when you arrived.
+   *
+   * Scope is the machine and steps, i.e. the editing work. The channel-access
+   * dropdown is excluded: `setChannelAccess` writes through to
+   * `store.definition`, so there is no pristine copy of it to restore, and it
+   * is one dropdown to flip back by hand.
+   *
+   * Deletes nothing — that is what Delete is for.
+   */
+  async function handleRevert() {
+    if (!store.definition) return;
+    setReverting(true);
+    try {
+      const { machine, steps } = JSON.parse(baseline as string);
+      store.setMachine(machine);
+      store.setSteps(steps);
+      await store.flush();
+      toast({ message: t('editor.revertToast'), tone: 'success' });
+      setShowRevert(false);
+    } catch {
+      toast({ message: t('editor.revertFailed'), tone: 'danger' });
+    } finally {
+      setReverting(false);
+    }
+  }
+
+  /**
    * Cancel out of workflow creation.
    *
    * Both creation paths (blank and from-template) persist the draft BEFORE
@@ -118,10 +169,10 @@ export default function EditorPage() {
     setDiscarding(true);
     try {
       await lifecycleAction(tenantId, entityId, 'delete');
-      toast({ message: t('editor.discardToast'), tone: 'success' });
+      toast({ message: t('editor.deleteToast'), tone: 'success' });
       navigate('/');
     } catch {
-      toast({ message: t('editor.discardFailed'), tone: 'danger' });
+      toast({ message: t('editor.deleteFailed'), tone: 'danger' });
       setDiscarding(false);
     }
   }
@@ -171,10 +222,19 @@ export default function EditorPage() {
               <Button
                 variant="secondary"
                 size="sm"
+                onClick={() => setShowRevert(true)}
+                disabled={!hasSessionChanges || store.saving || publishBusy || reverting}
+                title={hasSessionChanges ? undefined : t('editor.revert.nothingToRevert')}
+              >
+                {t('editor.revert.button')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowDiscard(true)}
                 disabled={store.saving || publishBusy}
               >
-                {t('editor.discard.button')}
+                {t('editor.delete.button')}
               </Button>
               <Button
                 variant="primary"
@@ -192,9 +252,36 @@ export default function EditorPage() {
       </header>
 
       <Modal
+        open={showRevert}
+        onClose={() => (!reverting ? setShowRevert(false) : undefined)}
+        title={t('editor.revert.title')}
+        subtitle={def.name}
+        size="sm"
+        dismissOnBackdrop={!reverting}
+        dismissOnEscape={!reverting}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowRevert(false)} disabled={reverting}>
+              {t('editor.revert.keep')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void handleRevert()}
+              loading={reverting}
+              loadingText={t('editor.revert.reverting')}
+            >
+              {t('editor.revert.confirm')}
+            </Button>
+          </>
+        }
+      >
+        <p>{t('editor.revert.body')}</p>
+      </Modal>
+
+      <Modal
         open={showDiscard}
         onClose={() => (!discarding ? setShowDiscard(false) : undefined)}
-        title={t('editor.discard.title')}
+        title={t('editor.delete.title')}
         subtitle={def.name}
         size="sm"
         dismissOnBackdrop={!discarding}
@@ -202,7 +289,7 @@ export default function EditorPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setShowDiscard(false)} disabled={discarding}>
-              {t('editor.discard.keep')}
+              {t('editor.delete.keep')}
             </Button>
             <Button
               variant="danger"
@@ -210,12 +297,12 @@ export default function EditorPage() {
               loading={discarding}
               loadingText={t('editor.discard.discarding')}
             >
-              {t('editor.discard.confirm')}
+              {t('editor.delete.confirm')}
             </Button>
           </>
         }
       >
-        <p>{t('editor.discard.body')}</p>
+        <p>{t('editor.delete.body')}</p>
       </Modal>
 
       {def.status === 'draft' && (
