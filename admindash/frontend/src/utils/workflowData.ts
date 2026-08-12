@@ -344,3 +344,42 @@ export function toDocumentView(row: Record<string, unknown>): InstanceDocumentVi
     item_id: row.item_id ? String(row.item_id) : undefined,
   };
 }
+
+/** One `workflow_instance` as the lineage work-item list route returns it.
+ * Every scalar arrives as a string off DataCore's flattened rows except
+ * `definition_version`, which the API client coerces with `asNumber`. */
+export interface LineageInstance {
+  entity_id: string;
+  instance_id: string;
+  state: string;
+  definition_version: number;
+  channel_started: string;
+  applicant_email: string;
+  opened_at: string;
+  closed_at: string;
+  /** Set while the work item is suspended by an archived workflow. The state
+   * is untouched during a freeze, so this is the only signal. */
+  frozen_at: string;
+}
+
+export interface InstanceFilter {
+  state?: string;
+  openness?: 'all' | 'open' | 'closed' | 'frozen';
+}
+
+/** Client-side because the server cannot filter on `frozen_at`: a
+ * DataCore `where` naming a column a tenant's table has not materialized is a
+ * binder error, not an empty result. Same reason the pipeline board's own
+ * grouping happens here rather than in SQL. */
+export function filterInstances(
+  rows: LineageInstance[],
+  { state, openness = 'all' }: InstanceFilter,
+): LineageInstance[] {
+  return rows.filter((r) => {
+    if (state && r.state !== state) return false;
+    if (openness === 'open') return !r.closed_at;
+    if (openness === 'closed') return Boolean(r.closed_at);
+    if (openness === 'frozen') return Boolean(r.frozen_at);
+    return true;
+  });
+}

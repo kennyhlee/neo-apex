@@ -81,13 +81,13 @@ DECISIONS this task makes (surfaced in task-8-report.md for Task 9/10):
    object to build the `{"item": ...}` response key when an item built-in
    (other than `save_draft`) ran. `None` for every non-item-mutating action.
 
-7. **`retire_definition`'s bulk-cancel is wired via a caller-supplied
-   `cancel_instance_fn` callback**, not a direct import of this module into
+7. **`archive_definition`'s bulk-freeze is wired via a caller-supplied
+   `freeze_instance_fn` callback**, not a direct import of this module into
    `definitions.py`. `machine.py` imports `definitions.py` (for
    `parse_machine_steps`/`fetch_models`/`referenced_entity_models`/
    `_as_int`) — a `definitions.py -> machine.py` import back would close a
    cycle. `app/api/definitions.py` (which already imports both) supplies
-   the callback (`build_eval_context` + `cancel_instance`), keeping
+   the callback (`build_eval_context` + `freeze_instance`), keeping
    `definitions.py` itself free of any machine-execution import.
 
 8. **The "capacity_available negated" mechanism the enrollment template
@@ -174,6 +174,14 @@ ITEM_BUILTIN_ACTIONS: frozenset[str] = frozenset(_ITEM_BUILTINS_ALL)
 # Definition-row statuses `build_eval_context` will pin an instance to — see
 # module docstring, decision 1.
 _PINNED_STATUSES = ("published", "superseded")
+
+# The one synthetic terminal state — never a declared `state_id` in an authored
+# machine. `cancel_instance` is now the ONLY way a work item ends outside its
+# machine's own terminal states: force-archive (and with it `abandoned`,
+# `archived_from_state`, and `restore_instance`) was removed to keep the state
+# set small and every path reversible-or-final with nothing in between.
+CANCELLED_STATE = "cancelled"
+_SYNTHETIC_TERMINAL_STATES = frozenset({CANCELLED_STATE})
 
 
 def _parse_json(raw) -> dict:
@@ -284,11 +292,11 @@ def _refresh_items(ctx: EvalContext) -> None:
 
 
 def _is_terminal_state(ctx: EvalContext) -> bool:
-    """True for the synthetic `"cancelled"` state (never a declared
-    `state_id`, spec: "always terminal-legal") or any declared state whose
+    """True for the synthetic `cancelled` state (never a declared `state_id`,
+    spec: "always terminal-legal") or any declared state whose
     `kind == "terminal"`."""
     current = ctx.instance.get("state")
-    if current == "cancelled":
+    if current in _SYNTHETIC_TERMINAL_STATES:
         return True
     state_def = next((s for s in ctx.definition["machine"].states if s.state_id == current), None)
     return state_def is not None and state_def.kind == "terminal"
@@ -367,7 +375,7 @@ def allowed_actions(ctx: EvalContext) -> list[str]:
     staff `GET .../allowed-actions` route (`app/api/instances.py`) and the
     family token-bundle route (`app/api/internal.py::instance_by_token`),
     which advertise this same list outside of a failed-action 409."""
-    if _is_terminal_state(ctx):
+    if _is_terminal_state(ctx) or _is_frozen(ctx):
         return []
 
     current_state = ctx.instance.get("state")
@@ -533,19 +541,85 @@ def cancel_instance(ctx: EvalContext) -> dict:
         token_version = 1
 
     base = entity_base_data(ctx.instance)
-    base["state"] = "cancelled"
+    base["state"] = CANCELLED_STATE
     base["closed_at"] = ctx.now.isoformat()
     base["token_version"] = token_version + 1
     updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
                            ctx.token, expected_version=engine.row_version(ctx.instance))
-    ctx.instance["state"] = "cancelled"
+    ctx.instance["state"] = CANCELLED_STATE
     ctx.instance["closed_at"] = base["closed_at"]
     ctx.instance["token_version"] = base["token_version"]
     if "_version" in updated:
         ctx.instance["_version"] = updated["_version"]
 
-    _log_activity(ctx, "state_change", from_state, "cancelled")
+    _log_activity(ctx, "state_change", from_state, CANCELLED_STATE)
     return ctx.instance
+
+
+
+
+def _is_frozen(ctx: EvalContext) -> bool:
+    """A frozen work item is SUSPENDED, not closed and not terminal.
+
+    Deliberately a timestamp rather than a state: freezing leaves `state`
+    untouched, so thawing has nothing to restore and cannot drift out of sync
+    the way `abandoned`/`archived_from_state` could. It also means a frozen
+    item still counts as open work (no `closed_at`), which is correct — the
+    work genuinely is unfinished."""
+    return bool(ctx.instance.get("frozen_at"))
+
+
+def freeze_instance(ctx: EvalContext) -> dict:
+    """Suspend one in-flight work item while its workflow is archived.
+
+    Not routed as a staff action: freezing is a consequence of archiving the
+    workflow, never a per-item decision. Called by `archive_definition` via the
+    collaborator injected in `app/api/definitions.py`.
+
+    Does NOT bump `token_version`. A family's magic link stays valid through
+    the freeze/thaw cycle and simply 409s while suspended — revoking it would
+    force a re-issue for work that is going to resume untouched, which is the
+    opposite of what a reversible pause should cost. (`cancel_instance` DOES
+    revoke, because that one is permanent.)
+
+    Idempotent: re-freezing an already-frozen item keeps the original
+    `frozen_at`, so a repeated archive never rewrites when the pause began.
+    """
+    if _is_frozen(ctx):
+        return ctx.instance
+    base = entity_base_data(ctx.instance)
+    base["frozen_at"] = ctx.now.isoformat()
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=engine.row_version(ctx.instance))
+    ctx.instance["frozen_at"] = base["frozen_at"]
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
+    _log_activity(ctx, "note", ctx.instance.get("state"), "frozen")
+    return ctx.instance
+
+
+def unfreeze_instance(ctx: EvalContext) -> dict:
+    """Thaw one suspended work item — the inverse of `freeze_instance`, driven
+    by `unarchive_definition`.
+
+    Clears `frozen_at` by writing `""` rather than `None`: `entity_base_data`
+    drops `None` values from the full-replace PUT body, so the column would
+    keep its old value. No state write is needed because freezing never
+    changed the state.
+    """
+    if not _is_frozen(ctx):
+        return ctx.instance
+    base = entity_base_data(ctx.instance)
+    base["frozen_at"] = ""
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=engine.row_version(ctx.instance))
+    ctx.instance["frozen_at"] = ""
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
+    _log_activity(ctx, "note", ctx.instance.get("state"), "unfrozen")
+    return ctx.instance
+
+
 
 
 # --- the single action dispatcher ------------------------------------------
@@ -564,6 +638,15 @@ def execute_action(ctx: EvalContext, action_name: str, params: dict) -> dict:
     prevented by the type) never leaks a PRIOR call's item result into a
     later transition/cancel response."""
     ctx.item_result = None
+    # A frozen work item accepts nothing at all — its workflow is archived, so
+    # every path (item built-ins, transitions, cancel, restore) is suspended
+    # until an unarchive thaws it. Checked here rather than in each branch so
+    # no future action can be added that forgets it.
+    if _is_frozen(ctx):
+        raise HTTPException(409, {
+            "reason": "frozen",
+            "state": ctx.instance.get("state"),
+        })
     if action_name in ITEM_BUILTIN_ACTIONS:
         _run_item_builtin(ctx, action_name, params)
     elif action_name == "cancel_instance":

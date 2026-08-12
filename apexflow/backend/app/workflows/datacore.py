@@ -87,6 +87,30 @@ def dc_create(tenant_id: str, entity_type: str, base_data: dict, token: str | No
     return resp.json()
 
 
+def dc_archive(tenant_id: str, entity_type: str, entity_id: str,
+               token: str | None = None) -> bool:
+    """Soft-delete one row: DataCore flips its `_status` to `"archived"`, which
+    drops it out of every `list_entities`/`get_entity` read (those filter
+    `_status = 'active'`). Returns True when a row was actually flipped.
+
+    NAMING COLLISION, read carefully: DataCore's `/archive` is a ROW-LEVEL
+    SOFT DELETE and has nothing to do with this service's workflow-lineage
+    `archived` status (`definitions.is_archived`). The only caller here is
+    `definitions.delete_definition`, whose user-facing verb is DELETE. Do not
+    reach for this when you mean lineage archiving.
+
+    DataCore keeps the row and offers `/restore` as the inverse, so this is
+    recoverable by an operator with API access even though no UI exposes it.
+    """
+    _validate_id(tenant_id, "tenant_id")
+    _validate_id(entity_type, "entity_type")
+    resp = _request("POST", f"/api/entities/{tenant_id}/{entity_type}/archive", token,
+                    {"entity_ids": [entity_id]})
+    if resp.status_code != 200:
+        raise HTTPException(resp.status_code, f"DataCore archive failed: {resp.text}")
+    return bool(resp.json().get("archived"))
+
+
 def dc_update(tenant_id: str, entity_type: str, entity_id: str, base_data: dict,
               token: str | None = None, custom_fields: dict | None = None,
               expected_version: int | None = None) -> dict:

@@ -271,3 +271,45 @@ any of them.
    secrets are correctly `ADMINDASH_`-prefixed (verified live via
    `fly secrets list -a admindash-api`, 2026-08-08), so this is a comment
    bug only; fix the comment next time that file is touched.
+
+## Deferred: garbage collection for closed workflow data (decided 2026-08-11)
+
+**Decision made, implementation deliberately deferred.** Nothing accumulates
+yet — there is no production workflow history to reclaim — so this is not
+worth building until real tenants have a year of data behind them.
+
+**Chosen approach: compaction, not deletion.** For a work item closed longer
+than the retention window, drop its `workflow_activity` and `workflow_item`
+rows and collapse the outcome onto the `workflow_instance` row (final state,
+closed date, counts). The instance survives and stays queryable. Detail is
+what gets reclaimed, never the record — which is what makes it safe to run
+automatically.
+
+**Retention default: 7 years.** These are student enrollment records and the
+floor is statutory, not a product preference. Treat 7 years as the default and
+confirm per-jurisdiction before shortening it for any tenant.
+
+Rejected for now: an age-based sweep that hard-deletes (no scheduler exists —
+Fly machines scale to zero — and timed deletion of the sole copy is the wrong
+default for these records), and export-then-purge to R2 (worth revisiting only
+if a tenant needs rows genuinely gone while the record survives).
+
+### What a future implementer must know first
+
+1. **There is no hard delete in the platform.** DataCore's `/archive` is a
+   SOFT delete — it re-inserts the row with `_status='archived'` and reclaims
+   nothing. `store.py::delete_version` does really remove rows but is not
+   exposed over HTTP. A purge endpoint on DataCore is the gating dependency
+   for any GC work, and it does not exist.
+2. **Version history is already bounded** — `_trim_entity_versions` caps rows
+   per entity on every write. Repeated edits are NOT the leak; the growing
+   count of entities is.
+3. **The volume is `workflow_activity`.** One entity row per state change,
+   note, and item operation, never removed. It dwarfs instances, items, and
+   definitions combined — a GC that only removed archived workflows would
+   reclaim almost nothing.
+4. **Documents are a separate axis with a real bill.** Deleting a `document`
+   row does not delete the R2 object. Compaction must either leave documents
+   alone (the safe default, and what the chosen approach implies) or delete
+   the object too — otherwise orphaned files accrue storage cost with nothing
+   referencing them.

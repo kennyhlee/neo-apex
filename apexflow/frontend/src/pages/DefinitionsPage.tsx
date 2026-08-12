@@ -9,7 +9,8 @@
 //   rows are historical and not actionable (api/designer.py's own docstring:
 //   "frontend groups by definition_id into lineages").
 // - v1 badge set is status/lineage_status/health ONLY — no new-fields hint.
-// - deprecate/reactivate/retire all operate on the LINEAGE's published row
+// - deprecate/reactivate/archive/unarchive all operate on the LINEAGE's
+//   published row
 //   (app/workflows/definitions.py's `_require_published_row` 409s on any
 //   other status) — those actions render only on published rows.
 // - "New draft from published" is a generic-write copy: fetch the bundle
@@ -18,11 +19,11 @@
 //   `templates/enrollment.py`'s seed_enrollment_template and
 //   scripts/apexflow-reseed-dev.py's push both write (map §3/§8): machine/
 //   steps are JSON-encoded STRINGS on the wire, not nested objects.
-//   Hidden when lineage_status === "retired" (browser-gate fix): retire is
-//   terminal, and a new draft copies `def.lineage_status` verbatim onto the
-//   new row, so a "New draft" off a retired lineage would carry
-//   lineage_status "retired" forward onto a fresh draft — confusing and
-//   never a legal published-row outcome for that lineage again anyway.
+//   Hidden for an ARCHIVED lineage (`isArchived`, which covers both the
+//   current "archived" value and the legacy "retired" one): a new draft
+//   copies `def.lineage_status` verbatim onto the new row, so a "New draft"
+//   off an archived lineage would carry that status forward onto a fresh
+//   draft. Unarchive first, then draft.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
@@ -35,10 +36,10 @@ import {
   lifecycleAction,
 } from '../api/designer.ts';
 import { createEntity } from '../api/client.ts';
+import { canArchive, isArchived } from '../types/designer.ts';
 import type {
   DefinitionListEntry,
   DefinitionLifecycleAction,
-  OpenInstancesConflict,
 } from '../types/designer.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -49,7 +50,7 @@ import './DefinitionsPage.css';
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 const DEFAULT_PAGE_SIZE = 20;
 
-/** `active` sorts before `deprecated` sorts before `retired`. */
+/** `active` sorts before `deprecated` sorts before `archived`. */
 const STATUS_ORDER: Record<string, number> = { published: 0, draft: 1 };
 
 function slugify(name: string): string {
@@ -98,7 +99,8 @@ export default function DefinitionsPage() {
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   const [retireTarget, setRetireTarget] = useState<DefinitionListEntry | null>(null);
-  const [forceCancel, setForceCancel] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DefinitionListEntry | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [retiring, setRetiring] = useState(false);
 
   // `load` is the reusable reload path — called from the retry button and
@@ -207,26 +209,6 @@ export default function DefinitionsPage() {
     return t(fallbackKey);
   }
 
-  /**
-   * Task review fix (Task 10, important): `retire_definition`'s
-   * `HTTPException(409, {"open_instances": N})` — like every non-string
-   * `HTTPException` detail in this backend — comes back on the wire as
-   * `{"detail": {"open_instances": N}}` (FastAPI wraps it), NOT
-   * `{"open_instances": N}` at the top level. Reading `err.body` directly
-   * as `OpenInstancesConflict` (this function's prior shape) always missed,
-   * silently falling back to the caller's pre-click count every time — same
-   * unwrap pattern as PublishDialog.tsx's `extractPublishErrors`. Returns
-   * `null` for any other 409 shape or non-409 error, same as that sibling.
-   */
-  function extractOpenInstances(err: unknown): number | null {
-    if (!(err instanceof ApiError) || err.status !== 409) return null;
-    const body = err.body;
-    if (!body || typeof body !== 'object' || !('detail' in body)) return null;
-    const detail = (body as { detail?: unknown }).detail;
-    if (!detail || typeof detail !== 'object' || !('open_instances' in detail)) return null;
-    const n = (detail as OpenInstancesConflict).open_instances;
-    return typeof n === 'number' ? n : null;
-  }
 
   // --- New workflow (blank draft) -------------------------------------
 
@@ -343,20 +325,56 @@ export default function DefinitionsPage() {
     }
   }
 
-  // --- Retire -------------------------------------------------------------
+  // --- Archive ------------------------------------------------------------
+
+  /** Unarchive is not gated and destroys nothing, so it needs no confirm. Its
+   * toast says that frozen applications resumed, because that side effect is
+   * invisible on this page and an operator would otherwise not know it
+   * happened. */
+  async function handleUnarchive(entry: DefinitionListEntry) {
+    try {
+      await lifecycleAction(tenantId, entry.entity_id, 'unarchive', {});
+      toast({
+        message: t('definitions.unarchiveToast').replace('{name}', entry.name),
+        tone: 'success',
+      });
+      void load();
+    } catch (err) {
+      toast({ message: errorMessage(err, 'definitions.unarchiveFailed'), tone: 'danger' });
+    }
+  }
+
+  /** Discarding an unwanted draft is an authoring action, so it lives here as
+   * well as in AdminDash. Only `draft` rows are deletable — the backend's
+   * `delete_definition` 409s on published/superseded, since a superseded row
+   * is the pinned definition for every instance still running on it. */
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await lifecycleAction(tenantId, deleteTarget.entity_id, 'delete');
+      toast({
+        message: t('definitions.deleteToast').replace('{name}', deleteTarget.name),
+        tone: 'success',
+      });
+      setDeleteTarget(null);
+      void load();
+    } catch (err) {
+      toast({ message: errorMessage(err, 'definitions.deleteFailed'), tone: 'danger' });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   function openRetireModal(entry: DefinitionListEntry) {
     setRetireTarget(entry);
-    setForceCancel(false);
   }
 
   async function confirmRetire() {
     if (!retireTarget) return;
     setRetiring(true);
     try {
-      await lifecycleAction(tenantId, retireTarget.entity_id, 'retire', {
-        force_cancel: forceCancel,
-      });
+      await lifecycleAction(tenantId, retireTarget.entity_id, 'archive');
       toast({
         message: t('definitions.retireToast').replace('{name}', retireTarget.name),
         tone: 'success',
@@ -364,22 +382,12 @@ export default function DefinitionsPage() {
       setRetireTarget(null);
       void load();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // Fallback (`retireTarget.open_instances`) kept for resilience if
-        // the response ever doesn't carry the count — see
-        // `extractOpenInstances`'s own doc comment for the actual wire
-        // shape this now correctly unwraps.
-        const count = extractOpenInstances(err) ?? retireTarget.open_instances;
-        toast({
-          message: t('definitions.retireBlockedToast').replace('{n}', String(count)),
-          tone: 'danger',
-        });
-        // Leave the modal open so the operator can tick "force cancel" and
-        // retry without re-finding this row.
-      } else {
-        toast({ message: errorMessage(err, 'definitions.lifecycleError'), tone: 'danger' });
-        setRetireTarget(null);
-      }
+      // Archiving no longer refuses on open work — it freezes it — so the only
+      // 409 left here is "lineage is not deprecated", which the row actions
+      // already prevent. Anything reaching this point is a stale view or a
+      // genuine failure, and reads the same to the operator.
+      toast({ message: errorMessage(err, 'definitions.lifecycleError'), tone: 'danger' });
+      setRetireTarget(null);
     } finally {
       setRetiring(false);
     }
@@ -462,9 +470,14 @@ export default function DefinitionsPage() {
   function rowActions(row: DefinitionListEntry) {
     if (row.status === 'draft') {
       return (
-        <Button variant="secondary" size="sm" onClick={() => navigate(`/definitions/${row.entity_id}`)}>
-          {t('definitions.actions.openEditor')}
-        </Button>
+        <div className="definitions-row-actions">
+          <Button variant="secondary" size="sm" onClick={() => navigate(`/definitions/${row.entity_id}`)}>
+            {t('definitions.actions.openEditor')}
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => setDeleteTarget(row)}>
+            {t('definitions.actions.delete')}
+          </Button>
+        </div>
       );
     }
 
@@ -472,7 +485,7 @@ export default function DefinitionsPage() {
     // way the backend gates them (see module comment).
     return (
       <div className="definitions-row-actions">
-        {row.lineage_status !== 'retired' && (
+        {!isArchived(row.lineage_status) && (
           <Button
             variant="secondary"
             size="sm"
@@ -501,9 +514,14 @@ export default function DefinitionsPage() {
             {t('definitions.actions.reactivate')}
           </Button>
         )}
-        {row.lineage_status !== 'retired' && (
+        {canArchive(row.lineage_status) && (
           <Button variant="danger" size="sm" onClick={() => openRetireModal(row)}>
             {t('definitions.actions.retire')}
+          </Button>
+        )}
+        {isArchived(row.lineage_status) && (
+          <Button variant="secondary" size="sm" onClick={() => void handleUnarchive(row)}>
+            {t('definitions.actions.unarchive')}
           </Button>
         )}
       </div>
@@ -667,20 +685,36 @@ export default function DefinitionsPage() {
       >
         <p>{t('definitions.retireConfirmBody')}</p>
         {retireTarget && retireTarget.open_instances > 0 && (
-          <>
-            <p className="definitions-retire-warning">
-              {t('definitions.retireOpenInstances').replace('{n}', String(retireTarget.open_instances))}
-            </p>
-            <label className="definitions-checkbox-field">
-              <input
-                type="checkbox"
-                checked={forceCancel}
-                onChange={(e) => setForceCancel(e.target.checked)}
-              />
-              {t('definitions.retireForceCancel').replace('{n}', String(retireTarget.open_instances))}
-            </label>
-          </>
+          <p className="definitions-retire-warning">
+            {t('definitions.archiveFreezes').replace('{n}', String(retireTarget.open_instances))}
+          </p>
         )}
+      </Modal>
+
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => (!deleting ? setDeleteTarget(null) : undefined)}
+        title={t('definitions.deleteConfirmTitle')}
+        subtitle={deleteTarget?.name}
+        dismissOnBackdrop={!deleting}
+        dismissOnEscape={!deleting}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void confirmDelete()}
+              loading={deleting}
+              loadingText={t('definitions.deleting')}
+            >
+              {t('definitions.actions.delete')}
+            </Button>
+          </>
+        }
+      >
+        <p>{t('definitions.deleteConfirmBody')}</p>
       </Modal>
     </div>
   );

@@ -1,3 +1,20 @@
 .workflows-page {
   animation: fadeIn var(--dur-base) var(--ease);
 }
+
+.workflows-show-archived {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* Explains why Archive isn't offered yet, in the slot the button would use. */
+.workflows-hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  max-width: 32ch;
+  display: inline-block;
+}

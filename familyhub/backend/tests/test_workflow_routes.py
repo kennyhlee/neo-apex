@@ -230,3 +230,16 @@ def test_start_no_longer_prefetches_the_config_bundle(client, fake_http):
     client.post(f"/api/workflows/{TENANT}/{DEFINITION_ID}/start",
                json={"applicant_email": "parent@example.com"})
     assert fake_http.calls and all(c["method"] == "POST" for c in fake_http.calls)
+
+
+def test_workflow_bundle_relays_archived_lineage_status(client, fake_http):
+    """FamilyHub needs no code change for archive: RegisterPage already renders
+    the closed state for any lineage_status != 'active'. Asserted rather than
+    assumed."""
+    fake_http.add("GET", f"/internal/workflows/{TENANT}/{DEFINITION_ID}/config",
+                  FakeResponse(200, {**BUNDLE, "lineage_status": "archived"}))
+
+    resp = client.get(f"/api/workflows/{TENANT}/{DEFINITION_ID}")
+
+    assert resp.status_code == 200
+    assert resp.json()["lineage_status"] == "archived"

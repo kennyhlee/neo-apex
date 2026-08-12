@@ -26,13 +26,20 @@ class ActionRequest(BaseModel):
     action: str
 
 
-def _cancel_one(tenant_id: str, instance_row: dict, actor: str, token: str | None) -> None:
-    """`retire_definition`'s `cancel_instance_fn` collaborator (Task 8) —
-    lives at the API layer (not in `app.workflows.definitions`) specifically
-    to avoid a `definitions.py -> machine.py` import cycle; see
-    `definitions.retire_definition`'s docstring."""
-    ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
-    machine.cancel_instance(ctx)
+def _instance_op(op):
+    """Build one of `archive_definition`/`unarchive_definition`'s per-instance
+    collaborators. These live at the API layer (not in
+    `app.workflows.definitions`) specifically to avoid a `definitions.py ->
+    machine.py` import cycle; see `definitions.archive_definition`'s
+    docstring."""
+    def run(tenant_id: str, instance_row: dict, actor: str, token: str | None) -> None:
+        ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
+        op(ctx)
+    return run
+
+
+_freeze_one = _instance_op(machine.freeze_instance)
+_unfreeze_one = _instance_op(machine.unfreeze_instance)
 
 
 @router.post("/{tenant_id}/definitions/{entity_id}/actions")
@@ -40,7 +47,6 @@ def definition_action(tenant_id: str, entity_id: str, body: ActionRequest,
                       user: dict = Depends(require_staff_tenant)):
     token = user.get("_token")
     actor = user.get("user_id", "staff")
-    params = body.model_dump(exclude={"action"})
 
     if body.action == "publish":
         return defs.publish_definition(tenant_id, entity_id, token)
@@ -48,10 +54,21 @@ def definition_action(tenant_id: str, entity_id: str, body: ActionRequest,
         return defs.deprecate_definition(tenant_id, entity_id, token)
     if body.action == "reactivate":
         return defs.reactivate_definition(tenant_id, entity_id, token)
-    if body.action == "retire":
-        return defs.retire_definition(
-            tenant_id, entity_id, force_cancel=bool(params.get("force_cancel")),
-            actor=actor, token=token, cancel_instance_fn=_cancel_one)
+    if body.action in ("archive", "retire"):
+        # `retire` is retained for one release as an alias so an unmigrated
+        # caller does not break mid-deploy. Its `force_cancel` param — and
+        # `force` — are accepted and IGNORED: archive is always
+        # non-destructive now, and rejecting an old caller's extra param would
+        # break it for no benefit.
+        return defs.archive_definition(
+            tenant_id, entity_id, actor=actor, token=token,
+            freeze_instance_fn=_freeze_one)
+    if body.action == "unarchive":
+        return defs.unarchive_definition(
+            tenant_id, entity_id, actor=actor, token=token,
+            unfreeze_instance_fn=_unfreeze_one)
+    if body.action == "delete":
+        return defs.delete_definition(tenant_id, entity_id, token)
 
     raise HTTPException(400, f"Unknown action: {body.action!r}")
 

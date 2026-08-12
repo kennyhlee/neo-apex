@@ -121,21 +121,19 @@ export async function getPrimitives(tenantId: string): Promise<PrimitivesCatalog
 
 /**
  * POST /api/workflows/{tenant_id}/definitions/{entity_id}/actions —
- * api/definitions.py:38. `{action, force_cancel?}` body — `force_cancel`
- * only means anything for `action: "retire"` (api/definitions.py:51-54);
- * harmless to omit for the other three actions.
+ * api/definitions.py. `{action, force?}` body — `force` only means anything
+ * for `action: "archive"`; harmless to omit for the other actions.
  *
  * Publish 409s with `{errors: [...]}` when the definition fails
- * `validate_definition` (definitions.py:114-117) — the row is never touched
- * in that path. Retire 409s with `{open_instances: N}` when instances are
- * open and `force_cancel` is not set (definitions.py:208-211). Both surface
- * as `ApiError` with the parsed body on `.body`.
+ * `validate_definition` — the row is never touched in that path. Archive
+ * 409s with `{open_instances: N}` when work items are still open and `force`
+ * is not set. Both surface as `ApiError` with the parsed body on `.body`.
  */
 export async function lifecycleAction(
   tenantId: string,
   entityId: string,
   action: DefinitionLifecycleAction,
-  opts?: { force_cancel?: boolean },
+  opts?: { force?: boolean },
 ): Promise<DefinitionRow> {
   const resp = await fetch(
     `${API_BASE}/api/workflows/${tenantId}/definitions/${entityId}/actions`,

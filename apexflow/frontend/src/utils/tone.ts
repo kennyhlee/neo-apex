@@ -32,6 +32,7 @@ const TONE_BY_STATUS: Record<string, Tone> = {
   // Gone, or gone wrong
   broken: 'risk',
   retired: 'risk',
+  archived: 'risk',
   rejected: 'risk',
   expired: 'risk',
   deprecated: 'risk',

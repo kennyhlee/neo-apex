@@ -1,0 +1,37 @@
+.workflow-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.workflow-items-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-4);
+}
+
+.workflow-items-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.workflow-items-filter select {
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-default, var(--accent));
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* Bulk controls sit at the end of the filter row and only exist while a
+   selection does, so they never occupy space in the common case. */
+.workflow-items-bulk {
+  display: flex;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}

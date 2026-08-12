@@ -18,7 +18,9 @@ import {
   toItemView,
   toDocumentView,
   type MachineStateView,
+  filterInstances,
   type InstanceRow,
+  type LineageInstance,
 } from '../workflowData.ts';
 
 describe('parseMachineStates', () => {
@@ -358,5 +360,48 @@ describe('toDocumentView', () => {
     expect(toDocumentView({ entity_id: 'DOC-2', filename: 'x.pdf' })).toEqual({
       document_id: 'DOC-2', filename: 'x.pdf', item_id: undefined,
     });
+  });
+});
+
+describe('filterInstances', () => {
+  const row = (over: Partial<LineageInstance>): LineageInstance => ({
+    entity_id: 'wi-1', instance_id: 'WI-1', state: 'draft', definition_version: 1,
+    channel_started: 'staff', applicant_email: '', opened_at: '', closed_at: '',
+    frozen_at: '', ...over,
+  });
+
+  const rows = [
+    row({ entity_id: 'open', state: 'submitted', closed_at: '' }),
+    row({ entity_id: 'closed', state: 'enrolled', closed_at: '2026-08-02T00:00:00Z' }),
+    row({ entity_id: 'gone', state: 'cancelled', closed_at: '2026-08-02T00:00:00Z' }),
+  ];
+
+  it('returns everything by default', () => {
+    expect(filterInstances(rows, {})).toHaveLength(3);
+  });
+
+  it('open means no closed_at', () => {
+    expect(filterInstances(rows, { openness: 'open' }).map((r) => r.entity_id))
+      .toEqual(['open']);
+  });
+
+  it('closed includes cancelled items', () => {
+    expect(filterInstances(rows, { openness: 'closed' }).map((r) => r.entity_id))
+      .toEqual(['closed', 'gone']);
+  });
+
+  it('frozen narrows to suspended work, which is still open', () => {
+    const withFrozen = [...rows, row({ entity_id: 'paused', state: 'submitted',
+                                       closed_at: '', frozen_at: '2026-08-06T00:00:00Z' })];
+    expect(filterInstances(withFrozen, { openness: 'frozen' }).map((r) => r.entity_id))
+      .toEqual(['paused']);
+    // a frozen item has no closed_at, so it still counts as open
+    expect(filterInstances(withFrozen, { openness: 'open' }).map((r) => r.entity_id))
+      .toEqual(['open', 'paused']);
+  });
+
+  it('state filter composes with openness', () => {
+    expect(filterInstances(rows, { state: 'enrolled', openness: 'closed' })
+      .map((r) => r.entity_id)).toEqual(['closed']);
   });
 });
