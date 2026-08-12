@@ -202,6 +202,20 @@ def list_open_instances(tenant_id: str, lineage_definition_id: str,
     return [r for r in rows if not r.get("closed_at")]
 
 
+def list_frozen_instances(tenant_id: str, lineage_definition_id: str,
+                          token: str | None = None) -> list[dict]:
+    """Instances of one lineage currently suspended by an archive — the set
+    `unarchive_definition` thaws.
+
+    Filtered in Python, never a SQL `where`: `frozen_at` is a column a tenant's
+    table only materializes once something has been frozen there, and a `where`
+    naming an unmaterialized column is a DuckDB binder error (400), not an
+    empty result."""
+    rows = dc.list_entities(tenant_id, "workflow_instance", "", token)
+    rows = [r for r in rows if str(r.get("definition_id", "")) == str(lineage_definition_id)]
+    return [r for r in rows if r.get("frozen_at")]
+
+
 def count_open_instances(tenant_id: str, lineage_definition_id: str,
                          token: str | None = None) -> int:
     """Open-instance count for one lineage, gating `retire`.
@@ -220,57 +234,114 @@ def count_open_instances(tenant_id: str, lineage_definition_id: str,
 
 def archive_definition(tenant_id: str, entity_id: str, force: bool = False, *,
                        actor: str | None = None, token: str | None = None,
+                       freeze_instance_fn: Callable[[str, dict, str, str | None], None] | None = None,
                        abandon_instance_fn: Callable[[str, dict, str, str | None], None] | None = None,
                        ) -> dict:
-    """lineage_status -> archived, gated on zero open work items.
+    """lineage_status: deprecated -> archived.
 
-    409 `{"open_instances": N}` when any work item is still outside an end
-    state and `force` is not set (spec R2). With `force=True`, each open
-    instance is abandoned via `abandon_instance_fn(tenant_id, instance_row,
-    actor, token)` before the lineage flips (spec R3).
+    Reachable ONLY from `deprecated` (409 `{"reason": "not_deprecated"}`
+    otherwise). That ordering is the whole point: deprecating stops new intake
+    while letting mid-flight work run, so it is the window in which a workflow
+    drains naturally. Archiving is what you do once you are done waiting.
 
-    Reversible, unlike the `retire_definition` this replaces — see
-    `unarchive_definition`.
+    Whatever is still in flight when the archive lands is SUSPENDED, not
+    destroyed — each open instance goes through `freeze_instance_fn`, and
+    `unarchive_definition` thaws them. `force=True` swaps that for
+    `abandon_instance_fn`, the destructive escape hatch: those instances are
+    closed permanently and unarchive will NOT revive them (an administrator
+    restores each by hand via `machine.restore_instance`).
 
-    `abandon_instance_fn` is dependency-injected by the caller (`app.api
+    Both collaborators are dependency-injected by the caller (`app.api
     .definitions`) rather than this module importing `app.workflows.machine`
     directly — `machine.py` imports THIS module (`parse_machine_steps`/
     `fetch_models`/`referenced_entity_models`/`_as_int`), so a
-    `definitions.py -> machine.py` import back would close a cycle. Callers
-    that pass `force=True` must supply `abandon_instance_fn` and a real
-    `actor` — a RuntimeError, not an HTTPException, if either is missing
-    while there are open instances to abandon: that is the API layer failing
-    to wire its collaborator, a programming error rather than a bad request.
-    (A bare `assert` would strip under `python -O`, silently archiving with
-    the instances never abandoned.)
+    `definitions.py -> machine.py` import back would close a cycle. A missing
+    collaborator or actor with open instances present is a RuntimeError, not
+    an HTTPException: that is the API layer failing to wire itself, a
+    programming error rather than a bad request. (A bare `assert` would strip
+    under `python -O`, silently archiving with the instances never touched.)
     """
     row = _require_published_row(tenant_id, entity_id, token, "archive")
+    if row.get("lineage_status") != "deprecated":
+        raise HTTPException(409, {
+            "reason": "not_deprecated",
+            "lineage_status": row.get("lineage_status"),
+        })
+
     lineage_id = row.get("definition_id")
     open_rows = list_open_instances(tenant_id, lineage_id, token)
     if open_rows:
-        if not force:
-            raise HTTPException(409, {"open_instances": len(open_rows)})
-        if abandon_instance_fn is None or not actor:
+        handler = abandon_instance_fn if force else freeze_instance_fn
+        if handler is None or not actor:
             raise RuntimeError(
-                "archive_definition(force=True) requires both actor and abandon_instance_fn"
+                "archive_definition requires an actor plus freeze_instance_fn "
+                "(or abandon_instance_fn when force=True)"
             )
         for instance_row in open_rows:
-            abandon_instance_fn(tenant_id, instance_row, actor, token)
+            handler(tenant_id, instance_row, actor, token)
 
     base = entity_base_data(row)
     base["lineage_status"] = "archived"
     return dc.dc_update(tenant_id, "workflow_definition", entity_id, base, token)
 
 
-def unarchive_definition(tenant_id: str, entity_id: str, token: str | None = None) -> dict:
-    """lineage_status -> active. Inverse of `archive_definition`.
+def unarchive_definition(tenant_id: str, entity_id: str, *, actor: str | None = None,
+                         token: str | None = None,
+                         unfreeze_instance_fn: Callable[[str, dict, str, str | None], None] | None = None,
+                         ) -> dict:
+    """lineage_status: archived -> deprecated, thawing every frozen work item.
 
-    Deliberately touches NO instances (spec R5): work items abandoned by a
-    force-archive stay abandoned until an administrator restores each one via
-    `machine.restore_instance`. Reviving them here would silently reopen work
-    families had already been told was closed.
+    Returns to `deprecated`, NOT `active`, because that is provably where the
+    archive was entered from (archive is only reachable from deprecated).
+    Landing on `active` would silently reopen intake the operator never asked
+    to reopen; `reactivate` is the separate, deliberate step for that.
+
+    Frozen work items resume exactly where they paused — freezing never
+    changed their state, so there is nothing to restore. Instances ABANDONED
+    by a force-archive are deliberately left alone: those are closed, and
+    reviving them here would silently reopen work families were told was
+    finished. An administrator restores each one via
+    `machine.restore_instance`.
     """
-    return _set_lineage_status(tenant_id, entity_id, "active", "unarchive", token)
+    row = _require_published_row(tenant_id, entity_id, token, "unarchive")
+    frozen_rows = list_frozen_instances(tenant_id, row.get("definition_id"), token)
+    if frozen_rows:
+        if unfreeze_instance_fn is None or not actor:
+            raise RuntimeError(
+                "unarchive_definition requires both actor and unfreeze_instance_fn"
+            )
+        for instance_row in frozen_rows:
+            unfreeze_instance_fn(tenant_id, instance_row, actor, token)
+
+    base = entity_base_data(row)
+    base["lineage_status"] = "deprecated"
+    return dc.dc_update(tenant_id, "workflow_definition", entity_id, base, token)
+
+
+def delete_definition(tenant_id: str, entity_id: str, token: str | None = None) -> dict:
+    """Delete an unpublished workflow version outright.
+
+    Only a `draft` row may go (409 `{"reason": "not_draft"}` otherwise):
+
+    - a `published` row is live, and its lineage is the thing instances bind to;
+    - a `superseded` row is the PINNED definition for every instance still
+      running on that version, so deleting it would strand them with an
+      unresolvable machine (`machine._pinned_definition_row` 404s).
+
+    Implemented as DataCore's row-level `/archive` soft delete — the row keeps
+    existing with `_status="archived"` and drops out of every read, and
+    DataCore's `/restore` is the inverse. Beware the vocabulary clash: that is
+    DataCore's *row* archive, unrelated to this module's lineage `archived`
+    status (see `dc.dc_archive`'s own warning).
+    """
+    row = require_definition_row(tenant_id, entity_id, token)
+    if row.get("status") != "draft":
+        raise HTTPException(409, {
+            "reason": "not_draft",
+            "status": row.get("status"),
+        })
+    dc.dc_archive(tenant_id, "workflow_definition", entity_id, token)
+    return {"deleted": entity_id}
 
 
 # --- model-impact ------------------------------------------------------------

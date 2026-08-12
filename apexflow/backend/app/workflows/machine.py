@@ -381,7 +381,7 @@ def allowed_actions(ctx: EvalContext) -> list[str]:
     staff `GET .../allowed-actions` route (`app/api/instances.py`) and the
     family token-bundle route (`app/api/internal.py::instance_by_token`),
     which advertise this same list outside of a failed-action 409."""
-    if _is_terminal_state(ctx):
+    if _is_terminal_state(ctx) or _is_frozen(ctx):
         return []
 
     current_state = ctx.instance.get("state")
@@ -615,6 +615,68 @@ def abandon_instance(ctx: EvalContext) -> dict:
     return ctx.instance
 
 
+def _is_frozen(ctx: EvalContext) -> bool:
+    """A frozen work item is SUSPENDED, not closed and not terminal.
+
+    Deliberately a timestamp rather than a state: freezing leaves `state`
+    untouched, so thawing has nothing to restore and cannot drift out of sync
+    the way `abandoned`/`archived_from_state` could. It also means a frozen
+    item still counts as open work (no `closed_at`), which is correct — the
+    work genuinely is unfinished."""
+    return bool(ctx.instance.get("frozen_at"))
+
+
+def freeze_instance(ctx: EvalContext) -> dict:
+    """Suspend one in-flight work item while its workflow is archived.
+
+    Not routed as a staff action: freezing is a consequence of archiving the
+    workflow, never a per-item decision. Called by `archive_definition` via the
+    collaborator injected in `app/api/definitions.py`.
+
+    Does NOT bump `token_version`. A family's magic link stays valid through
+    the freeze/thaw cycle and simply 409s while suspended — revoking it would
+    force a re-issue for work that is going to resume untouched, which is the
+    opposite of what a reversible pause should cost. (`abandon_instance` DOES
+    revoke, because that one is permanent.)
+
+    Idempotent: re-freezing an already-frozen item keeps the original
+    `frozen_at`, so a repeated archive never rewrites when the pause began.
+    """
+    if _is_frozen(ctx):
+        return ctx.instance
+    base = entity_base_data(ctx.instance)
+    base["frozen_at"] = ctx.now.isoformat()
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=engine.row_version(ctx.instance))
+    ctx.instance["frozen_at"] = base["frozen_at"]
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
+    _log_activity(ctx, "note", ctx.instance.get("state"), "frozen")
+    return ctx.instance
+
+
+def unfreeze_instance(ctx: EvalContext) -> dict:
+    """Thaw one suspended work item — the inverse of `freeze_instance`, driven
+    by `unarchive_definition`.
+
+    Clears `frozen_at` by writing `""` rather than `None`: `entity_base_data`
+    drops `None` values from the full-replace PUT body, so the column would
+    keep its old value. No state write is needed because freezing never
+    changed the state.
+    """
+    if not _is_frozen(ctx):
+        return ctx.instance
+    base = entity_base_data(ctx.instance)
+    base["frozen_at"] = ""
+    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
+                           ctx.token, expected_version=engine.row_version(ctx.instance))
+    ctx.instance["frozen_at"] = ""
+    if "_version" in updated:
+        ctx.instance["_version"] = updated["_version"]
+    _log_activity(ctx, "note", ctx.instance.get("state"), "unfrozen")
+    return ctx.instance
+
+
 def restore_instance(ctx: EvalContext) -> dict:
     """Staff-only: return ONE abandoned work item to the state it held before
     its workflow was force-archived (spec R5).
@@ -706,6 +768,15 @@ def execute_action(ctx: EvalContext, action_name: str, params: dict) -> dict:
     prevented by the type) never leaks a PRIOR call's item result into a
     later transition/cancel response."""
     ctx.item_result = None
+    # A frozen work item accepts nothing at all — its workflow is archived, so
+    # every path (item built-ins, transitions, cancel, restore) is suspended
+    # until an unarchive thaws it. Checked here rather than in each branch so
+    # no future action can be added that forgets it.
+    if _is_frozen(ctx):
+        raise HTTPException(409, {
+            "reason": "frozen",
+            "state": ctx.instance.get("state"),
+        })
     if action_name in ITEM_BUILTIN_ACTIONS:
         _run_item_builtin(ctx, action_name, params)
     elif action_name == "cancel_instance":

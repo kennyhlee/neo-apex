@@ -259,6 +259,22 @@ class FakeDataCore:
         rows = self.list_entities(tenant_id, entity_type, f"entity_id = '{entity_id}'")
         return rows[0] if rows else None
 
+    def dc_archive(self, tenant_id, entity_type, entity_id, token=None):
+        """Row-level SOFT DELETE (DataCore's `/archive`), not lineage
+        archiving — see `datacore.dc_archive`'s own naming warning. Real
+        DataCore keeps the row with `_status='archived'` and filters it out of
+        every read; dropping it from `self.rows` is observationally identical
+        for every read path this fake supports, and keeps `_parse_where`'s
+        binder-error emulation honest (a column only this deleted row carried
+        must stop being queryable, exactly as it would once the row is
+        excluded)."""
+        before = len(self.rows)
+        self.rows = [r for r in self.rows
+                     if not (r["_tenant"] == tenant_id
+                             and r["entity_type"] == entity_type
+                             and r["entity_id"] == entity_id)]
+        return len(self.rows) < before
+
     @staticmethod
     def _no_raw_query(*args, **kwargs):
         raise AssertionError(
@@ -293,7 +309,7 @@ class FakeDataCore:
 def install_fake_datacore(monkeypatch, fdc: FakeDataCore):
     from app.workflows import datacore as dc
 
-    for name in ("dc_create", "dc_update", "next_id", "list_entities", "get_entity",
-                 "get_model_definition"):
+    for name in ("dc_create", "dc_update", "dc_archive", "next_id", "list_entities",
+                 "get_entity", "get_model_definition"):
         monkeypatch.setattr(dc, name, getattr(fdc, name))
     monkeypatch.setattr(dc, "dc_query", fdc._no_raw_query)

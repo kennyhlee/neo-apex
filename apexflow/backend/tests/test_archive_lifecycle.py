@@ -212,23 +212,8 @@ def _act(client, entity_id, action, **params):
     )
 
 
-def test_archive_refused_while_any_work_item_is_open(client, fake_dc):
-    fake_dc.set_model(TENANT, "student", _models())
-    eid = _seed_definition(fake_dc, definition_id="wd-gate")
-    _seed_instance(fake_dc, definition_id="wd-gate", state="submitted", closed_at="")
-    _seed_instance(fake_dc, definition_id="wd-gate", state="enrolled",
-                   closed_at="2026-08-02T00:00:00+00:00")
-
-    resp = _act(client, eid, "archive")
-    assert resp.status_code == 409
-    assert resp.json()["detail"]["open_instances"] == 1
-
-    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "active"
-
-
 def test_archive_succeeds_once_every_work_item_is_in_an_end_state(client, fake_dc):
-    """The *iff* direction of R2, asserted explicitly: with nothing open, the
-    gate must not block."""
+    """Nothing left in flight, so the archive has nothing to freeze."""
     fake_dc.set_model(TENANT, "student", _models())
     eid = _seed_definition(fake_dc, definition_id="wd-gate-open")
     _seed_instance(fake_dc, definition_id="wd-gate-open", state="enrolled",
@@ -236,6 +221,7 @@ def test_archive_succeeds_once_every_work_item_is_in_an_end_state(client, fake_d
     _seed_instance(fake_dc, definition_id="wd-gate-open", state="cancelled",
                    closed_at="2026-08-03T00:00:00+00:00")
 
+    assert _act(client, eid, "deprecate").status_code == 200
     resp = _act(client, eid, "archive")
     assert resp.status_code == 200
     assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "archived"
@@ -248,6 +234,7 @@ def test_force_archive_abandons_open_items_and_leaves_closed_ones_alone(client, 
     cancelled_eid = _seed_instance(fake_dc, definition_id="wd-force", state="cancelled",
                                    closed_at="2026-08-02T00:00:00+00:00")
 
+    assert _act(client, eid, "deprecate").status_code == 200
     resp = _act(client, eid, "archive", force=True)
     assert resp.status_code == 200
     assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "archived"
@@ -267,6 +254,7 @@ def test_force_archive_abandons_open_items_and_leaves_closed_ones_alone(client, 
 def test_archived_workflow_refuses_new_work_items(client, fake_dc):
     fake_dc.set_model(TENANT, "student", _models())
     eid = _seed_definition(fake_dc, definition_id="wd-no-new")
+    assert _act(client, eid, "deprecate").status_code == 200
     assert _act(client, eid, "archive").status_code == 200
 
     resp = client.post(
@@ -277,28 +265,12 @@ def test_archived_workflow_refuses_new_work_items(client, fake_dc):
     assert resp.json()["detail"]["reason"] == "lineage_not_active"
 
 
-def test_unarchive_returns_lineage_to_active_and_revives_nothing(client, fake_dc):
-    """R5: unarchive is a lineage-level action only. Abandoned work items stay
-    abandoned until an administrator restores each one."""
-    fake_dc.set_model(TENANT, "student", _models())
-    eid = _seed_definition(fake_dc, definition_id="wd-unarchive")
-    open_eid = _seed_instance(fake_dc, definition_id="wd-unarchive", state="submitted")
-    assert _act(client, eid, "archive", force=True).status_code == 200
-
-    resp = _act(client, eid, "unarchive")
-    assert resp.status_code == 200
-    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "active"
-
-    still_abandoned = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
-    assert still_abandoned["state"] == "abandoned"
-    assert still_abandoned["closed_at"]
-
-
 def test_retire_action_is_accepted_as_a_legacy_alias_of_archive(client, fake_dc):
     fake_dc.set_model(TENANT, "student", _models())
     eid = _seed_definition(fake_dc, definition_id="wd-legacy-retire")
     _seed_instance(fake_dc, definition_id="wd-legacy-retire", state="submitted")
 
+    assert _act(client, eid, "deprecate").status_code == 200
     resp = _act(client, eid, "retire", force_cancel=True)
     assert resp.status_code == 200
     assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "archived"
@@ -307,6 +279,7 @@ def test_retire_action_is_accepted_as_a_legacy_alias_of_archive(client, fake_dc)
 def test_publishing_a_new_version_keeps_the_lineage_archived(client, fake_dc):
     fake_dc.set_model(TENANT, "student", _models())
     v1 = _seed_definition(fake_dc, definition_id="wd-archived-publish", version=1)
+    assert _act(client, v1, "deprecate").status_code == 200
     assert _act(client, v1, "archive").status_code == 200
 
     v2 = _seed_definition(fake_dc, definition_id="wd-archived-publish",
@@ -331,6 +304,7 @@ def test_restore_returns_the_work_item_to_its_state_before_archiving(client, fak
     def_eid = _seed_definition(fake_dc, definition_id="wd-restore")
     inst_eid = _seed_instance(fake_dc, definition_id="wd-restore", state="submitted")
 
+    assert _act(client, def_eid, "deprecate").status_code == 200
     assert _act(client, def_eid, "archive", force=True).status_code == 200
     assert _act(client, def_eid, "unarchive").status_code == 200
 
@@ -350,6 +324,7 @@ def test_restore_is_refused_while_the_workflow_is_still_archived(client, fake_dc
     fake_dc.set_model(TENANT, "student", _models())
     def_eid = _seed_definition(fake_dc, definition_id="wd-restore-blocked")
     inst_eid = _seed_instance(fake_dc, definition_id="wd-restore-blocked", state="submitted")
+    assert _act(client, def_eid, "deprecate").status_code == 200
     assert _act(client, def_eid, "archive", force=True).status_code == 200
 
     resp = _instance_act(client, inst_eid, "restore_instance")
@@ -399,6 +374,7 @@ def test_restored_work_item_can_make_progress_again(client, fake_dc):
     fake_dc.set_model(TENANT, "student", _models())
     def_eid = _seed_definition(fake_dc, definition_id="wd-restore-progress")
     inst_eid = _seed_instance(fake_dc, definition_id="wd-restore-progress", state="submitted")
+    assert _act(client, def_eid, "deprecate").status_code == 200
     assert _act(client, def_eid, "archive", force=True).status_code == 200
     assert _act(client, def_eid, "unarchive").status_code == 200
     assert _instance_act(client, inst_eid, "restore_instance").status_code == 200
@@ -406,3 +382,150 @@ def test_restored_work_item_can_make_progress_again(client, fake_dc):
     resp = _instance_act(client, inst_eid, "approve")
     assert resp.status_code == 200
     assert fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)["state"] == "enrolled"
+
+
+# --- revised model: deprecated gate, freeze/unfreeze, delete ----------------
+#
+# Archive is now reachable ONLY from `deprecated`, so the ladder is
+# active -> deprecated -> archived and back. Deprecating first is what gives
+# mid-flight work its chance to finish; archiving then FREEZES whatever is
+# still running rather than destroying it, and unarchive thaws it.
+
+
+def test_archive_is_refused_while_the_lineage_is_still_active(client, fake_dc):
+    """The deprecate step is mandatory, not advisory: it is the window in which
+    mid-flight work is allowed to finish."""
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-must-deprecate")
+
+    resp = _act(client, eid, "archive")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "not_deprecated"
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "active"
+
+
+def test_archive_from_deprecated_freezes_mid_flight_work(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-freeze")
+    open_eid = _seed_instance(fake_dc, definition_id="wd-freeze", state="submitted")
+    done_eid = _seed_instance(fake_dc, definition_id="wd-freeze", state="enrolled",
+                              closed_at="2026-08-02T00:00:00+00:00")
+
+    assert _act(client, eid, "deprecate").status_code == 200
+    assert _act(client, eid, "archive").status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "archived"
+
+    frozen = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
+    assert frozen["frozen_at"]
+    # Freezing SUSPENDS: the state is untouched and the item is not closed, so
+    # there is no prior state to record and nothing to restore on thaw.
+    assert frozen["state"] == "submitted"
+    assert not frozen["closed_at"]
+
+    # already-finished work is not in the open set and is left alone
+    untouched = fake_dc.get_entity(TENANT, "workflow_instance", done_eid)
+    assert not untouched.get("frozen_at")
+
+
+def test_frozen_work_item_refuses_all_progress(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-frozen-blocks")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-frozen-blocks", state="submitted")
+    assert _act(client, eid, "deprecate").status_code == 200
+    assert _act(client, eid, "archive").status_code == 200
+
+    for body in ({"action": "approve"},
+                 {"action": "save_draft", "section_answers": {}},
+                 {"action": "complete_item", "item_id": "wi-1"}):
+        resp = _instance_act(client, inst_eid, body.pop("action"), **body)
+        assert resp.status_code == 409, body
+        assert resp.json()["detail"]["reason"] == "frozen"
+
+    assert fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)["state"] == "submitted"
+
+
+def test_unarchive_thaws_frozen_work_and_returns_lineage_to_deprecated(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-thaw")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-thaw", state="submitted")
+    assert _act(client, eid, "deprecate").status_code == 200
+    assert _act(client, eid, "archive").status_code == 200
+
+    resp = _act(client, eid, "unarchive")
+    assert resp.status_code == 200
+    # back to where archive was entered from, NOT to active — the operator
+    # never asked to reopen intake.
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid)["lineage_status"] == "deprecated"
+
+    thawed = fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)
+    assert not thawed["frozen_at"]
+    assert thawed["state"] == "submitted"
+
+    # and it can make progress again
+    assert _instance_act(client, inst_eid, "approve").status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)["state"] == "enrolled"
+
+
+def test_force_archive_abandons_instead_of_freezing(client, fake_dc):
+    """Force is the destructive escape hatch and keeps its old semantics:
+    abandoned, not frozen, and unarchive does NOT revive it."""
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-force-still-abandons")
+    inst_eid = _seed_instance(fake_dc, definition_id="wd-force-still-abandons",
+                              state="submitted")
+    assert _act(client, eid, "deprecate").status_code == 200
+    assert _act(client, eid, "archive", force=True).status_code == 200
+
+    row = fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)
+    assert row["state"] == "abandoned"
+    assert row["archived_from_state"] == "submitted"
+    assert not row.get("frozen_at")
+
+    assert _act(client, eid, "unarchive").status_code == 200
+    still_gone = fake_dc.get_entity(TENANT, "workflow_instance", inst_eid)
+    assert still_gone["state"] == "abandoned"
+
+
+# --- delete an unpublished workflow -----------------------------------------
+
+
+def test_draft_workflow_can_be_deleted(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-deletable", status="draft")
+
+    resp = _act(client, eid, "delete")
+    assert resp.status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid) is None
+
+
+def test_published_workflow_cannot_be_deleted(client, fake_dc):
+    """History matters once a workflow has gone live, and instances pin to it."""
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-not-deletable", status="published")
+
+    resp = _act(client, eid, "delete")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "not_draft"
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid) is not None
+
+
+def test_superseded_workflow_cannot_be_deleted(client, fake_dc):
+    """A superseded row is the pinned definition for every instance still
+    running on that version — deleting it would strand them."""
+    fake_dc.set_model(TENANT, "student", _models())
+    eid = _seed_definition(fake_dc, definition_id="wd-superseded", status="superseded")
+
+    resp = _act(client, eid, "delete")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "not_draft"
+    assert fake_dc.get_entity(TENANT, "workflow_definition", eid) is not None
+
+
+def test_deleting_a_draft_leaves_the_published_version_untouched(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _models())
+    pub = _seed_definition(fake_dc, definition_id="wd-mixed", version=1, status="published")
+    draft = _seed_definition(fake_dc, definition_id="wd-mixed", version=2, status="draft")
+
+    assert _act(client, draft, "delete").status_code == 200
+    assert fake_dc.get_entity(TENANT, "workflow_definition", draft) is None
+    assert fake_dc.get_entity(TENANT, "workflow_definition", pub)["status"] == "published"

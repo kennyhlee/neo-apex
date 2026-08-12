@@ -311,15 +311,16 @@ def _seed_instance(fake_dc, *, definition_id, closed_at=""):
     return fake_dc.dc_create(TENANT, "workflow_instance", base)["entity_id"]
 
 
-def test_archive_with_open_instances_returns_409_with_count(client, fake_dc):
+def test_archive_from_active_is_refused(client, fake_dc):
+    """Archive is reachable only from `deprecated` — deprecating first is the
+    window in which mid-flight work is allowed to finish."""
     fake_dc.set_model(TENANT, "student", _valid_models()["student"])
     eid = _seed_definition(fake_dc, definition_id="wd-lineage-4", status="published")
     _seed_instance(fake_dc, definition_id="wd-lineage-4", closed_at="")
-    _seed_instance(fake_dc, definition_id="wd-lineage-4", closed_at="2026-08-02T00:00:00+00:00")
 
     resp = act(client, eid, "archive")
     assert resp.status_code == 409
-    assert resp.json()["detail"]["open_instances"] == 1
+    assert resp.json()["detail"]["reason"] == "not_deprecated"
 
     row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
     assert row["lineage_status"] == "active"
@@ -335,6 +336,7 @@ def test_archive_force_bulk_abandons_open_instances_then_archives(client, fake_d
     already_closed_eid = _seed_instance(
         fake_dc, definition_id="wd-lineage-5", closed_at="2026-08-02T00:00:00+00:00")
 
+    assert act(client, eid, "deprecate").status_code == 200
     resp = act(client, eid, "archive", force=True)
     assert resp.status_code == 200
 
@@ -361,6 +363,7 @@ def test_archive_with_no_open_instances_succeeds(client, fake_dc):
     eid = _seed_definition(fake_dc, definition_id="wd-lineage-6", status="published")
     _seed_instance(fake_dc, definition_id="wd-lineage-6", closed_at="2026-08-02T00:00:00+00:00")
 
+    assert act(client, eid, "deprecate").status_code == 200
     resp = act(client, eid, "archive")
     assert resp.status_code == 200
     row = fake_dc.get_entity(TENANT, "workflow_definition", eid)

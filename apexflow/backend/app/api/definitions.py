@@ -26,13 +26,21 @@ class ActionRequest(BaseModel):
     action: str
 
 
-def _abandon_one(tenant_id: str, instance_row: dict, actor: str, token: str | None) -> None:
-    """`archive_definition`'s `abandon_instance_fn` collaborator — lives at
-    the API layer (not in `app.workflows.definitions`) specifically to avoid a
-    `definitions.py -> machine.py` import cycle; see
-    `definitions.archive_definition`'s docstring."""
-    ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
-    machine.abandon_instance(ctx)
+def _instance_op(op):
+    """Build one of `archive_definition`/`unarchive_definition`'s per-instance
+    collaborators. These live at the API layer (not in
+    `app.workflows.definitions`) specifically to avoid a `definitions.py ->
+    machine.py` import cycle; see `definitions.archive_definition`'s
+    docstring."""
+    def run(tenant_id: str, instance_row: dict, actor: str, token: str | None) -> None:
+        ctx = machine.build_eval_context(tenant_id, instance_row, actor=actor, token=token)
+        op(ctx)
+    return run
+
+
+_freeze_one = _instance_op(machine.freeze_instance)
+_unfreeze_one = _instance_op(machine.unfreeze_instance)
+_abandon_one = _instance_op(machine.abandon_instance)
 
 
 @router.post("/{tenant_id}/definitions/{entity_id}/actions")
@@ -54,10 +62,14 @@ def definition_action(tenant_id: str, entity_id: str, body: ActionRequest,
         # maps onto `force`. Remove both once no caller sends it.
         force = bool(params.get("force") or params.get("force_cancel"))
         return defs.archive_definition(
-            tenant_id, entity_id, force=force,
-            actor=actor, token=token, abandon_instance_fn=_abandon_one)
+            tenant_id, entity_id, force=force, actor=actor, token=token,
+            freeze_instance_fn=_freeze_one, abandon_instance_fn=_abandon_one)
     if body.action == "unarchive":
-        return defs.unarchive_definition(tenant_id, entity_id, token)
+        return defs.unarchive_definition(
+            tenant_id, entity_id, actor=actor, token=token,
+            unfreeze_instance_fn=_unfreeze_one)
+    if body.action == "delete":
+        return defs.delete_definition(tenant_id, entity_id, token)
 
     raise HTTPException(400, f"Unknown action: {body.action!r}")
 
