@@ -100,11 +100,16 @@
    A header that does not sit over its own column is the actual defect. */
 .data-table thead th.data-table-center { text-align: center; }
 
-/* A count column does not need a share of the leftover width. Keeping it
-   shrink-to-fit puts the figure next to its header instead of stranding both
-   at opposite ends of a 300px cell. */
-.data-table th.data-table-center,
-.data-table td.data-table-center {
+/* Shrink-to-fit. `width: 1%` on a table cell is the standard idiom for "take
+   only what you need" — the browser expands it to fit content, then hands the
+   slack to the unconstrained columns.
+   
+   Deliberately SEPARATE from `.data-table-center`: alignment and sizing are
+   different decisions, and a column often wants one without the other. Without
+   this, every column splits the leftover width evenly and a short badge or a
+   single digit ends up marooned at the edge of a 300px cell. */
+.data-table th.data-table-compact,
+.data-table td.data-table-compact {
   width: 1%;
   white-space: nowrap;
 }

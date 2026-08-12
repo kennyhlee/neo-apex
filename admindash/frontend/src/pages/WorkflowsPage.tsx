@@ -113,6 +113,7 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
       // accepts nothing new.
       key: 'lineage_status',
       label: t('workflows.colIntake'),
+      compact: true,
       render: (row) => <StatusBadge status={row.lineage_status} />,
     },
     {
@@ -120,6 +121,7 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
       // changes how the work arrives.
       key: 'channel_access',
       label: t('workflows.colEntry'),
+      compact: true,
       render: (row) => <StatusBadge status={row.channel_access} />,
     },
     {
@@ -127,6 +129,7 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
       label: t('workflows.colOpenWorkItems'),
       numeric: true,
       center: true,
+      compact: true,
       // Goes straight to this workflow's work-item list, NOT the board — the
       // two counts must lead somewhere different or the column is decorative.
       render: (row) => (
@@ -147,6 +150,7 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
       label: t('workflows.colNeedsAttention'),
       numeric: true,
       center: true,
+      compact: true,
       render: (row) => {
         // A dash, not 0, until the attention fetch lands — a confident "0"
         // while still loading is a lie an operator would act on.

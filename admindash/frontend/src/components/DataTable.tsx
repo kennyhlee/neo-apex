@@ -12,6 +12,10 @@ export interface Column<T> {
   /** Centre the cell. Wins over `numeric`'s right-alignment, which reads badly
    * for a single at-a-glance figure sitting under a wide header. */
   center?: boolean;
+  /** Shrink the column to its content instead of taking an equal share of the
+   * leftover width. Use for badges, counts, and short fixed vocabularies; leave
+   * off the one column that should absorb the slack (usually the name). */
+  compact?: boolean;
   /** Keep this column visible when rows reflow to cards on small screens. */
   primary?: boolean;
 }
@@ -189,7 +193,8 @@ export default function DataTable<T extends Record<string, any>>({
                     key={col.key}
                     aria-sort={ariaSortFor(col.key)}
                     className={[col.numeric ? 'data-table-numeric' : '',
-                                col.center ? 'data-table-center' : '']
+                                col.center ? 'data-table-center' : '',
+                                col.compact ? 'data-table-compact' : '']
                       .filter(Boolean).join(' ') || undefined}
                   >
                     {onSortChange ? (
@@ -301,6 +306,7 @@ export default function DataTable<T extends Record<string, any>>({
                           className={
                             [col.numeric ? 'data-table-numeric' : '',
                              col.center ? 'data-table-center' : '',
+                             col.compact ? 'data-table-compact' : '',
                              col.primary ? 'data-table-primary' : '']
                               .filter(Boolean)
                               .join(' ') || undefined
