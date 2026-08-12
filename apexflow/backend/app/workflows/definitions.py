@@ -25,7 +25,7 @@ from fastapi import HTTPException
 from app.workflows import datacore as dc
 from app.workflows.schema import ConditionGroup, MachineDef, SectionDef, StepDef
 from app.workflows.shared import entity_base_data
-from app.workflows.validate import validate_definition
+from app.workflows.validate import definition_health, validate_definition
 
 # `entity_base_data` now lives in app.workflows.shared (code-review follow-up
 # to Task 7 — was duplicated between here and engine.py/primitives.py; see
@@ -229,6 +229,58 @@ def count_open_instances(tenant_id: str, lineage_definition_id: str,
     `kind: "terminal"` state, and on `cancel_instance`).
     """
     return len(list_open_instances(tenant_id, lineage_definition_id, token))
+
+
+def save_definition(tenant_id: str, entity_id: str, machine_raw: Any, steps_raw: Any,
+                     channel_access: str | None = None, token: str | None = None) -> dict:
+    """Write a draft's authored content and return its validation in one call.
+
+    Replaces the editor's previous pair of operations — a write through the
+    GENERIC entities proxy plus a separately-triggered validate — and the
+    reason is cost as much as tidiness. The old validate route re-read the
+    definition row AND every referenced entity model on a debounce, so a
+    four-model workflow cost one query plus four model reads per edit burst.
+    Here the content arrives in the body, so nothing is read back to validate
+    it, and validation rides a write that was going to happen anyway rather
+    than being independently triggerable.
+
+    422 if `machine`/`steps` do not parse — the generic proxy enforces no
+    schema, so `machine: "not json"` was previously storable and bricked every
+    later read of the row (see `app/api/designer.py::_parse_or_422`). Refusing
+    here makes that unreachable through the product.
+
+    409 `{"reason": "not_draft"}` on a published or superseded row: those are
+    live or pinned-to by running instances, and are edited by publishing a new
+    version, never in place.
+
+    Validation errors do NOT refuse the write. A draft is allowed to be
+    invalid — that is what draft means — and losing an author's work because
+    their half-built machine has no terminal state yet would be perverse.
+    `publish_definition` remains the gate that actually refuses.
+    """
+    row = require_definition_row(tenant_id, entity_id, token)
+    if row.get("status") != "draft":
+        raise HTTPException(409, {"reason": "not_draft", "status": row.get("status")})
+
+    try:
+        machine = MachineDef.model_validate(machine_raw)
+        steps = [StepDef.model_validate(s) for s in (steps_raw or [])]
+    except Exception as exc:
+        raise HTTPException(422, {"parse_error": str(exc)}) from exc
+
+    base = entity_base_data(row)
+    base["machine"] = json.dumps(machine.model_dump(by_alias=True))
+    base["steps"] = json.dumps([s.model_dump(by_alias=True) for s in steps])
+    if channel_access is not None:
+        base["channel_access"] = channel_access
+    updated = dc.dc_update(tenant_id, "workflow_definition", entity_id, base, token)
+
+    models = fetch_models(tenant_id, referenced_entity_models(steps), token)
+    return {
+        "row": updated,
+        "errors": validate_definition(machine, steps, models),
+        "health": definition_health(machine, steps, models),
+    }
 
 
 def archive_definition(tenant_id: str, entity_id: str, *,

@@ -842,3 +842,76 @@ def test_date_window_neither_bound_present_errors():
 def test_date_window_unparseable_date_errors():
     errors = _errors_for_primitive("date_window", {"start": "not-a-date"})
     assert any("not a valid YYYY-MM-DD date" in e for e in errors), errors
+
+
+# --- definition-aware save -------------------------------------------------
+#
+# The editor used to write through the GENERIC entities proxy, which enforces
+# no schema, and validate through a separate debounced call that re-read the
+# row and every referenced model. This route replaces both: the machine/steps
+# arrive in the body, so there is no row read, and validation rides the write
+# instead of being independently triggerable.
+
+
+def test_save_definition_writes_and_returns_validation(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-save", status="draft")
+
+    resp = client.put(
+        f"/api/workflows/{TENANT}/definitions/{eid}",
+        json={"machine": _valid_machine(), "steps": _valid_steps()},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["errors"] == []
+    assert body["health"] == "current"
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert json.loads(row["machine"])["states"][0]["state_id"] == "draft"
+
+
+def test_save_definition_reports_errors_without_refusing_the_write(client, fake_dc):
+    """A draft is allowed to be invalid — that is what draft means. The write
+    must land so the work is not lost; the errors come back alongside it, and
+    publish stays the gate that actually refuses."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-save-invalid", status="draft")
+
+    resp = client.put(
+        f"/api/workflows/{TENANT}/definitions/{eid}",
+        json={"machine": _broken_machine(), "steps": _valid_steps()},
+    )
+    assert resp.status_code == 200
+    assert len(resp.json()["errors"]) > 0
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert json.loads(row["machine"])["states"] == _broken_machine()["states"]
+
+
+def test_save_definition_rejects_unparseable_machine_before_writing(client, fake_dc):
+    """The generic entities proxy would happily store `machine: "not json"`,
+    which bricks every later read of the row. A definition-aware save refuses
+    it, so the corrupt-row case stops being reachable through the product."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-save-corrupt", status="draft")
+
+    resp = client.put(
+        f"/api/workflows/{TENANT}/definitions/{eid}",
+        json={"machine": {"states": "not-a-list"}, "steps": []},
+    )
+    assert resp.status_code == 422
+
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert json.loads(row["machine"])["states"][0]["state_id"] == "draft"
+
+
+def test_save_definition_refuses_a_published_row(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-save-published", status="published")
+
+    resp = client.put(
+        f"/api/workflows/{TENANT}/definitions/{eid}",
+        json={"machine": _valid_machine(), "steps": []},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "not_draft"

@@ -35,7 +35,7 @@ exactly the errors publish would 409 with."
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.auth import require_staff_tenant
 from app.config import settings
@@ -220,6 +220,34 @@ def get_bundle(tenant_id: str, entity_id: str, user: dict = Depends(require_staf
         "health": health,
         "errors": errors,
     }
+
+
+class SaveDefinitionRequest(BaseModel):
+    """The editor's authored content. `machine`/`steps` are the parsed shapes,
+    NOT the JSON-encoded strings the row stores — `save_definition` does the
+    encoding, so the client never hand-serialises into a field the generic
+    proxy would have accepted unchecked."""
+
+    machine: dict[str, Any]
+    steps: list[dict[str, Any]] = []
+    channel_access: str | None = None
+
+
+@router.put("/{tenant_id}/definitions/{entity_id}")
+def save_definition_route(tenant_id: str, entity_id: str, body: SaveDefinitionRequest,
+                          user: dict = Depends(require_staff_tenant)):
+    """Write a draft and return its validation in the same response.
+
+    This is deliberately the ONLY way the editor learns whether a definition is
+    valid: validation rides the save rather than being separately triggerable,
+    so its cost is bounded by how often someone actually saves. See
+    `defs.save_definition` for why the old debounced validate route was
+    expensive (a row read plus one read per referenced model, per edit burst).
+    """
+    return defs.save_definition(
+        tenant_id, entity_id, body.machine, body.steps, body.channel_access,
+        user.get("_token"),
+    )
 
 
 @router.post("/{tenant_id}/definitions/{entity_id}/validate")
