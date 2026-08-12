@@ -40,7 +40,6 @@ import { canArchive, isArchived } from '../types/designer.ts';
 import type {
   DefinitionListEntry,
   DefinitionLifecycleAction,
-  OpenInstancesConflict,
 } from '../types/designer.ts';
 import DataTable, { type Column } from '../components/DataTable.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -100,7 +99,6 @@ export default function DefinitionsPage() {
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   const [retireTarget, setRetireTarget] = useState<DefinitionListEntry | null>(null);
-  const [forceCancel, setForceCancel] = useState(false);
   const [retiring, setRetiring] = useState(false);
 
   // `load` is the reusable reload path — called from the retry button and
@@ -209,26 +207,6 @@ export default function DefinitionsPage() {
     return t(fallbackKey);
   }
 
-  /**
-   * Task review fix (Task 10, important): `archive_definition`'s
-   * `HTTPException(409, {"open_instances": N})` — like every non-string
-   * `HTTPException` detail in this backend — comes back on the wire as
-   * `{"detail": {"open_instances": N}}` (FastAPI wraps it), NOT
-   * `{"open_instances": N}` at the top level. Reading `err.body` directly
-   * as `OpenInstancesConflict` (this function's prior shape) always missed,
-   * silently falling back to the caller's pre-click count every time — same
-   * unwrap pattern as PublishDialog.tsx's `extractPublishErrors`. Returns
-   * `null` for any other 409 shape or non-409 error, same as that sibling.
-   */
-  function extractOpenInstances(err: unknown): number | null {
-    if (!(err instanceof ApiError) || err.status !== 409) return null;
-    const body = err.body;
-    if (!body || typeof body !== 'object' || !('detail' in body)) return null;
-    const detail = (body as { detail?: unknown }).detail;
-    if (!detail || typeof detail !== 'object' || !('open_instances' in detail)) return null;
-    const n = (detail as OpenInstancesConflict).open_instances;
-    return typeof n === 'number' ? n : null;
-  }
 
   // --- New workflow (blank draft) -------------------------------------
 
@@ -347,9 +325,10 @@ export default function DefinitionsPage() {
 
   // --- Archive ------------------------------------------------------------
 
-  /** Unarchive is not gated and destroys nothing, so it needs no confirm — but
-   * its toast must say that abandoned work items were NOT revived, since that
-   * is the one thing an operator is likely to assume it did. */
+  /** Unarchive is not gated and destroys nothing, so it needs no confirm. Its
+   * toast says that frozen applications resumed, because that side effect is
+   * invisible on this page and an operator would otherwise not know it
+   * happened. */
   async function handleUnarchive(entry: DefinitionListEntry) {
     try {
       await lifecycleAction(tenantId, entry.entity_id, 'unarchive', {});
@@ -365,16 +344,13 @@ export default function DefinitionsPage() {
 
   function openRetireModal(entry: DefinitionListEntry) {
     setRetireTarget(entry);
-    setForceCancel(false);
   }
 
   async function confirmRetire() {
     if (!retireTarget) return;
     setRetiring(true);
     try {
-      await lifecycleAction(tenantId, retireTarget.entity_id, 'archive', {
-        force: forceCancel,
-      });
+      await lifecycleAction(tenantId, retireTarget.entity_id, 'archive');
       toast({
         message: t('definitions.retireToast').replace('{name}', retireTarget.name),
         tone: 'success',
@@ -382,22 +358,12 @@ export default function DefinitionsPage() {
       setRetireTarget(null);
       void load();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // Fallback (`retireTarget.open_instances`) kept for resilience if
-        // the response ever doesn't carry the count — see
-        // `extractOpenInstances`'s own doc comment for the actual wire
-        // shape this now correctly unwraps.
-        const count = extractOpenInstances(err) ?? retireTarget.open_instances;
-        toast({
-          message: t('definitions.retireBlockedToast').replace('{n}', String(count)),
-          tone: 'danger',
-        });
-        // Leave the modal open so the operator can tick "force cancel" and
-        // retry without re-finding this row.
-      } else {
-        toast({ message: errorMessage(err, 'definitions.lifecycleError'), tone: 'danger' });
-        setRetireTarget(null);
-      }
+      // Archiving no longer refuses on open work — it freezes it — so the only
+      // 409 left here is "lineage is not deprecated", which the row actions
+      // already prevent. Anything reaching this point is a stale view or a
+      // genuine failure, and reads the same to the operator.
+      toast({ message: errorMessage(err, 'definitions.lifecycleError'), tone: 'danger' });
+      setRetireTarget(null);
     } finally {
       setRetiring(false);
     }
@@ -690,19 +656,9 @@ export default function DefinitionsPage() {
       >
         <p>{t('definitions.retireConfirmBody')}</p>
         {retireTarget && retireTarget.open_instances > 0 && (
-          <>
-            <p className="definitions-retire-warning">
-              {t('definitions.retireOpenInstances').replace('{n}', String(retireTarget.open_instances))}
-            </p>
-            <label className="definitions-checkbox-field">
-              <input
-                type="checkbox"
-                checked={forceCancel}
-                onChange={(e) => setForceCancel(e.target.checked)}
-              />
-              {t('definitions.retireForceCancel').replace('{n}', String(retireTarget.open_instances))}
-            </label>
-          </>
+          <p className="definitions-retire-warning">
+            {t('definitions.archiveFreezes').replace('{n}', String(retireTarget.open_instances))}
+          </p>
         )}
       </Modal>
     </div>

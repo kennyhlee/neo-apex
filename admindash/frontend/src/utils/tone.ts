@@ -48,7 +48,6 @@ const TONE_BY_STATUS: Record<string, Tone> = {
   inactive: 'risk',
   transferred: 'risk',
   cancelled: 'risk',
-  abandoned: 'risk',
   // Frozen is a reversible pause, not a fault — `away`, not `risk`.
   frozen: 'away',
   canceled: 'risk',

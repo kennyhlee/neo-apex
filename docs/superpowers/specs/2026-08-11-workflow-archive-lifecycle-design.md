@@ -32,11 +32,13 @@ constraint is all still load-bearing.
    from; landing on `active` would silently reopen intake nobody asked to
    reopen. `reactivate` remains the separate, deliberate step for that.
 
-5. **R5 (no automatic revival) now applies only to the `force` path.** Force
-   archive still abandons in-flight work permanently, still records
-   `archived_from_state`, and unarchive still leaves those items alone for an
-   administrator to `restore_instance` one at a time. The two paths coexist:
-   archive freezes, force-archive abandons.
+5. **Force archive is REMOVED, and with it R5.** There is no destructive
+   archive variant at all: archive always freezes, unarchive always thaws, and
+   the `abandoned` state, `archived_from_state`, `restore_instance`, and the
+   restore UI are all deleted. Keeping the state set small and every path
+   either reversible or explicitly final was worth more than the escape hatch.
+   `cancel_instance` remains the one way to end a single work item outside its
+   machine's terminal states — visible, per-item, and not restorable.
 
 6. **New: a `draft` definition can be deleted.** `delete_definition` 409s
    `{"reason": "not_draft"}` on a `published` or `superseded` row — the latter
@@ -46,7 +48,8 @@ constraint is all still load-bearing.
    `archived` status despite the shared word.
 
 The consequence for the error table near the end: "archive with open items, no
-force → 409 `{open_instances: N}`" no longer happens. Add "archive from a
+force → 409 `{open_instances: N}`" no longer happens, and every row mentioning
+abandon or restore is void. Add "archive from a
 non-deprecated lineage → 409 `{reason: not_deprecated}`", "any action on a
 frozen work item → 409 `{reason: frozen}`", and "delete a non-draft row → 409
 `{reason: not_draft}`".

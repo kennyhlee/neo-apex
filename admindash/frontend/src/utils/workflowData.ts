@@ -357,7 +357,6 @@ export interface LineageInstance {
   applicant_email: string;
   opened_at: string;
   closed_at: string;
-  archived_from_state: string;
   /** Set while the work item is suspended by an archived workflow. The state
    * is untouched during a freeze, so this is the only signal. */
   frozen_at: string;
@@ -365,10 +364,10 @@ export interface LineageInstance {
 
 export interface InstanceFilter {
   state?: string;
-  openness?: 'all' | 'open' | 'closed' | 'abandoned' | 'frozen';
+  openness?: 'all' | 'open' | 'closed' | 'frozen';
 }
 
-/** Client-side because the server cannot filter on `archived_from_state`: a
+/** Client-side because the server cannot filter on `frozen_at`: a
  * DataCore `where` naming a column a tenant's table has not materialized is a
  * binder error, not an empty result. Same reason the pipeline board's own
  * grouping happens here rather than in SQL. */
@@ -380,7 +379,6 @@ export function filterInstances(
     if (state && r.state !== state) return false;
     if (openness === 'open') return !r.closed_at;
     if (openness === 'closed') return Boolean(r.closed_at);
-    if (openness === 'abandoned') return r.state === 'abandoned';
     if (openness === 'frozen') return Boolean(r.frozen_at);
     return true;
   });

@@ -267,10 +267,6 @@ export interface DefinitionRow {
   [key: string]: unknown;
 }
 
-/** 409 body shape from `archive_definition` when open work items block archiving. */
-export interface OpenInstancesConflict {
-  open_instances: number;
-}
 
 // ---- Template gallery — GET .../templates (designer.py, Task 6) ----------
 

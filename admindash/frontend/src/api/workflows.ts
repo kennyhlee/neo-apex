@@ -99,13 +99,13 @@ export function isArchived(lineageStatus: string): boolean {
   return lineageStatus === 'archived' || lineageStatus === 'retired';
 }
 
-/** POST /api/workflows/{tenant_id}/definitions/{entity_id}/actions.
- * A blocked archive comes back 409 with `detail.open_instances` — callers
- * catch `WorkflowApiError` and read that off `.body`. */
+/** POST /api/workflows/{tenant_id}/definitions/{entity_id}/actions — publish /
+ * deprecate / reactivate / archive / unarchive / delete. A refused action comes
+ * back 409 with a `detail.reason` callers map to their own copy. */
 export async function postDefinitionAction(
   tenantId: string,
   entityId: string,
-  body: { action: string; force?: boolean },
+  body: { action: string },
 ): Promise<Record<string, unknown>> {
   const resp = await fetch(
     `${API_BASE}/api/workflows/${tenantId}/definitions/${entityId}/actions`,
@@ -126,7 +126,7 @@ export function canArchive(lineageStatus: string): boolean {
 }
 
 /** GET /api/workflows/{tenant_id}/definitions/{definition_id}/instances —
- * every work item of the lineage, open and closed, including abandoned. */
+ * every work item of the lineage, open and closed, including frozen. */
 export async function listLineageInstances(
   tenantId: string,
   definitionId: string,

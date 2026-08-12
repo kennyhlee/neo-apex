@@ -194,9 +194,8 @@ def reactivate_definition(tenant_id: str, entity_id: str, token: str | None = No
 def list_open_instances(tenant_id: str, lineage_definition_id: str,
                         token: str | None = None) -> list[dict]:
     """Open (`closed_at` empty/absent) `workflow_instance` rows of one
-    lineage — the same query `count_open_instances` and `archive_definition`
-    gate on, exposed as rows (not just a count) so `archive_definition`'s
-    force path can abandon each one by name."""
+    lineage — exposed as rows (not just a count) so `archive_definition` can
+    freeze each one by name."""
     rows = dc.list_entities(tenant_id, "workflow_instance", "", token)
     rows = [r for r in rows if str(r.get("definition_id", "")) == str(lineage_definition_id)]
     return [r for r in rows if not r.get("closed_at")]
@@ -232,10 +231,9 @@ def count_open_instances(tenant_id: str, lineage_definition_id: str,
     return len(list_open_instances(tenant_id, lineage_definition_id, token))
 
 
-def archive_definition(tenant_id: str, entity_id: str, force: bool = False, *,
+def archive_definition(tenant_id: str, entity_id: str, *,
                        actor: str | None = None, token: str | None = None,
                        freeze_instance_fn: Callable[[str, dict, str, str | None], None] | None = None,
-                       abandon_instance_fn: Callable[[str, dict, str, str | None], None] | None = None,
                        ) -> dict:
     """lineage_status: deprecated -> archived.
 
@@ -246,12 +244,13 @@ def archive_definition(tenant_id: str, entity_id: str, force: bool = False, *,
 
     Whatever is still in flight when the archive lands is SUSPENDED, not
     destroyed — each open instance goes through `freeze_instance_fn`, and
-    `unarchive_definition` thaws them. `force=True` swaps that for
-    `abandon_instance_fn`, the destructive escape hatch: those instances are
-    closed permanently and unarchive will NOT revive them (an administrator
-    restores each by hand via `machine.restore_instance`).
+    `unarchive_definition` thaws them. There is deliberately NO destructive
+    variant: an archive is always reversible, so the state set stays small and
+    every path is either reversible or explicitly final, with nothing in
+    between. Staff who genuinely want a work item ended cancel it first
+    (`machine.cancel_instance`), which is visible and per-item.
 
-    Both collaborators are dependency-injected by the caller (`app.api
+    The collaborator is dependency-injected by the caller (`app.api
     .definitions`) rather than this module importing `app.workflows.machine`
     directly — `machine.py` imports THIS module (`parse_machine_steps`/
     `fetch_models`/`referenced_entity_models`/`_as_int`), so a
@@ -271,14 +270,12 @@ def archive_definition(tenant_id: str, entity_id: str, force: bool = False, *,
     lineage_id = row.get("definition_id")
     open_rows = list_open_instances(tenant_id, lineage_id, token)
     if open_rows:
-        handler = abandon_instance_fn if force else freeze_instance_fn
-        if handler is None or not actor:
+        if freeze_instance_fn is None or not actor:
             raise RuntimeError(
-                "archive_definition requires an actor plus freeze_instance_fn "
-                "(or abandon_instance_fn when force=True)"
+                "archive_definition requires both actor and freeze_instance_fn"
             )
         for instance_row in open_rows:
-            handler(tenant_id, instance_row, actor, token)
+            freeze_instance_fn(tenant_id, instance_row, actor, token)
 
     base = entity_base_data(row)
     base["lineage_status"] = "archived"
@@ -297,11 +294,9 @@ def unarchive_definition(tenant_id: str, entity_id: str, *, actor: str | None = 
     to reopen; `reactivate` is the separate, deliberate step for that.
 
     Frozen work items resume exactly where they paused — freezing never
-    changed their state, so there is nothing to restore. Instances ABANDONED
-    by a force-archive are deliberately left alone: those are closed, and
-    reviving them here would silently reopen work families were told was
-    finished. An administrator restores each one via
-    `machine.restore_instance`.
+    changed their state, so there is nothing to restore. Instances that were
+    already closed before the archive (terminal or cancelled) stay closed:
+    they are not frozen, so there is nothing to thaw.
     """
     row = _require_published_row(tenant_id, entity_id, token, "unarchive")
     frozen_rows = list_frozen_instances(tenant_id, row.get("definition_id"), token)

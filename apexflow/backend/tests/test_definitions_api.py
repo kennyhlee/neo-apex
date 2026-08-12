@@ -326,10 +326,10 @@ def test_archive_from_active_is_refused(client, fake_dc):
     assert row["lineage_status"] == "active"
 
 
-def test_archive_force_bulk_abandons_open_instances_then_archives(client, fake_dc):
-    """Force-archive performs a real bulk-abandon — every open instance of the
-    lineage is run through `machine.abandon_instance` before the lineage itself
-    flips to archived."""
+def test_archive_bulk_freezes_open_instances_then_archives(client, fake_dc):
+    """Archive suspends whatever is still running — every open instance of the
+    lineage goes through `machine.freeze_instance` before the lineage flips.
+    There is no destructive variant: force archive was removed."""
     fake_dc.set_model(TENANT, "student", _valid_models()["student"])
     eid = _seed_definition(fake_dc, definition_id="wd-lineage-5", status="published")
     open_eid = _seed_instance(fake_dc, definition_id="wd-lineage-5", closed_at="")
@@ -337,25 +337,22 @@ def test_archive_force_bulk_abandons_open_instances_then_archives(client, fake_d
         fake_dc, definition_id="wd-lineage-5", closed_at="2026-08-02T00:00:00+00:00")
 
     assert act(client, eid, "deprecate").status_code == 200
-    resp = act(client, eid, "archive", force=True)
+    resp = act(client, eid, "archive")
     assert resp.status_code == 200
 
     row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
     assert row["lineage_status"] == "archived"
 
-    abandoned_row = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
-    assert abandoned_row["state"] == "abandoned"
-    assert abandoned_row["archived_from_state"] == "draft"
-    assert abandoned_row["closed_at"]
-    assert int(abandoned_row["token_version"]) == 2  # started at 1 via _seed_instance's default
-
-    activities = fake_dc.find("workflow_activity", instance_id=open_eid)
-    assert activities[-1]["type"] == "state_change"
-    assert activities[-1]["to_value"] == "abandoned"
+    frozen_row = fake_dc.get_entity(TENANT, "workflow_instance", open_eid)
+    assert frozen_row["frozen_at"]
+    # freezing suspends: state untouched, still not closed
+    assert frozen_row["state"] == "draft"
+    assert not frozen_row["closed_at"]
 
     # the already-closed instance (excluded from the open-instance query) is untouched.
     untouched_row = fake_dc.get_entity(TENANT, "workflow_instance", already_closed_eid)
     assert untouched_row["state"] == "draft"
+    assert not untouched_row.get("frozen_at")
 
 
 def test_archive_with_no_open_instances_succeeds(client, fake_dc):

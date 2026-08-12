@@ -231,7 +231,7 @@ def test_lineage_instances_proxies(client):
     _stub_auth(respx)
     route = respx.get(f"{BASE}/api/workflows/t1/definitions/wd-1/instances").mock(
         return_value=httpx.Response(
-            200, json={"instances": [{"entity_id": "wi-1", "state": "abandoned"}]}
+            200, json={"instances": [{"entity_id": "wi-1", "state": "submitted"}]}
         )
     )
     resp = client.get(
@@ -239,6 +239,6 @@ def test_lineage_instances_proxies(client):
         headers={"Authorization": "Bearer good"},
     )
     assert resp.status_code == 200
-    assert resp.json()["instances"][0]["state"] == "abandoned"
+    assert resp.json()["instances"][0]["state"] == "submitted"
     assert route.called
     assert route.calls.last.request.headers["authorization"] == "Bearer good"

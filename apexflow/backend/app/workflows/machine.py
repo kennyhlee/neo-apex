@@ -81,13 +81,13 @@ DECISIONS this task makes (surfaced in task-8-report.md for Task 9/10):
    object to build the `{"item": ...}` response key when an item built-in
    (other than `save_draft`) ran. `None` for every non-item-mutating action.
 
-7. **`archive_definition`'s bulk-abandon is wired via a caller-supplied
-   `abandon_instance_fn` callback**, not a direct import of this module into
+7. **`archive_definition`'s bulk-freeze is wired via a caller-supplied
+   `freeze_instance_fn` callback**, not a direct import of this module into
    `definitions.py`. `machine.py` imports `definitions.py` (for
    `parse_machine_steps`/`fetch_models`/`referenced_entity_models`/
    `_as_int`) — a `definitions.py -> machine.py` import back would close a
    cycle. `app/api/definitions.py` (which already imports both) supplies
-   the callback (`build_eval_context` + `abandon_instance`), keeping
+   the callback (`build_eval_context` + `freeze_instance`), keeping
    `definitions.py` itself free of any machine-execution import.
 
 8. **The "capacity_available negated" mechanism the enrollment template
@@ -175,14 +175,13 @@ ITEM_BUILTIN_ACTIONS: frozenset[str] = frozenset(_ITEM_BUILTINS_ALL)
 # module docstring, decision 1.
 _PINNED_STATUSES = ("published", "superseded")
 
-# Synthetic terminal states — never declared `state_id`s in an authored
-# machine. `cancelled` is a deliberate staff cancellation; `abandoned` is
-# force-archive fallout and is the ONLY one `restore_instance` will reverse
-# (spec D3 — keeping them distinct is what makes a real cancellation
-# non-restorable).
+# The one synthetic terminal state — never a declared `state_id` in an authored
+# machine. `cancel_instance` is now the ONLY way a work item ends outside its
+# machine's own terminal states: force-archive (and with it `abandoned`,
+# `archived_from_state`, and `restore_instance`) was removed to keep the state
+# set small and every path reversible-or-final with nothing in between.
 CANCELLED_STATE = "cancelled"
-ABANDONED_STATE = "abandoned"
-_SYNTHETIC_TERMINAL_STATES = frozenset({CANCELLED_STATE, ABANDONED_STATE})
+_SYNTHETIC_TERMINAL_STATES = frozenset({CANCELLED_STATE})
 
 
 def _parse_json(raw) -> dict:
@@ -293,14 +292,9 @@ def _refresh_items(ctx: EvalContext) -> None:
 
 
 def _is_terminal_state(ctx: EvalContext) -> bool:
-    """True for the synthetic `cancelled`/`abandoned` states (never declared
-    `state_id`s, spec: "always terminal-legal") or any declared state whose
-    `kind == "terminal"`.
-
-    Because every progress path in this module funnels through this check,
-    teaching it `abandoned` is the whole of "no more progress can be made"
-    (spec R3) — item built-ins, explicit transitions, and system auto-advance
-    all refuse an abandoned instance with no further change."""
+    """True for the synthetic `cancelled` state (never a declared `state_id`,
+    spec: "always terminal-legal") or any declared state whose
+    `kind == "terminal"`."""
     current = ctx.instance.get("state")
     if current in _SYNTHETIC_TERMINAL_STATES:
         return True
@@ -562,57 +556,6 @@ def cancel_instance(ctx: EvalContext) -> dict:
     return ctx.instance
 
 
-def abandon_instance(ctx: EvalContext) -> dict:
-    """Force-archive fallout: drive one open instance to the synthetic
-    `abandoned` state, recording the state it held so `restore_instance` can
-    put it back exactly (spec R3/R5).
-
-    NOT routed as a staff action (spec D2/D3): abandoning a single work item
-    by hand is what `cancel_instance` is for, and offering an administrator
-    both would present two controls that look identical and differ only in
-    whether the result can later be restored. The only caller is
-    `archive_definition`'s force path, via the collaborator injected by
-    `app/api/definitions.py`.
-
-    Mirrors `cancel_instance`'s write shape exactly — including the
-    `token_version` bump that revokes any outstanding magic link, since an
-    abandoned instance must stop accepting family traffic immediately — and
-    adds the two archive-provenance columns.
-    """
-    if is_family_actor(ctx.actor):
-        raise HTTPException(403, "family actor may not abandon an instance")
-    if _is_terminal_state(ctx):
-        raise HTTPException(409, {
-            "error": "instance is already terminal",
-            "state": ctx.instance.get("state"),
-        })
-
-    from_state = ctx.instance.get("state")
-    try:
-        token_version = int(ctx.instance.get("token_version") or 1)
-    except (TypeError, ValueError):
-        token_version = 1
-
-    base = entity_base_data(ctx.instance)
-    base["state"] = ABANDONED_STATE
-    base["archived_from_state"] = from_state
-    base["archived_at"] = ctx.now.isoformat()
-    base["closed_at"] = ctx.now.isoformat()
-    base["token_version"] = token_version + 1
-    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
-                           ctx.token, expected_version=engine.row_version(ctx.instance))
-    ctx.instance.update({
-        "state": ABANDONED_STATE,
-        "archived_from_state": base["archived_from_state"],
-        "archived_at": base["archived_at"],
-        "closed_at": base["closed_at"],
-        "token_version": base["token_version"],
-    })
-    if "_version" in updated:
-        ctx.instance["_version"] = updated["_version"]
-
-    _log_activity(ctx, "state_change", from_state, ABANDONED_STATE)
-    return ctx.instance
 
 
 def _is_frozen(ctx: EvalContext) -> bool:
@@ -636,7 +579,7 @@ def freeze_instance(ctx: EvalContext) -> dict:
     Does NOT bump `token_version`. A family's magic link stays valid through
     the freeze/thaw cycle and simply 409s while suspended — revoking it would
     force a re-issue for work that is going to resume untouched, which is the
-    opposite of what a reversible pause should cost. (`abandon_instance` DOES
+    opposite of what a reversible pause should cost. (`cancel_instance` DOES
     revoke, because that one is permanent.)
 
     Idempotent: re-freezing an already-frozen item keeps the original
@@ -677,79 +620,6 @@ def unfreeze_instance(ctx: EvalContext) -> dict:
     return ctx.instance
 
 
-def restore_instance(ctx: EvalContext) -> dict:
-    """Staff-only: return ONE abandoned work item to the state it held before
-    its workflow was force-archived (spec R5).
-
-    Three refusals, each a 409 with a machine-readable `reason` the UI maps to
-    its own copy:
-
-    - `not_abandoned` — the instance is not in the synthetic `abandoned`
-      state. This is what makes a deliberate `cancel_instance` and a natural
-      terminal state non-restorable, and it is the entire reason `abandoned`
-      is a state of its own rather than a reuse of `cancelled` (spec D3).
-    - `lineage_archived` — the workflow is still out of circulation. Restoring
-      work into it would produce an instance nobody can act on.
-    - `state_unavailable` — `archived_from_state` names a state the pinned
-      machine does not declare (the definition was edited in place after the
-      abandon). There is nothing coherent to restore into.
-
-    A pinned definition version that no longer resolves never reaches here:
-    `build_eval_context` raises 404 first.
-
-    Clears `closed_at`/`archived_at`/`archived_from_state` by writing `""`,
-    not `None` — `entity_base_data` drops `None` values from the full-replace
-    PUT body, and `""` is already what the open-instance query treats as open.
-    Bumps `token_version` so any magic link issued before the abandon stays
-    dead and the reopened instance gets a fresh one.
-    """
-    if is_family_actor(ctx.actor):
-        raise HTTPException(403, "family actor may not restore an instance")
-
-    if ctx.instance.get("state") != ABANDONED_STATE:
-        raise HTTPException(409, {
-            "reason": "not_abandoned",
-            "state": ctx.instance.get("state"),
-        })
-
-    lineage_id = ctx.instance.get("definition_id")
-    published = defs.get_published_definition(ctx.tenant_id, lineage_id, ctx.token)
-    if published is not None and defs.is_archived(published):
-        raise HTTPException(409, {"reason": "lineage_archived"})
-
-    to_state = ctx.instance.get("archived_from_state") or ""
-    declared = {s.state_id for s in ctx.definition["machine"].states}
-    if to_state not in declared:
-        raise HTTPException(409, {
-            "reason": "state_unavailable",
-            "archived_from_state": to_state,
-        })
-
-    try:
-        token_version = int(ctx.instance.get("token_version") or 1)
-    except (TypeError, ValueError):
-        token_version = 1
-
-    base = entity_base_data(ctx.instance)
-    base["state"] = to_state
-    base["closed_at"] = ""
-    base["archived_at"] = ""
-    base["archived_from_state"] = ""
-    base["token_version"] = token_version + 1
-    updated = dc.dc_update(ctx.tenant_id, "workflow_instance", ctx.instance["entity_id"], base,
-                           ctx.token, expected_version=engine.row_version(ctx.instance))
-    ctx.instance.update({
-        "state": to_state,
-        "closed_at": "",
-        "archived_at": "",
-        "archived_from_state": "",
-        "token_version": base["token_version"],
-    })
-    if "_version" in updated:
-        ctx.instance["_version"] = updated["_version"]
-
-    _log_activity(ctx, "state_change", ABANDONED_STATE, to_state)
-    return ctx.instance
 
 
 # --- the single action dispatcher ------------------------------------------
@@ -781,8 +651,6 @@ def execute_action(ctx: EvalContext, action_name: str, params: dict) -> dict:
         _run_item_builtin(ctx, action_name, params)
     elif action_name == "cancel_instance":
         cancel_instance(ctx)
-    elif action_name == "restore_instance":
-        restore_instance(ctx)
     else:
         _run_transition_action(ctx, action_name, params)
 

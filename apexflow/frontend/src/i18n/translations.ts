@@ -101,14 +101,12 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.retireConfirmTitle': 'Archive this workflow?',
     'definitions.retireConfirmBody':
       'An archived workflow cannot start new applications. You can unarchive it later.',
-    'definitions.retireOpenInstances': '{n} application(s) are still open for this workflow.',
-    'definitions.retireForceCancel': 'Also cancel {n} open application(s).',
+    'definitions.archiveFreezes': '{n} application(s) are still in progress. They will be frozen and will resume exactly where they are if you unarchive.',
     'definitions.retireConfirm': 'Archive',
     'definitions.retiring': 'Retiring…',
     'definitions.retireToast': '"{name}" archived.',
-    'definitions.unarchiveToast': '"{name}" unarchived. Abandoned applications were not restored.',
+    'definitions.unarchiveToast': '"{name}" unarchived. Frozen applications have resumed.',
     'definitions.unarchiveFailed': "Couldn't unarchive this workflow. Please try again.",
-    'definitions.retireBlockedToast': "Can't archive — {n} application(s) are still open.",
 
     // Editor (step editor — Task 7)
     'editor.title': 'Editor',
@@ -485,14 +483,12 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     'definitions.retireConfirmTitle': '归档此工作流？',
     'definitions.retireConfirmBody': '已归档的工作流无法发起新的申请。您之后可以取消归档。',
-    'definitions.retireOpenInstances': '此工作流仍有 {n} 个进行中的申请。',
-    'definitions.retireForceCancel': '同时取消 {n} 个进行中的申请。',
+    'definitions.archiveFreezes': '仍有 {n} 个申请进行中。它们将被冻结，取消归档后将从原处继续。',
     'definitions.retireConfirm': '淘汰',
     'definitions.retiring': '正在淘汰…',
     'definitions.retireToast': '"{name}" 已归档。',
-    'definitions.unarchiveToast': '"{name}" 已取消归档。被放弃的申请未被恢复。',
+    'definitions.unarchiveToast': '"{name}" 已取消归档。被冻结的申请已恢复运行。',
     'definitions.unarchiveFailed': '无法取消归档此工作流，请重试。',
-    'definitions.retireBlockedToast': '无法归档 — 仍有 {n} 个进行中的申请。',
 
     // Editor (step editor — Task 7)
     'editor.title': '编辑器',

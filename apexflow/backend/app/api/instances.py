@@ -153,20 +153,18 @@ def instance_action_route(tenant_id: str, instance_entity_id: str, body: ActionR
 @router.get("/{tenant_id}/definitions/{definition_id}/instances")
 def list_lineage_instances_route(tenant_id: str, definition_id: str,
                                  user: dict = Depends(require_staff_tenant)):
-    """Every work item of one lineage — open AND closed, including abandoned.
+    """Every work item of one lineage — open AND closed, including frozen.
 
-    Backs AdminDash's work-item management surface (spec R6). Deliberately
-    wider than the pipeline board's own query, which is open-only: an
-    administrator managing a workflow needs to reach the closed and abandoned
-    items too, and restore is only ever offered on an abandoned one.
+    Backs AdminDash's work-item management surface. Deliberately wider than the
+    pipeline board's own query, which is open-only: an administrator managing a
+    workflow needs to reach the closed and the frozen ones too.
 
     Lineage matching is done in Python rather than a SQL `where` for the same
     reason `definitions.get_published_definition` does it: on a tenant whose
     table has not materialized every column yet, a `where` predicate naming an
     unmaterialized column is a DuckDB binder error (400), not an empty result.
-    `archived_from_state` is exactly such a column on any tenant predating this
-    feature, so it is read with `.get(..., "")` and never filtered on
-    server-side.
+    `frozen_at` is exactly such a column on any tenant predating this feature,
+    so it is read with `.get(..., "")` and never filtered on server-side.
     """
     token = user.get("_token")
     rows = dc.list_entities(tenant_id, "workflow_instance", "", token)
@@ -180,7 +178,6 @@ def list_lineage_instances_route(tenant_id: str, definition_id: str,
         "applicant_email": r.get("applicant_email", "") or "",
         "opened_at": r.get("opened_at", "") or "",
         "closed_at": r.get("closed_at", "") or "",
-        "archived_from_state": r.get("archived_from_state", "") or "",
         "frozen_at": r.get("frozen_at", "") or "",
     } for r in rows]}
 

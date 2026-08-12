@@ -33,7 +33,6 @@ const TONE_BY_STATUS: Record<string, Tone> = {
   broken: 'risk',
   retired: 'risk',
   archived: 'risk',
-  abandoned: 'risk',
   rejected: 'risk',
   expired: 'risk',
   deprecated: 'risk',

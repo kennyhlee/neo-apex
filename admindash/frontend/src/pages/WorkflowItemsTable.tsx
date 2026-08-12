@@ -3,7 +3,6 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import {
   listLineageInstances,
   postInstanceAction,
-  WorkflowApiError,
   type LineageInstance,
 } from '../api/workflows.ts';
 import { filterInstances, type MachineStateView } from '../utils/workflowData.ts';
@@ -20,15 +19,7 @@ interface WorkflowItemsTableProps {
   states: MachineStateView[];
 }
 
-type Openness = 'all' | 'open' | 'closed' | 'abandoned' | 'frozen';
-
-/** `restore_instance`'s 409 `reason` mapped to its own copy. The raw wire
- * value must never reach the screen. */
-const RESTORE_REASON_KEYS: Record<string, string> = {
-  lineage_archived: 'workflows.restoreFailedLineageArchived',
-  not_abandoned: 'workflows.restoreFailedNotAbandoned',
-  state_unavailable: 'workflows.restoreFailedStateUnavailable',
-};
+type Openness = 'all' | 'open' | 'closed' | 'frozen';
 
 function formatAt(value: string): string {
   if (!value) return '—';
@@ -42,12 +33,11 @@ function formatAt(value: string): string {
  *
  * The board answers "what needs attention" and is open-only; this answers
  * "manage everything", so it is the only surface where a closed, cancelled, or
- * abandoned item is reachable — and restore is only ever offered on an
- * abandoned one.
+ * frozen item is reachable.
  *
  * Filtering is client-side over the fetched set, never a refetch: the server
- * cannot put `archived_from_state` in a `where` clause without a binder error
- * on any tenant whose table predates the column.
+ * cannot put `frozen_at` in a `where` clause without a binder error on any
+ * tenant whose table predates the column.
  */
 export default function WorkflowItemsTable({
   tenant, definitionId, states,
@@ -84,26 +74,7 @@ export default function WorkflowItemsTable({
     [rows, stateFilter, openness],
   );
 
-  function restoreErrorKey(e: unknown): string {
-    if (e instanceof WorkflowApiError && e.status === 409) {
-      const reason = (e.body as { detail?: { reason?: string } } | undefined)?.detail?.reason;
-      if (reason && RESTORE_REASON_KEYS[reason]) return RESTORE_REASON_KEYS[reason];
-    }
-    return 'workflows.restoreFailed';
-  }
 
-  async function restoreOne(row: LineageInstance) {
-    setBusy(true);
-    try {
-      await postInstanceAction(tenant, row.entity_id, { action: 'restore_instance' });
-      toast({ message: t('workflows.restored'), tone: 'success' });
-      await load();
-    } catch (e) {
-      toast({ message: t(restoreErrorKey(e)), tone: 'danger' });
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function cancelOne(row: LineageInstance) {
     setBusy(true);
@@ -123,7 +94,7 @@ export default function WorkflowItemsTable({
    * work item whose prior state no longer exists in the machine must not stop
    * the other forty from being restored.
    */
-  async function runBulk(action: 'restore_instance' | 'cancel_instance') {
+  async function runBulk(action: 'cancel_instance') {
     setBusy(true);
     let ok = 0;
     const ids = [...selected];
@@ -139,7 +110,7 @@ export default function WorkflowItemsTable({
     const failed = total - ok;
     toast({
       message: failed === 0
-        ? t(action === 'restore_instance' ? 'workflows.restored' : 'workflows.cancelledToast')
+        ? t('workflows.cancelledToast')
         : t('workflows.bulkPartial')
             .replace('{ok}', String(ok))
             .replace('{total}', String(total))
@@ -175,18 +146,6 @@ export default function WorkflowItemsTable({
   function rowActions(row: LineageInstance) {
     return (
       <>
-        {row.state === 'abandoned' && (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            onClick={() => void restoreOne(row)}
-          >
-            {row.archived_from_state
-              ? t('workflows.restoreTo').replace('{state}', row.archived_from_state)
-              : t('workflows.restore')}
-          </Button>
-        )}
         {/* A frozen item refuses every action until its workflow is
             unarchived, so offering Cancel here would only produce a 409. */}
         {!row.closed_at && !row.frozen_at && (
@@ -213,7 +172,6 @@ export default function WorkflowItemsTable({
               <option key={s.state_id} value={s.state_id}>{s.name}</option>
             ))}
             <option value="cancelled">cancelled</option>
-            <option value="abandoned">{t('workflows.filterAbandoned')}</option>
           </select>
         </div>
 
@@ -227,21 +185,12 @@ export default function WorkflowItemsTable({
             <option value="all">{t('workflows.filterAll')}</option>
             <option value="open">{t('workflows.filterOpen')}</option>
             <option value="closed">{t('workflows.filterClosed')}</option>
-            <option value="abandoned">{t('workflows.filterAbandoned')}</option>
             <option value="frozen">{t('workflows.filterFrozen')}</option>
           </select>
         </div>
 
         {selected.size > 0 && (
           <div className="workflow-items-bulk">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={busy}
-              onClick={() => void runBulk('restore_instance')}
-            >
-              {t('workflows.bulkRestore')}
-            </Button>
             <Button
               variant="danger"
               size="sm"

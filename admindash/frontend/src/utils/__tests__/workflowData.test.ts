@@ -367,14 +367,13 @@ describe('filterInstances', () => {
   const row = (over: Partial<LineageInstance>): LineageInstance => ({
     entity_id: 'wi-1', instance_id: 'WI-1', state: 'draft', definition_version: 1,
     channel_started: 'staff', applicant_email: '', opened_at: '', closed_at: '',
-    archived_from_state: '', frozen_at: '', ...over,
+    frozen_at: '', ...over,
   });
 
   const rows = [
     row({ entity_id: 'open', state: 'submitted', closed_at: '' }),
     row({ entity_id: 'closed', state: 'enrolled', closed_at: '2026-08-02T00:00:00Z' }),
-    row({ entity_id: 'gone', state: 'abandoned', closed_at: '2026-08-02T00:00:00Z',
-          archived_from_state: 'submitted' }),
+    row({ entity_id: 'gone', state: 'cancelled', closed_at: '2026-08-02T00:00:00Z' }),
   ];
 
   it('returns everything by default', () => {
@@ -386,14 +385,9 @@ describe('filterInstances', () => {
       .toEqual(['open']);
   });
 
-  it('closed includes abandoned items', () => {
+  it('closed includes cancelled items', () => {
     expect(filterInstances(rows, { openness: 'closed' }).map((r) => r.entity_id))
       .toEqual(['closed', 'gone']);
-  });
-
-  it('abandoned narrows to the archive fallout only', () => {
-    expect(filterInstances(rows, { openness: 'abandoned' }).map((r) => r.entity_id))
-      .toEqual(['gone']);
   });
 
   it('frozen narrows to suspended work, which is still open', () => {

@@ -177,7 +177,7 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
 
       {/* The board answers "what needs attention" and stays the default; the
           work-items table answers "manage everything" and is the only surface
-          where a closed or abandoned item is reachable. */}
+          where a closed or frozen item is reachable. */}
       <div className="workflow-tabs" role="tablist">
         <button
           type="button"
