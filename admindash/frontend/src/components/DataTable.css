@@ -94,6 +94,21 @@
 /* Wins over .data-table-numeric — declared after it, same specificity. */
 .data-table-center { text-align: center; }
 
+/* `.data-table thead th` sets `text-align: left` at specificity 0,2,1, which
+   beats a bare class — so without this the header label stays hard left while
+   its values centre, and the values read as pushed right rather than centred.
+   A header that does not sit over its own column is the actual defect. */
+.data-table thead th.data-table-center { text-align: center; }
+
+/* A count column does not need a share of the leftover width. Keeping it
+   shrink-to-fit puts the figure next to its header instead of stranding both
+   at opposite ends of a 300px cell. */
+.data-table th.data-table-center,
+.data-table td.data-table-center {
+  width: 1%;
+  white-space: nowrap;
+}
+
 .data-table-checkbox,
 .data-table-expand {
   width: 1%;
