@@ -9,9 +9,16 @@
 // "independent copies, not shared code").
 import type { ModelFieldSource, WorkflowStepDef } from '@neoapex/workflow-forms';
 import { ADMINDASH_API_URL } from '../config.ts';
-import { asNumber, type LineageInstance } from '../utils/workflowData.ts';
+import {
+  asNumber, isArchivedLineage,
+  type DefinitionListEntry, type LineageInstance, type WorkflowRow,
+} from '../utils/workflowData.ts';
 
-export type { LineageInstance };
+export type { DefinitionListEntry, LineageInstance, WorkflowRow };
+export { visibleWorkflows } from '../utils/workflowData.ts';
+
+/** Re-exported under the name every consumer already uses. */
+export const isArchived = isArchivedLineage;
 
 const API_BASE = ADMINDASH_API_URL;
 const TOKEN_KEY = 'neoapex_token';
@@ -55,19 +62,6 @@ async function parseOrThrow<T>(resp: Response): Promise<T> {
 
 // ---- Definitions -----------------------------------------------------------
 
-export interface DefinitionListEntry {
-  entity_id: string;
-  definition_id: string;
-  name: string;
-  version: number;
-  status: string;
-  lineage_status: string;
-  channel_access: string;
-  health: string;
-  open_instances: number;
-  family_url?: string;
-  parse_error?: string;
-}
 
 /** GET /api/workflows/{tenant_id}/definitions — one row per lineage-version
  * row (draft/published/superseded all included; apexflow's own doc comment
@@ -92,38 +86,8 @@ export async function listWorkflowDefinitions(
   };
 }
 
-/** `retired` is the pre-archive name for the same lineage state; rows written
- * under it are never migrated. One definition, mirroring the backend's
- * `definitions.is_archived` — never string-compare either value inline. */
-export function isArchived(lineageStatus: string): boolean {
-  return lineageStatus === 'archived' || lineageStatus === 'retired';
-}
 
-/** POST /api/workflows/{tenant_id}/definitions/{entity_id}/actions — publish /
- * deprecate / reactivate / archive / unarchive / delete. A refused action comes
- * back 409 with a `detail.reason` callers map to their own copy. */
-export async function postDefinitionAction(
-  tenantId: string,
-  entityId: string,
-  body: { action: string },
-): Promise<Record<string, unknown>> {
-  const resp = await fetch(
-    `${API_BASE}/api/workflows/${tenantId}/definitions/${entityId}/actions`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify(body),
-    },
-  );
-  return parseOrThrow(resp);
-}
 
-/** True while the lineage is deprecated — the only state archive is reachable
- * from. Mirrors `archive_definition`'s own gate so the UI never offers an
- * action the backend will refuse. */
-export function canArchive(lineageStatus: string): boolean {
-  return lineageStatus === 'deprecated';
-}
 
 /** GET /api/workflows/{tenant_id}/definitions/{definition_id}/instances —
  * every work item of the lineage, open and closed, including frozen. */

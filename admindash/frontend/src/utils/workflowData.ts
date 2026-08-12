@@ -383,3 +383,81 @@ export function filterInstances(
     return true;
   });
 }
+
+/** One `workflow_definition` row as `/definitions` returns it — one row per
+ * lineage VERSION, so a single workflow appears two or three times.
+ *
+ * Defined here rather than in `api/workflows.ts` for the same reason
+ * `LineageInstance` is: that module imports this one, so declaring it there
+ * and importing it back would close a cycle. */
+export interface DefinitionListEntry {
+  entity_id: string;
+  definition_id: string;
+  name: string;
+  version: number;
+  status: string;
+  lineage_status: string;
+  channel_access: string;
+  health: string;
+  open_instances: number;
+  family_url?: string;
+  parse_error?: string;
+}
+
+/** A lineage collapsed to one row, plus its attention count. */
+export interface WorkflowRow extends DefinitionListEntry {
+  needsAttention: number;
+}
+
+/**
+ * Reduce the raw per-VERSION list to one row per workflow, keeping only what a
+ * school administrator managing work items can act on.
+ *
+ * The backend returns draft, published, and superseded rows because the
+ * ApexFlow designer needs all three. This surface does not: an operations user
+ * thinks in workflows ("the enrolment workflow"), not versions.
+ *
+ * Kept: a workflow that is published, or that still has open work items.
+ * Dropped: archived workflows (their work is frozen — nothing to process) and
+ * never-published ones (they cannot have work items at all, since instance
+ * creation resolves through the published version).
+ *
+ * The representative row is the published one where it exists, so
+ * `channel_access`/`lineage_status` describe the live version, not a stale draft.
+ */
+export function visibleWorkflows(
+  entries: DefinitionListEntry[],
+  attentionByLineage: Map<string, number>,
+): WorkflowRow[] {
+  const byLineage = new Map<string, DefinitionListEntry[]>();
+  for (const e of entries) {
+    const rows = byLineage.get(e.definition_id) ?? [];
+    rows.push(e);
+    byLineage.set(e.definition_id, rows);
+  }
+
+  const out: WorkflowRow[] = [];
+  for (const [definitionId, rows] of byLineage) {
+    const published = rows.find((r) => r.status === 'published');
+    const representative = published ?? rows[0];
+    if (isArchivedLineage(representative.lineage_status)) continue;
+
+    const openInstances = Math.max(...rows.map((r) => r.open_instances), 0);
+    if (!published && openInstances === 0) continue;
+
+    out.push({
+      ...representative,
+      open_instances: openInstances,
+      needsAttention: attentionByLineage.get(definitionId) ?? 0,
+    });
+  }
+
+  return out.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+}
+
+/** `retired` is the pre-archive name for the same lineage state and is never
+ * migrated, so both must read as archived. Mirrors the backend's
+ * `definitions.is_archived`; `api/workflows.ts` re-exports it as `isArchived`. */
+export function isArchivedLineage(lineageStatus: string): boolean {
+  return lineageStatus === 'archived' || lineageStatus === 'retired';
+}

@@ -18,3 +18,9 @@
   max-width: 32ch;
   display: inline-block;
 }
+
+/* Work waiting on staff — the one number on this page that demands action. */
+.workflows-attention {
+  color: var(--color-danger-ink, var(--text-primary));
+  font-variant-numeric: tabular-nums;
+}

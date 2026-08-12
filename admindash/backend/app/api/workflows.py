@@ -96,26 +96,14 @@ def allowed_actions(
     )
 
 
-@router.post("/workflows/{tenant_id}/definitions/{entity_id}/actions")
-async def definition_action(
-    tenant_id: str, entity_id: str, request: Request, user=Depends(require_tenant_match)
-) -> Response:
-    """Lineage lifecycle actions — publish / deprecate / reactivate / archive /
-    unarchive. Body relayed verbatim, so a future action needs no change here.
 
-    `async def` + `_relay_bytes` for the same reason the other body-forwarding
-    routes use it (module docstring): read the raw body here, offload the sync
-    httpx call to a threadpool."""
-    content = await request.body()
-    content_type = request.headers.get("content-type", "application/json")
-    return await run_in_threadpool(
-        _relay_bytes,
-        "POST",
-        f"/api/workflows/{tenant_id}/definitions/{entity_id}/actions",
-        user["_token"],
-        content,
-        content_type,
-    )
+
+# NOTE: there is deliberately no `POST /definitions/{entity_id}/actions` proxy.
+# Workflow lifecycle — publish/deprecate/archive/unarchive/delete — belongs to
+# the ApexFlow designer, not to AdminDash, which exists to manage the WORK ITEMS
+# flowing through workflows that already exist. Hiding the buttons would not have
+# been enough: this route relayed every action verbatim, so a caller holding an
+# AdminDash token could still have deleted a workflow through it.
 
 
 @router.get("/workflows/{tenant_id}/definitions/{definition_id}/instances")
