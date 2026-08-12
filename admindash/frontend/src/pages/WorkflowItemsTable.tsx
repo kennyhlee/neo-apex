@@ -17,6 +17,10 @@ interface WorkflowItemsTableProps {
   definitionId: string;
   /** Declared states of the published machine — the state filter's options. */
   states: MachineStateView[];
+  /** Preselects the open/closed/frozen filter, so a deep link from the
+   * workflows list lands on the subset it promised. Unknown values fall back
+   * to `all` rather than rendering an empty table. */
+  initialOpenness?: string;
 }
 
 type Openness = 'all' | 'open' | 'closed' | 'frozen';
@@ -39,8 +43,14 @@ function formatAt(value: string): string {
  * cannot put `frozen_at` in a `where` clause without a binder error on any
  * tenant whose table predates the column.
  */
+const OPENNESS_VALUES: Openness[] = ['all', 'open', 'closed', 'frozen'];
+
+function asOpenness(value: string | undefined): Openness {
+  return OPENNESS_VALUES.includes(value as Openness) ? (value as Openness) : 'all';
+}
+
 export default function WorkflowItemsTable({
-  tenant, definitionId, states,
+  tenant, definitionId, states, initialOpenness,
 }: WorkflowItemsTableProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -49,7 +59,7 @@ export default function WorkflowItemsTable({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState('');
-  const [openness, setOpenness] = useState<Openness>('all');
+  const [openness, setOpenness] = useState<Openness>(asOpenness(initialOpenness));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 

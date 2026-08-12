@@ -94,6 +94,17 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
     navigate(`/workflows/${row.definition_id}`, { state: { entry: row } });
   }
 
+  /** The work-item table for this workflow, open items only. */
+  function openWorkItems(row: WorkflowRow) {
+    navigate(`/workflows/${row.definition_id}?tab=items&show=open`, { state: { entry: row } });
+  }
+
+  /** The attention queue narrowed to this workflow — which is the only place
+   * that answers WHICH items need attention and why. */
+  function openAttention(row: WorkflowRow) {
+    navigate(`/attention?workflow=${encodeURIComponent(row.definition_id)}`);
+  }
+
   const columns: Column<WorkflowRow>[] = [
     { key: 'name', label: t('workflows.colName'), primary: true },
     {
@@ -111,14 +122,49 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
       label: t('workflows.colEntry'),
       render: (row) => <StatusBadge status={row.channel_access} />,
     },
-    { key: 'open_instances', label: t('workflows.colOpenWorkItems'), numeric: true },
+    {
+      key: 'open_instances',
+      label: t('workflows.colOpenWorkItems'),
+      numeric: true,
+      center: true,
+      // Goes straight to this workflow's work-item list, NOT the board — the
+      // two counts must lead somewhere different or the column is decorative.
+      render: (row) => (
+        <button
+          type="button"
+          className="workflows-count"
+          onClick={(e) => { e.stopPropagation(); openWorkItems(row); }}
+          aria-label={t('workflows.viewOpenWorkItems')
+            .replace('{n}', String(row.open_instances))
+            .replace('{name}', row.name)}
+        >
+          {row.open_instances}
+        </button>
+      ),
+    },
     {
       key: 'needsAttention',
       label: t('workflows.colNeedsAttention'),
       numeric: true,
-      render: (row) => (row.needsAttention > 0
-        ? <strong className="workflows-attention">{row.needsAttention}</strong>
-        : <span>{attention.loaded ? 0 : '—'}</span>),
+      center: true,
+      render: (row) => {
+        // A dash, not 0, until the attention fetch lands — a confident "0"
+        // while still loading is a lie an operator would act on.
+        if (!attention.loaded) return <span className="workflows-count-idle">—</span>;
+        if (row.needsAttention === 0) return <span className="workflows-count-idle">0</span>;
+        return (
+          <button
+            type="button"
+            className="workflows-attention-pill"
+            onClick={(e) => { e.stopPropagation(); openAttention(row); }}
+            aria-label={t('workflows.viewNeedsAttention')
+              .replace('{n}', String(row.needsAttention))
+              .replace('{name}', row.name)}
+          >
+            {row.needsAttention}
+          </button>
+        );
+      },
     },
   ];
 

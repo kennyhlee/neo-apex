@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { postQuery } from '../api/client.ts';
@@ -54,15 +54,41 @@ export default function AttentionPage({ tenant }: AttentionPageProps) {
     [selected],
   );
 
-  const total = attention.result?.rows.length ?? 0;
+  /** Narrow to one workflow — how the workflows list answers "WHICH items need
+   * attention here". Applied on top of any bucket selection, so the two
+   * filters compose rather than clobbering each other. */
+  const workflowFilter = params.get('workflow');
+  const workflowName = useMemo(() => {
+    if (!workflowFilter) return '';
+    const hit = attention.result?.rows.find((r) => r.definitionId === workflowFilter);
+    return hit?.workflowName ?? workflowFilter;
+  }, [workflowFilter, attention.result]);
+
+  const rowsFor = useCallback((bucket: BucketKey): AttentionRow[] => {
+    const rows = attention.result ? bucketRows(attention.result, bucket) : [];
+    return workflowFilter ? rows.filter((r) => r.definitionId === workflowFilter) : rows;
+  }, [attention.result, workflowFilter]);
+
+  const total = useMemo(
+    () => BUCKETS.reduce((n, b) => n + rowsFor(b.key).length, 0),
+    [rowsFor],
+  );
 
   function countOf(bucket: BucketKey): number {
-    return attention.result ? bucketRows(attention.result, bucket).length : 0;
+    return rowsFor(bucket).length;
   }
 
   function selectBucket(bucket: BucketKey | null) {
-    if (bucket) setParams({ bucket });
-    else setParams({});
+    const next = new URLSearchParams(params);
+    if (bucket) next.set('bucket', bucket);
+    else next.delete('bucket');
+    setParams(next);
+  }
+
+  function clearWorkflowFilter() {
+    const next = new URLSearchParams(params);
+    next.delete('workflow');
+    setParams(next);
   }
 
   async function openRow(row: AttentionRow) {
@@ -115,6 +141,15 @@ export default function AttentionPage({ tenant }: AttentionPageProps) {
 
   return (
     <div className="attention-page">
+      {workflowFilter && (
+        <div className="attention-scope" role="status">
+          <span>{t('attention.scopedTo').replace('{name}', workflowName)}</span>
+          <Button variant="link" size="sm" onClick={clearWorkflowFilter}>
+            {t('attention.clearScope')}
+          </Button>
+        </div>
+      )}
+
       <header className="page-header">
         <h1 className="page-title">
           {t('attention.title')}
@@ -169,7 +204,7 @@ export default function AttentionPage({ tenant }: AttentionPageProps) {
         </div>
       ) : (
         shown.map((b) => {
-          const rows = attention.result ? bucketRows(attention.result, b.key) : [];
+          const rows = rowsFor(b.key);
           return (
             <section key={b.key} className="attention-group" aria-labelledby={`grp-${b.key}`}>
               <h2 className="attention-group-title" id={`grp-${b.key}`}>

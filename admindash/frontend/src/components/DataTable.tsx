@@ -9,6 +9,9 @@ export interface Column<T> {
   render?: (row: T) => ReactNode;
   /** Right-align and use tabular figures — for counts, dates, amounts. */
   numeric?: boolean;
+  /** Centre the cell. Wins over `numeric`'s right-alignment, which reads badly
+   * for a single at-a-glance figure sitting under a wide header. */
+  center?: boolean;
   /** Keep this column visible when rows reflow to cards on small screens. */
   primary?: boolean;
 }
@@ -185,7 +188,9 @@ export default function DataTable<T extends Record<string, any>>({
                   <th
                     key={col.key}
                     aria-sort={ariaSortFor(col.key)}
-                    className={col.numeric ? 'data-table-numeric' : undefined}
+                    className={[col.numeric ? 'data-table-numeric' : '',
+                                col.center ? 'data-table-center' : '']
+                      .filter(Boolean).join(' ') || undefined}
                   >
                     {onSortChange ? (
                       // A real button, so sorting is reachable by keyboard.
@@ -294,7 +299,9 @@ export default function DataTable<T extends Record<string, any>>({
                           key={col.key}
                           data-label={col.i18nKey ? t(col.i18nKey) : col.label}
                           className={
-                            [col.numeric ? 'data-table-numeric' : '', col.primary ? 'data-table-primary' : '']
+                            [col.numeric ? 'data-table-numeric' : '',
+                             col.center ? 'data-table-center' : '',
+                             col.primary ? 'data-table-primary' : '']
                               .filter(Boolean)
                               .join(' ') || undefined
                           }

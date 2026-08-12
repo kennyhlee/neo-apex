@@ -91,6 +91,8 @@
 .data-table tbody tr.is-selected td { background: var(--accent-tint); }
 
 .data-table-numeric { text-align: right; font-variant-numeric: tabular-nums; }
+/* Wins over .data-table-numeric — declared after it, same specificity. */
+.data-table-center { text-align: center; }
 
 .data-table-checkbox,
 .data-table-expand {
@@ -356,6 +358,8 @@
   .data-table tbody td.data-table-primary::before { display: none; }
 
   .data-table-numeric { text-align: left; }
+  /* Cards stack label/value; centring a value under a left label reads broken. */
+  .data-table-center { text-align: left; }
 
   .data-table-checkbox {
     position: absolute;

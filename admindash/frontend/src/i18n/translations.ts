@@ -66,6 +66,8 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Attention (/attention)
     'attention.title': 'Needs you today',
+    'attention.scopedTo': 'Showing only: {name}',
+    'attention.clearScope': 'Show all workflows',
     'attention.subtitle': '{n} across your workflows',
     'attention.all': 'All',
     'attention.empty': 'Nothing needs your attention right now.',
@@ -295,6 +297,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'workflows.otherStates': 'Other',
     'workflows.startEntry': 'Start staff entry',
     'workflows.colName': 'Name',
+    'workflows.viewOpenWorkItems': 'View {n} open work items for {name}',
+    'workflows.viewNeedsAttention': 'View {n} work items needing attention for {name}',
     'workflows.colStatus': 'Status',
     'workflows.colVersion': 'Version',
     'workflows.colIntake': 'Intake',
@@ -624,6 +628,8 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Attention (/attention)
     'attention.title': '\u4eca\u65e5\u5f85\u529e',
+    'attention.scopedTo': '\u4ec5\u663e\u793a\uff1a{name}',
+    'attention.clearScope': '\u663e\u793a\u5168\u90e8\u5de5\u4f5c\u6d41',
     'attention.subtitle': '\u5171 {n} \u9879',
     'attention.all': '\u5168\u90e8',
     'attention.empty': '\u76ee\u524d\u6ca1\u6709\u9700\u8981\u5904\u7406\u7684\u4e8b\u9879\u3002',
@@ -839,6 +845,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'workflows.otherStates': '\u5176\u4ed6',
     'workflows.startEntry': '\u53d1\u8d77\u5458\u5de5\u5f55\u5165',
     'workflows.colName': '\u540d\u79f0',
+    'workflows.viewOpenWorkItems': '\u67e5\u770b{name}\u7684 {n} \u4e2a\u8fdb\u884c\u4e2d\u5de5\u4f5c\u9879',
+    'workflows.viewNeedsAttention': '\u67e5\u770b{name}\u7684 {n} \u4e2a\u5f85\u5904\u7406\u5de5\u4f5c\u9879',
     'workflows.colStatus': '\u72b6\u6001',
     'workflows.colVersion': '\u7248\u672c',
     'workflows.colIntake': '\u65b0\u5efa\u53d7\u7406',

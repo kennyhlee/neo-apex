@@ -19,8 +19,50 @@
   display: inline-block;
 }
 
-/* Work waiting on staff — the one number on this page that demands action. */
-.workflows-attention {
-  color: var(--color-danger-ink, var(--text-primary));
+/* Both counts are links, not decoration: each leads somewhere different, so
+   they must look pressable rather than like plain text. */
+.workflows-count,
+.workflows-attention-pill {
+  appearance: none;
+  border: none;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.workflows-count {
+  background: none;
+  color: var(--accent-ink);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  min-width: 2.5rem;
+}
+
+.workflows-count:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+/* Work waiting on staff. This is the one figure on the page that means
+   something is wrong, so it carries weight a right-aligned number never
+   could — a filled pill reads as a badge at a glance across a long table. */
+.workflows-attention-pill {
+  display: inline-block;
+  min-width: 2rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  background: var(--color-danger, #b3261e);
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.workflows-attention-pill:hover {
+  filter: brightness(0.92);
+}
+
+/* Nothing waiting, or not known yet — deliberately quiet so the eye is drawn
+   only to the rows that need someone. */
+.workflows-count-idle {
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }

@@ -82,3 +82,14 @@
   .attention-page { padding: var(--space-3); }
   .attention-wf { display: none; }
 }
+
+/* Scoping to one workflow must be obvious and undoable — otherwise an empty
+   queue reads as "nothing needs attention anywhere". */
+.attention-scope {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}

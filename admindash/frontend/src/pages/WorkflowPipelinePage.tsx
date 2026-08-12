@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { postQuery } from '../api/client.ts';
 import { listWorkflowDefinitions, type DefinitionListEntry } from '../api/workflows.ts';
@@ -58,7 +58,18 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
   /** A card click sets this; the instance detail drawer below reads it back
    * against `instances` to render (Task 11). */
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'board' | 'items'>('board');
+  // Tab lives in the URL so the workflows list can deep-link straight to the
+  // work-item table, and so a reload or a shared link lands where it did.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: 'board' | 'items' = searchParams.get('tab') === 'items' ? 'items' : 'board';
+  const initialShow = searchParams.get('show') ?? 'all';
+
+  function setTab(next: 'board' | 'items') {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'items') params.set('tab', 'items');
+    else { params.delete('tab'); params.delete('show'); }
+    setSearchParams(params, { replace: true });
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -210,7 +221,12 @@ export default function WorkflowPipelinePage({ tenant }: WorkflowPipelinePagePro
       )}
 
       {tab === 'items' && (
-        <WorkflowItemsTable tenant={tenant} definitionId={definitionId} states={states} />
+        <WorkflowItemsTable
+          tenant={tenant}
+          definitionId={definitionId}
+          states={states}
+          initialOpenness={initialShow}
+        />
       )}
 
       {selectedInstance && (
