@@ -76,7 +76,7 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
   );
 
   const columnKeys = useMemo(
-    () => ['name', 'lineage_status', 'channel_access', 'open_instances', 'needsAttention'],
+    () => ['name', 'version', 'lineage_status', 'channel_access', 'open_instances', 'needsAttention'],
     [],
   );
   const userId = user?.user_id ?? 'anonymous';
@@ -108,6 +108,16 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
   const columns: Column<WorkflowRow>[] = [
     { key: 'name', label: t('workflows.colName'), primary: true },
     {
+      // The LIVE version — `visibleWorkflows` picks the published row as the
+      // lineage's representative, so this is what new work items bind to, not
+      // whatever draft happens to be open in the designer.
+      key: 'version',
+      label: t('workflows.colVersion'),
+      numeric: true,
+      center: true,
+      compact: true,
+    },
+    {
       // After filtering this is only ever `active` or `deprecated`, and the
       // difference is operational: deprecated still runs its in-flight work but
       // accepts nothing new.
@@ -120,7 +130,7 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
       // Whether families submit for themselves or staff key it in — that
       // changes how the work arrives.
       key: 'channel_access',
-      label: t('workflows.colEntry'),
+      label: t('workflows.colChannel'),
       compact: true,
       render: (row) => <StatusBadge status={row.channel_access} />,
     },
