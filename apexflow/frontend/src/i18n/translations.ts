@@ -71,7 +71,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.channel.familyLinkLabel': 'Open family link',
 
     'definitions.actions.openEditor': 'Open editor',
-    'definitions.actions.newDraft': 'New draft',
+    'definitions.actions.newDraft': 'New version',
+    'definitions.actions.moreFor': 'More actions for {name}',
     'definitions.actions.deprecate': 'Deprecate',
     'definitions.actions.reactivate': 'Reactivate',
     'definitions.actions.retire': 'Archive',
@@ -470,7 +471,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.channel.familyLinkLabel': '打开家庭端链接',
 
     'definitions.actions.openEditor': '打开编辑器',
-    'definitions.actions.newDraft': '新建草稿',
+    'definitions.actions.newDraft': '新建版本',
+    'definitions.actions.moreFor': '{name} 的更多操作',
     'definitions.actions.deprecate': '停用',
     'definitions.actions.reactivate': '重新启用',
     'definitions.actions.retire': '归档',

@@ -116,6 +116,7 @@ export default function WorkflowsPage({ tenant }: WorkflowsPageProps) {
       numeric: true,
       center: true,
       compact: true,
+      render: (row) => t('workflows.versionValue').replace('{v}', String(row.version)),
     },
     {
       // After filtering this is only ever `active` or `deprecated`, and the

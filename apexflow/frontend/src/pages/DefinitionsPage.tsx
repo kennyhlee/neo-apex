@@ -45,6 +45,7 @@ import DataTable, { type Column } from '../components/DataTable.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
+import RowMenu, { type RowMenuItem } from '../components/RowMenu.tsx';
 import './DefinitionsPage.css';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
@@ -467,6 +468,15 @@ export default function DefinitionsPage() {
     },
   ];
 
+  /**
+   * One visible action per row plus an overflow menu.
+   *
+   * Every lifecycle control used to render as its own button, so a published
+   * row showed three similar-weight controls and the one an author actually
+   * reaches for — open the editor, or start the next version — competed with
+   * deprecate and archive. The common action stays a button; the rest move
+   * into the menu, destructive ones last.
+   */
   function rowActions(row: DefinitionListEntry) {
     if (row.status === 'draft') {
       return (
@@ -474,15 +484,52 @@ export default function DefinitionsPage() {
           <Button variant="secondary" size="sm" onClick={() => navigate(`/definitions/${row.entity_id}`)}>
             {t('definitions.actions.openEditor')}
           </Button>
-          <Button variant="danger" size="sm" onClick={() => setDeleteTarget(row)}>
-            {t('definitions.actions.delete')}
-          </Button>
+          <RowMenu
+            label={t('definitions.actions.moreFor').replace('{name}', row.name)}
+            items={[{
+              key: 'delete',
+              label: t('definitions.actions.delete'),
+              danger: true,
+              onSelect: () => setDeleteTarget(row),
+            }]}
+          />
         </div>
       );
     }
 
-    // Published row — lifecycle controls, gated on lineage_status the same
-    // way the backend gates them (see module comment).
+    // Published row. Lifecycle is gated on lineage_status exactly as the
+    // backend gates it (see module comment).
+    const menu: RowMenuItem[] = [];
+    if (row.lineage_status === 'active') {
+      menu.push({
+        key: 'deprecate',
+        label: t('definitions.actions.deprecate'),
+        onSelect: () => setLifecycleTarget({ entry: row, action: 'deprecate' }),
+      });
+    }
+    if (row.lineage_status === 'deprecated') {
+      menu.push({
+        key: 'reactivate',
+        label: t('definitions.actions.reactivate'),
+        onSelect: () => setLifecycleTarget({ entry: row, action: 'reactivate' }),
+      });
+    }
+    if (canArchive(row.lineage_status)) {
+      menu.push({
+        key: 'archive',
+        label: t('definitions.actions.retire'),
+        danger: true,
+        onSelect: () => openRetireModal(row),
+      });
+    }
+    if (isArchived(row.lineage_status)) {
+      menu.push({
+        key: 'unarchive',
+        label: t('definitions.actions.unarchive'),
+        onSelect: () => { void handleUnarchive(row); },
+      });
+    }
+
     return (
       <div className="definitions-row-actions">
         {!isArchived(row.lineage_status) && (
@@ -496,34 +543,10 @@ export default function DefinitionsPage() {
             {t('definitions.actions.newDraft')}
           </Button>
         )}
-        {row.lineage_status === 'active' && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setLifecycleTarget({ entry: row, action: 'deprecate' })}
-          >
-            {t('definitions.actions.deprecate')}
-          </Button>
-        )}
-        {row.lineage_status === 'deprecated' && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setLifecycleTarget({ entry: row, action: 'reactivate' })}
-          >
-            {t('definitions.actions.reactivate')}
-          </Button>
-        )}
-        {canArchive(row.lineage_status) && (
-          <Button variant="danger" size="sm" onClick={() => openRetireModal(row)}>
-            {t('definitions.actions.retire')}
-          </Button>
-        )}
-        {isArchived(row.lineage_status) && (
-          <Button variant="secondary" size="sm" onClick={() => void handleUnarchive(row)}>
-            {t('definitions.actions.unarchive')}
-          </Button>
-        )}
+        <RowMenu
+          label={t('definitions.actions.moreFor').replace('{name}', row.name)}
+          items={menu}
+        />
       </div>
     );
   }

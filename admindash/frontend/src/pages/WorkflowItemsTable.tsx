@@ -150,7 +150,14 @@ export default function WorkflowItemsTable({
     { key: 'closed_at', label: t('workflows.colClosed'), render: (r) => formatAt(r.closed_at) },
     { key: 'applicant_email', label: t('workflows.colApplicant') },
     { key: 'channel_started', label: t('workflows.colChannel') },
-    { key: 'definition_version', label: t('workflows.colVersion'), numeric: true },
+    {
+      key: 'definition_version',
+      label: t('workflows.colVersion'),
+      numeric: true,
+      center: true,
+      compact: true,
+      render: (row) => t('workflows.versionValue').replace('{v}', String(row.definition_version)),
+    },
   ];
 
   function rowActions(row: LineageInstance) {

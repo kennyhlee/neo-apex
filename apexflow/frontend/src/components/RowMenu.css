@@ -1,0 +1,66 @@
+.row-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.row-menu-trigger {
+  appearance: none;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: var(--space-1) var(--space-2);
+}
+
+.row-menu-trigger:hover,
+.row-menu-trigger[aria-expanded='true'] {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+/* Right-aligned because row actions sit at the right edge of the table — a
+   left-aligned panel would open off-screen. */
+.row-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-1));
+  z-index: 20;
+  min-width: 12rem;
+  padding: var(--space-1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md, 0 6px 20px rgba(0, 0, 0, 0.12));
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.row-menu-item {
+  appearance: none;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+  color: var(--text-primary);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.row-menu-item:hover:not(:disabled) { background: var(--accent-tint); }
+.row-menu-item:disabled { color: var(--text-tertiary); cursor: default; }
+
+/* Destructive items sit last and read differently, so a mis-click on the
+   common action cannot land on the irreversible one. */
+.row-menu-item.is-danger { color: var(--color-danger-ink, var(--text-primary)); }
+.row-menu-item.is-danger + .row-menu-item,
+.row-menu-item:not(.is-danger) + .row-menu-item.is-danger {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+}
