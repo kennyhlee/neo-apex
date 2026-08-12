@@ -114,12 +114,27 @@ export default function EditorPage() {
           ? t('editor.save.saved')
           : null;
 
-  /** Cancel — drop unsaved edits and go back to the last saved state. Costs
-   * nothing: the edits only ever lived in this browser. */
-  function handleCancel() {
+  /**
+   * Leave the editor. Always available — "cancel" means "I am done here
+   * without saving", which is just as meaningful when nothing has changed.
+   * Being dirty only decides whether the exit is guarded.
+   *
+   * Goes to the workflow list rather than `navigate(-1)`: history could lead
+   * anywhere (a deep link, another tab's referrer, or straight out of the app),
+   * and an exit that lands somewhere unpredictable is worse than one that is
+   * always the same place.
+   */
+  function leaveEditor() {
+    if (store.dirty) { setShowCancel(true); return; }
+    navigate('/');
+  }
+
+  /** Confirmed exit: drop the unsaved edits (and the local mirror with them),
+   * then leave. Costs nothing — those edits only ever lived in this browser. */
+  function discardAndLeave() {
     store.cancel();
     setShowCancel(false);
-    toast({ message: t('editor.cancel.toast'), tone: 'success' });
+    navigate('/');
   }
 
 
@@ -178,7 +193,16 @@ export default function EditorPage() {
         {/* The editor had no exit at all: creation persists the draft then
             drops you here, so without this the only way out was the global
             nav or the browser back button. */}
-        <Link className="editor-back-link" to="/">
+        {/* Shares leaveEditor so this cannot become an unguarded way past the
+            unsaved-changes warning. Left a <Link> rather than a <button> so
+            middle-click and open-in-new-tab still work — those open a second
+            tab and leave this one's unsaved state untouched, so they need no
+            guard. */}
+        <Link
+          className="editor-back-link"
+          to="/"
+          onClick={(e) => { e.preventDefault(); leaveEditor(); }}
+        >
           {t('editor.backToWorkflows')}
         </Link>
         <h1 className="page-title">
@@ -227,9 +251,8 @@ export default function EditorPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setShowCancel(true)}
-                disabled={!store.dirty || store.saving || publishBusy}
-                title={store.dirty ? undefined : t('editor.cancel.nothingToCancel')}
+                onClick={leaveEditor}
+                disabled={store.saving || publishBusy}
               >
                 {t('editor.cancel.button')}
               </Button>
@@ -267,7 +290,7 @@ export default function EditorPage() {
             <Button variant="secondary" onClick={() => setShowCancel(false)}>
               {t('editor.cancel.keep')}
             </Button>
-            <Button variant="danger" onClick={handleCancel}>
+            <Button variant="danger" onClick={discardAndLeave}>
               {t('editor.cancel.confirm')}
             </Button>
           </>
