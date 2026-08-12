@@ -2,7 +2,7 @@
 // the ordered step list (`StepEditor`), a tab strip for Task 8's machine
 // editor and Task 9's live preview pane, plus a right rail of validation
 // errors. Route: `/definitions/:entityId`.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
@@ -32,8 +32,7 @@ export default function EditorPage() {
   const [publishBusy, setPublishBusy] = useState(false);
   const [showDiscard, setShowDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
-  const [showRevert, setShowRevert] = useState(false);
-  const [reverting, setReverting] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
 
   async function handleOpenPublish() {
@@ -53,6 +52,16 @@ export default function EditorPage() {
       setPublishBusy(false);
     }
   }
+
+  /* Unsaved edits now live only in this browser, so closing the tab is a real
+     way to lose them. The localStorage mirror means they are recoverable, but
+     a warning is still owed — recovery is a safety net, not a plan. */
+  useEffect(() => {
+    if (!store.dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [store.dirty]);
 
   if (store.loading) {
     return <p className="page-placeholder">{t('common.loading')}</p>;
@@ -105,52 +114,21 @@ export default function EditorPage() {
           ? t('editor.save.saved')
           : null;
 
-  /**
-   * The draft as it was when this editor opened.
-   *
-   * No snapshot machinery needed: `store.definition` is written only on load,
-   * while `setMachine`/`setSteps` write to separate state — so
-   * `definition.machine`/`.steps` stay pristine for the whole session and are
-   * already the baseline. (Serialised for comparison because these are nested
-   * objects that change identity on every edit.)
-   */
-  const baseline = store.definition
-    ? JSON.stringify({ machine: store.definition.machine, steps: store.definition.steps })
-    : null;
-  const current = store.definition
-    ? JSON.stringify({ machine: store.machine, steps: store.steps })
-    : null;
-  const hasSessionChanges = baseline !== null && current !== null && baseline !== current;
+  /** Cancel — drop unsaved edits and go back to the last saved state. Costs
+   * nothing: the edits only ever lived in this browser. */
+  function handleCancel() {
+    store.cancel();
+    setShowCancel(false);
+    toast({ message: t('editor.cancel.toast'), tone: 'success' });
+  }
 
-  /**
-   * Undo everything changed since this editor opened.
-   *
-   * NOT a literal "cancel — nothing was saved": the editor autosaves on an
-   * 800ms debounce, so edits are already persisted long before anyone reaches
-   * for this. Restoring the opening state and flushing is the honest
-   * equivalent — the workflow ends up exactly as it was when you arrived.
-   *
-   * Scope is the machine and steps, i.e. the editing work. The channel-access
-   * dropdown is excluded: `setChannelAccess` writes through to
-   * `store.definition`, so there is no pristine copy of it to restore, and it
-   * is one dropdown to flip back by hand.
-   *
-   * Deletes nothing — that is what Delete is for.
-   */
-  async function handleRevert() {
-    if (!store.definition) return;
-    setReverting(true);
+
+  async function handleSave() {
     try {
-      const { machine, steps } = JSON.parse(baseline as string);
-      store.setMachine(machine);
-      store.setSteps(steps);
-      await store.flush();
-      toast({ message: t('editor.revertToast'), tone: 'success' });
-      setShowRevert(false);
+      await store.save();
+      toast({ message: t('editor.save.toast'), tone: 'success' });
     } catch {
-      toast({ message: t('editor.revertFailed'), tone: 'danger' });
-    } finally {
-      setReverting(false);
+      toast({ message: t('editor.save.error'), tone: 'danger' });
     }
   }
 
@@ -179,6 +157,23 @@ export default function EditorPage() {
 
   return (
     <div className="editor-page">
+      {store.recovered && (
+        <div className="editor-recovered" role="status">
+          <span>
+            {t('editor.recovered.body').replace(
+              '{when}',
+              new Date(store.recovered.at).toLocaleString(),
+            )}
+          </span>
+          <Button variant="secondary" size="sm" onClick={store.applyRecovered}>
+            {t('editor.recovered.restore')}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={store.discardRecovered}>
+            {t('editor.recovered.discard')}
+          </Button>
+        </div>
+      )}
+
       <header className="page-header">
         {/* The editor had no exit at all: creation persists the draft then
             drops you here, so without this the only way out was the global
@@ -220,13 +215,23 @@ export default function EditorPage() {
                 </select>
               </label>
               <Button
+                variant="primary"
+                size="sm"
+                onClick={() => void handleSave()}
+                disabled={!store.dirty || store.saving || publishBusy}
+                loading={store.saving}
+                loadingText={t('editor.save.saving')}
+              >
+                {t('editor.save.button')}
+              </Button>
+              <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setShowRevert(true)}
-                disabled={!hasSessionChanges || store.saving || publishBusy || reverting}
-                title={hasSessionChanges ? undefined : t('editor.revert.nothingToRevert')}
+                onClick={() => setShowCancel(true)}
+                disabled={!store.dirty || store.saving || publishBusy}
+                title={store.dirty ? undefined : t('editor.cancel.nothingToCancel')}
               >
-                {t('editor.revert.button')}
+                {t('editor.cancel.button')}
               </Button>
               <Button
                 variant="secondary"
@@ -252,30 +257,23 @@ export default function EditorPage() {
       </header>
 
       <Modal
-        open={showRevert}
-        onClose={() => (!reverting ? setShowRevert(false) : undefined)}
-        title={t('editor.revert.title')}
+        open={showCancel}
+        onClose={() => setShowCancel(false)}
+        title={t('editor.cancel.title')}
         subtitle={def.name}
         size="sm"
-        dismissOnBackdrop={!reverting}
-        dismissOnEscape={!reverting}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowRevert(false)} disabled={reverting}>
-              {t('editor.revert.keep')}
+            <Button variant="secondary" onClick={() => setShowCancel(false)}>
+              {t('editor.cancel.keep')}
             </Button>
-            <Button
-              variant="danger"
-              onClick={() => void handleRevert()}
-              loading={reverting}
-              loadingText={t('editor.revert.reverting')}
-            >
-              {t('editor.revert.confirm')}
+            <Button variant="danger" onClick={handleCancel}>
+              {t('editor.cancel.confirm')}
             </Button>
           </>
         }
       >
-        <p>{t('editor.revert.body')}</p>
+        <p>{t('editor.cancel.body')}</p>
       </Modal>
 
       <Modal
@@ -295,7 +293,7 @@ export default function EditorPage() {
               variant="danger"
               onClick={() => void handleDiscard()}
               loading={discarding}
-              loadingText={t('editor.discard.discarding')}
+              loadingText={t('editor.delete.deleting')}
             >
               {t('editor.delete.confirm')}
             </Button>

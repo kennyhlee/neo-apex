@@ -6,6 +6,7 @@ import { APEXFLOW_API_URL } from '../config.ts';
 import { asNumber } from '../utils/numeric.ts';
 import type {
   DefinitionBundle,
+  DefinitionHealth,
   DefinitionLifecycleAction,
   DefinitionRow,
   ListDefinitionsResponse,
@@ -100,6 +101,42 @@ export async function getBundle(tenantId: string, entityId: string): Promise<Def
  * errors `publishDefinition` would 409 with (designer.py:158-162's own
  * binding contract).
  */
+export interface SaveDefinitionResult {
+  row: Record<string, unknown>;
+  errors: string[];
+  health: DefinitionHealth;
+}
+
+/**
+ * PUT /api/workflows/{tenant_id}/definitions/{entity_id} — write a draft's
+ * authored content and get its validation back in the same response.
+ *
+ * Replaces the old pairing of a write through the generic entities proxy plus
+ * a separately-triggered validate. Validation rides the save, so it costs no
+ * extra request and cannot be triggered independently — which is what keeps
+ * its frequency bounded by deliberate saves rather than by typing.
+ *
+ * 422 when machine/steps do not parse; 409 `{reason: "not_draft"}` on a
+ * published or superseded row. Validation ERRORS do not fail the call — a
+ * draft is allowed to be invalid, and the errors arrive alongside a
+ * successful write.
+ */
+export async function saveDefinition(
+  tenantId: string,
+  entityId: string,
+  body: { machine: unknown; steps: unknown; channel_access?: string },
+): Promise<SaveDefinitionResult> {
+  const resp = await fetch(
+    `${API_BASE}/api/workflows/${tenantId}/definitions/${entityId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    },
+  );
+  return parseOrThrow(resp);
+}
+
 export async function validateDefinition(
   tenantId: string,
   entityId: string,

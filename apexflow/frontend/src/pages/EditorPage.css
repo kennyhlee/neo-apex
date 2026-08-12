@@ -172,3 +172,18 @@
   font-size: var(--font-size-sm);
   color: var(--accent-ink);
 }
+
+/* Offered, never applied silently — the server row may have moved too. */
+.editor-recovered {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-tint);
+  font-size: var(--font-size-sm);
+}

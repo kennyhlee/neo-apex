@@ -61,8 +61,7 @@
 //   under B's entity_id carrying A's content. See each guard's own doc
 //   comment below for its specific role.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, getBundle, validateDefinition } from '../api/designer.ts';
-import { updateEntity } from '../api/client.ts';
+import { ApiError, getBundle, saveDefinition, validateDefinition } from '../api/designer.ts';
 import type {
   ChannelAccess,
   DefinitionDetail,
@@ -72,8 +71,22 @@ import type {
   WorkflowStepDef,
 } from '../types/designer.ts';
 
-const AUTOSAVE_DEBOUNCE_MS = 800;
-const VALIDATE_DEBOUNCE_MS = 600;
+/**
+ * Where unsaved edits are mirrored so a crashed or closed tab does not lose
+ * them. Purely a browser write — no request, no DataCore round trip.
+ *
+ * Keyed by tenant AND entity so two definitions, or two tenants in the same
+ * browser profile, cannot shadow each other.
+ */
+const MIRROR_PREFIX = 'apexflow_draft';
+const mirrorKey = (tenantId: string, entityId: string) =>
+  `${MIRROR_PREFIX}:${tenantId}:${entityId}`;
+
+interface DraftMirror {
+  machine: MachineDef;
+  steps: WorkflowStepDef[];
+  at: number;
+}
 const FLUSH_POLL_INTERVAL_MS = 50;
 /** Task 10 review fix (minor): `flush()` bails out rather than polling
  * forever if a save is somehow still in flight after this long (a hung
@@ -149,6 +162,15 @@ export interface DraftStore {
    * Publish button stuck in a busy state.
    */
   flush: () => Promise<void>;
+  /** Explicit save — the only write, and the only validation. */
+  save: () => Promise<void>;
+  /** Drop unsaved edits, returning to the last SAVED state. */
+  cancel: () => void;
+  /** Unsaved edits found in this browser on open, if they differ from the
+   * server's copy. Never applied without the author choosing. */
+  recovered: { at: number } | null;
+  applyRecovered: () => void;
+  discardRecovered: () => void;
 }
 
 /** Extracts `{"parse_error": "..."}` from a 422 `ApiError` body
@@ -298,6 +320,61 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
    */
   const editSeqRef = useRef(0);
 
+  /**
+   * Unsaved edits found in this browser on open, when they differ from what
+   * the server returned. Never applied silently: the server row may have moved
+   * too, and picking a winner unasked is how people lose work.
+   */
+  const [recovered, setRecovered] = useState<{ at: number } | null>(null);
+
+  const writeLocalMirror = useCallback(() => {
+    if (!tenantId || !entityId) return;
+    try {
+      const mirror: DraftMirror = {
+        machine: machineRef.current,
+        steps: stepsRef.current,
+        at: Date.now(),
+      };
+      localStorage.setItem(mirrorKey(tenantId, entityId), JSON.stringify(mirror));
+    } catch {
+      // A full or disabled localStorage must never break editing — the mirror
+      // is a convenience, not the source of truth.
+    }
+  }, [tenantId, entityId]);
+
+  /**
+   * Offer a local copy only when it actually differs from what the server just
+   * returned. An identical mirror means the last session ended cleanly, and
+   * prompting there would train people to dismiss the prompt reflexively.
+   */
+  const detectLocalMirror = useCallback((serverDef: DefinitionDetail) => {
+    if (!tenantId || !entityId) return;
+    try {
+      const raw = localStorage.getItem(mirrorKey(tenantId, entityId));
+      if (!raw) { setRecovered(null); return; }
+      const mirror = JSON.parse(raw) as DraftMirror;
+      const same =
+        JSON.stringify(mirror.machine) === JSON.stringify(serverDef.machine) &&
+        JSON.stringify(mirror.steps) === JSON.stringify(serverDef.steps);
+      if (same) {
+        localStorage.removeItem(mirrorKey(tenantId, entityId));
+        setRecovered(null);
+      } else {
+        setRecovered({ at: mirror.at });
+      }
+    } catch {
+      setRecovered(null);
+    }
+  }, [tenantId, entityId]);
+
+  const clearLocalMirror = useCallback(() => {
+    if (!tenantId || !entityId) return;
+    try {
+      localStorage.removeItem(mirrorKey(tenantId, entityId));
+    } catch { /* see writeLocalMirror */ }
+    setRecovered(null);
+  }, [tenantId, entityId]);
+
   const clearTimers = useCallback(() => {
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     if (validateTimer.current) clearTimeout(validateTimer.current);
@@ -340,12 +417,6 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     }
   }, [tenantId, entityId]);
 
-  const scheduleValidate = useCallback(() => {
-    if (validateTimer.current) clearTimeout(validateTimer.current);
-    validateTimer.current = setTimeout(() => {
-      void runValidate();
-    }, VALIDATE_DEBOUNCE_MS);
-  }, [runValidate]);
 
   // Always-current pointer to `runAutosave` itself, so the queued-retry
   // path below can invoke "the latest autosave function" without a direct
@@ -416,16 +487,14 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     // exact edit-loss race this prevents (Task 10 review fix).
     const seqAtSave = editSeqRef.current;
     try {
-      await updateEntity(tenantId, 'workflow_definition', entityId, {
-        definition_id: def.definition_id,
-        name: def.name,
-        version: def.version,
-        status: def.status,
-        lineage_status: def.lineage_status,
+      const result = await saveDefinition(tenantId, entityId, {
+        machine: machineRef.current,
+        steps: stepsRef.current,
         channel_access: def.channel_access,
-        machine: JSON.stringify(machineRef.current),
-        steps: JSON.stringify(stepsRef.current),
       });
+      // Validation rides the write — no separate call, and no way for the
+      // editor to ask for it independently.
+      setValidation({ errors: result.errors, health: result.health, validating: false });
       // Only clear `dirty` if no edit landed while this PUT was in flight
       // (editSeqRef unchanged since the snapshot above) — otherwise this
       // write is already stale relative to the newer edit, and `dirty` must
@@ -441,11 +510,10 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
       // immediately rather than waiting for the validate call below to
       // land (belt-and-suspenders; that call also clears it on success).
       setStaleParseWarning(null);
-      // Task review fix #5: the debounced typing-triggered validate reads
-      // whatever's on the server as of ITS OWN timer firing, which can be
-      // stale relative to what just got persisted here — the post-save
-      // validate is the authoritative one.
-      void runValidate();
+      // The local mirror exists only to survive a crash between saves; once
+      // the content is on the server it is noise, and leaving it behind would
+      // shadow the real row on the next open.
+      clearLocalMirror();
     } catch {
       setSaveError(true);
     } finally {
@@ -465,7 +533,7 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
         }
       }
     }
-  }, [tenantId, entityId, runValidate]);
+  }, [tenantId, entityId, clearLocalMirror]);
 
   useEffect(() => {
     runAutosaveRef.current = () => {
@@ -473,14 +541,6 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     };
   }, [runAutosave]);
 
-  const scheduleAutosave = useCallback(() => {
-    const def = definitionRef.current;
-    if (!def || def.status !== 'draft') return;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      void runAutosave();
-    }, AUTOSAVE_DEBOUNCE_MS);
-  }, [runAutosave]);
 
   const markDirty = useCallback(() => {
     // Defensive backstop (task review fix #6): the editor disables every
@@ -497,9 +557,11 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     editSeqRef.current += 1;
     setDirty(true);
     setSaveError(false);
-    scheduleAutosave();
-    scheduleValidate();
-  }, [scheduleAutosave, scheduleValidate]);
+    // No timers. Edits stay in the browser until an explicit save, and are
+    // mirrored to localStorage purely so a crashed or closed tab does not lose
+    // them — that mirror is a synchronous browser write, never a request.
+    writeLocalMirror();
+  }, [writeLocalMirror]);
 
   const setSteps = useCallback(
     (updater: StepsUpdater) => {
@@ -551,7 +613,9 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
       setDirty(false);
       setSaveError(false);
       setSavedAt(null);
-      void runValidate();
+      // The bundle already carries validation, so nothing needs to ask for it
+      // separately on load.
+      detectLocalMirror(bundle.definition);
     } catch (err) {
       const parseMsg = extractParseError(err);
       if (parseMsg) setParseError(parseMsg);
@@ -559,7 +623,7 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     } finally {
       setLoading(false);
     }
-  }, [tenantId, entityId, clearTimers, runValidate]);
+  }, [tenantId, entityId, clearTimers, detectLocalMirror]);
 
   useEffect(() => {
     // Cross-definition race follow-up (module doc comment, guard 2 of 3):
@@ -684,6 +748,44 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     }
   }, [runAutosave]);
 
+  /** Explicit save. The only thing that writes, and the only thing that
+   * validates — both in one request. */
+  const save = useCallback(async () => {
+    await runAutosave();
+  }, [runAutosave]);
+
+  /**
+   * Drop unsaved edits and return to the last SAVED state.
+   *
+   * Deliberately not "back to how it was when the editor opened": once someone
+   * has saved mid-session those diverge, and discarding a save the author
+   * deliberately made would be undoing their work, not cancelling it.
+   */
+  const cancel = useCallback(() => {
+    const def = definitionRef.current;
+    if (!def) return;
+    setMachineState(def.machine);
+    setStepsState(def.steps);
+    setDirty(false);
+    setSaveError(false);
+    clearLocalMirror();
+  }, [clearLocalMirror]);
+
+  /** Apply the recovered local copy as the current working content. It stays
+   * unsaved — the author reviews it and saves, or cancels it away. */
+  const applyRecovered = useCallback(() => {
+    if (!tenantId || !entityId) return;
+    try {
+      const raw = localStorage.getItem(mirrorKey(tenantId, entityId));
+      if (!raw) return;
+      const mirror = JSON.parse(raw) as DraftMirror;
+      setMachineState(mirror.machine);
+      setStepsState(mirror.steps);
+      setDirty(true);
+    } catch { /* a corrupt mirror is simply not offered */ }
+    setRecovered(null);
+  }, [tenantId, entityId]);
+
   const readOnly = definition ? definition.status !== 'draft' : false;
 
   const dismissStaleParseWarning = useCallback(() => setStaleParseWarning(null), []);
@@ -709,5 +811,10 @@ export function useDraftStore(tenantId: string, entityId: string | undefined): D
     validation,
     reload: load,
     flush,
+    save,
+    cancel,
+    recovered,
+    applyRecovered,
+    discardRecovered: clearLocalMirror,
   };
 }
