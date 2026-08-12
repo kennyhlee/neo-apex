@@ -118,6 +118,13 @@ export async function postDefinitionAction(
   return parseOrThrow(resp);
 }
 
+/** True while the lineage is deprecated — the only state archive is reachable
+ * from. Mirrors `archive_definition`'s own gate so the UI never offers an
+ * action the backend will refuse. */
+export function canArchive(lineageStatus: string): boolean {
+  return lineageStatus === 'deprecated';
+}
+
 /** GET /api/workflows/{tenant_id}/definitions/{definition_id}/instances —
  * every work item of the lineage, open and closed, including abandoned. */
 export async function listLineageInstances(

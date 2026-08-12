@@ -36,7 +36,7 @@ import {
   lifecycleAction,
 } from '../api/designer.ts';
 import { createEntity } from '../api/client.ts';
-import { isArchived } from '../types/designer.ts';
+import { canArchive, isArchived } from '../types/designer.ts';
 import type {
   DefinitionListEntry,
   DefinitionLifecycleAction,
@@ -519,7 +519,7 @@ export default function DefinitionsPage() {
             {t('definitions.actions.reactivate')}
           </Button>
         )}
-        {!isArchived(row.lineage_status) && (
+        {canArchive(row.lineage_status) && (
           <Button variant="danger" size="sm" onClick={() => openRetireModal(row)}>
             {t('definitions.actions.retire')}
           </Button>

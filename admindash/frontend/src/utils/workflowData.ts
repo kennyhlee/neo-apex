@@ -358,11 +358,14 @@ export interface LineageInstance {
   opened_at: string;
   closed_at: string;
   archived_from_state: string;
+  /** Set while the work item is suspended by an archived workflow. The state
+   * is untouched during a freeze, so this is the only signal. */
+  frozen_at: string;
 }
 
 export interface InstanceFilter {
   state?: string;
-  openness?: 'all' | 'open' | 'closed' | 'abandoned';
+  openness?: 'all' | 'open' | 'closed' | 'abandoned' | 'frozen';
 }
 
 /** Client-side because the server cannot filter on `archived_from_state`: a
@@ -378,6 +381,7 @@ export function filterInstances(
     if (openness === 'open') return !r.closed_at;
     if (openness === 'closed') return Boolean(r.closed_at);
     if (openness === 'abandoned') return r.state === 'abandoned';
+    if (openness === 'frozen') return Boolean(r.frozen_at);
     return true;
   });
 }

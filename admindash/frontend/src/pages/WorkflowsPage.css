@@ -10,3 +10,11 @@
   color: var(--text-secondary);
   cursor: pointer;
 }
+
+/* Explains why Archive isn't offered yet, in the slot the button would use. */
+.workflows-hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  max-width: 32ch;
+  display: inline-block;
+}

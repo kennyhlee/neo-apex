@@ -20,7 +20,7 @@ interface WorkflowItemsTableProps {
   states: MachineStateView[];
 }
 
-type Openness = 'all' | 'open' | 'closed' | 'abandoned';
+type Openness = 'all' | 'open' | 'closed' | 'abandoned' | 'frozen';
 
 /** `restore_instance`'s 409 `reason` mapped to its own copy. The raw wire
  * value must never reach the screen. */
@@ -156,7 +156,14 @@ export default function WorkflowItemsTable({
     {
       key: 'state',
       label: t('workflows.colStatus'),
-      render: (row) => <StatusBadge status={row.state} />,
+      // A freeze leaves `state` untouched, so it needs its own badge — without
+      // this a suspended item is indistinguishable from a running one.
+      render: (row) => (
+        <>
+          <StatusBadge status={row.state} />
+          {row.frozen_at && <StatusBadge status="frozen" />}
+        </>
+      ),
     },
     { key: 'opened_at', label: t('workflows.colOpened'), render: (r) => formatAt(r.opened_at) },
     { key: 'closed_at', label: t('workflows.colClosed'), render: (r) => formatAt(r.closed_at) },
@@ -180,7 +187,9 @@ export default function WorkflowItemsTable({
               : t('workflows.restore')}
           </Button>
         )}
-        {!row.closed_at && (
+        {/* A frozen item refuses every action until its workflow is
+            unarchived, so offering Cancel here would only produce a 409. */}
+        {!row.closed_at && !row.frozen_at && (
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => void cancelOne(row)}>
             {t('workflows.cancelItem')}
           </Button>
@@ -219,6 +228,7 @@ export default function WorkflowItemsTable({
             <option value="open">{t('workflows.filterOpen')}</option>
             <option value="closed">{t('workflows.filterClosed')}</option>
             <option value="abandoned">{t('workflows.filterAbandoned')}</option>
+            <option value="frozen">{t('workflows.filterFrozen')}</option>
           </select>
         </div>
 

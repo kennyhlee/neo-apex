@@ -440,6 +440,7 @@ def test_lineage_instance_list_returns_open_and_closed_work_items(client, fake_d
     assert len(instances) == 2
     assert {i["closed_at"] for i in instances} == {"", "2026-08-02T00:00:00+00:00"}
     assert all("archived_from_state" in i for i in instances)
+    assert all("frozen_at" in i for i in instances)
 
 
 def test_lineage_instance_list_tolerates_a_tenant_without_the_archive_columns(client, fake_dc):
@@ -453,3 +454,4 @@ def test_lineage_instance_list_tolerates_a_tenant_without_the_archive_columns(cl
     resp = client.get(f"/api/workflows/{TENANT}/definitions/wd-legacy-cols/instances")
     assert resp.status_code == 200
     assert resp.json()["instances"][0]["archived_from_state"] == ""
+    assert resp.json()["instances"][0]["frozen_at"] == ""

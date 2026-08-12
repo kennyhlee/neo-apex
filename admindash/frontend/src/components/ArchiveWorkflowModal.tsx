@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { postDefinitionAction, WorkflowApiError } from '../api/workflows.ts';
 import Modal from './ui/Modal.tsx';
@@ -15,30 +15,29 @@ interface ArchiveWorkflowModalProps {
    * on the lineage's `definition_id`. */
   entityId: string;
   workflowName: string;
+  /** Open work items that will be frozen (or abandoned, under force). Drives
+   * the warning copy; 0 means the workflow has already drained. */
+  openInstances: number;
 }
 
 /**
- * Two-stage archive confirm.
+ * Archive confirm.
  *
- * Stage 1 attempts a plain archive. The backend gates it on every work item
- * being in an end state, so a workflow with open work comes back 409 with
- * `detail.open_instances`; that flips this modal into stage 2, which names the
- * count and offers force-archive as an explicit, clearly-warned second choice.
+ * A plain archive is non-destructive: whatever is still in flight is FROZEN,
+ * and unarchiving thaws it back to exactly where it paused. So this is a
+ * confirm, not a gate — the operator is told what freezing means and proceeds.
  *
- * Force is deliberately never the default and never autofocused: it abandons
- * live work families are mid-way through, and after unarchiving each item has
- * to be restored by hand.
+ * Force is the separate destructive path, shown only when there is in-flight
+ * work to destroy: it abandons those items permanently, and after unarchiving
+ * each one must be restored by hand. It is deliberately never the default,
+ * never autofocused, and always carries its consequence in the same view.
  */
 export default function ArchiveWorkflowModal({
-  open, onClose, onArchived, tenant, entityId, workflowName,
+  open, onClose, onArchived, tenant, entityId, workflowName, openInstances,
 }: ArchiveWorkflowModalProps) {
   const { t } = useTranslation();
-  const [blockedCount, setBlockedCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  /** Stage 1 fires once per open. A ref (not state) so it cannot re-trigger on
-   * the re-render its own setState causes. */
-  const attempted = useRef(false);
 
   const run = useCallback(async (force: boolean) => {
     setBusy(true);
@@ -48,33 +47,24 @@ export default function ArchiveWorkflowModal({
       onArchived();
       onClose();
     } catch (e) {
-      const openInstances =
+      // The backend refuses an archive from any lineage state but `deprecated`.
+      // The list page already hides the button in that case, so this is the
+      // stale-view path: say the actionable thing rather than "failed".
+      const reason =
         e instanceof WorkflowApiError && e.status === 409
-          ? (e.body as { detail?: { open_instances?: number } } | undefined)?.detail?.open_instances
+          ? (e.body as { detail?: { reason?: string } } | undefined)?.detail?.reason
           : undefined;
-      if (typeof openInstances === 'number') {
-        setBlockedCount(openInstances);
-      } else {
-        setError(t('workflows.archiveFailed'));
-      }
+      setError(
+        reason === 'not_deprecated'
+          ? t('workflows.archiveNeedsDeprecate')
+          : t('workflows.archiveFailed'),
+      );
     } finally {
       setBusy(false);
     }
   }, [tenant, entityId, onArchived, onClose, t]);
 
-  useEffect(() => {
-    if (!open) {
-      attempted.current = false;
-      setBlockedCount(null);
-      setError(null);
-      return;
-    }
-    if (attempted.current) return;
-    attempted.current = true;
-    void run(false);
-  }, [open, run]);
-
-  const blocked = blockedCount !== null;
+  const hasOpenWork = openInstances > 0;
 
   return (
     <Modal
@@ -89,24 +79,29 @@ export default function ArchiveWorkflowModal({
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             {t('common.cancel')}
           </Button>
-          {blocked && (
-            <Button variant="danger" onClick={() => void run(true)} disabled={busy}>
-              {t('workflows.archiveForce')}
-            </Button>
-          )}
+          <Button variant="primary" onClick={() => void run(false)} disabled={busy}>
+            {t('workflows.archive')}
+          </Button>
         </>
       }
     >
       <div className="archive-workflow-modal">
-        {!blocked && !error && <p>{t('workflows.archiveBody')}</p>}
-        {blocked && (
+        <p>{t('workflows.archiveBody')}</p>
+
+        {hasOpenWork && (
           <>
             <p className="archive-workflow-blocked">
-              {t('workflows.archiveBlocked').replace('{count}', String(blockedCount))}
+              {t('workflows.archiveFreezes').replace('{count}', String(openInstances))}
             </p>
-            <p className="archive-workflow-warning">{t('workflows.archiveForceWarning')}</p>
+            <div className="archive-workflow-force">
+              <p className="archive-workflow-warning">{t('workflows.archiveForceWarning')}</p>
+              <Button variant="danger" size="sm" onClick={() => void run(true)} disabled={busy}>
+                {t('workflows.archiveForce')}
+              </Button>
+            </div>
           </>
         )}
+
         {error && <p role="alert" className="archive-workflow-error">{error}</p>}
       </div>
     </Modal>

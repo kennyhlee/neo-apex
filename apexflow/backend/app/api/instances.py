@@ -181,6 +181,7 @@ def list_lineage_instances_route(tenant_id: str, definition_id: str,
         "opened_at": r.get("opened_at", "") or "",
         "closed_at": r.get("closed_at", "") or "",
         "archived_from_state": r.get("archived_from_state", "") or "",
+        "frozen_at": r.get("frozen_at", "") or "",
     } for r in rows]}
 
 
