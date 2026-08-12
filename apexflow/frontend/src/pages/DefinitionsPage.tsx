@@ -99,6 +99,8 @@ export default function DefinitionsPage() {
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   const [retireTarget, setRetireTarget] = useState<DefinitionListEntry | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DefinitionListEntry | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [retiring, setRetiring] = useState(false);
 
   // `load` is the reusable reload path — called from the retry button and
@@ -342,6 +344,28 @@ export default function DefinitionsPage() {
     }
   }
 
+  /** Discarding an unwanted draft is an authoring action, so it lives here as
+   * well as in AdminDash. Only `draft` rows are deletable — the backend's
+   * `delete_definition` 409s on published/superseded, since a superseded row
+   * is the pinned definition for every instance still running on it. */
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await lifecycleAction(tenantId, deleteTarget.entity_id, 'delete');
+      toast({
+        message: t('definitions.deleteToast').replace('{name}', deleteTarget.name),
+        tone: 'success',
+      });
+      setDeleteTarget(null);
+      void load();
+    } catch (err) {
+      toast({ message: errorMessage(err, 'definitions.deleteFailed'), tone: 'danger' });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   function openRetireModal(entry: DefinitionListEntry) {
     setRetireTarget(entry);
   }
@@ -446,9 +470,14 @@ export default function DefinitionsPage() {
   function rowActions(row: DefinitionListEntry) {
     if (row.status === 'draft') {
       return (
-        <Button variant="secondary" size="sm" onClick={() => navigate(`/definitions/${row.entity_id}`)}>
-          {t('definitions.actions.openEditor')}
-        </Button>
+        <div className="definitions-row-actions">
+          <Button variant="secondary" size="sm" onClick={() => navigate(`/definitions/${row.entity_id}`)}>
+            {t('definitions.actions.openEditor')}
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => setDeleteTarget(row)}>
+            {t('definitions.actions.delete')}
+          </Button>
+        </div>
       );
     }
 
@@ -660,6 +689,32 @@ export default function DefinitionsPage() {
             {t('definitions.archiveFreezes').replace('{n}', String(retireTarget.open_instances))}
           </p>
         )}
+      </Modal>
+
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => (!deleting ? setDeleteTarget(null) : undefined)}
+        title={t('definitions.deleteConfirmTitle')}
+        subtitle={deleteTarget?.name}
+        dismissOnBackdrop={!deleting}
+        dismissOnEscape={!deleting}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void confirmDelete()}
+              loading={deleting}
+              loadingText={t('definitions.deleting')}
+            >
+              {t('definitions.actions.delete')}
+            </Button>
+          </>
+        }
+      >
+        <p>{t('definitions.deleteConfirmBody')}</p>
       </Modal>
     </div>
   );
