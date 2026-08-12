@@ -1,8 +1,55 @@
 # Workflow Archive Lifecycle — Design
 
 Date: 2026-08-11
-Status: Draft — awaiting review
+Status: Implemented, with the amendment below
 Scope: apexflow backend (service + API), admindash (backend proxy + frontend), apexflow frontend (button rewiring)
+
+## Amendment — 2026-08-11, after the first implementation landed
+
+The requirements changed once the first version was working. Where this
+amendment and the body below disagree, **the amendment wins**; the body is kept
+because its reasoning about identity, wire shapes, and the binder-error
+constraint is all still load-bearing.
+
+1. **Archive is reachable only from `deprecated`.** The lifecycle is a ladder:
+   `active --deprecate-> deprecated --archive-> archived`. Deprecating is the
+   window in which mid-flight work is allowed to drain, so it is a required
+   step rather than an alternative. Archiving from `active` is 409
+   `{"reason": "not_deprecated"}`.
+
+2. **The open-work-item gate (R2) is gone**, replaced by that ordering.
+   Archiving no longer refuses when work is in flight — it **freezes** it.
+
+3. **Freeze replaces the R2 gate as the normal path.** A frozen work item is
+   suspended: `frozen_at` is stamped and `state` is left ALONE, so thawing has
+   nothing to restore and cannot drift. It is not closed (`closed_at` stays
+   empty), because the work genuinely is unfinished. Every action returns 409
+   `{"reason": "frozen"}` while suspended. Magic links are deliberately NOT
+   revoked — a reversible pause should not cost a link re-issue.
+
+4. **`unarchive` thaws every frozen item and returns the lineage to
+   `deprecated`**, not `active`. That is provably where the archive was entered
+   from; landing on `active` would silently reopen intake nobody asked to
+   reopen. `reactivate` remains the separate, deliberate step for that.
+
+5. **R5 (no automatic revival) now applies only to the `force` path.** Force
+   archive still abandons in-flight work permanently, still records
+   `archived_from_state`, and unarchive still leaves those items alone for an
+   administrator to `restore_instance` one at a time. The two paths coexist:
+   archive freezes, force-archive abandons.
+
+6. **New: a `draft` definition can be deleted.** `delete_definition` 409s
+   `{"reason": "not_draft"}` on a `published` or `superseded` row — the latter
+   is the pinned definition for every instance still running on that version,
+   so deleting it would strand them. Implemented via DataCore's row-level
+   `/archive` soft delete, which is **unrelated** to this document's lineage
+   `archived` status despite the shared word.
+
+The consequence for the error table near the end: "archive with open items, no
+force → 409 `{open_instances: N}`" no longer happens. Add "archive from a
+non-deprecated lineage → 409 `{reason: not_deprecated}`", "any action on a
+frozen work item → 409 `{reason: frozen}`", and "delete a non-draft row → 409
+`{reason: not_draft}`".
 
 ## Problem
 

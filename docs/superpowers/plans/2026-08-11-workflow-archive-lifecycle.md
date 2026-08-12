@@ -10,6 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-11-workflow-archive-lifecycle-design.md`
 
+> **STATUS: executed, then superseded in part.** All 12 tasks below shipped, but
+> the requirements changed immediately afterwards — archive is now gated on the
+> lineage being `deprecated`, freezes in-flight work instead of blocking on it,
+> and drafts can be deleted. Read the **Amendment** at the top of the spec
+> before treating any task here as current; the follow-up work is not written
+> up as tasks because it landed directly.
+
 ## Global Constraints
 
 - **Vocabulary:** "workflow" = definition **lineage** (`definition_id`); "work item" = one **`workflow_instance`**. A `workflow_item` row is a step inside an instance and is NOT touched by this plan.
