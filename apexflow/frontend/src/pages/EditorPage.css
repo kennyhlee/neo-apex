@@ -163,3 +163,12 @@
   .editor-layout { grid-template-columns: 1fr; }
   .editor-rail { position: static; }
 }
+
+/* The editor's only exit besides Publish — creation lands you here with the
+   draft already persisted, so a way back is not optional. */
+.editor-back-link {
+  display: inline-block;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--accent-ink);
+}

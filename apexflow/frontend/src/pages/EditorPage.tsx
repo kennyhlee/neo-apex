@@ -3,7 +3,7 @@
 // editor and Task 9's live preview pane, plus a right rail of validation
 // errors. Route: `/definitions/:entityId`.
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useToast } from '../hooks/useToast.ts';
@@ -13,6 +13,8 @@ import PreviewPane from '../editor/PreviewPane.tsx';
 import PublishDialog from '../editor/PublishDialog.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
+import { Modal } from '../components/ui/Modal.tsx';
+import { lifecycleAction } from '../api/designer.ts';
 import type { ChannelAccess } from '../types/designer.ts';
 import './EditorPage.css';
 
@@ -28,6 +30,8 @@ export default function EditorPage() {
   const store = useDraftStore(tenantId, entityId);
   const [tab, setTab] = useState<EditorTab>('stages');
   const [publishBusy, setPublishBusy] = useState(false);
+  const [showDiscard, setShowDiscard] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
 
   async function handleOpenPublish() {
@@ -99,9 +103,38 @@ export default function EditorPage() {
           ? t('editor.save.saved')
           : null;
 
+  /**
+   * Cancel out of workflow creation.
+   *
+   * Both creation paths (blank and from-template) persist the draft BEFORE
+   * navigating here, so "cancel" cannot just navigate away — that leaves an
+   * orphan draft the author never wanted. Discard deletes the row and returns
+   * to the list. Draft-only, matching `delete_definition`'s own gate: a
+   * published or superseded row 409s, and a superseded one is the pinned
+   * definition for every instance still running on it.
+   */
+  async function handleDiscard() {
+    if (!entityId) return;
+    setDiscarding(true);
+    try {
+      await lifecycleAction(tenantId, entityId, 'delete');
+      toast({ message: t('editor.discardToast'), tone: 'success' });
+      navigate('/');
+    } catch {
+      toast({ message: t('editor.discardFailed'), tone: 'danger' });
+      setDiscarding(false);
+    }
+  }
+
   return (
     <div className="editor-page">
       <header className="page-header">
+        {/* The editor had no exit at all: creation persists the draft then
+            drops you here, so without this the only way out was the global
+            nav or the browser back button. */}
+        <Link className="editor-back-link" to="/">
+          {t('editor.backToWorkflows')}
+        </Link>
         <h1 className="page-title">
           {def.name}
           <span className="page-subtitle">{t('editor.versionLabel').replace('{v}', String(def.version))}</span>
@@ -136,6 +169,14 @@ export default function EditorPage() {
                 </select>
               </label>
               <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowDiscard(true)}
+                disabled={store.saving || publishBusy}
+              >
+                {t('editor.discard.button')}
+              </Button>
+              <Button
                 variant="primary"
                 size="sm"
                 onClick={() => void handleOpenPublish()}
@@ -149,6 +190,33 @@ export default function EditorPage() {
           )}
         </div>
       </header>
+
+      <Modal
+        open={showDiscard}
+        onClose={() => (!discarding ? setShowDiscard(false) : undefined)}
+        title={t('editor.discard.title')}
+        subtitle={def.name}
+        size="sm"
+        dismissOnBackdrop={!discarding}
+        dismissOnEscape={!discarding}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowDiscard(false)} disabled={discarding}>
+              {t('editor.discard.keep')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void handleDiscard()}
+              loading={discarding}
+              loadingText={t('editor.discard.discarding')}
+            >
+              {t('editor.discard.confirm')}
+            </Button>
+          </>
+        }
+      >
+        <p>{t('editor.discard.body')}</p>
+      </Modal>
 
       {def.status === 'draft' && (
         <PublishDialog
