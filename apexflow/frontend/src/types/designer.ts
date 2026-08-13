@@ -244,7 +244,8 @@ export interface PrimitivesCatalog {
 // (api/definitions.py:38-56)
 
 export type DefinitionLifecycleAction =
-  | 'publish' | 'deprecate' | 'reactivate' | 'archive' | 'unarchive' | 'delete';
+  | 'publish' | 'deprecate' | 'reactivate' | 'archive' | 'unarchive' | 'delete'
+  | 'new_draft';
 
 /**
  * The raw updated `workflow_definition` DataCore row that every lifecycle
