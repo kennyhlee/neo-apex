@@ -97,12 +97,6 @@ export function isArchived(status: LineageStatus): boolean {
   return status === 'archived' || status === 'retired';
 }
 
-/** Archive is reachable only from `deprecated` — mirrors
- * `archive_definition`'s own gate so the UI never offers an action the backend
- * will refuse. */
-export function canArchive(status: LineageStatus): boolean {
-  return status === 'deprecated';
-}
 export type ChannelAccess = 'staff_only' | 'family';
 
 /**

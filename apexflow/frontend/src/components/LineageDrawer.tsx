@@ -29,6 +29,12 @@ export interface LineageDrawerProps {
   onDeleteDraft: (entry: DefinitionListEntry) => void;
   onNewDraft: (entityId: string) => void;
   busy?: boolean;
+  /** True only while a `new_draft` call is actually in flight — narrower than
+   * `busy`, which disables every button in the drawer during ANY mutation.
+   * Drives the New version button's own loading label, not just whether it's
+   * clickable, so a slow request reads as "working" rather than as a button
+   * that stopped responding. */
+  newDraftBusy?: boolean;
 }
 
 /** Label + hint i18n keys per rung, so the ladder reads as an explanation
@@ -47,7 +53,7 @@ const ACTION_LABEL: Record<RungAction, string> = {
 };
 
 export default function LineageDrawer({
-  row, onClose, onOpenEditor, onAction, onDeleteDraft, onNewDraft, busy = false,
+  row, onClose, onOpenEditor, onAction, onDeleteDraft, onNewDraft, busy = false, newDraftBusy = false,
 }: LineageDrawerProps) {
   const { t } = useTranslation();
   if (!row) return null;
@@ -138,6 +144,8 @@ export default function LineageDrawer({
                 variant="secondary"
                 size="sm"
                 disabled={busy}
+                loading={newDraftBusy}
+                loadingText={t('definitions.newDraftCreating')}
                 onClick={() => onNewDraft(row.published!.entity_id)}
               >
                 {t('definitions.actions.newDraft')}

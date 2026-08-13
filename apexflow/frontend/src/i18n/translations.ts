@@ -44,8 +44,6 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     'definitions.columns.name': 'Name',
     'definitions.columns.definitionId': 'Workflow ID',
-    'definitions.columns.version': 'Version',
-    'definitions.columns.status': 'Status',
     'definitions.columns.lineageStatus': 'Lineage',
     'definitions.columns.health': 'Health',
     'definitions.columns.openInstances': 'Open instances',
@@ -487,8 +485,6 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     'definitions.columns.name': '名称',
     'definitions.columns.definitionId': '工作流 ID',
-    'definitions.columns.version': '版本',
-    'definitions.columns.status': '状态',
     'definitions.columns.lineageStatus': '生命周期',
     'definitions.columns.health': '健康状态',
     'definitions.columns.openInstances': '进行中的申请',

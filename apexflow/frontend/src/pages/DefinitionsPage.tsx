@@ -102,7 +102,10 @@ export default function DefinitionsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
 
-  const [newDraftBusyId, setNewDraftBusyId] = useState<string | null>(null);
+  // At most one lineage can have a `new_draft` in flight at a time — the
+  // drawer for a different row can't even be open while this one's open, so
+  // this only ever needs to be a plain boolean, not a per-entity id.
+  const [newDraftBusy, setNewDraftBusy] = useState(false);
 
   // Holds a `definition_id` rather than a `LineageRow` object, so the drawer
   // re-reads the freshly-collapsed row out of `lineageRows` after every
@@ -194,14 +197,14 @@ export default function DefinitionsPage() {
   }
 
   /**
-   * Translated badge label for a raw backend enum value — `status`,
-   * `lineage_status`, and `health` are all wire values like "deprecated",
-   * never themselves user-facing copy. Falls back to the raw value (not
-   * the untranslated i18n key) if a value somehow isn't in the map, so an
-   * unexpected value degrades to "shows the raw word" rather than "shows
-   * a literal translation key like definitions.status.foo".
+   * Translated badge label for a raw backend enum value — `lineage_status`
+   * and `health` are both wire values like "deprecated", never themselves
+   * user-facing copy. Falls back to the raw value (not the untranslated
+   * i18n key) if a value somehow isn't in the map, so an unexpected value
+   * degrades to "shows the raw word" rather than "shows a literal
+   * translation key like definitions.lineageStatus.foo".
    */
-  function badgeLabel(prefix: 'status' | 'lineageStatus' | 'health', value: string): string {
+  function badgeLabel(prefix: 'lineageStatus' | 'health', value: string): string {
     const key = `definitions.${prefix}.${value}`;
     const translated = t(key);
     return translated === key ? value : translated;
@@ -282,7 +285,7 @@ export default function DefinitionsPage() {
   // --- New draft from published ----------------------------------------
 
   async function handleNewDraft(entityId: string) {
-    setNewDraftBusyId(entityId);
+    setNewDraftBusy(true);
     try {
       const created = await newDraft(tenantId, entityId);
       toast({
@@ -309,7 +312,7 @@ export default function DefinitionsPage() {
       toast({ message: t(key), tone: 'danger' });
       void load();
     } finally {
-      setNewDraftBusyId(null);
+      setNewDraftBusy(false);
     }
   }
 
@@ -343,7 +346,15 @@ export default function DefinitionsPage() {
    */
   function handleLadderAction(entityId: string, action: RungAction) {
     const entry = lineageRows.find((r) => r.published?.entity_id === entityId)?.published;
-    if (!entry) return;
+    if (!entry) {
+      // Only reachable from a stale drawer — the lineage's published row
+      // moved or vanished (superseded, deleted) since this list loaded. A
+      // silent no-op here would look like the button is simply broken;
+      // reload and say so instead.
+      toast({ message: t('definitions.lifecycleError'), tone: 'danger' });
+      void load();
+      return;
+    }
     if (action === 'archive') { setRetireTarget(entry); return; }
     if (action === 'unarchive') { void handleUnarchive(entry); return; }
     setLifecycleTarget({ entry, action });
@@ -409,9 +420,11 @@ export default function DefinitionsPage() {
       void load();
     } catch (err) {
       // Archiving no longer refuses on open work — it freezes it — so the only
-      // 409 left here is "lineage is not deprecated", which the row actions
-      // already prevent. Anything reaching this point is a stale view or a
-      // genuine failure, and reads the same to the operator.
+      // 409 left here is "lineage is not deprecated", which the drawer's
+      // ladder already prevents (Archive renders greyed with a reason
+      // outside `deprecated` — see `lifecycleLadder`'s `blockedReasonKey`).
+      // Anything reaching this point is a stale view or a genuine failure,
+      // and reads the same to the operator.
       toast({ message: errorMessage(err, 'definitions.lifecycleError'), tone: 'danger' });
       setRetireTarget(null);
     } finally {
@@ -579,6 +592,33 @@ export default function DefinitionsPage() {
         }}
       />
 
+      {/*
+       * Mounted here — BEFORE the four confirm Modals below, not after them —
+       * on purpose. `Modal` renders its overlay inline at its own JSX
+       * position rather than through a portal (ui/Modal.tsx), and every
+       * overlay (drawer and dialog alike) shares one `--z-modal` value
+       * (styles/theme.css), so with equal z-index it is DOM TREE ORDER that
+       * decides which overlay's `inset: 0` catches a click. Every confirm
+       * below is reachable only from a button inside this drawer, so if the
+       * drawer were the LATER sibling, opening a confirm from it would still
+       * leave the drawer painted on top: the confirm's own buttons would be
+       * visually behind the drawer's overlay, and a click meant for
+       * "Deprecate" would land on the drawer's backdrop instead and close
+       * the drawer without ever calling the mutation. Mounting the drawer
+       * first makes it the EARLIEST of the five overlays, so any confirm it
+       * opens paints on top of it instead of under it.
+       */}
+      <LineageDrawer
+        row={drawerRow}
+        onClose={() => setDrawerLineageId(null)}
+        onOpenEditor={(entityId) => navigate(`/definitions/${entityId}`)}
+        onAction={handleLadderAction}
+        onDeleteDraft={(entry) => setDeleteTarget(entry)}
+        onNewDraft={(entityId) => void handleNewDraft(entityId)}
+        busy={newDraftBusy || lifecycleBusy || retiring || deleting}
+        newDraftBusy={newDraftBusy}
+      />
+
       {/* New workflow (blank draft) */}
       <Modal
         open={showNewModal}
@@ -710,16 +750,6 @@ export default function DefinitionsPage() {
       >
         <p>{t('definitions.deleteConfirmBody')}</p>
       </Modal>
-
-      <LineageDrawer
-        row={drawerRow}
-        onClose={() => setDrawerLineageId(null)}
-        onOpenEditor={(entityId) => navigate(`/definitions/${entityId}`)}
-        onAction={handleLadderAction}
-        onDeleteDraft={(entry) => setDeleteTarget(entry)}
-        onNewDraft={(entityId) => void handleNewDraft(entityId)}
-        busy={newDraftBusyId !== null || lifecycleBusy || retiring || deleting}
-      />
     </div>
   );
 }
