@@ -87,12 +87,16 @@ describe('collapseLineages', () => {
   });
 
   it('takes open_instances as the max across versions', () => {
+    // The draft deliberately carries the HIGHER count. With published as the
+    // representative row, a fixture where published also holds the max cannot
+    // distinguish `Math.max(...)` from `rep.open_instances` — the assertion
+    // would pass either way and verify nothing.
     const rows = collapseLineages([
       entry({ entity_id: 'pub', version: 3, status: 'published', open_instances: 14 }),
-      entry({ entity_id: 'drf', version: 4, status: 'draft', open_instances: 0 }),
+      entry({ entity_id: 'drf', version: 4, status: 'draft', open_instances: 21 }),
     ]);
 
-    expect(rows[0].open_instances).toBe(14);
+    expect(rows[0].open_instances).toBe(21);
   });
 
   it('separates distinct lineages and sorts them by name', () => {
