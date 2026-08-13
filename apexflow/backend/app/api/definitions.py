@@ -69,6 +69,8 @@ def definition_action(tenant_id: str, entity_id: str, body: ActionRequest,
             unfreeze_instance_fn=_unfreeze_one)
     if body.action == "delete":
         return defs.delete_definition(tenant_id, entity_id, token)
+    if body.action == "new_draft":
+        return defs.new_draft_definition(tenant_id, entity_id, token)
 
     raise HTTPException(400, f"Unknown action: {body.action!r}")
 
