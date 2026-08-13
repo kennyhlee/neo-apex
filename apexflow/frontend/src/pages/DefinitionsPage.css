@@ -23,15 +23,10 @@
   text-decoration: underline;
 }
 
-.definitions-row-actions {
-  display: flex;
+.definitions-live {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  /* No wrapping: with the lifecycle controls now behind one overflow menu
-     there are only ever two controls, and letting them stack put the menu on
-     its own line under the button. */
-  flex-wrap: nowrap;
-  justify-content: flex-end;
   white-space: nowrap;
 }
 

@@ -1,29 +1,44 @@
-// Home page: definitions list — lineages grouped (published + draft rows
-// per lineage), lifecycle controls, and the two workflow-creation entry
-// points (blank draft / from template). Route: `/`.
+// Home page: definitions list — one row per workflow LINEAGE (not per
+// version), an `Open` button that lands on whichever version is being
+// worked on, and a click-through drawer that holds everything else. Route:
+// `/`.
 //
-// Binding notes (task-5-brief.md, docs/superpowers/plans/2026-08-06-apexflow
+// Binding notes (task-6-brief.md, docs/superpowers/plans/2026-08-06-apexflow
 // -plan2-interface-map.md §2, §8):
 // - listDefinitions returns EVERY workflow_definition row (draft/published/
-//   superseded) — this page filters to draft+published only; superseded
-//   rows are historical and not actionable (api/designer.py's own docstring:
-//   "frontend groups by definition_id into lineages").
-// - v1 badge set is status/lineage_status/health ONLY — no new-fields hint.
+//   superseded) — `collapseLineages` (utils/lineage.ts) is what filters to
+//   draft+published and folds each lineage's rows into one `LineageRow`;
+//   superseded rows are historical and not actionable (api/designer.py's own
+//   docstring: "frontend groups by definition_id into lineages").
+// - A lineage that is both published AND drafted used to occupy two table
+//   rows with different action sets. `collapseLineages` makes that
+//   impossible: `LineageRow.published`/`.draft` hold at most one of each,
+//   and the table's `Live` column renders both — the published version plus
+//   a `vN draft` chip — in the one row. `primaryEntityId` (same module)
+//   picks which version the row's single `Open` button lands on: the draft
+//   wins, since on an authoring surface that's the version being worked on.
+// - Everything the old `⋯` overflow menu held (deprecate/reactivate/archive/
+//   unarchive, delete draft, new draft) now lives in `LineageDrawer`,
+//   reached by clicking the row body. The drawer renders the lifecycle as a
+//   ladder (utils/lifecycleLadder.ts) instead of a menu, so an illegal move
+//   (e.g. Archive on an `active` lineage) shows greyed WITH ITS REASON
+//   rather than being silently omitted. The drawer raises intent only —
+//   every confirm modal, API call, toast, and reload stays here, keyed off
+//   `drawerLineageId` (a definition_id, not a captured row) so the drawer
+//   re-reads the freshly-collapsed row after every mutation instead of
+//   showing a stale snapshot.
 // - deprecate/reactivate/archive/unarchive all operate on the LINEAGE's
-//   published row
-//   (app/workflows/definitions.py's `_require_published_row` 409s on any
-//   other status) — those actions render only on published rows.
-// - "New draft from published" is a generic-write copy: fetch the bundle
-//   for the published row's machine/steps, then createEntity with the same
-//   definition_id lineage, version + 1, status "draft". Matches the shape
-//   `templates/enrollment.py`'s seed_enrollment_template and
-//   scripts/apexflow-reseed-dev.py's push both write (map §3/§8): machine/
-//   steps are JSON-encoded STRINGS on the wire, not nested objects.
-//   Hidden for an ARCHIVED lineage (`isArchived`, which covers both the
-//   current "archived" value and the legacy "retired" one): a new draft
-//   copies `def.lineage_status` verbatim onto the new row, so a "New draft"
-//   off an archived lineage would carry that status forward onto a fresh
-//   draft. Unarchive first, then draft.
+//   published row (app/workflows/definitions.py's `_require_published_row`
+//   409s on any other status) — `handleLadderAction` resolves the ladder's
+//   `entityId` back to that row's `LineageRow.published` entry.
+// - "New draft from published" is now a single server-side action
+//   (`api/designer.ts`'s `newDraft`, POST `.../actions {action: "new_draft"}`)
+//   rather than a client-side bundle-fetch-and-copy: the one-draft-per-
+//   lineage rule can only be enforced server-side, where two tabs open on
+//   this list can't both see "no draft" and both create one. Hidden in the
+//   drawer for an ARCHIVED lineage (`isArchived`, which covers both the
+//   current "archived" value and the legacy "retired" one) — see
+//   `LineageDrawer`'s own comment.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
@@ -31,12 +46,11 @@ import { useAuth } from '../hooks/useAuth.ts';
 import { useToast } from '../hooks/useToast.ts';
 import {
   ApiError,
-  getBundle,
   listDefinitions,
   lifecycleAction,
+  newDraft,
 } from '../api/designer.ts';
 import { createEntity } from '../api/client.ts';
-import { canArchive, isArchived } from '../types/designer.ts';
 import type {
   DefinitionListEntry,
   DefinitionLifecycleAction,
@@ -45,14 +59,13 @@ import DataTable, { type Column } from '../components/DataTable.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
-import RowMenu, { type RowMenuItem } from '../components/RowMenu.tsx';
+import { collapseLineages, primaryEntityId, type LineageRow } from '../utils/lineage.ts';
+import type { RungAction } from '../utils/lifecycleLadder.ts';
+import LineageDrawer from '../components/LineageDrawer.tsx';
 import './DefinitionsPage.css';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 const DEFAULT_PAGE_SIZE = 20;
-
-/** `active` sorts before `deprecated` sorts before `archived`. */
-const STATUS_ORDER: Record<string, number> = { published: 0, draft: 1 };
 
 function slugify(name: string): string {
   const slug = name
@@ -90,6 +103,11 @@ export default function DefinitionsPage() {
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
 
   const [newDraftBusyId, setNewDraftBusyId] = useState<string | null>(null);
+
+  // Holds a `definition_id` rather than a `LineageRow` object, so the drawer
+  // re-reads the freshly-collapsed row out of `lineageRows` after every
+  // reload instead of rendering a snapshot captured before the action ran.
+  const [drawerLineageId, setDrawerLineageId] = useState<string | null>(null);
 
   const [showNewModal, setShowNewModal] = useState(false);
   const [newName, setNewName] = useState('');
@@ -154,32 +172,20 @@ export default function DefinitionsPage() {
     };
   }, [tenantId]);
 
-  // Draft + published rows only — superseded rows carry no live action and
-  // clutter a page whose job is "what can I do right now" (binding rule).
-  // Sort by lineage (definition_id), published row before its draft.
-  const visibleRows = useMemo(() => {
-    return entries
-      .filter((e) => e.status === 'draft' || e.status === 'published')
-      .slice()
-      .sort((a, b) => {
-        if (a.definition_id !== b.definition_id) {
-          const an = a.name || a.definition_id;
-          const bn = b.name || b.definition_id;
-          return an.localeCompare(bn) || a.definition_id.localeCompare(b.definition_id);
-        }
-        return (STATUS_ORDER[a.status] ?? 2) - (STATUS_ORDER[b.status] ?? 2);
-      });
-  }, [entries]);
+  // One row per lineage — draft + published rows folded together, superseded
+  // rows dropped (see module comment / utils/lineage.ts).
+  const lineageRows = useMemo(() => collapseLineages(entries), [entries]);
 
-  const lineageCount = useMemo(
-    () => new Set(visibleRows.map((e) => e.definition_id)).size,
-    [visibleRows],
+  const lineageCount = lineageRows.length;
+  const total = lineageRows.length;
+  const pageRows = useMemo(
+    () => lineageRows.slice((page - 1) * pageSize, page * pageSize),
+    [lineageRows, page, pageSize],
   );
 
-  const total = visibleRows.length;
-  const pageRows = useMemo(
-    () => visibleRows.slice((page - 1) * pageSize, page * pageSize),
-    [visibleRows, page, pageSize],
+  const drawerRow = useMemo(
+    () => lineageRows.find((r) => r.definition_id === drawerLineageId) ?? null,
+    [lineageRows, drawerLineageId],
   );
 
   function handlePageSizeChange(size: number) {
@@ -275,33 +281,33 @@ export default function DefinitionsPage() {
 
   // --- New draft from published ----------------------------------------
 
-  async function handleNewDraft(entry: DefinitionListEntry) {
-    setNewDraftBusyId(entry.entity_id);
+  async function handleNewDraft(entityId: string) {
+    setNewDraftBusyId(entityId);
     try {
-      const bundle = await getBundle(tenantId, entry.entity_id);
-      const def = bundle.definition;
-      // `def.version` is already coerced to a real number by getBundle
-      // (see api/designer.ts / utils/numeric.ts) — DataCore's flattened row
-      // would otherwise hand back the STRING "1", and "1" + 1 === "11" in
-      // JS, silently corrupting every draft's version past the first.
-      const nextVersion = def.version + 1;
-      const result = await createEntity(tenantId, 'workflow_definition', {
-        definition_id: def.definition_id,
-        name: def.name,
-        version: nextVersion,
-        status: 'draft',
-        lineage_status: def.lineage_status,
-        channel_access: def.channel_access,
-        machine: JSON.stringify(def.machine),
-        steps: JSON.stringify(def.steps),
-      });
+      const created = await newDraft(tenantId, entityId);
       toast({
-        message: t('definitions.newDraftToast').replace('{v}', String(nextVersion)),
+        message: t('definitions.newDraftToast').replace('{v}', String(created.version)),
         tone: 'success',
       });
-      navigate(`/definitions/${result.entity_id}`);
-    } catch {
-      toast({ message: t('definitions.newDraftError'), tone: 'danger' });
+      navigate(`/definitions/${created.entity_id}`);
+    } catch (err) {
+      // The two 409s the drawer's own gating should already prevent still
+      // reach here from a stale view — a second tab that opened a draft since
+      // this list loaded. Say which one it was rather than "try again".
+      const reason =
+        err instanceof ApiError
+        && err.body
+        && typeof err.body === 'object'
+        && 'detail' in err.body
+        && typeof (err.body as { detail?: unknown }).detail === 'object'
+          ? ((err.body as { detail: { reason?: string } }).detail.reason)
+          : undefined;
+      const key =
+        reason === 'draft_exists' ? 'definitions.newDraftDraftExists'
+        : reason === 'lineage_archived' ? 'definitions.newDraftArchived'
+        : 'definitions.newDraftError';
+      toast({ message: t(key), tone: 'danger' });
+      void load();
     } finally {
       setNewDraftBusyId(null);
     }
@@ -324,6 +330,23 @@ export default function DefinitionsPage() {
     } finally {
       setLifecycleBusy(false);
     }
+  }
+
+  /**
+   * The drawer's ladder raises one of four actions against an `entityId` —
+   * always the lineage's PUBLISHED row, per `LineageDrawer`'s own comment
+   * (`_require_published_row` 409s on anything else). This resolves that id
+   * back to the `LineageRow` holding it and routes to the same confirm-modal
+   * state / unconfirmed-mutation paths the old per-row buttons used —
+   * `archive` and `unarchive` keep their existing handling, `deprecate` and
+   * `reactivate` share the confirm modal below via `lifecycleTarget`.
+   */
+  function handleLadderAction(entityId: string, action: RungAction) {
+    const entry = lineageRows.find((r) => r.published?.entity_id === entityId)?.published;
+    if (!entry) return;
+    if (action === 'archive') { setRetireTarget(entry); return; }
+    if (action === 'unarchive') { void handleUnarchive(entry); return; }
+    setLifecycleTarget({ entry, action });
   }
 
   // --- Archive ------------------------------------------------------------
@@ -359,16 +382,18 @@ export default function DefinitionsPage() {
         tone: 'success',
       });
       setDeleteTarget(null);
+      // A never-published lineage's only row was this draft — after this
+      // delete, `load()` will make its lineage disappear entirely. Close the
+      // drawer now rather than leave it open on a row that's about to vanish.
+      if (!lineageRows.find((r) => r.definition_id === deleteTarget.definition_id)?.published) {
+        setDrawerLineageId(null);
+      }
       void load();
     } catch (err) {
       toast({ message: errorMessage(err, 'definitions.deleteFailed'), tone: 'danger' });
     } finally {
       setDeleting(false);
     }
-  }
-
-  function openRetireModal(entry: DefinitionListEntry) {
-    setRetireTarget(entry);
   }
 
   async function confirmRetire() {
@@ -396,7 +421,7 @@ export default function DefinitionsPage() {
 
   // --- Columns --------------------------------------------------------
 
-  const columns: Column<DefinitionListEntry>[] = [
+  const columns: Column<LineageRow>[] = [
     {
       key: 'name',
       label: 'Name',
@@ -411,24 +436,32 @@ export default function DefinitionsPage() {
       render: (row) => <code className="definitions-lineage-id">{row.definition_id}</code>,
     },
     {
-      key: 'version',
-      label: 'Version',
-      i18nKey: 'definitions.columns.version',
-      numeric: true,
-      render: (row) => <>v{row.version}</>,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      i18nKey: 'definitions.columns.status',
-      render: (row) => <StatusBadge status={row.status} label={badgeLabel('status', row.status)} />,
+      // `status` (draft/published) is no longer a row property — a lineage can
+      // be both at once — so it folds in here as a chip beside the live version.
+      key: 'live',
+      label: 'Live',
+      i18nKey: 'definitions.columns.live',
+      render: (row) => (
+        <span className="definitions-live">
+          {row.published ? `v${row.published.version}` : t('definitions.noPublished')}
+          {row.draft ? (
+            <StatusBadge
+              status="draft"
+              label={t('definitions.draftChip').replace('{v}', String(row.draft.version))}
+            />
+          ) : null}
+        </span>
+      ),
     },
     {
       key: 'lineage_status',
       label: 'Lineage',
       i18nKey: 'definitions.columns.lineageStatus',
       render: (row) => (
-        <StatusBadge status={row.lineage_status} label={badgeLabel('lineageStatus', row.lineage_status)} />
+        <StatusBadge
+          status={row.lineage_status}
+          label={badgeLabel('lineageStatus', row.lineage_status)}
+        />
       ),
     },
     {
@@ -450,7 +483,9 @@ export default function DefinitionsPage() {
       i18nKey: 'definitions.columns.channel',
       render: (row) => (
         <span className="definitions-channel">
-          {t(row.channel_access === 'family' ? 'definitions.channel.family' : 'definitions.channel.staffOnly')}
+          {t(row.channel_access === 'family'
+            ? 'definitions.channel.family'
+            : 'definitions.channel.staffOnly')}
           {row.family_url ? (
             <a
               className="definitions-family-link"
@@ -469,85 +504,20 @@ export default function DefinitionsPage() {
   ];
 
   /**
-   * One visible action per row plus an overflow menu.
-   *
-   * Every lifecycle control used to render as its own button, so a published
-   * row showed three similar-weight controls and the one an author actually
-   * reaches for — open the editor, or start the next version — competed with
-   * deprecate and archive. The common action stays a button; the rest move
-   * into the menu, destructive ones last.
+   * Exactly one control per row, matching AdminDash's Students and Families
+   * tables (row click opens a detail drawer; the row carries a single button).
+   * Everything the old `⋯` menu held now lives in the drawer, where a blocked
+   * lifecycle move can be shown WITH ITS REASON instead of silently omitted.
    */
-  function rowActions(row: DefinitionListEntry) {
-    if (row.status === 'draft') {
-      return (
-        <div className="definitions-row-actions">
-          <Button variant="secondary" size="sm" onClick={() => navigate(`/definitions/${row.entity_id}`)}>
-            {t('definitions.actions.openEditor')}
-          </Button>
-          <RowMenu
-            label={t('definitions.actions.moreFor').replace('{name}', row.name)}
-            items={[{
-              key: 'delete',
-              label: t('definitions.actions.delete'),
-              danger: true,
-              onSelect: () => setDeleteTarget(row),
-            }]}
-          />
-        </div>
-      );
-    }
-
-    // Published row. Lifecycle is gated on lineage_status exactly as the
-    // backend gates it (see module comment).
-    const menu: RowMenuItem[] = [];
-    if (row.lineage_status === 'active') {
-      menu.push({
-        key: 'deprecate',
-        label: t('definitions.actions.deprecate'),
-        onSelect: () => setLifecycleTarget({ entry: row, action: 'deprecate' }),
-      });
-    }
-    if (row.lineage_status === 'deprecated') {
-      menu.push({
-        key: 'reactivate',
-        label: t('definitions.actions.reactivate'),
-        onSelect: () => setLifecycleTarget({ entry: row, action: 'reactivate' }),
-      });
-    }
-    if (canArchive(row.lineage_status)) {
-      menu.push({
-        key: 'archive',
-        label: t('definitions.actions.retire'),
-        danger: true,
-        onSelect: () => openRetireModal(row),
-      });
-    }
-    if (isArchived(row.lineage_status)) {
-      menu.push({
-        key: 'unarchive',
-        label: t('definitions.actions.unarchive'),
-        onSelect: () => { void handleUnarchive(row); },
-      });
-    }
-
+  function rowActions(row: LineageRow) {
     return (
-      <div className="definitions-row-actions">
-        {!isArchived(row.lineage_status) && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleNewDraft(row)}
-            loading={newDraftBusyId === row.entity_id}
-            loadingText={t('definitions.newDraftCreating')}
-          >
-            {t('definitions.actions.newDraft')}
-          </Button>
-        )}
-        <RowMenu
-          label={t('definitions.actions.moreFor').replace('{name}', row.name)}
-          items={menu}
-        />
-      </div>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => navigate(`/definitions/${primaryEntityId(row)}`)}
+      >
+        {t('definitions.actions.open')}
+      </Button>
     );
   }
 
@@ -582,7 +552,7 @@ export default function DefinitionsPage() {
         </div>
       )}
 
-      <DataTable<DefinitionListEntry>
+      <DataTable<LineageRow>
         columns={columns}
         data={pageRows}
         total={total}
@@ -590,13 +560,14 @@ export default function DefinitionsPage() {
         pageSize={pageSize}
         loading={loading}
         onPageChange={setPage}
-        rowKey={(row) => row.entity_id}
-        rowLabel={(row) => `${row.name} v${row.version}`}
+        rowKey={(row) => row.definition_id}
+        rowLabel={(row) => row.name}
         caption={t('definitions.title')}
         pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
         onPageSizeChange={handlePageSizeChange}
         selectable={false}
         rowActions={rowActions}
+        onRowClick={(row) => setDrawerLineageId(row.definition_id)}
         emptyState={{
           title: t('definitions.emptyTitle'),
           description: t('definitions.emptyBody'),
@@ -739,6 +710,16 @@ export default function DefinitionsPage() {
       >
         <p>{t('definitions.deleteConfirmBody')}</p>
       </Modal>
+
+      <LineageDrawer
+        row={drawerRow}
+        onClose={() => setDrawerLineageId(null)}
+        onOpenEditor={(entityId) => navigate(`/definitions/${entityId}`)}
+        onAction={handleLadderAction}
+        onDeleteDraft={(entry) => setDeleteTarget(entry)}
+        onNewDraft={(entityId) => void handleNewDraft(entityId)}
+        busy={newDraftBusyId !== null || lifecycleBusy || retiring || deleting}
+      />
     </div>
   );
 }
