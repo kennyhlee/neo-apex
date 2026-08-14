@@ -44,12 +44,13 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     'definitions.columns.name': 'Name',
     'definitions.columns.definitionId': 'Workflow ID',
-    'definitions.columns.version': 'Version',
-    'definitions.columns.status': 'Status',
     'definitions.columns.lineageStatus': 'Lineage',
-    'definitions.columns.health': 'Health',
+    'definitions.columns.health': 'Model fit',
     'definitions.columns.openInstances': 'Open instances',
     'definitions.columns.channel': 'Channel',
+    'definitions.columns.live': 'Live',
+    'definitions.draftChip': 'v{v} draft',
+    'definitions.noPublished': '—',
 
     // Badge label overrides — StatusBadge's default label is the raw enum
     // value (fine in en-US only by accident); every value each column can
@@ -61,8 +62,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.lineageStatus.deprecated': 'Deprecated',
     'definitions.lineageStatus.retired': 'Retired',
     'definitions.lineageStatus.archived': 'Archived',
-    'definitions.health.current': 'Current',
-    'definitions.health.stale': 'Stale',
+    'definitions.health.current': 'Fit',
+    'definitions.health.stale': 'Incomplete',
     'definitions.health.broken': 'Broken',
     'definitions.health.superseded': 'Superseded',
 
@@ -70,9 +71,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.channel.family': 'Family',
     'definitions.channel.familyLinkLabel': 'Open family link',
 
-    'definitions.actions.openEditor': 'Open editor',
+    'definitions.actions.open': 'Open',
     'definitions.actions.newDraft': 'New version',
-    'definitions.actions.moreFor': 'More actions for {name}',
     'definitions.actions.deprecate': 'Deprecate',
     'definitions.actions.reactivate': 'Reactivate',
     'definitions.actions.retire': 'Archive',
@@ -95,6 +95,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.newDraftCreating': 'Creating…',
     'definitions.newDraftToast': 'Draft v{v} created.',
     'definitions.newDraftError': "Couldn't create a new draft. Try again.",
+    'definitions.newDraftDraftExists':
+      'This workflow already has an open draft. Open or delete it first.',
+    'definitions.newDraftArchived': "An archived workflow can't take a new draft.",
 
     'definitions.deprecateConfirmTitle': 'Deprecate this workflow?',
     'definitions.deprecateConfirmBody':
@@ -114,6 +117,31 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.retireToast': '"{name}" archived.',
     'definitions.unarchiveToast': '"{name}" unarchived. Frozen applications have resumed.',
     'definitions.unarchiveFailed': "Couldn't unarchive this workflow. Please try again.",
+
+    'definitions.drawer.versions': 'Versions',
+    'definitions.drawer.facts': 'Facts',
+    'definitions.drawer.lifecycle': 'Lifecycle',
+    'definitions.drawer.publishedVersion': 'v{v} published',
+    'definitions.drawer.draftVersion': 'v{v} draft',
+    'definitions.drawer.live': 'live',
+    'definitions.drawer.health': 'Model fit',
+    'definitions.drawer.channel': 'Channel',
+    'definitions.drawer.openItems': 'Open work items',
+    'definitions.drawer.frozenItems': 'Frozen work items',
+    'definitions.drawer.lifecycleAfterPublish':
+      'Lifecycle begins at first publish — every lifecycle action targets the published version.',
+    'definitions.drawer.newDraftBlockedArchived':
+      'Unarchive this workflow before starting a new version.',
+
+    'definitions.ladder.active': 'Active',
+    'definitions.ladder.activeHint': 'Accepting new work items.',
+    'definitions.ladder.deprecated': 'Deprecated',
+    'definitions.ladder.deprecatedHint': 'Stops new work. In-flight work continues.',
+    'definitions.ladder.archived': 'Archived',
+    'definitions.ladder.archivedHint': 'Freezes whatever is still in flight.',
+    'definitions.ladder.current': 'current',
+    'definitions.ladder.archiveNeedsDeprecated': 'Available once deprecated.',
+    'definitions.ladder.reactivateNeedsUnarchive': 'Unarchive first, then reactivate.',
 
     // Editor (step editor — Task 7)
     'editor.title': 'Editor',
@@ -457,12 +485,13 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     'definitions.columns.name': '名称',
     'definitions.columns.definitionId': '工作流 ID',
-    'definitions.columns.version': '版本',
-    'definitions.columns.status': '状态',
     'definitions.columns.lineageStatus': '生命周期',
-    'definitions.columns.health': '健康状态',
+    'definitions.columns.health': '模型匹配',
     'definitions.columns.openInstances': '进行中的申请',
     'definitions.columns.channel': '渠道',
+    'definitions.columns.live': '当前版本',
+    'definitions.draftChip': 'v{v} 草稿',
+    'definitions.noPublished': '—',
 
     'definitions.status.draft': '草稿',
     'definitions.status.published': '已发布',
@@ -471,18 +500,17 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.lineageStatus.deprecated': '已停用',
     'definitions.lineageStatus.retired': '已淘汰',
     'definitions.lineageStatus.archived': '已归档',
-    'definitions.health.current': '正常',
-    'definitions.health.stale': '需要更新',
-    'definitions.health.broken': '有问题',
+    'definitions.health.current': '匹配',
+    'definitions.health.stale': '不完整',
+    'definitions.health.broken': '已失效',
     'definitions.health.superseded': '已替代',
 
     'definitions.channel.staffOnly': '仅限员工',
     'definitions.channel.family': '家庭端',
     'definitions.channel.familyLinkLabel': '打开家庭端链接',
 
-    'definitions.actions.openEditor': '打开编辑器',
+    'definitions.actions.open': '打开',
     'definitions.actions.newDraft': '新建版本',
-    'definitions.actions.moreFor': '{name} 的更多操作',
     'definitions.actions.deprecate': '停用',
     'definitions.actions.reactivate': '重新启用',
     'definitions.actions.retire': '归档',
@@ -505,6 +533,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.newDraftCreating': '正在创建…',
     'definitions.newDraftToast': '已创建草稿 v{v}。',
     'definitions.newDraftError': '无法创建新草稿，请重试。',
+    'definitions.newDraftDraftExists': '该工作流已有一个草稿，请先打开或删除它。',
+    'definitions.newDraftArchived': '已归档的工作流无法新建草稿。',
 
     'definitions.deprecateConfirmTitle': '停用此工作流？',
     'definitions.deprecateConfirmBody': '员工和家庭将无法再发起"{name}"。已在进行中的申请不受影响。',
@@ -522,6 +552,29 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.retireToast': '"{name}" 已归档。',
     'definitions.unarchiveToast': '"{name}" 已取消归档。被冻结的申请已恢复运行。',
     'definitions.unarchiveFailed': '无法取消归档此工作流，请重试。',
+
+    'definitions.drawer.versions': '版本',
+    'definitions.drawer.facts': '概况',
+    'definitions.drawer.lifecycle': '生命周期',
+    'definitions.drawer.publishedVersion': 'v{v} 已发布',
+    'definitions.drawer.draftVersion': 'v{v} 草稿',
+    'definitions.drawer.live': '生效中',
+    'definitions.drawer.health': '模型匹配',
+    'definitions.drawer.channel': '渠道',
+    'definitions.drawer.openItems': '进行中的工作项',
+    'definitions.drawer.frozenItems': '已冻结的工作项',
+    'definitions.drawer.lifecycleAfterPublish': '首次发布后才有生命周期——所有生命周期操作都针对已发布版本。',
+    'definitions.drawer.newDraftBlockedArchived': '请先取消归档，然后再新建版本。',
+
+    'definitions.ladder.active': '启用中',
+    'definitions.ladder.activeHint': '正在接收新的工作项。',
+    'definitions.ladder.deprecated': '已停用',
+    'definitions.ladder.deprecatedHint': '停止接收新工作，进行中的工作继续。',
+    'definitions.ladder.archived': '已归档',
+    'definitions.ladder.archivedHint': '冻结所有仍在进行中的工作。',
+    'definitions.ladder.current': '当前',
+    'definitions.ladder.archiveNeedsDeprecated': '停用后才可归档。',
+    'definitions.ladder.reactivateNeedsUnarchive': '请先取消归档，再重新启用。',
 
     // Editor (step editor — Task 7)
     'editor.title': '编辑器',

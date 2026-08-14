@@ -12,7 +12,7 @@
 //   version-1 DRAFT workflow_definition row via createEntity. machine/steps
 //   are JSON.stringify'd at write time (map §3/§8: DataCore stores them as
 //   JSON-encoded strings on the wire, not nested objects — same boundary
-//   DefinitionsPage.tsx's submitNewWorkflow/handleNewDraft already draw).
+//   DefinitionsPage.tsx's submitNewWorkflow already draws).
 // - Template updates never propagate (spec §3): the copy made here is
 //   complete at instantiate time — the new draft row has no live link back
 //   to the template it was seeded from.

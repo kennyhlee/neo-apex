@@ -534,3 +534,110 @@ def test_model_impact_is_tenant_scoped(client, fake_dc):
     refs = resp.json()["references"]
     assert refs  # this tenant's own reference is still present
     assert all(r["definition_id"] == "wd-impact-6" for r in refs)
+
+
+# --- new_draft ----------------------------------------------------------
+
+
+def test_new_draft_creates_next_version_from_published(client, fake_dc):
+    published = _seed_definition(fake_dc, definition_id="enroll", version=3,
+                                 status="published", lineage_status="active")
+
+    resp = act(client, published, "new_draft")
+
+    assert resp.status_code == 200
+    row = resp.json()
+    assert row["status"] == "draft"
+    assert int(row["version"]) == 4
+    assert row["definition_id"] == "enroll"
+    # A brand-new row, not a mutation of the published one.
+    assert row["entity_id"] != published
+
+
+def test_new_draft_carries_lineage_status_forward(client, fake_dc):
+    published = _seed_definition(fake_dc, definition_id="enroll", version=3,
+                                 status="published", lineage_status="deprecated")
+
+    row = act(client, published, "new_draft").json()
+
+    assert row["lineage_status"] == "deprecated"
+
+
+def test_new_draft_copies_authored_content(client, fake_dc):
+    published = _seed_definition(fake_dc, definition_id="enroll", version=3,
+                                 status="published", name="Enrollment",
+                                 channel_access="family")
+
+    row = act(client, published, "new_draft").json()
+
+    assert row["name"] == "Enrollment"
+    assert row["channel_access"] == "family"
+    # machine/steps stay JSON-encoded strings across the copy.
+    assert json.loads(row["machine"]) == _valid_machine()
+    assert json.loads(row["steps"]) == _valid_steps()
+
+
+def test_new_draft_refuses_when_a_draft_already_exists(client, fake_dc):
+    published = _seed_definition(fake_dc, definition_id="enroll", version=3,
+                                 status="published")
+    existing = _seed_definition(fake_dc, definition_id="enroll", version=4,
+                                status="draft")
+
+    resp = act(client, published, "new_draft")
+
+    assert resp.status_code == 409
+    detail = resp.json()["detail"]
+    assert detail["reason"] == "draft_exists"
+    assert detail["entity_id"] == existing
+
+
+def test_new_draft_ignores_a_draft_in_another_lineage(client, fake_dc):
+    published = _seed_definition(fake_dc, definition_id="enroll", version=3,
+                                 status="published")
+    _seed_definition(fake_dc, definition_id="camp", version=1, status="draft")
+
+    assert act(client, published, "new_draft").status_code == 200
+
+
+def test_new_draft_refuses_on_an_archived_lineage(client, fake_dc):
+    published = _seed_definition(fake_dc, definition_id="enroll", version=3,
+                                 status="published", lineage_status="archived")
+
+    resp = act(client, published, "new_draft")
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "lineage_archived"
+
+
+def test_new_draft_refuses_on_a_retired_lineage(client, fake_dc):
+    """`retired` is the legacy alias for `archived` and must gate identically."""
+    published = _seed_definition(fake_dc, definition_id="enroll", version=3,
+                                 status="published", lineage_status="retired")
+
+    resp = act(client, published, "new_draft")
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "lineage_archived"
+
+
+def test_new_draft_refuses_on_a_draft_row(client, fake_dc):
+    draft = _seed_definition(fake_dc, definition_id="enroll", version=1, status="draft")
+
+    resp = act(client, draft, "new_draft")
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "not_published"
+
+
+def test_new_draft_refuses_on_a_superseded_row(client, fake_dc):
+    superseded = _seed_definition(fake_dc, definition_id="enroll", version=1,
+                                  status="superseded")
+
+    resp = act(client, superseded, "new_draft")
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["reason"] == "not_published"
+
+
+def test_new_draft_404s_on_an_unknown_entity(client, fake_dc):
+    assert act(client, "no-such-entity", "new_draft").status_code == 404

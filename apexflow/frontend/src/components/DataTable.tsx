@@ -1,4 +1,9 @@
 // Ported from admindash/frontend/src/components/DataTable.tsx (interface map §1f).
+// Deliberate divergence from that port: `tabIndex` and `onKeyDown` on the row
+// below are apexflow-only additions. Apexflow's workflows table opens a
+// detail drawer on row click, and deleting `RowMenu` removed the only
+// keyboard path to the lifecycle actions it used to hold — these restore
+// keyboard reachability. Do not "fix" this drift by removing them.
 import { useEffect, useRef, useState, Fragment, type ReactNode } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './DataTable.css';
@@ -68,6 +73,19 @@ interface DataTableProps<T> {
 }
 
 const SKELETON_ROWS = 6;
+
+/** Shared by `onRowClick`'s mouse and keyboard handlers: a click or Enter/
+ * Space landing on the selection checkbox, the action cell, the expand
+ * toggle, or any focusable control inside a cell must NOT also trigger the
+ * row-level activation, or e.g. checking a box would also open the row. */
+function isRowActivationTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement;
+  return Boolean(
+    el.closest?.(
+      '.data-table-checkbox, .data-table-actions, .data-table-expand, button, a, input, select, textarea, label',
+    ),
+  );
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function DataTable<T extends Record<string, any>>({
@@ -252,12 +270,38 @@ export default function DataTable<T extends Record<string, any>>({
                           .filter(Boolean)
                           .join(' ') || undefined
                       }
+                      // A row that opens something on click must also open on
+                      // Enter/Space and be reachable by Tab — `RowMenu`'s old
+                      // trigger was a real `<button>`, so replacing it with a
+                      // bare clickable `<tr>` would have dropped keyboard/
+                      // screen-reader access to whatever the click reveals.
+                      // Deliberately NOT `role="button"`: that would replace
+                      // the row's implicit `row` role, breaking the table's
+                      // ARIA structure (`tbody[role=rowgroup]` would own a
+                      // non-`row` child), and several AT implementations treat
+                      // a `button`-role element's children as presentational —
+                      // which would drop the row's own `Open` button and `↗`
+                      // family link from the accessibility tree entirely. If a
+                      // role is ever wanted here, the correct shape is a real
+                      // `<button>` inside the primary cell, not one on the row.
+                      tabIndex={onRowClick ? 0 : undefined}
                       onClick={
                         onRowClick
                           ? (e) => {
-                              const el = e.target as HTMLElement;
-                              if (el.closest('.data-table-checkbox, .data-table-actions, .data-table-expand')) return;
-                              if (el.closest('button, a, input, select, textarea, label')) return;
+                              if (isRowActivationTarget(e.target)) return;
+                              onRowClick(row);
+                            }
+                          : undefined
+                      }
+                      onKeyDown={
+                        onRowClick
+                          ? (e) => {
+                              if (e.key !== 'Enter' && e.key !== ' ') return;
+                              if (isRowActivationTarget(e.target)) return;
+                              // Space's default is scrolling the page — only
+                              // suppress it once we know this keypress is
+                              // actually activating the row.
+                              if (e.key === ' ') e.preventDefault();
                               onRowClick(row);
                             }
                           : undefined

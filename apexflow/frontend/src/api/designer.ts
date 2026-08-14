@@ -192,6 +192,25 @@ export function publishDefinition(tenantId: string, entityId: string): Promise<D
 }
 
 /**
+ * Open the next draft version of a published lineage —
+ * `POST .../definitions/{entity_id}/actions` with `{action: "new_draft"}`.
+ *
+ * Replaces the old client-side draft copy, which called the generic
+ * `createEntity` and so had to JSON-encode `machine`/`steps` itself and compute
+ * the next version in the browser. Both now happen server-side, where the
+ * one-draft-per-lineage rule can actually be enforced — two tabs open on the
+ * list would otherwise both see "no draft" and both create one.
+ *
+ * 409 `{reason: "draft_exists", entity_id}` when the lineage already has a
+ * draft; `{reason: "lineage_archived"}` on an archived lineage;
+ * `{reason: "not_published"}` on any row that isn't the published one. All
+ * surface as `ApiError` with the parsed body on `.body`.
+ */
+export function newDraft(tenantId: string, entityId: string): Promise<DefinitionRow> {
+  return lifecycleAction(tenantId, entityId, 'new_draft');
+}
+
+/**
  * GET /api/workflows/{tenant_id}/templates — api/designer.py's
  * `templates_route` (Task 6). Platform-wide catalog, not tenant data —
  * `tenant_id` is present only for auth/route-shape consistency with the

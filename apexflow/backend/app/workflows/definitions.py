@@ -391,6 +391,80 @@ def delete_definition(tenant_id: str, entity_id: str, token: str | None = None) 
     return {"deleted": entity_id}
 
 
+def get_draft_definition(tenant_id: str, lineage_definition_id: str,
+                         token: str | None = None) -> dict | None:
+    """The tenant's current draft row for one lineage, or None.
+
+    Filtered in Python rather than via a SQL `where`, for the same reason
+    `get_published_definition` is: on a new tenant those flattened columns may
+    not be materialized yet, and a predicate naming one is a DuckDB binder
+    error (400), not an empty result.
+    """
+    rows = dc.list_entities(tenant_id, "workflow_definition", "", token)
+    rows = [r for r in rows if str(r.get("definition_id", "")) == str(lineage_definition_id)]
+    rows = [r for r in rows if r.get("status") == "draft"]
+    return rows[0] if rows else None
+
+
+def new_draft_definition(tenant_id: str, entity_id: str,
+                         token: str | None = None) -> dict:
+    """Open the next draft version of a published lineage.
+
+    AT MOST ONE DRAFT PER LINEAGE. This is not tidiness — it is what keeps
+    `version` unique within a lineage. The version of a new draft is
+    `published.version + 1`, and `publish_definition` only ever supersedes the
+    PRIOR PUBLISHED row, so no superseded row can sit above the published one.
+    Allow a second concurrent draft and both get the same number; once both are
+    published in turn, `machine._pinned_definition_row` — which matches on
+    `(definition_id, version)` and returns `rows[0]` — resolves every running
+    instance's machine from whichever row `list_entities` happens to return
+    first.
+
+    This lives here rather than in the browser because the frontend previously
+    created drafts with a direct generic `createEntity` write, bypassing this
+    module entirely: a UI-only guard would be advisory, and two tabs open on the
+    list would both see "no draft" and both create one.
+
+    409 `not_published` on any other row (lifecycle reads the published row);
+    409 `lineage_archived` because a copy would carry `archived` forward onto a
+    fresh draft; 409 `draft_exists` carrying the existing draft's `entity_id`
+    so the caller can navigate to it.
+    """
+    row = require_definition_row(tenant_id, entity_id, token)
+
+    if row.get("status") != "published":
+        raise HTTPException(409, {
+            "reason": "not_published",
+            "status": row.get("status"),
+        })
+
+    if is_archived(row):
+        raise HTTPException(409, {
+            "reason": "lineage_archived",
+            "lineage_status": row.get("lineage_status"),
+        })
+
+    existing = get_draft_definition(tenant_id, row.get("definition_id"), token)
+    if existing is not None:
+        raise HTTPException(409, {
+            "reason": "draft_exists",
+            "entity_id": existing.get("entity_id"),
+        })
+
+    base = entity_base_data(row)
+    base["status"] = "draft"
+    base["version"] = _as_int(row.get("version")) + 1
+    created = dc.dc_create(tenant_id, "workflow_definition", base, token)
+    # `dc_create` echoes DataCore's write-response envelope
+    # (`{entity_id, entity_type, base_data, _version}`, unflattened — see
+    # `datacore.dc_create`), not the flattened row shape every other read in
+    # this module returns (`require_definition_row`/`get_published_definition`
+    # /`get_draft_definition`). Re-fetch through `require_definition_row` so
+    # callers get the same flattened shape (`row["status"]`, stringified
+    # `row["version"]`) regardless of which of those functions produced it.
+    return require_definition_row(tenant_id, created["entity_id"], token)
+
+
 # --- model-impact ------------------------------------------------------------
 
 
