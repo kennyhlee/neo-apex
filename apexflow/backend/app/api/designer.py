@@ -313,13 +313,19 @@ def templates_route(tenant_id: str, user: dict = Depends(require_staff_tenant)):
     field on each `catalog_entry()` would.
 
     `fetch_models` yields `None` for a model the tenant never set up
-    (`definitions.py:84-85`), which is exactly the diff signal. Sorted so the
-    rendered copy is stable — `referenced_entity_models` returns a set.
+    (`definitions.py:84-85`), which is exactly the diff signal.
+    `referenced_entity_models` returns an unordered `set`, so `missing_models`
+    is sorted here explicitly — that guarantee is this route's own, and does
+    not depend on `fetch_models` happening to iterate the set in sorted
+    order.
 
     `STANDARD_BUNDLE_MODELS` is deliberately NOT unioned in here: that
     constant exists to give the section-editor's picker a full menu, whereas
     this asks a per-template question, and a standard model the tenant lacks
     is just as missing as any other.
+
+    No longer a route that cannot fail: this now calls `fetch_models`, which
+    calls `dc_query` against DataCore, and raises on a non-200 response.
     """
     token = user.get("_token")
 

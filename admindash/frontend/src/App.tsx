@@ -49,7 +49,14 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/home" replace /> : <LoginPage />} />
 
-      <Route path="/inquire/:tenantId" element={<PublicInquiryPage />} />
+      <Route
+        path="/inquire/:tenantId"
+        element={
+          <RoutedErrorBoundary variant="public">
+            <PublicInquiryPage />
+          </RoutedErrorBoundary>
+        }
+      />
 
       <Route
         path="*"

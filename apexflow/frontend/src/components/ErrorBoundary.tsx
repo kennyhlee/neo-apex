@@ -21,9 +21,13 @@ import './ErrorBoundary.css';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  /** Changing this clears a caught error. Pass the current location so
-   * navigating away recovers, instead of leaving a sticky error panel that
-   * outlives the route that produced it. */
+  /** Changing this clears a caught error. Pass `location.key`, not
+   * `location.pathname` — `key` is unique per history entry, so it changes
+   * on any navigation, including `replace` and query-only changes, where
+   * `pathname` would stay put and leave a sticky error panel that outlives
+   * the route that produced it (a sibling app, admindash, drives real view
+   * state through the query string, which is exactly the case `pathname`
+   * misses). */
   resetKey?: string;
 }
 
@@ -44,8 +48,9 @@ interface ErrorBoundaryState {
 }
 
 /** True when `value` looks like a real `Error` (has the shape we render
- * specially), without trusting `instanceof` across realms/iframes. Render
- * errors from React are always real `Error`s, but `throw` accepts anything. */
+ * specially). Narrows an `unknown` thrown value so the panel never touches
+ * `.message`/`.stack` on a non-Error. Render errors from React are always
+ * real `Error`s, but `throw` accepts anything. */
 function isErrorLike(value: unknown): value is Error {
   return value instanceof Error;
 }
@@ -154,5 +159,5 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
  * Must be rendered INSIDE the router — `useLocation` throws otherwise. */
 export function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   const location = useLocation();
-  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+  return <ErrorBoundary resetKey={location.key}>{children}</ErrorBoundary>;
 }

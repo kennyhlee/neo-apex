@@ -38,6 +38,12 @@ export const translations: Record<Locale, Record<string, string>> = {
     'errorBoundary.copied': 'Copied',
     'errorBoundary.copyFailed': "Couldn't copy",
     'errorBoundary.reload': 'Reload',
+    // Public-facing variant (e.g. /inquire/:tenantId) — no error message, stack,
+    // or copy button. Copy reused verbatim from familyhub's ErrorBoundary.
+    'errorBoundary.public.title': 'Something went wrong',
+    'errorBoundary.public.body':
+      "Sorry — this page didn't load properly. Please try again. If it keeps happening, contact your school and let them know what you were doing.",
+    'errorBoundary.public.reload': 'Try again',
 
     // Today (work queue)
     'today.title': 'Today',
@@ -609,6 +615,12 @@ export const translations: Record<Locale, Record<string, string>> = {
     'errorBoundary.copied': '\u5df2\u590d\u5236',
     'errorBoundary.copyFailed': '\u590d\u5236\u5931\u8d25',
     'errorBoundary.reload': '\u91cd\u65b0\u52a0\u8f7d',
+    // Public-facing variant (e.g. /inquire/:tenantId) \u2014 no error message, stack,
+    // or copy button. Copy reused verbatim from familyhub's ErrorBoundary.
+    'errorBoundary.public.title': '\u51fa\u73b0\u95ee\u9898',
+    'errorBoundary.public.body':
+      '\u62b1\u6b49\uff0c\u6b64\u9875\u9762\u672a\u80fd\u6b63\u5e38\u52a0\u8f7d\u3002\u8bf7\u91cd\u8bd5\u3002\u5982\u679c\u95ee\u9898\u6301\u7eed\u51fa\u73b0\uff0c\u8bf7\u8054\u7cfb\u5b66\u6821\u5e76\u8bf4\u660e\u60a8\u5f53\u65f6\u7684\u64cd\u4f5c\u3002',
+    'errorBoundary.public.reload': '\u91cd\u8bd5',
 
     // Today (work queue)
     'today.title': '\u4eca\u65e5',

@@ -10,9 +10,12 @@
 // Deliberately a CLASS component: `getDerivedStateFromError` has no hook
 // equivalent, and React offers no functional error-boundary API.
 //
-// It renders the error text on purpose. This is an internal staff tool
-// behind auth, and the message IS the diagnosis. FamilyHub's copy of this
-// component deliberately does NOT — its users are parents.
+// The default (`variant="staff"`) renders the error text on purpose: this
+// app is otherwise an internal staff tool behind auth, and the message IS
+// the diagnosis. `variant="public"` opts a route out of that — for the one
+// unauthenticated, parent/prospect-facing route (`/inquire/:tenantId`),
+// where the audience can't open a console or read a stack, matching
+// FamilyHub's copy of this component, whose users are also parents.
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
@@ -21,10 +24,21 @@ import './ErrorBoundary.css';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  /** Changing this clears a caught error. Pass the current location so
-   * navigating away recovers, instead of leaving a sticky error panel that
+  /** Changing this clears a caught error. Pass `location.key`, not
+   * `location.pathname` — this app drives real view state through the query
+   * string (`WorkflowPipelinePage`'s tab, `AttentionPage`'s filters), so a
+   * query-only navigation leaves `pathname` unchanged and would never clear
+   * the panel. `location.key` is unique per history entry, so it changes on
+   * any navigation, including `replace` and query-only changes, and lets the
+   * user recover instead of being stuck with a sticky error panel that
    * outlives the route that produced it. */
   resetKey?: string;
+  /** `'staff'` (default) shows the error message, stack, and a copy button —
+   * this is an internal staff tool behind auth, and the message IS the
+   * diagnosis. `'public'` is for unauthenticated, parent/prospect-facing
+   * routes (e.g. `/inquire/:tenantId`) and shows an apology only, matching
+   * FamilyHub's no-error-text panel. */
+  variant?: 'staff' | 'public';
 }
 
 interface ErrorBoundaryState {
@@ -44,8 +58,9 @@ interface ErrorBoundaryState {
 }
 
 /** True when `value` looks like a real `Error` (has the shape we render
- * specially), without trusting `instanceof` across realms/iframes. Render
- * errors from React are always real `Error`s, but `throw` accepts anything. */
+ * specially). Narrows an `unknown` thrown value so the panel never touches
+ * `.message`/`.stack` on a non-Error. Render errors from React are always
+ * real `Error`s, but `throw` accepts anything. */
 function isErrorLike(value: unknown): value is Error {
   return value instanceof Error;
 }
@@ -120,6 +135,34 @@ function ErrorPanel({ error, componentStack }: { error: unknown; componentStack:
   );
 }
 
+/** The public-facing panel for unauthenticated, parent/prospect routes.
+ * Takes zero props on purpose, same as FamilyHub's `ErrorPanel` — with no
+ * error value in scope, there is nothing here that could leak a message or
+ * stack to an audience that can't open a console or read one anyway. */
+function PublicErrorPanel() {
+  const { t } = useTranslation();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Move focus onto the panel when it mounts. `role="alert"` announces it to
+  // screen readers, but a sighted keyboard user has no other way to reach a
+  // panel that just replaced the entire routed content area.
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
+
+  return (
+    <div className="error-boundary" role="alert" tabIndex={-1} ref={panelRef}>
+      <h2 className="error-boundary-title">{t('errorBoundary.public.title')}</h2>
+      <p className="error-boundary-body">{t('errorBoundary.public.body')}</p>
+      <div className="error-boundary-actions">
+        <Button variant="primary" size="sm" onClick={() => window.location.reload()}>
+          {t('errorBoundary.public.reload')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null, componentStack: null };
 
@@ -144,6 +187,9 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   render() {
     if (this.state.hasError) {
+      if (this.props.variant === 'public') {
+        return <PublicErrorPanel />;
+      }
       return <ErrorPanel error={this.state.error} componentStack={this.state.componentStack} />;
     }
     return this.props.children;
@@ -152,7 +198,17 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
 /** `ErrorBoundary` wired to the router, so navigating away clears the error.
  * Must be rendered INSIDE the router — `useLocation` throws otherwise. */
-export function RoutedErrorBoundary({ children }: { children: ReactNode }) {
+export function RoutedErrorBoundary({
+  children,
+  variant,
+}: {
+  children: ReactNode;
+  variant?: 'staff' | 'public';
+}) {
   const location = useLocation();
-  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+  return (
+    <ErrorBoundary resetKey={location.key} variant={variant}>
+      {children}
+    </ErrorBoundary>
+  );
 }

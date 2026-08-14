@@ -713,7 +713,11 @@ def test_missing_models_is_present_on_every_entry(client, fake_dc):
 
 def test_missing_models_is_sorted(client, fake_dc):
     """Order must be stable so the rendered copy doesn't reshuffle between
-    requests — `fetch_models` iterates a set, which has no stable order."""
+    requests. `referenced_entity_models` returns an unordered `set`, and
+    `fetch_models` (definitions.py:85) currently happens to iterate it
+    sorted — but that's an implementation detail of `fetch_models`, not a
+    guarantee. The route's own `sorted()` here is an independent guarantee
+    that does not depend on `fetch_models`'s current behavior."""
     for entry in client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]:
         assert entry["missing_models"] == sorted(entry["missing_models"])
 

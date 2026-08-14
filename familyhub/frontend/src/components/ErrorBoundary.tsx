@@ -24,8 +24,10 @@ import './ErrorBoundary.css';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  /** Changing this clears a caught error. Pass the current location so
-   * navigating away recovers, instead of leaving a sticky error panel that
+  /** Changing this clears a caught error. Pass `location.key`, not
+   * `location.pathname` — `key` is unique per history entry, so it changes
+   * on any navigation, including `replace` and query-only changes, and lets
+   * navigating away recover instead of leaving a sticky error panel that
    * outlives the route that produced it. */
   resetKey?: string;
 }
@@ -110,5 +112,5 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
  * Must be rendered INSIDE the router — `useLocation` throws otherwise. */
 export function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   const location = useLocation();
-  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+  return <ErrorBoundary resetKey={location.key}>{children}</ErrorBoundary>;
 }
