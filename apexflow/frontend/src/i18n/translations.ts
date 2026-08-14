@@ -28,6 +28,8 @@ export const translations: Record<Locale, Record<string, string>> = {
       'The page stopped rendering. The error is below — copy it into a bug report, or reload to try again.',
     'errorBoundary.showStack': 'Component stack',
     'errorBoundary.copy': 'Copy details',
+    'errorBoundary.copied': 'Copied',
+    'errorBoundary.copyFailed': "Couldn't copy",
     'errorBoundary.reload': 'Reload',
 
     // Login
@@ -480,6 +482,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'errorBoundary.body': '页面渲染中断。错误信息如下——可复制并提交问题报告，或重新加载重试。',
     'errorBoundary.showStack': '组件堆栈',
     'errorBoundary.copy': '复制详情',
+    'errorBoundary.copied': '已复制',
+    'errorBoundary.copyFailed': '复制失败',
     'errorBoundary.reload': '重新加载',
 
     // Login
