@@ -559,7 +559,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'definitions.drawer.publishedVersion': 'v{v} 已发布',
     'definitions.drawer.draftVersion': 'v{v} 草稿',
     'definitions.drawer.live': '生效中',
-    'definitions.drawer.health': '状态',
+    'definitions.drawer.health': '健康状态',
     'definitions.drawer.channel': '渠道',
     'definitions.drawer.openItems': '进行中的工作项',
     'definitions.drawer.frozenItems': '已冻结的工作项',

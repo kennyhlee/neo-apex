@@ -35,7 +35,13 @@ export interface LineageRow {
   health: DefinitionHealth;
   channel_access: ChannelAccess;
   family_url?: string;
-  /** Max across versions — an instance pins to the version it started on. */
+  /**
+   * The backend (`app/api/designer.py:167-180`) already computes this once
+   * per LINEAGE and stamps the identical value onto every version row of
+   * that lineage, so `collapseLineages`'s `Math.max` below can never see a
+   * difference across versions in production. The max is defensive, not
+   * load-bearing — kept in case that per-lineage guarantee ever changes.
+   */
   open_instances: number;
 }
 
@@ -78,6 +84,10 @@ export function collapseLineages(entries: DefinitionListEntry[]): LineageRow[] {
       health: rep.health,
       channel_access: rep.channel_access,
       family_url: rep.family_url,
+      // Defensive, not load-bearing: the backend already counts per lineage
+      // (see the `open_instances` doc comment above), so every row in `rows`
+      // carries the same value today and this max can never actually differ
+      // from any single one of them.
       open_instances: Math.max(...rows.map((r) => r.open_instances), 0),
     });
   }

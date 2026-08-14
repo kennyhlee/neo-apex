@@ -242,12 +242,20 @@ export type DefinitionLifecycleAction =
   | 'new_draft';
 
 /**
- * The raw updated `workflow_definition` DataCore row that every lifecycle
- * action returns directly (`defs.publish_definition` et al. return `dict`,
- * `api/definitions.py`'s route returns it unwrapped) — `machine`/`steps`
- * are still the JSON-ENCODED STRINGS DataCore stores them as (base_model.json
- * §8), NOT the parsed `MachineDef`/`WorkflowStepDef[]` the bundle route
- * returns. Callers that need the parsed shape must re-fetch the bundle.
+ * The raw `workflow_definition` DataCore row — `machine`/`steps` are still
+ * the JSON-ENCODED STRINGS DataCore stores them as (base_model.json §8), NOT
+ * the parsed `MachineDef`/`WorkflowStepDef[]` the bundle route returns.
+ * Callers that need the parsed shape must re-fetch the bundle.
+ *
+ * Only `new_draft` returns this shape directly: it deliberately re-fetches
+ * through `require_definition_row` so the caller can read `created.entity_id`
+ * and `created.version`. The other five lifecycle actions
+ * (`publish`/`deprecate`/`reactivate`/`archive`/`unarchive`) all end in
+ * `dc.dc_update`, which returns DataCore's write envelope
+ * `{entity_id, entity_type, base_data, _version}` instead — see
+ * `test_definitions_api.py:158`, which asserts `resp.json()["base_data"]
+ * ["status"]`. No current caller reads a lifecycle action's return value
+ * other than `new_draft`'s, so this mismatch is latent, not live.
  */
 export interface DefinitionRow {
   entity_id: string;
@@ -272,8 +280,7 @@ export interface DefinitionRow {
  * JSON-encoded-string wire shape a `workflow_definition` row stores; see
  * `DefinitionRow`'s own doc comment). The gallery's "Use template" flow
  * `JSON.stringify`s these at instantiate time, same boundary
- * `DefinitionsPage.tsx`'s `submitNewWorkflow`/`handleNewDraft` already draw
- * (map §3/§8).
+ * `DefinitionsPage.tsx`'s `submitNewWorkflow` already draws (map §3/§8).
  */
 export interface TemplateDefinition {
   machine: MachineDef;

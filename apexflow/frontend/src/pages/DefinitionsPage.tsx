@@ -180,7 +180,6 @@ export default function DefinitionsPage() {
   const lineageRows = useMemo(() => collapseLineages(entries), [entries]);
 
   const lineageCount = lineageRows.length;
-  const total = lineageRows.length;
   const pageRows = useMemo(
     () => lineageRows.slice((page - 1) * pageSize, page * pageSize),
     [lineageRows, page, pageSize],
@@ -303,6 +302,7 @@ export default function DefinitionsPage() {
         && typeof err.body === 'object'
         && 'detail' in err.body
         && typeof (err.body as { detail?: unknown }).detail === 'object'
+        && (err.body as { detail?: unknown }).detail !== null
           ? ((err.body as { detail: { reason?: string } }).detail.reason)
           : undefined;
       const key =
@@ -568,7 +568,7 @@ export default function DefinitionsPage() {
       <DataTable<LineageRow>
         columns={columns}
         data={pageRows}
-        total={total}
+        total={lineageCount}
         page={page}
         pageSize={pageSize}
         loading={loading}

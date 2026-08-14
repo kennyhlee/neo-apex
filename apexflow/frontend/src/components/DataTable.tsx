@@ -1,4 +1,9 @@
 // Ported from admindash/frontend/src/components/DataTable.tsx (interface map §1f).
+// Deliberate divergence from that port: `tabIndex` and `onKeyDown` on the row
+// below are apexflow-only additions. Apexflow's workflows table opens a
+// detail drawer on row click, and deleting `RowMenu` removed the only
+// keyboard path to the lifecycle actions it used to hold — these restore
+// keyboard reachability. Do not "fix" this drift by removing them.
 import { useEffect, useRef, useState, Fragment, type ReactNode } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './DataTable.css';
@@ -270,8 +275,16 @@ export default function DataTable<T extends Record<string, any>>({
                       // trigger was a real `<button>`, so replacing it with a
                       // bare clickable `<tr>` would have dropped keyboard/
                       // screen-reader access to whatever the click reveals.
+                      // Deliberately NOT `role="button"`: that would replace
+                      // the row's implicit `row` role, breaking the table's
+                      // ARIA structure (`tbody[role=rowgroup]` would own a
+                      // non-`row` child), and several AT implementations treat
+                      // a `button`-role element's children as presentational —
+                      // which would drop the row's own `Open` button and `↗`
+                      // family link from the accessibility tree entirely. If a
+                      // role is ever wanted here, the correct shape is a real
+                      // `<button>` inside the primary cell, not one on the row.
                       tabIndex={onRowClick ? 0 : undefined}
-                      role={onRowClick ? 'button' : undefined}
                       onClick={
                         onRowClick
                           ? (e) => {

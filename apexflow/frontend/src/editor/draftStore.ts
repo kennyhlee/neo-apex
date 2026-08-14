@@ -11,7 +11,7 @@
 //   JSON-encoded strings a `workflow_definition` DataCore row stores them
 //   as (map §3/§8) — this store parses once at load and re-stringifies only
 //   at the autosave write boundary, same boundary DefinitionsPage.tsx's
-//   `handleNewDraft`/`submitNewWorkflow` already draw.
+//   `submitNewWorkflow` already draws.
 // - `updateEntity` (api/client.ts, PUT /api/entities/.../{entity_id}) maps
 //   to DataCore's `store.put_entity`, which REPLACES the row's entire
 //   `base_data` with what's sent (archive-and-reinsert, not a merge —
