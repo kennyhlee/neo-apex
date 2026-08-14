@@ -22,6 +22,14 @@ export const translations: Record<Locale, Record<string, string>> = {
     'notFound.body': 'The link may be out of date, or the address may have a typo in it.',
     'notFound.action': 'Go to Workflows',
 
+    // Error boundary
+    'errorBoundary.title': 'Something broke on this screen',
+    'errorBoundary.body':
+      'The page stopped rendering. The error is below — copy it into a bug report, or reload to try again.',
+    'errorBoundary.showStack': 'Component stack',
+    'errorBoundary.copy': 'Copy details',
+    'errorBoundary.reload': 'Reload',
+
     // Login
     'login.title': 'Welcome Back',
     'login.email': 'Email',
@@ -466,6 +474,13 @@ export const translations: Record<Locale, Record<string, string>> = {
     'notFound.title': '页面不存在',
     'notFound.body': '链接可能已失效，或地址输入有误。',
     'notFound.action': '返回工作流',
+
+    // Error boundary
+    'errorBoundary.title': '此页面出现故障',
+    'errorBoundary.body': '页面渲染中断。错误信息如下——可复制并提交问题报告，或重新加载重试。',
+    'errorBoundary.showStack': '组件堆栈',
+    'errorBoundary.copy': '复制详情',
+    'errorBoundary.reload': '重新加载',
 
     // Login
     'login.title': '欢迎回来',
