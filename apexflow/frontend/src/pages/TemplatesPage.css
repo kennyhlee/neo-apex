@@ -92,3 +92,22 @@
   color: var(--danger);
   font-size: var(--text-sm);
 }
+
+/* A template whose sections bind to entity models this tenant hasn't set
+   up. Advisory, not blocking — the draft is valid, it just can't publish
+   until the models exist. Toned as a warning rather than an error for
+   exactly that reason. */
+.template-card-warning,
+.templates-dialog-warning {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--attn);
+  border-radius: var(--radius-md);
+  background: var(--attn-tint);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.templates-dialog-warning {
+  margin: 0 0 var(--space-4);
+}

@@ -293,6 +293,11 @@ export interface TemplateCatalogEntry {
   name: string;
   description: string;
   definition: TemplateDefinition;
+  /** Entity models this template's sections reference that THIS tenant does
+   * not have (`api/designer.py`'s `templates_route`). Non-empty means the
+   * template can be applied but not published until the models exist —
+   * launchpad's "Sync default entities" provisions the shipped ones. */
+  missing_models: string[];
 }
 
 export interface ListTemplatesResponse {

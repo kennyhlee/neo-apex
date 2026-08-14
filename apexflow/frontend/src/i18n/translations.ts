@@ -426,6 +426,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'templates.useCreate': 'Create',
     'templates.useToast': '"{name}" created from template.',
     'templates.useError': "Couldn't create a workflow from this template. Try again.",
+    'templates.missingModelsBadge': 'Needs setup',
+    'templates.missingModelsCard': 'Needs {models}, which this tenant does not have yet.',
+    'templates.missingModelsDialog':
+      'This template collects data into {models}, which this tenant does not have yet. You can still create the workflow and author it now, but it cannot be published until those models exist. An administrator can add them in LaunchPad under Tenant Settings → Sync default entities.',
 
     // Common
     'common.loading': 'Loading...',
@@ -847,6 +851,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'templates.useCreate': '创建',
     'templates.useToast': '已从模板创建 "{name}"。',
     'templates.useError': '无法从此模板创建工作流，请重试。',
+    'templates.missingModelsBadge': '需要配置',
+    'templates.missingModelsCard': '需要 {models}——此租户尚未配置。',
+    'templates.missingModelsDialog':
+      '此模板会将数据写入 {models}，但此租户尚未配置。您仍可以创建并编辑该工作流，但在配置完成前无法发布。管理员可在 LaunchPad 的「租户设置 → 同步默认实体」中添加。',
 
     // Common
     'common.loading': '加载中...',
