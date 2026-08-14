@@ -29,6 +29,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'notFound.body': 'The link may be out of date, or the address may have a typo in it.',
     'notFound.action': 'Go to Home',
 
+    // Error boundary
+    'errorBoundary.title': 'Something broke on this screen',
+    'errorBoundary.body':
+      'The page stopped rendering. The error is below — copy it into a bug report, or reload to try again.',
+    'errorBoundary.showStack': 'Component stack',
+    'errorBoundary.copy': 'Copy details',
+    'errorBoundary.copied': 'Copied',
+    'errorBoundary.copyFailed': "Couldn't copy",
+    'errorBoundary.reload': 'Reload',
+
     // Today (work queue)
     'today.title': 'Today',
     'today.greetingMorning': 'Good morning',
@@ -590,6 +600,15 @@ export const translations: Record<Locale, Record<string, string>> = {
     'notFound.title': '\u9875\u9762\u4e0d\u5b58\u5728',
     'notFound.body': '\u94fe\u63a5\u53ef\u80fd\u5df2\u5931\u6548\uff0c\u6216\u5730\u5740\u8f93\u5165\u6709\u8bef\u3002',
     'notFound.action': '\u8fd4\u56de\u9996\u9875',
+
+    // Error boundary
+    'errorBoundary.title': '\u6b64\u9875\u9762\u51fa\u73b0\u6545\u969c',
+    'errorBoundary.body': '\u9875\u9762\u6e32\u67d3\u4e2d\u65ad\u3002\u9519\u8bef\u4fe1\u606f\u5982\u4e0b\u2014\u2014\u53ef\u590d\u5236\u5e76\u63d0\u4ea4\u95ee\u9898\u62a5\u544a\uff0c\u6216\u91cd\u65b0\u52a0\u8f7d\u91cd\u8bd5\u3002',
+    'errorBoundary.showStack': '\u7ec4\u4ef6\u5806\u6808',
+    'errorBoundary.copy': '\u590d\u5236\u8be6\u60c5',
+    'errorBoundary.copied': '\u5df2\u590d\u5236',
+    'errorBoundary.copyFailed': '\u590d\u5236\u5931\u8d25',
+    'errorBoundary.reload': '\u91cd\u65b0\u52a0\u8f7d',
 
     // Today (work queue)
     'today.title': '\u4eca\u65e5',
