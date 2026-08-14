@@ -9,6 +9,12 @@ export const translations: Record<Locale, Record<string, string>> = {
     'landing.explanation':
       'Registration links are specific to your school. If you were expecting to register a student, please use the link your school sent you.',
 
+    // Error boundary
+    'errorBoundary.title': 'Something went wrong',
+    'errorBoundary.body':
+      "Sorry — this page didn't load properly. Please try again. If it keeps happening, contact your school and let them know what you were doing.",
+    'errorBoundary.reload': 'Try again',
+
     // Registration start
     'register.loading': 'Loading registration…',
     'register.notFound': 'This registration link is not available. Check the address with your school.',
@@ -73,6 +79,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Landing
     'landing.explanation':
       '报名链接由各学校单独提供。如果您希望为学生报名，请使用学校发送给您的链接。',
+
+    // Error boundary
+    'errorBoundary.title': '出现问题',
+    'errorBoundary.body': '抱歉，此页面未能正常加载。请重试。如果问题持续出现，请联系学校并说明您当时的操作。',
+    'errorBoundary.reload': '重试',
 
     // Registration start
     'register.loading': '正在加载注册信息…',

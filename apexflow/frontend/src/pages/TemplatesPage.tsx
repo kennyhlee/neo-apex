@@ -186,6 +186,15 @@ export default function TemplatesPage() {
                   <dd>{tpl.definition.machine.states.length}</dd>
                 </div>
               </dl>
+              {tpl.missing_models.length > 0 && (
+                <p className="template-card-warning" role="note">
+                  <strong>{t('templates.missingModelsBadge')}</strong>{' '}
+                  {t('templates.missingModelsCard').replace(
+                    '{models}',
+                    tpl.missing_models.join(', '),
+                  )}
+                </p>
+              )}
               <Button variant="primary" size="sm" onClick={() => openUseModal(tpl)}>
                 {t('templates.useTemplate')}
               </Button>
@@ -217,6 +226,14 @@ export default function TemplatesPage() {
           </>
         }
       >
+        {activeTemplate && activeTemplate.missing_models.length > 0 && (
+          <p className="templates-dialog-warning" role="note">
+            {t('templates.missingModelsDialog').replace(
+              '{models}',
+              activeTemplate.missing_models.join(', '),
+            )}
+          </p>
+        )}
         <div className="templates-form-field">
           <label htmlFor="template-workflow-name">{t('templates.useNameLabel')}</label>
           <input

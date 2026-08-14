@@ -298,9 +298,44 @@ def primitives_catalog(tenant_id: str, user: dict = Depends(require_staff_tenant
 @router.get("/{tenant_id}/templates")
 def templates_route(tenant_id: str, user: dict = Depends(require_staff_tenant)):
     """Shipped workflow template catalog for the designer's template gallery
-    (Task 6) — `app.templates.catalog.template_catalog()`, unwrapped by
-    `require_staff_tenant`'s auth check only. The catalog itself is
-    platform-wide, not tenant-scoped data (`tenant_id` exists purely for
-    route-shape/auth consistency with the rest of this router, same as every
-    other route above)."""
-    return {"templates": template_catalog()}
+    (Task 6), each entry annotated with `missing_models` for THIS tenant.
+
+    The catalog itself is platform-wide, but the annotation is not: a
+    template binds sections to entity models (`signup`'s `signup_section` ->
+    `enrollment`), and a tenant that has not set that model up can apply the
+    template and only discover the problem at publish, as
+    `section '...' references unknown entity model '...'` — an error that
+    reads like an authoring mistake rather than a missing prerequisite.
+
+    DERIVED, never declared. `referenced_entity_models` reads the models
+    straight off the template's own form sections, so this can never drift
+    out of sync with the steps the way a hand-maintained `required_models`
+    field on each `catalog_entry()` would.
+
+    `fetch_models` yields `None` for a model the tenant never set up
+    (`definitions.py:84-85`), which is exactly the diff signal.
+    `referenced_entity_models` returns an unordered `set`, so `missing_models`
+    is sorted here explicitly — that guarantee is this route's own, and does
+    not depend on `fetch_models` happening to iterate the set in sorted
+    order.
+
+    `STANDARD_BUNDLE_MODELS` is deliberately NOT unioned in here: that
+    constant exists to give the section-editor's picker a full menu, whereas
+    this asks a per-template question, and a standard model the tenant lacks
+    is just as missing as any other.
+
+    No longer a route that cannot fail: this now calls `fetch_models`, which
+    calls `dc_query` against DataCore, and raises on a non-200 response.
+    """
+    token = user.get("_token")
+
+    entries = []
+    for entry in template_catalog():
+        steps = [StepDef.model_validate(s) for s in entry["definition"]["steps"]]
+        models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
+        entries.append({
+            **entry,
+            "missing_models": sorted(et for et, model in models.items() if model is None),
+        })
+
+    return {"templates": entries}

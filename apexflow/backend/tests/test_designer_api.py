@@ -637,6 +637,106 @@ def test_templates_route_serves_every_shipped_template(client):
     assert definition["machine"]["transitions"][0]["from"]
 
 
+def _model(*field_names):
+    """Minimal model definition — only presence matters to this route."""
+    return {
+        "base_fields": [{"name": n, "type": "str", "required": False} for n in field_names],
+        "custom_fields": [],
+    }
+
+
+def _entry_by_id(templates, template_id):
+    return next(t for t in templates if t["template_id"] == template_id)
+
+
+def _referenced_models_of(template_id):
+    """The entity models a shipped template's sections actually name —
+    derived the same way the route does, so these tests never hardcode a
+    model list that a template edit could silently invalidate."""
+    from app.templates.catalog import template_catalog
+    from app.workflows import definitions as defs
+    from app.workflows.schema import StepDef
+
+    entry = _entry_by_id(template_catalog(), template_id)
+    steps = [StepDef.model_validate(s) for s in entry["definition"]["steps"]]
+    return defs.referenced_entity_models(steps)
+
+
+def test_templates_report_missing_models_when_tenant_has_none(client, fake_dc):
+    resp = client.get(f"/api/workflows/{TENANT}/templates")
+    assert resp.status_code == 200
+
+    for entry in resp.json()["templates"]:
+        expected = sorted(_referenced_models_of(entry["template_id"]))
+        assert entry["missing_models"] == expected
+
+
+def test_templates_report_no_missing_models_when_tenant_has_all(client, fake_dc):
+    from app.templates.catalog import template_catalog
+
+    for entry in template_catalog():
+        for et in _referenced_models_of(entry["template_id"]):
+            fake_dc.set_model(TENANT, et, _model("first_name"))
+
+    resp = client.get(f"/api/workflows/{TENANT}/templates")
+
+    for entry in resp.json()["templates"]:
+        assert entry["missing_models"] == []
+
+
+def test_templates_report_only_the_models_the_tenant_lacks(client, fake_dc):
+    """Seed every referenced model except one, and only that one is reported."""
+    from app.templates.catalog import template_catalog
+
+    target = template_catalog()[0]["template_id"]
+    referenced = sorted(_referenced_models_of(target))
+    assert referenced, "this test needs a template that references at least one model"
+    withheld = referenced[0]
+
+    for entry in template_catalog():
+        for et in _referenced_models_of(entry["template_id"]):
+            if et != withheld:
+                fake_dc.set_model(TENANT, et, _model("first_name"))
+
+    resp = client.get(f"/api/workflows/{TENANT}/templates")
+    entry = _entry_by_id(resp.json()["templates"], target)
+
+    assert entry["missing_models"] == [withheld]
+
+
+def test_missing_models_is_present_on_every_entry(client, fake_dc):
+    """The key is never absent — the frontend reads it unconditionally."""
+    for entry in client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]:
+        assert "missing_models" in entry
+        assert isinstance(entry["missing_models"], list)
+
+
+def test_missing_models_is_sorted(client, fake_dc):
+    """Order must be stable so the rendered copy doesn't reshuffle between
+    requests. `referenced_entity_models` returns an unordered `set`, and
+    `fetch_models` (definitions.py:85) currently happens to iterate it
+    sorted — but that's an implementation detail of `fetch_models`, not a
+    guarantee. The route's own `sorted()` here is an independent guarantee
+    that does not depend on `fetch_models`'s current behavior."""
+    for entry in client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]:
+        assert entry["missing_models"] == sorted(entry["missing_models"])
+
+
+def test_templates_route_still_serves_the_whole_catalog(client, fake_dc):
+    """`missing_models` is additive — the existing payload must be intact."""
+    from app.templates.catalog import template_catalog
+
+    templates = client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]
+    expected = template_catalog()
+
+    assert [t["template_id"] for t in templates] == [e["template_id"] for e in expected]
+    for got, want in zip(templates, expected):
+        assert got["name"] == want["name"]
+        assert got["description"] == want["description"]
+        assert got["definition"]["steps"] == want["definition"]["steps"]
+        assert got["definition"]["machine"] == want["definition"]["machine"]
+
+
 # --- cross-tenant 403 on every designer route -------------------------------
 
 

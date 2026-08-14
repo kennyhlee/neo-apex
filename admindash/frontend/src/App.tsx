@@ -6,6 +6,7 @@ import { ToastProvider } from './components/ui/Toast.tsx';
 import CommandPalette from './components/ui/CommandPalette.tsx';
 import Navbar from './components/Navbar.tsx';
 import Footer from './components/Footer.tsx';
+import { RoutedErrorBoundary } from './components/ErrorBoundary.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import PublicInquiryPage from './pages/PublicInquiryPage.tsx';
 import HomePage from './pages/HomePage.tsx';
@@ -48,7 +49,14 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/home" replace /> : <LoginPage />} />
 
-      <Route path="/inquire/:tenantId" element={<PublicInquiryPage />} />
+      <Route
+        path="/inquire/:tenantId"
+        element={
+          <RoutedErrorBoundary variant="public">
+            <PublicInquiryPage />
+          </RoutedErrorBoundary>
+        }
+      />
 
       <Route
         path="*"
@@ -62,29 +70,31 @@ function AppRoutes() {
                   <Navbar />
                   <CommandPalette tenant={tenant} />
                   <main className="app-main" id="main-content" tabIndex={-1}>
-                    <Routes>
-                      <Route path="/home" element={<HomePage tenant={tenant} />} />
-                      <Route path="/attention" element={<AttentionPage tenant={tenant} />} />
-                      <Route path="/students" element={<StudentsPage tenant={tenant} />} />
-                      <Route
-                        path="/students/bulk-add"
-                        element={<BulkAddStudentsPage tenant={tenant} />}
-                      />
-                      <Route path="/leads" element={<LeadPage tenant={tenant} />} />
-                      <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
-                      <Route path="/families" element={<FamiliesPage tenant={tenant} />} />
-                      <Route path="/workflows" element={<WorkflowsPage tenant={tenant} />} />
-                      <Route
-                        path="/workflows/:definitionId"
-                        element={<WorkflowPipelinePage tenant={tenant} />}
-                      />
-                      <Route
-                        path="/workflows/:definitionId/new"
-                        element={<StaffEntryPage tenant={tenant} />}
-                      />
-                      <Route path="/" element={<Navigate to="/home" replace />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
+                    <RoutedErrorBoundary>
+                      <Routes>
+                        <Route path="/home" element={<HomePage tenant={tenant} />} />
+                        <Route path="/attention" element={<AttentionPage tenant={tenant} />} />
+                        <Route path="/students" element={<StudentsPage tenant={tenant} />} />
+                        <Route
+                          path="/students/bulk-add"
+                          element={<BulkAddStudentsPage tenant={tenant} />}
+                        />
+                        <Route path="/leads" element={<LeadPage tenant={tenant} />} />
+                        <Route path="/programs" element={<ProgramPage tenant={tenant} />} />
+                        <Route path="/families" element={<FamiliesPage tenant={tenant} />} />
+                        <Route path="/workflows" element={<WorkflowsPage tenant={tenant} />} />
+                        <Route
+                          path="/workflows/:definitionId"
+                          element={<WorkflowPipelinePage tenant={tenant} />}
+                        />
+                        <Route
+                          path="/workflows/:definitionId/new"
+                          element={<StaffEntryPage tenant={tenant} />}
+                        />
+                        <Route path="/" element={<Navigate to="/home" replace />} />
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </RoutedErrorBoundary>
                   </main>
                   <Footer />
                 </div>

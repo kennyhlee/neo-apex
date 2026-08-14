@@ -1,0 +1,38 @@
+.error-boundary {
+  max-width: 720px;
+  margin: var(--space-8) auto;
+  padding: var(--space-6);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.error-boundary-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.error-boundary-body {
+  margin: 0 0 var(--space-4);
+  color: var(--ink-faint);
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* familyhub has no shared Button component -- pages hand-roll their own
+   button classes (see .register-primary, .hub-action), so this follows the
+   same convention rather than introducing a new abstraction. */
+.error-boundary-reload {
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent-ink);
+  color: var(--text-inverse);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}

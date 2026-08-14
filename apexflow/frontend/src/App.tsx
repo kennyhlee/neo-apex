@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext.tsx';
 import { useAuth } from './hooks/useAuth.ts';
 import { ToastProvider } from './components/ui/Toast.tsx';
 import AppNav from './components/AppNav.tsx';
+import { RoutedErrorBoundary } from './components/ErrorBoundary.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import DefinitionsPage from './pages/DefinitionsPage.tsx';
 import EditorPage from './pages/EditorPage.tsx';
@@ -41,12 +42,14 @@ function AppRoutes() {
             <div className="app-shell">
               <AppNav />
               <main className="app-main" id="main-content" tabIndex={-1}>
-                <Routes>
-                  <Route path="/" element={<DefinitionsPage />} />
-                  <Route path="/definitions/:entityId" element={<EditorPage />} />
-                  <Route path="/templates" element={<TemplatesPage />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                <RoutedErrorBoundary>
+                  <Routes>
+                    <Route path="/" element={<DefinitionsPage />} />
+                    <Route path="/definitions/:entityId" element={<EditorPage />} />
+                    <Route path="/templates" element={<TemplatesPage />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </RoutedErrorBoundary>
               </main>
             </div>
           )
