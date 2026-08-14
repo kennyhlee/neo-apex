@@ -215,10 +215,23 @@ export function newDraft(tenantId: string, entityId: string): Promise<Definition
  * `templates_route` (Task 6). Platform-wide catalog, not tenant data —
  * `tenant_id` is present only for auth/route-shape consistency with the
  * rest of this file's routes.
+ *
+ * `missing_models` defaulted to `[]` here, not trusted from the wire: the
+ * frontend and the API deploy as separate artifacts (Cloudflare Workers vs
+ * Fly) from parallel jobs with no ordering, so a new frontend can briefly
+ * serve against a backend that predates this field. Absent must degrade to
+ * "no warning to show", never to a crashed gallery — same reasoning as
+ * `listDefinitions`'s `asNumber` coercion above.
  */
 export async function listTemplates(tenantId: string): Promise<ListTemplatesResponse> {
   const resp = await fetch(`${API_BASE}/api/workflows/${tenantId}/templates`, {
     headers: authHeaders(),
   });
-  return parseOrThrow(resp);
+  const data = await parseOrThrow<ListTemplatesResponse>(resp);
+  return {
+    templates: data.templates.map((entry) => ({
+      ...entry,
+      missing_models: entry.missing_models ?? [],
+    })),
+  };
 }
