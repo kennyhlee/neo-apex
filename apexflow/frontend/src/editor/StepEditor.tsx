@@ -41,10 +41,10 @@ interface StepEditorProps {
 }
 
 /** Short, non-cryptographic uniqueness suffix — same precedent as
- * DefinitionsPage.tsx/TemplatesPage.tsx's own `uniqueSuffix` (collisions
- * are harmless: a person picks step/section ids indirectly via "add", not
- * by typing them, so a clash within one session is vanishingly unlikely
- * and not safety-critical). */
+ * editor/stageOps.ts's and editor/stage/write.ts's own `uniqueSuffix`
+ * (collisions are harmless: a person picks step/section ids indirectly via
+ * "add", not by typing them, so a clash within one session is vanishingly
+ * unlikely and not safety-critical). */
 function uniqueSuffix(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }

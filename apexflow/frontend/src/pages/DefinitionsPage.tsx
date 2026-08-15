@@ -46,11 +46,11 @@ import { useAuth } from '../hooks/useAuth.ts';
 import { useToast } from '../hooks/useToast.ts';
 import {
   ApiError,
+  createDefinition,
   listDefinitions,
   lifecycleAction,
   newDraft,
 } from '../api/designer.ts';
-import { createEntity } from '../api/client.ts';
 import type {
   DefinitionListEntry,
   DefinitionLifecycleAction,
@@ -66,23 +66,6 @@ import './DefinitionsPage.css';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 const DEFAULT_PAGE_SIZE = 20;
-
-function slugify(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-+|-+$)/g, '');
-  return slug || 'workflow';
-}
-
-/** Short, non-cryptographic uniqueness suffix — collisions are harmless
- * here (DataCore assigns the real entity_id; definition_id is a lineage
- * label a person picked), just distinct enough that two "New workflow"
- * clicks with the same name don't collide within one session. */
-function uniqueSuffix(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
 
 interface LifecycleTarget {
   entry: DefinitionListEntry;
@@ -235,14 +218,8 @@ export default function DefinitionsPage() {
     }
     setCreatingBlank(true);
     try {
-      const definitionId = `${slugify(name)}-${uniqueSuffix()}`;
-      const result = await createEntity(tenantId, 'workflow_definition', {
-        definition_id: definitionId,
+      const result = await createDefinition(tenantId, {
         name,
-        version: 1,
-        status: 'draft',
-        lineage_status: 'active',
-        channel_access: 'staff_only',
         // A new workflow starts as the SMALLEST VALID machine, not an empty
         // one. An empty machine ({states: [], transitions: []}) fails
         // validate.py's `_state_errors` immediately ("no initial state", "no
@@ -253,7 +230,7 @@ export default function DefinitionsPage() {
         // transition" on top. This skeleton validates with ZERO errors; the
         // author renames, re-kinds, and re-wires it from a working starting
         // point instead of debugging a blank canvas.
-        machine: JSON.stringify({
+        machine: {
           states: [
             { state_id: 'draft', name: 'Draft', kind: 'initial' },
             { state_id: 'done', name: 'Done', kind: 'terminal' },
@@ -269,11 +246,12 @@ export default function DefinitionsPage() {
               effects: [],
             },
           ],
-        }),
-        steps: JSON.stringify([]),
+        },
+        steps: [],
+        channel_access: 'staff_only',
       });
       setShowNewModal(false);
-      navigate(`/definitions/${result.entity_id}`);
+      navigate(`/definitions/${result.row.entity_id}`);
     } catch {
       toast({ message: t('definitions.newWorkflowError'), tone: 'danger' });
     } finally {
