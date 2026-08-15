@@ -441,6 +441,33 @@ export const translations: Record<Locale, Record<string, string>> = {
     'templates.missingModelsDialog':
       'This template collects data into {models}, which this tenant does not have yet. You can still create the workflow and author it now, but it cannot be published until those models exist. An administrator can add them in LaunchPad under Tenant Settings → Sync default entities.',
 
+    // Assistant (chat drawer). The proposal-card keys (createDraft…readOnly)
+    // are used by the cards Tasks 10/11 add.
+    'assistant.title': 'Assistant',
+    'assistant.empty': 'Ask me to build or change a workflow.',
+    'assistant.placeholder': 'Ask about workflows…',
+    'assistant.inputLabel': 'Message',
+    'assistant.send': 'Send',
+    'assistant.stop': 'Stop',
+    'assistant.clear': 'Clear',
+    'assistant.quickQuestions': 'Quick questions',
+    'assistant.edit': 'Edit',
+    'assistant.done': 'Done',
+    'assistant.addQuick': '+ Add',
+    'assistant.removeQuick': 'Remove',
+    'assistant.newQuestion': 'New question',
+    'assistant.show': '‹ Assistant',
+    'assistant.hide': 'Hide assistant ›',
+    'assistant.limitReached': 'Conversation limit reached. Start a new chat.',
+    'assistant.createDraft': 'Create draft',
+    'assistant.adjust': 'Adjust…',
+    'assistant.apply': 'Apply',
+    'assistant.dismiss': 'Dismiss',
+    'assistant.applied': 'Applied ✓',
+    'assistant.createFailed': 'Create failed',
+    'assistant.applyFailed': 'Could not apply',
+    'assistant.readOnly': 'This version is read-only — open a new draft first',
+
     // Common
     'common.loading': 'Loading...',
     'common.save': 'Save',
@@ -874,6 +901,32 @@ export const translations: Record<Locale, Record<string, string>> = {
     'templates.missingModelsCard': '需要 {models}——此租户尚未配置。',
     'templates.missingModelsDialog':
       '此模板会将数据写入 {models}，但此租户尚未配置。您仍可以创建并编辑该工作流，但在配置完成前无法发布。管理员可在 LaunchPad 的「租户设置 → 同步默认实体」中添加。',
+
+    // Assistant (chat drawer)
+    'assistant.title': '助手',
+    'assistant.empty': '问我如何创建或修改工作流。',
+    'assistant.placeholder': '询问工作流…',
+    'assistant.inputLabel': '消息',
+    'assistant.send': '发送',
+    'assistant.stop': '停止',
+    'assistant.clear': '清除',
+    'assistant.quickQuestions': '快捷问题',
+    'assistant.edit': '编辑',
+    'assistant.done': '完成',
+    'assistant.addQuick': '添加',
+    'assistant.removeQuick': '删除',
+    'assistant.newQuestion': '新问题',
+    'assistant.show': '‹ 助手',
+    'assistant.hide': '隐藏助手 ›',
+    'assistant.limitReached': '对话已达上限，请开始新对话。',
+    'assistant.createDraft': '创建草稿',
+    'assistant.adjust': '调整',
+    'assistant.apply': '应用',
+    'assistant.dismiss': '忽略',
+    'assistant.applied': '已应用 ✓',
+    'assistant.createFailed': '创建失败',
+    'assistant.applyFailed': '无法应用',
+    'assistant.readOnly': '此版本为只读 — 请先创建新草稿',
 
     // Common
     'common.loading': '加载中...',

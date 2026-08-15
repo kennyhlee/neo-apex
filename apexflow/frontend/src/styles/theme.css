@@ -131,6 +131,7 @@
   /* --- Layout -------------------------------------------------------------- */
   --content-max: 1400px;
   --tap-min: 44px;
+  --assistant-w: 380px;
 
   /* ===========================================================================
      B. DENSITY — comfortable (default). ApexFlow ships one density; the

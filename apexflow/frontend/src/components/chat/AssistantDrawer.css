@@ -1,0 +1,67 @@
+/* =============================================================================
+   Assistant slide-in drawer. Ported from admindash's HomePage.css:345-401
+   (`.home-chat-*` -> `.assistant-*`).
+
+   Page content stays centered (.app-main keeps its max-width). The drawer is
+   anchored to the RIGHT EDGE OF THE CENTERED CONTENT, not the viewport edge,
+   and content reserves the drawer width + a small gap — so the two sit flush
+   with only a slight breathing space, no dead centered-gutter.
+   ============================================================================= */
+
+.app-main { transition: padding-right 0.28s ease; }
+body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--space-4)); }
+
+.assistant-toggle {
+  position: fixed;
+  top: calc(var(--nav-h) + var(--space-3));
+  z-index: var(--z-dropdown);
+  right: max(var(--space-4), calc((100vw - var(--content-max)) / 2 + var(--space-4)));
+  background: var(--accent-ink);
+  color: var(--on-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--shadow-2);
+}
+.assistant-toggle:hover { background: var(--accent-hover); }
+
+.assistant-drawer {
+  position: fixed;
+  top: var(--nav-h);
+  z-index: var(--z-drawer);
+  right: max(0px, calc((100vw - var(--content-max)) / 2));
+  width: var(--assistant-w);
+  height: calc(100vh - var(--nav-h));
+  transform: translateX(calc(100% + max(0px, (100vw - var(--content-max)) / 2)));
+  transition: transform 0.28s ease;
+  display: flex;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-3);
+}
+.assistant-drawer.is-open { transform: translateX(0); }
+.assistant-drawer .chat-panel { flex: 1; height: 100%; border: none; border-radius: 0; }
+
+/* Keep the closed drawer out of the tab order rather than only hiding it
+   from assistive tech. */
+.assistant-drawer[aria-hidden='true'] { visibility: hidden; }
+.assistant-drawer.is-open[aria-hidden='false'] { visibility: visible; }
+
+@media (max-width: 992px) {
+  /* Drawer covers the screen on small viewports; don't reserve desktop width. */
+  body.assistant-open .app-main { padding-right: var(--gutter); }
+  .assistant-drawer { width: 100%; transform: translateX(100%); }
+}
+
+/* AdminDash also shortens the drawer for its mobile bottom nav
+   (`--bottom-nav-h`). ApexFlow's AppNav has no bottom bar, so the full
+   `100vh - --nav-h` height is correct at every width. */
+
+@media (prefers-reduced-motion: reduce) {
+  .app-main,
+  .assistant-drawer { transition: none; }
+}

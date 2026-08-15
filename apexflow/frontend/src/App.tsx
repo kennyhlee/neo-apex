@@ -4,6 +4,7 @@ import { useAuth } from './hooks/useAuth.ts';
 import { ToastProvider } from './components/ui/Toast.tsx';
 import AppNav from './components/AppNav.tsx';
 import { RoutedErrorBoundary } from './components/ErrorBoundary.tsx';
+import { AssistantDrawer } from './components/chat/AssistantDrawer.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import DefinitionsPage from './pages/DefinitionsPage.tsx';
 import EditorPage from './pages/EditorPage.tsx';
@@ -41,6 +42,7 @@ function AppRoutes() {
           ) : (
             <div className="app-shell">
               <AppNav />
+              <AssistantDrawer />
               <main className="app-main" id="main-content" tabIndex={-1}>
                 <RoutedErrorBoundary>
                   <Routes>
