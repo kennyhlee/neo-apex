@@ -346,9 +346,11 @@
    rearranged the page you were trying to read. That rule is gone, and the
    `assistant-open` body class went with it.
 
-   The drawer is anchored to the RIGHT EDGE OF THE CENTERED CONTENT, not the
-   viewport edge, so on wide screens it sits flush with the dashboard rather
-   than stranded out in the gutter.
+   The drawer is anchored to the VIEWPORT edge. It was briefly anchored to the
+   right edge of the centered content column (`--content-max`), a holdover from
+   the pushing version: on a display wider than 1400px that left the open panel
+   floating (100vw - 1400px)/2 inboard of the edge, reading as "somewhere in the
+   middle of the screen". An overlay belongs to the window, not to the column.
    ============================================================================= */
 
 /* --- the edge handle -------------------------------------------------------
@@ -394,10 +396,11 @@
 }
 .home-chat-toggle__chevron { font-size: var(--text-md); line-height: 1; transition: transform 0.28s ease; }
 
-/* Open: sit flush against the drawer's left edge — the drawer's own right
-   offset plus its width. */
+/* Open: sit flush against the drawer's left edge. The drawer is pinned to the
+   viewport edge, so that edge is exactly its own width inboard — no content-
+   column term. */
 .home-chat-toggle.is-open {
-  right: calc(max(0px, (100vw - var(--content-max)) / 2) + var(--assistant-w));
+  right: var(--assistant-w);
 }
 .home-chat-toggle.is-open .home-chat-toggle__chevron { transform: rotate(180deg); }
 
@@ -405,10 +408,10 @@
   position: fixed;
   top: var(--nav-h);
   z-index: var(--z-drawer);
-  right: max(0px, calc((100vw - var(--content-max)) / 2));
+  right: 0;
   width: var(--assistant-w);
   height: calc(100vh - var(--nav-h));
-  transform: translateX(calc(100% + max(0px, (100vw - var(--content-max)) / 2)));
+  transform: translateX(100%);
   transition: transform 0.28s ease;
   display: flex;
   background: var(--bg-secondary);

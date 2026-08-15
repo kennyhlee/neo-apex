@@ -7,19 +7,21 @@
    left every time the assistant opened. That rule is gone; nothing in the page
    moves now, and the `assistant-open` body class went with it.
 
-   The drawer is anchored to the RIGHT EDGE OF THE CENTERED CONTENT, not the
-   viewport edge, so on wide screens it sits flush with the content column
-   rather than stranded out in the gutter.
+   The drawer is anchored to the VIEWPORT edge. It was briefly anchored to the
+   right edge of the centered content column (`--content-max`), a holdover from
+   the pushing version: on a display wider than 1400px that left the open panel
+   floating (100vw - 1400px)/2 inboard of the edge, reading as "somewhere in the
+   middle of the screen". An overlay belongs to the window, not to the column.
    ============================================================================= */
 
 .assistant-drawer {
   position: fixed;
   top: var(--nav-h);
   z-index: var(--z-drawer);
-  right: max(0px, calc((100vw - var(--content-max)) / 2));
+  right: 0;
   width: var(--assistant-w);
   height: calc(100vh - var(--nav-h));
-  transform: translateX(calc(100% + max(0px, (100vw - var(--content-max)) / 2)));
+  transform: translateX(100%);
   transition: transform 0.28s ease;
   display: flex;
   background: var(--bg-secondary);
@@ -86,12 +88,13 @@
   transition: transform 0.28s ease;
 }
 
-/* Open: sit flush against the drawer's left edge — the drawer's own right
-   offset plus its width. `.is-open` comes from React on the handle itself
-   rather than from a `body:has(...)` selector: the state is already in hand,
-   so the styling does not need to go looking for it. */
+/* Open: sit flush against the drawer's left edge. The drawer is pinned to the
+   viewport edge, so that edge is exactly its own width inboard — no content-
+   column term. `.is-open` comes from React on the handle itself rather than
+   from a `body:has(...)` selector: the state is already in hand, so the styling
+   does not need to go looking for it. */
 .assistant-handle.is-open {
-  right: calc(max(0px, (100vw - var(--content-max)) / 2) + var(--assistant-w));
+  right: var(--assistant-w);
 }
 .assistant-handle.is-open .assistant-handle__chevron { transform: rotate(180deg); }
 
