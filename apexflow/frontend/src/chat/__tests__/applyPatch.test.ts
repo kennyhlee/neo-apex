@@ -493,6 +493,75 @@ describe('applyPatch — set_channel_access', () => {
   });
 });
 
+// --- forward references ------------------------------------------------------
+//
+// The deliberate NON-check, pinned so a later hardening pass cannot quietly
+// take it away. `applyPatch`'s header states the rule: ids an op merely
+// INTRODUCES are not resolved here, because `patchOps.ts` puts id coherence on
+// the save PUT that Apply triggers, and because validating them would make op
+// ORDER load-bearing — an `add_move` listed before the `add_stage` that mints
+// its target is a legitimate patch. These tests fail loudly if that changes,
+// instead of the change landing green and breaking reorderable patches.
+
+describe('applyPatch — forward references are not resolved', () => {
+  it('add_move accepts a from/to naming stages that do not exist yet', () => {
+    // Header rationale: coherence is the save PUT's job, not this function's.
+    expect(() =>
+      run([
+        {
+          op: 'add_move',
+          transition_id: 't_later',
+          from: 'not_yet',
+          to: 'also_not_yet',
+          action: 'go',
+          actor: 'staff',
+          guards: [],
+          effects: [],
+        },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('add_move before the add_stage that mints its target still applies both', () => {
+    // Header rationale: refusing this would make op ORDER load-bearing in a
+    // way the backend never promised.
+    const { machine } = run([
+      {
+        op: 'add_move',
+        transition_id: 't_waitlist',
+        from: 'review',
+        to: 'waitlist',
+        action: 'waitlist',
+        actor: 'staff',
+        guards: [],
+        effects: [],
+      },
+      { op: 'add_stage', stage_id: 'waitlist', name: 'Waitlist', kind: 'active' },
+    ]);
+
+    expect(machine.transitions.map((t) => t.transition_id)).toContain('t_waitlist');
+    expect(machine.states.map((s) => s.state_id)).toContain('waitlist');
+  });
+
+  it('add_step accepts available_in ids that name no stage', () => {
+    // Header rationale: `available_in` is introduced, not resolved.
+    expect(() =>
+      run([
+        { op: 'add_step', step: { ...newStep('welcome'), available_in: ['ghost_stage'] } },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('update_move accepts a patch retargeting `to` at a nonexistent stage', () => {
+    // Header rationale: patch VALUES are merged, not validated.
+    const { machine } = run([
+      { op: 'update_move', transition_id: 't_submit', patch: { to: 'nowhere' } },
+    ]);
+
+    expect(machine.transitions[0].to).toBe('nowhere');
+  });
+});
+
 // --- cross-cutting -----------------------------------------------------------
 
 describe('applyPatch — purity and atomicity', () => {
@@ -550,6 +619,33 @@ describe('applyPatch — purity and atomicity', () => {
     expect(machine).toEqual(machineFixture());
     expect(steps).toEqual(stepsFixture());
     expect(channelAccess).toBeUndefined();
+  });
+
+  it('refuses an op it does not recognise instead of silently dropping it', () => {
+    // The frontend and backend deploy from independent version lines, so a
+    // newer backend can propose a 15th op this build has never seen. Dropping
+    // it would let Apply report success having applied 4 of 5 edits. The cast
+    // through `unknown` is the point of the test — no in-tree caller can
+    // produce this value, only a wire payload can.
+    const unknownOp = { op: 'set_deadline', when: '2026-09-01' } as unknown as PatchOp;
+
+    expect(() => run([unknownOp])).toThrow(PatchApplyError);
+    expect(() => run([unknownOp])).toThrow(/set_deadline/);
+  });
+
+  it('an unrecognised op aborts the whole patch, applying none of its siblings', () => {
+    const machine = machineFixture();
+    const steps = stepsFixture();
+
+    expect(() =>
+      applyPatch(machine, steps, [
+        { op: 'rename_stage', stage_id: 'draft', name: 'Started' },
+        { op: 'set_deadline', when: '2026-09-01' } as unknown as PatchOp,
+      ]),
+    ).toThrow(PatchApplyError);
+
+    expect(machine).toEqual(machineFixture());
+    expect(steps).toEqual(stepsFixture());
   });
 
   it('PatchApplyError is an Error subclass with a usable name', () => {

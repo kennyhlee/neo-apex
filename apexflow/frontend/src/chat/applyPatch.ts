@@ -295,6 +295,23 @@ export function applyPatch(
         channelAccess = op.value;
         break;
       }
+
+      default: {
+        // The frontend and the backend deploy from independent version lines,
+        // so a newer backend CAN send an op this build has never heard of. The
+        // `never` assignment makes ADDING a 15th member to `PatchOp` a compile
+        // error here (a plain 14-case switch would not — TS does not enforce
+        // exhaustiveness without it), and the throw makes an op arriving from
+        // an ahead-of-us backend a REFUSED patch rather than a silently
+        // dropped edit. Silent dropping is the dangerous failure: Apply would
+        // report success having applied 4 of 5 edits, and the author would
+        // have no way to see the fifth went missing.
+        const _exhaustive: never = op;
+        void _exhaustive;
+        throw new PatchApplyError(
+          `unsupported op "${(op as { op: string }).op}" — this workflow editor is older than the assistant that proposed it`,
+        );
+      }
     }
   }
 
