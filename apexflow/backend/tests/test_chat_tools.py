@@ -27,7 +27,8 @@ from pydantic_ai.messages import ToolReturnPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.chat.deps import ChatDeps
-from app.chat.tools import register_read_tools
+from app.chat.tools import register_proposal_tools, register_read_tools
+from app.workflows import datacore as dc
 from app.workflows import definitions as defs
 
 models.ALLOW_MODEL_REQUESTS = False
@@ -35,7 +36,7 @@ models.ALLOW_MODEL_REQUESTS = False
 TENANT = "acme"
 
 
-def _agent_that_calls(tool_name: str, args: dict) -> Agent:
+def _responder_for(tool_name: str, args: dict):
     def responder(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         if len(messages) == 1:
             return ModelResponse(parts=[ToolCallPart(tool_name, args)])
@@ -44,7 +45,11 @@ def _agent_that_calls(tool_name: str, args: dict) -> Agent:
                 return ModelResponse(parts=[TextPart(str(part.content))])
         return ModelResponse(parts=[TextPart("no tool return")])
 
-    agent = Agent(FunctionModel(responder), deps_type=ChatDeps)
+    return responder
+
+
+def _agent_that_calls(tool_name: str, args: dict) -> Agent:
+    agent = Agent(FunctionModel(_responder_for(tool_name, args)), deps_type=ChatDeps)
     register_read_tools(agent)
     return agent
 
@@ -340,6 +345,113 @@ def test_get_template_unknown_id_returns_an_error_string():
     assert "list_templates" in out
 
 
+# --- propose_create_draft -------------------------------------------------
+#
+# The model NEVER writes. `propose_create_draft` only QUEUES a dict on
+# `deps.pending_proposals`; `sse_chat` emits it as a `proposal` frame and the
+# admin's click on the resulting card is what actually creates the draft. So
+# every test here asserts two things: the string handed back to the model, and
+# the exact state of the queue.
+
+
+def _run_proposal(args: dict, page: str = "list") -> tuple[str, ChatDeps]:
+    """Like `_run`, but registers the PROPOSAL tools and hands back the deps
+    so the queue itself can be inspected."""
+    agent = Agent(FunctionModel(_responder_for("propose_create_draft", args)),
+                  deps_type=ChatDeps)
+    register_proposal_tools(agent)
+    deps = _deps(page)
+    return agent.run_sync("go", deps=deps).output, deps
+
+
+def _draft_args(**over) -> dict:
+    args = {"name": "Signup", "machine": _valid_machine(), "steps": _valid_steps()}
+    args.update(over)
+    return args
+
+
+def test_propose_create_draft_queues_the_exact_wire_contract(fake_dc):
+    out, deps = _run_proposal(_draft_args(
+        channel_access="family",
+        template_id="signup",
+        summary=["Two states", "One form step"],
+    ))
+
+    assert "card is ready" in out.lower()
+    assert len(deps.pending_proposals) == 1
+    p = deps.pending_proposals[0]
+    # Exactly the keys Task 10's CreateDraftCard reads — no more, no fewer.
+    assert set(p) == {"action", "name", "template_id", "machine", "steps",
+                      "channel_access", "summary"}
+    assert p["action"] == "create_draft"
+    assert p["name"] == "Signup"
+    assert p["template_id"] == "signup"
+    assert p["channel_access"] == "family"
+    assert p["summary"] == ["Two states", "One form step"]
+    # The COMPLETE machine/steps, dumped by_alias: the card posts this straight
+    # to the create endpoint, which parses `from`, not `from_`.
+    assert [s["state_id"] for s in p["machine"]["states"]] == [
+        "draft", "submitted", "enrolled"]
+    t = p["machine"]["transitions"][0]
+    assert t["from"] == "draft"
+    assert "from_" not in t
+    assert p["steps"][0]["step_id"] == "student_details"
+    assert p["steps"][0]["config"]["sections"][0]["entity_model"] == "student"
+    # It rides the SSE wire verbatim (`json.dumps` in stream.py's `_sse`).
+    json.dumps(p)
+
+
+def test_propose_create_draft_writes_nothing(fake_dc):
+    """The whole point of a proposal: no definition row exists afterwards."""
+    _out, deps = _run_proposal(_draft_args())
+
+    assert deps.pending_proposals  # it really did propose
+    assert dc.list_entities(TENANT, "workflow_definition", "", "Bearer test-token") == []
+
+
+def test_propose_create_draft_defaults_channel_template_and_summary(fake_dc):
+    _out, deps = _run_proposal(_draft_args())
+
+    p = deps.pending_proposals[0]
+    assert p["channel_access"] == "staff_only"
+    assert p["template_id"] is None
+    assert p["summary"] == []
+
+
+def test_propose_create_draft_rejects_an_unparseable_machine(fake_dc):
+    """A machine the schema cannot parse must come back as a correctable
+    string — never an exception through the stream, and never a queued
+    proposal the card would post to a create endpoint that then 422s."""
+    out, deps = _run_proposal(_draft_args(
+        machine={"states": [{"state_id": "draft"}], "transitions": []}))
+
+    assert "does not parse" in out
+    assert "propose_create_draft" in out  # tells the model how to retry
+    assert deps.pending_proposals == []
+
+
+def test_propose_create_draft_rejects_unparseable_steps(fake_dc):
+    out, deps = _run_proposal(_draft_args(steps=[{"step_id": "orphan"}]))
+
+    assert "does not parse" in out
+    assert deps.pending_proposals == []
+
+
+def test_propose_create_draft_rejects_an_unknown_channel_access(fake_dc):
+    """`channel_access` is a two-value enum on the definition row; anything
+    else would be rejected downstream, so it is caught here instead."""
+    out, deps = _run_proposal(_draft_args(channel_access="public"))
+
+    assert out == "channel_access must be 'staff_only' or 'family'."
+    assert deps.pending_proposals == []
+
+
+def test_propose_create_draft_accepts_both_channel_values(fake_dc):
+    for value in ("staff_only", "family"):
+        _out, deps = _run_proposal(_draft_args(channel_access=value))
+        assert deps.pending_proposals[0]["channel_access"] == value
+
+
 # --- registration ---------------------------------------------------------
 
 
@@ -360,3 +472,21 @@ def test_register_read_tools_offers_all_four_tools_to_the_model(fake_dc):
 
     assert {"list_workflows", "get_workflow", "list_templates", "get_template"} <= set(seen)
     assert all(seen[n] for n in seen), seen
+
+
+def test_register_proposal_tools_offers_propose_create_draft_with_a_description(fake_dc):
+    """Same `AgentInfo` check for the write-proposal side. The docstring is
+    what steers the model to propose instead of claiming it created the
+    workflow, so a bare name is not enough."""
+    seen: dict[str, str | None] = {}
+
+    def responder(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen.update({t.name: t.description for t in info.function_tools})
+        return ModelResponse(parts=[TextPart("done")])
+
+    agent = Agent(FunctionModel(responder), deps_type=ChatDeps)
+    register_proposal_tools(agent)
+    agent.run_sync("go", deps=_deps())
+
+    assert "propose_create_draft" in seen
+    assert seen["propose_create_draft"]

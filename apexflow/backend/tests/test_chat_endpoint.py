@@ -18,7 +18,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 from pydantic_ai import models
-from pydantic_ai.models.function import FunctionModel
+from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
 import app.api.chat as chat_api
 from app.auth import require_authenticated_user
@@ -211,6 +211,87 @@ def test_chat_endpoint_rejects_tenant_mismatch(client, monkeypatch):
               "context": {"page": "list"}},
     )
     assert resp.status_code == 403
+
+
+# --- proposals over the wire ----------------------------------------------
+#
+# `sse_chat` drains `deps.pending_proposals` after the run, so a proposal tool
+# only reaches the UI if the route builds deps the tool can append to AND the
+# stream emits them. These tests drive the REAL `build_chat_agent` (proposal
+# tools included) with a streaming FunctionModel that calls the tool, so the
+# route -> deps -> tool -> queue -> SSE path is exercised end to end.
+
+_SKELETON_MACHINE = {
+    "states": [
+        {"state_id": "draft", "name": "Draft", "kind": "initial"},
+        {"state_id": "done", "name": "Done", "kind": "terminal"},
+    ],
+    "transitions": [
+        {"transition_id": "t_submit", "from": "draft", "to": "done",
+         "action": "submit", "actor": "family", "guards": [], "effects": []},
+    ],
+}
+
+
+def _agent_that_proposes(**over):
+    args = {"name": "Signup", "machine": _SKELETON_MACHINE, "steps": [],
+            "summary": ["Draft -> submit -> done"]}
+    args.update(over)
+
+    async def _stream(messages, info):
+        if len(messages) == 1:
+            yield {0: DeltaToolCall(name="propose_create_draft",
+                                    json_args=json.dumps(args))}
+        else:
+            yield "The create-draft card is ready — review it and confirm."
+
+    return lambda: build_chat_agent(model=FunctionModel(stream_function=_stream))
+
+
+def test_chat_endpoint_emits_a_proposal_frame_when_the_model_proposes(
+    client, monkeypatch
+):
+    monkeypatch.setattr(chat_api, "build_chat_agent", _agent_that_proposes())
+    resp = client.post(
+        CHAT_URL,
+        json={"message": "build me a signup workflow", "history": [],
+              "message_count": 0, "context": {"page": "list"}},
+    )
+    assert resp.status_code == 200
+    events = _events(resp.text)
+    assert not [e for e in events if e["type"] == "error"], events
+    proposals = [e for e in events if e["type"] == "proposal"]
+    assert len(proposals) == 1, events
+    p = proposals[0]["proposal"]
+    assert p["action"] == "create_draft"
+    assert p["name"] == "Signup"
+    assert p["channel_access"] == "staff_only"
+    # by_alias survives the round trip to the browser: `from`, not `from_`.
+    assert p["machine"]["transitions"][0]["from"] == "draft"
+    # The proposal must land BEFORE `done` — the UI renders the card off the
+    # frame and clears its pending state on `done`.
+    types = [e["type"] for e in events]
+    assert types.index("proposal") < types.index("done")
+    assert types[-1] == "done"
+
+
+def test_chat_endpoint_emits_no_proposal_frame_when_the_tool_rejects(
+    client, monkeypatch
+):
+    """A rejected payload comes back to the model as text; nothing is queued,
+    so the admin is never shown a card for a definition that would not parse."""
+    monkeypatch.setattr(chat_api, "build_chat_agent",
+                        _agent_that_proposes(channel_access="public"))
+    resp = client.post(
+        CHAT_URL,
+        json={"message": "build me a signup workflow", "history": [],
+              "message_count": 0, "context": {"page": "list"}},
+    )
+    assert resp.status_code == 200
+    events = _events(resp.text)
+    assert not [e for e in events if e["type"] == "proposal"], events
+    assert not [e for e in events if e["type"] == "error"], events
+    assert events[-1]["type"] == "done"
 
 
 # --- agent construction ---------------------------------------------------

@@ -20,18 +20,21 @@ of the shipped template catalog. Two properties every tool here must keep:
    the designer's own bundle/validate routes would report. A second, chat-only
    read path would be free to drift.
 
-`register_proposal_tools` stays a no-op until Tasks 5-6; `build_chat_agent`
-calls it unconditionally, so it must exist.
+`register_proposal_tools` holds the write-PROPOSAL tools — see its own
+docstring; property 1 applies there too, property 2 does not (a proposal
+reads nothing).
 """
 import json
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from pydantic_ai import Agent, RunContext
 
 from app.chat.deps import ChatDeps
 from app.templates.catalog import template_catalog
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
+from app.workflows.schema import MachineDef, StepDef
 from app.workflows.validate import validate_definition
 
 
@@ -123,4 +126,53 @@ def register_read_tools(agent: Agent) -> None:
 
 
 def register_proposal_tools(agent: Agent) -> None:
-    """filled in by Tasks 5-6"""
+    """The write-PROPOSAL tools. Nothing here writes.
+
+    A proposal tool appends a dict to `ctx.deps.pending_proposals`; `sse_chat`
+    drains that list into `proposal` SSE frames after the run, the frontend
+    renders a confirmation card from it, and the ADMIN's click is what calls
+    the create/patch endpoint. So the queued dict is a wire contract, and it
+    is validated here rather than trusted: a payload that would 422 at the
+    create endpoint must never reach a card, because at that point the admin
+    is the one holding a broken request. Same two properties as the read
+    tools — returns a string, never raises — with the rejection text written
+    so the model can correct itself and call again.
+    """
+
+    @agent.tool
+    def propose_create_draft(
+        ctx: RunContext[ChatDeps],
+        name: str,
+        machine: dict,
+        steps: list[dict],
+        channel_access: str = "staff_only",
+        template_id: str | None = None,
+        summary: list[str] | None = None,
+    ) -> str:
+        """Open a create-draft confirmation card. Call for ANY request to
+        create/build a new workflow, passing the COMPLETE machine and steps
+        (start from a template via get_template, or from the minimal skeleton
+        for scratch builds) and a short human-readable summary of what you
+        set up. Do NOT create the draft yourself — the admin confirms."""
+        # The same models the create endpoint parses with, so "it parses here"
+        # means "it parses there" — and `model_dump(by_alias=True)` re-emits
+        # the wire keys (`from`, not `from_`) the card posts back.
+        try:
+            m = MachineDef.model_validate(machine)
+            s = [StepDef.model_validate(x) for x in steps]
+        except ValidationError as exc:
+            return (f"Proposal rejected — the definition does not parse: {exc}. "
+                    "Fix the payload and call propose_create_draft again.")
+        if channel_access not in ("staff_only", "family"):
+            return "channel_access must be 'staff_only' or 'family'."
+        ctx.deps.pending_proposals.append({
+            "action": "create_draft",
+            "name": name,
+            "template_id": template_id,
+            "machine": m.model_dump(by_alias=True),
+            "steps": [x.model_dump(by_alias=True) for x in s],
+            "channel_access": channel_access,
+            "summary": summary or [],
+        })
+        return ("Create-draft card is ready for the admin to confirm. Tell them "
+                "to review and click Create draft — do not claim it exists yet.")
