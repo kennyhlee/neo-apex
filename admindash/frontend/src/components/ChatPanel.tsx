@@ -22,7 +22,14 @@ function loadHistory(): Msg[] {
   }
 }
 
-export function ChatPanel() {
+export function ChatPanel({
+  /**
+   * Renders a close control in the header when provided. Optional because the
+   * panel is not inherently a drawer — only HomePage wraps it in one, and a
+   * panel embedded directly in a page would have nothing to close.
+   */
+  onClose,
+}: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const { t } = useTranslation();
   const [msgs, setMsgs] = useState<Msg[]>(loadHistory);
@@ -93,7 +100,11 @@ export function ChatPanel() {
   return (
     <aside className="chat-panel" aria-label={t('assistant.title')}>
       <div className="chat-panel__header">
-        {t('assistant.title')}
+        {/* The title carries the `margin-right: auto` that right-aligns the
+            controls, rather than Clear carrying `margin-left: auto` —
+            otherwise Clear and × each claim the free space and drift apart,
+            and × would un-align whenever Clear is absent. */}
+        <span className="chat-panel__title">{t('assistant.title')}</span>
         {msgs.length > 0 && (
           <button
             type="button"
@@ -102,6 +113,16 @@ export function ChatPanel() {
             disabled={busy}
           >
             {t('assistant.clear')}
+          </button>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            className="chat-panel__close"
+            onClick={onClose}
+            aria-label={t('assistant.hide')}
+          >
+            <span aria-hidden="true">×</span>
           </button>
         )}
       </div>

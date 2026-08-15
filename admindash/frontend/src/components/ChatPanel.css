@@ -174,13 +174,24 @@
   gap: var(--space-3);
 }
 
+/* Pushes every header control to the right edge. On the title rather than on
+   the first button, so Clear and the close × stay together and × stays
+   aligned when Clear is absent (empty transcript). */
+.chat-panel__title { margin-right: auto; }
+
+/* Clear was --text-tertiary at --text-xs with no border or background: present
+   and clickable, but reading as decoration rather than a control. Users
+   reported "no way to clear the messages" while this button was on screen and
+   working. Bumped to secondary text at --text-sm with a resting border — the
+   same weight as other ghost buttons in this app — so it looks like something
+   you can press. It stays conditional on a non-empty transcript, which is
+   correct: a Clear with nothing to clear is noise. */
 .chat-panel__clear {
-  margin-left: auto;
   background: none;
-  border: none;
-  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
   font: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   cursor: pointer;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-xs);
@@ -190,3 +201,25 @@
   color: var(--text-primary);
 }
 .chat-panel__clear:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Ghost square for the × glyph. 24px keeps it a comfortable target without
+   making the header taller than the text line it shares. */
+.chat-panel__close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: calc(var(--space-2) * -1);
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+.chat-panel__close:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}

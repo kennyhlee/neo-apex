@@ -349,6 +349,13 @@
 .app-main { transition: padding-right 0.28s ease; }
 body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--space-4)); }
 
+/* REOPEN-ONLY: HomePage renders this while the drawer is CLOSED and not
+   otherwise, so `--z-dropdown` sitting below `--z-drawer` no longer matters —
+   the two are never on screen together. Closing is the × in the panel header.
+   Keep it that way: restoring a persistent toggle here reinstates the defect
+   where the open drawer paints over its own close control. Verified at 1440 /
+   1200 / 1000px that nothing on Home shares this band while closed, so the
+   fixed position steals no page control. */
 .home-chat-toggle {
   position: fixed;
   top: calc(var(--nav-h) + var(--space-3));

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useToast } from '../hooks/useToast.ts';
@@ -296,17 +296,72 @@ export default function HomePage({ tenant }: HomePageProps) {
     return () => document.body.classList.remove('assistant-open');
   }, [chatOpen]);
 
+  // The reopen pill only exists while the drawer is closed, so focus has to be
+  // handed to it AFTER the close has rendered it — hence the effect below
+  // rather than a `.focus()` inside `closeChat`.
+  const reopenRef = useRef<HTMLButtonElement>(null);
+  const wantReopenFocus = useRef(false);
+  useEffect(() => {
+    if (!chatOpen && wantReopenFocus.current) {
+      wantReopenFocus.current = false;
+      reopenRef.current?.focus();
+    }
+  }, [chatOpen]);
+
+  const closeChat = useCallback(() => {
+    // The element that had focus is inside the panel about to be hidden
+    // (`visibility: hidden` when `aria-hidden`), so parking focus on the
+    // reopen control keeps a keyboard user where the assistant now is.
+    wantReopenFocus.current = true;
+    setChatOpen(false);
+  }, []);
+
+  /**
+   * Escape closes the drawer when focus is inside it. Bound to the `<aside>`
+   * rather than to `document`: a window-level listener would also fire while
+   * the user is typing in some unrelated control on Home, and closing the
+   * assistant out from under an edit elsewhere is worse than not offering the
+   * shortcut. React's synthetic events bubble, so focus in any descendant is
+   * covered.
+   */
+  const onDrawerKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      closeChat();
+    },
+    [closeChat],
+  );
+
   return (
     <div className={`home-layout ${chatOpen ? 'chat-open' : ''}`}>
-      <button
-        className="home-chat-toggle"
-        onClick={() => setChatOpen((o) => !o)}
-        aria-expanded={chatOpen}
+      {/* SHOW-ONLY, and rendered only while the drawer is closed.
+          It used to be a persistent show/hide toggle, which could not work:
+          it sits at --z-dropdown (200) under the drawer's --z-drawer (500), so
+          once open — and it opens by default — the drawer's own header
+          swallowed every click on it. With no other close control and Escape
+          unhandled, the assistant could not be closed at all. Rendering it
+          only when closed makes that stacking conflict structurally impossible
+          rather than fixing it with a z-index fight that would put a fixed
+          control back over the page. Closing is the × in the panel header. */}
+      {!chatOpen && (
+        <button
+          ref={reopenRef}
+          className="home-chat-toggle"
+          onClick={() => setChatOpen(true)}
+          aria-expanded={false}
+          aria-controls="home-chat-drawer"
+        >
+          {t('assistant.show')}
+        </button>
+      )}
+      <aside
+        id="home-chat-drawer"
+        className={`home-chat-drawer ${chatOpen ? 'is-open' : ''}`}
+        aria-hidden={!chatOpen}
+        onKeyDown={onDrawerKeyDown}
       >
-        {chatOpen ? 'Hide assistant ›' : '‹ Assistant'}
-      </button>
-      <aside className={`home-chat-drawer ${chatOpen ? 'is-open' : ''}`} aria-hidden={!chatOpen}>
-        <ChatPanel />
+        <ChatPanel onClose={closeChat} />
       </aside>
 
       <div className="home-page">

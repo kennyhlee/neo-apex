@@ -115,6 +115,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.send': 'Send',
     'assistant.stop': 'Stop',
     'assistant.clear': 'Clear',
+    // `show` labels the reopen pill (visible only while the drawer is
+    // closed); `hide` is the aria-label on the drawer header's ×.
+    'assistant.show': 'Assistant',
+    'assistant.hide': 'Hide assistant',
     'assistant.quickQuestions': 'Quick questions',
 
     // Sites
@@ -692,6 +696,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.send': '\u53d1\u9001',
     'assistant.stop': '\u505c\u6b62',
     'assistant.clear': '\u6e05\u7a7a',
+    'assistant.show': '\u52a9\u624b',
+    'assistant.hide': '\u9690\u85cf\u52a9\u624b',
     'assistant.quickQuestions': '\u5feb\u6377\u63d0\u95ee',
 
     // Sites
