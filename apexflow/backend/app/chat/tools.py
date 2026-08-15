@@ -1,8 +1,9 @@
 # apexflow/backend/app/chat/tools.py
 """Chat agent tool registrations.
 
-`register_read_tools` is the model's whole view of tenant workflow data and
-of the shipped template catalog. Two properties every tool here must keep:
+`register_read_tools` is the model's whole view of tenant workflow data, of
+the tenant's entity models, and of the shipped template catalog. Two
+properties every tool here must keep:
 
 1. RETURNS A STRING, NEVER RAISES. A tool exception propagates out of
    `agent.run_stream` and the SSE stream ends in an `error` frame — a row
@@ -30,13 +31,30 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from pydantic_ai import Agent, RunContext
 
+from app.api.designer import STANDARD_BUNDLE_MODELS
 from app.chat.deps import ChatDeps
 from app.chat.patch_ops import validate_ops
 from app.templates.catalog import template_catalog
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
-from app.workflows.schema import MachineDef, StepDef
-from app.workflows.validate import validate_definition
+from app.workflows.schema import ENGINE_OWNED_FIELDS, MachineDef, SectionDef, StepDef
+from app.workflows.validate import (
+    _is_link_or_id_field,
+    _model_fields,
+    validate_definition,
+)
+
+# `_model_fields` and `_is_link_or_id_field` are private to validate.py and
+# imported deliberately rather than re-derived, for the reason context.py
+# already states about the first: they ARE validate_definition's own
+# definitions of "a field of this model" and "a field the engine supplies".
+# These tools exist to tell the model which field names will pass validation,
+# so a second implementation here could disagree with the one that decides.
+#
+# `STANDARD_BUNDLE_MODELS` is the designer's section-picker menu; unioning it
+# into the listing keeps the assistant's menu and the picker's the same menu.
+# The import direction is safe: `app.api.designer` imports nothing from
+# `app.chat`.
 
 
 def register_read_tools(agent: Agent) -> None:
@@ -109,6 +127,86 @@ def register_read_tools(agent: Agent) -> None:
         })
 
     @agent.tool
+    def list_entity_models(ctx: RunContext[ChatDeps]) -> str:
+        """The entity models this tenant has, with their field names — the
+        only models a form section may bind to. CALL THIS BEFORE AUTHORING
+        ANY FORM SECTION (creating a workflow from scratch or adding a step):
+        outside the editor nothing else tells you which models exist or what
+        they hold, and a section bound to a model this does not list, or
+        picking no fields at all, is rejected."""
+        # Two sources, unioned: the tenant's OWN model types (a camp or
+        # program model no hardcoded list could know about) and the designer
+        # picker's standard menu (so the assistant offers what the picker
+        # offers). The enumeration is the optional half — if that read fails,
+        # the standard menu is still worth returning, so the failure is
+        # reported inline rather than replacing the answer.
+        note = ""
+        try:
+            types = set(dc.list_model_types(ctx.deps.tenant_id, ctx.deps.token))
+        except Exception as exc:  # noqa: BLE001 — surface to the model, never raise
+            types = set()
+            note = (f"\n(This tenant's own model list could not be read ({exc}), so "
+                    f"only the standard models are shown — there may be more.)")
+        types |= set(STANDARD_BUNDLE_MODELS)
+        try:
+            models = defs.fetch_models(ctx.deps.tenant_id, types, ctx.deps.token)
+        except Exception as exc:  # noqa: BLE001
+            return f"Could not load this tenant's entity models: {exc}"
+        lines, absent = [], []
+        for name in sorted(models):
+            # `fetch_models` yields None for a type the tenant never set up;
+            # a model with no fields is equally unusable for a section.
+            fields = _model_fields(models[name])
+            if fields:
+                lines.append(f"- {name}: " + ", ".join(sorted(fields)))
+            else:
+                absent.append(name)
+        if not lines:
+            return ("This tenant has no entity models set up, so no form section "
+                    "can be authored yet. Tell the admin their entity models "
+                    "(student, family, ...) must exist before a form step can "
+                    "collect anything." + note)
+        out = "\n".join(lines)
+        if absent:
+            # Named, not hidden: "not set up here" is precisely the fact that
+            # stops the model inventing a section against one of them.
+            out += ("\nNot set up in this tenant — do NOT bind a section to these: "
+                    + ", ".join(absent))
+        return out + note
+
+    @agent.tool
+    def get_entity_model(ctx: RunContext[ChatDeps], entity_type: str) -> str:
+        """One entity model's fields with their type and required-ness — what
+        a section's `fields: [{name, required}]` must be drawn from. Call this
+        for every model you are about to author a section against, and pick
+        real field names from it; never invent a field, and never leave a
+        section's fields empty."""
+        try:
+            model = dc.get_model_definition(ctx.deps.tenant_id, entity_type,
+                                            ctx.deps.token)
+        except Exception as exc:  # noqa: BLE001 — an outage is not an absent model
+            return (f"Could not load entity model '{entity_type}': {exc}. The model "
+                    f"may well exist — do not treat this as missing.")
+        fields = _model_fields(model)
+        if not fields:
+            return (f"This tenant has no entity model '{entity_type}' (or it declares "
+                    f"no fields). Call list_entity_models for the models that do "
+                    f"exist, and do not bind a section to '{entity_type}'.")
+        lines = []
+        for name in sorted(fields):
+            f = fields[name]
+            line = f"- {name}: {f.get('type') or 'unknown'}"
+            if f.get("required"):
+                line += " (required)"
+            # The engine supplies these; validate_definition rejects a section
+            # that names an engine-owned field, and link/id fields are never
+            # section-writable in practice.
+            if name in ENGINE_OWNED_FIELDS or _is_link_or_id_field(name):
+                line += " [engine-supplied — do not pick]"
+            lines.append(line)
+        return f"Fields of entity model '{entity_type}':\n" + "\n".join(lines)
+
+    @agent.tool
     def list_templates(ctx: RunContext[ChatDeps]) -> str:
         """List available workflow templates (template_id, name, description)."""
         return "\n".join(
@@ -124,6 +222,46 @@ def register_read_tools(agent: Agent) -> None:
             if t["template_id"] == template_id:
                 return json.dumps(t["definition"])
         return f"No template named {template_id}. Call list_templates."
+
+
+def _step_sections(steps: list[StepDef]) -> list[SectionDef]:
+    """Every declared section across `form` steps, parsed.
+
+    The same walk `defs.referenced_entity_models` does (and the same
+    `SectionDef.model_validate`), so on steps that function has already
+    accepted this cannot raise — which is why the callers below run it
+    outside their parse-guard try.
+    """
+    return [SectionDef.model_validate(raw)
+            for step in steps if step.type == "form"
+            for raw in step.config.get("sections", []) or []]
+
+
+def _empty_section_rejection(sections: list[SectionDef]) -> str | None:
+    """Refusal text for the first section that picks NO fields, else None.
+
+    `fields: []` parses — an empty list is a valid `list[FieldPick]` — and it
+    passes publish-time validation too, since every rule there is about the
+    fields a section DOES name. So nothing downstream stops it, and the
+    workflow the admin confirms contains a form step that renders blank. This
+    was not hypothetical: an assistant with no way to read the tenant's entity
+    models (before `list_entity_models`/`get_entity_model` existed) emitted
+    exactly this, and the empty form only showed up when someone opened the
+    step.
+
+    Refusing at the proposal is the only place it can be caught before the
+    admin is the one holding it, and the text names the section, the model to
+    ask about, and the tool that answers — enough for the model to fix it in
+    one turn instead of re-proposing the same shape.
+    """
+    for section in sections:
+        if not section.fields:
+            return (f"Proposal rejected — section '{section.section_id}' picks no "
+                    f"fields, so its form would render empty. Call "
+                    f"get_entity_model('{section.entity_model}') and put real field "
+                    f"names into the section's `fields` list "
+                    f"([{{\"name\": ..., \"required\": ...}}]), then propose again.")
+    return None
 
 
 def register_proposal_tools(agent: Agent) -> None:
@@ -180,6 +318,9 @@ def register_proposal_tools(agent: Agent) -> None:
         except (ValidationError, ValueError, TypeError) as exc:
             return (f"Proposal rejected — the definition does not parse: {exc}. "
                     "Fix the payload and call propose_create_draft again.")
+        rejection = _empty_section_rejection(_step_sections(s))
+        if rejection is not None:
+            return rejection
         if channel_access not in ("staff_only", "family"):
             return "channel_access must be 'staff_only' or 'family'."
         ctx.deps.pending_proposals.append({
@@ -246,14 +387,28 @@ def register_proposal_tools(agent: Agent) -> None:
         # `{"sections": 5}` raises TypeError while iterating rather than
         # ValidationError. Every malformed payload must come back as text — a
         # raise here ends the SSE stream in `error`.
+        #
+        # `add_section` carries a whole SectionDef in an equally untyped
+        # `dict[str, Any]` and is parsed here for the same reason — it is the
+        # other door to the same step content, and a half-built section
+        # reaching a card fails at Apply exactly as a half-built step would.
         try:
             validated = validate_ops(ops)
             added = [StepDef.model_validate(o["step"]) for o in validated
                      if o["op"] == "add_step"]
             defs.referenced_entity_models(added)
+            sections = _step_sections(added) + [
+                SectionDef.model_validate(o["section"]) for o in validated
+                if o["op"] == "add_section"]
         except (ValidationError, ValueError, TypeError) as exc:
             return (f"Proposal rejected — invalid ops: {exc}. Fix the ops and "
                     "call propose_patch again.")
+        # Same empty-form gate propose_create_draft applies, on both doors:
+        # a step whose section picks nothing, and a section added to a step
+        # that picks nothing, render identically blank.
+        rejection = _empty_section_rejection(sections)
+        if rejection is not None:
+            return rejection
         ctx.deps.pending_proposals.append(
             {"action": "patch", "ops": validated, "summary": summary})
         return ("Patch card is ready for the admin to review and Apply. Do not "

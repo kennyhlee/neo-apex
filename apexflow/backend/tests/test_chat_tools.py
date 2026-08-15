@@ -150,6 +150,20 @@ def _valid_models():
     }
 
 
+def _family_model():
+    """A second model, with a custom field — `_model_fields` merges
+    base_fields and custom_fields, and the assistant must see both."""
+    return {
+        "base_fields": [
+            {"name": "family_id", "type": "str", "required": True},
+            {"name": "family_name", "type": "str", "required": True},
+        ],
+        "custom_fields": [
+            {"name": "home_city", "type": "str", "required": False},
+        ],
+    }
+
+
 def _seed_definition(fake_dc, *, definition_id, version=1, status="draft",
                      lineage_status="active", machine=None, steps=None,
                      channel_access="staff_only", name="Enrollment"):
@@ -345,6 +359,115 @@ def test_get_template_unknown_id_returns_an_error_string():
     assert "list_templates" in out
 
 
+# --- list_entity_models / get_entity_model --------------------------------
+#
+# The gap these close: outside the editor there is no `entity_model_fields`
+# block in the prompt (that comes from `load_editor_context`), so a
+# from-scratch build had NO way to learn which fields a tenant's models carry.
+# The observed failure was a form step whose sections picked zero fields — a
+# form that renders empty — and, in one run, a section bound to a model the
+# tenant never had.
+
+
+def test_list_entity_models_lists_each_model_with_its_field_names(fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    fake_dc.set_model(TENANT, "family", _family_model())
+
+    out = _run("list_entity_models")
+
+    student_line = next(ln for ln in out.splitlines() if ln.startswith("- student"))
+    assert "first_name" in student_line and "last_name" in student_line
+    family_line = next(ln for ln in out.splitlines() if ln.startswith("- family"))
+    assert "family_name" in family_line
+    # base_fields AND custom_fields — the same merge validation itself uses.
+    assert "home_city" in family_line
+
+
+def test_list_entity_models_includes_a_model_outside_the_standard_bundle(fake_dc):
+    """The tenant's own types are enumerated from the models table, not read
+    off a hardcoded list — a tenant-specific model must be offerable."""
+    fake_dc.set_model(TENANT, "camp_session", {
+        "base_fields": [{"name": "session_name", "type": "str", "required": True}],
+        "custom_fields": [],
+    })
+
+    out = _run("list_entity_models")
+
+    assert "camp_session" in out
+    assert "session_name" in out
+
+
+def test_list_entity_models_names_the_models_that_are_not_set_up(fake_dc):
+    """A standard model the tenant never configured must be reported as
+    ABSENT, not silently listed — a section bound to it fails validation, and
+    the "invent a model" failure is exactly what this tool exists to stop."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    out = _run("list_entity_models")
+
+    body, _, absent = out.partition("Not set up")
+    assert "- student:" in body
+    assert "contact" in absent and "lead" in absent
+    assert "contact" not in body
+
+
+def test_list_entity_models_scopes_to_the_deps_tenant(fake_dc):
+    fake_dc.set_model("other-tenant", "camp_session", {
+        "base_fields": [{"name": "session_name", "type": "str", "required": True}],
+        "custom_fields": [],
+    })
+
+    out = _run("list_entity_models")
+
+    assert "camp_session" not in out
+
+
+def test_list_entity_models_says_so_when_the_tenant_has_none(fake_dc):
+    out = _run("list_entity_models")
+
+    assert "no entity models" in out.lower()
+
+
+def test_get_entity_model_returns_fields_with_types_and_required_ness(fake_dc):
+    fake_dc.set_model(TENANT, "family", _family_model())
+
+    out = _run("get_entity_model", {"entity_type": "family"})
+
+    assert "family_name" in out and "home_city" in out
+    name_line = next(ln for ln in out.splitlines() if ln.startswith("- family_name"))
+    assert "str" in name_line and "required" in name_line
+    city_line = next(ln for ln in out.splitlines() if ln.startswith("- home_city"))
+    assert "required" not in city_line
+    # `{model}_id` fields are engine-supplied and rejected as section-writable
+    # by validate_definition — the model must be told before it picks one.
+    id_line = next(ln for ln in out.splitlines() if ln.startswith("- family_id"))
+    assert "do not pick" in id_line.lower()
+
+
+def test_get_entity_model_on_an_unknown_type_points_back_at_the_list(fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    out = _run("get_entity_model", {"entity_type": "feedback"})
+
+    assert "feedback" in out
+    assert "list_entity_models" in out
+
+
+def test_get_entity_model_reports_a_datacore_failure_as_could_not_load(fake_dc,
+                                                                      monkeypatch):
+    """Same property every read tool here keeps: a string, never a raise, and
+    an outage must not read as "this model does not exist"."""
+    def _boom(*a, **kw):
+        raise HTTPException(503, "DataCore query failed: upstream unavailable")
+
+    monkeypatch.setattr(dc, "get_model_definition", _boom)
+
+    out = _run("get_entity_model", {"entity_type": "student"})
+
+    assert "could not load" in out.lower()
+    assert "503" in out
+
+
 # --- propose_create_draft -------------------------------------------------
 #
 # The model NEVER writes. `propose_create_draft` only QUEUES a dict on
@@ -467,6 +590,47 @@ def test_propose_create_draft_rejects_a_non_list_sections_without_raising(fake_d
 
     assert "does not parse" in out
     assert deps.pending_proposals == []
+
+
+def test_propose_create_draft_rejects_a_section_that_picks_no_fields(fake_dc):
+    """The reported bug. A section with `fields: []` PARSES — `FieldPick` is a
+    list, and an empty list is a valid list — so every existing guard passes it
+    through, the draft is created, and the form renders with nothing in it. The
+    admin cannot tell from the card that the step is empty, so the refusal has
+    to happen here, naming the tool that supplies the missing field names."""
+    empty_step = _valid_steps()[0]
+    empty_step["config"]["sections"][0]["fields"] = []
+
+    out, deps = _run_proposal(_draft_args(steps=[empty_step]))
+
+    assert "student_section" in out          # which section
+    assert "get_entity_model" in out         # how to fix it
+    assert "student" in out                  # which model to ask about
+    assert deps.pending_proposals == []
+
+
+def test_propose_create_draft_rejects_the_empty_section_among_good_ones(fake_dc):
+    """One bad section is enough — a draft with three good steps and one empty
+    form is still a workflow with an empty form in it."""
+    good = _valid_steps()[0]
+    empty = json.loads(json.dumps(good))
+    empty["step_id"] = "family_details"
+    empty["config"]["sections"][0]["section_id"] = "family_section"
+    empty["config"]["sections"][0]["entity_model"] = "family"
+    empty["config"]["sections"][0]["fields"] = []
+
+    out, deps = _run_proposal(_draft_args(steps=[good, empty]))
+
+    assert "family_section" in out
+    assert deps.pending_proposals == []
+
+
+def test_propose_create_draft_still_accepts_sections_that_pick_fields(fake_dc):
+    """The gate must not touch the ordinary path."""
+    out, deps = _run_proposal(_draft_args())
+
+    assert "card is ready" in out.lower()
+    assert len(deps.pending_proposals) == 1
 
 
 def test_propose_create_draft_rejects_an_unknown_channel_access(fake_dc):
@@ -634,6 +798,59 @@ def test_propose_patch_accepts_a_well_formed_add_step(fake_dc):
     assert deps.pending_proposals[0]["ops"][0]["step"]["step_id"] == "student_details"
 
 
+def test_propose_patch_rejects_an_add_step_whose_section_picks_no_fields(fake_dc):
+    """The same empty-form bug, arriving through the editor instead of the
+    list page."""
+    empty = _valid_steps()[0]
+    empty["config"]["sections"][0]["fields"] = []
+
+    out, deps = _run_patch(_patch_args(ops=[{"op": "add_step", "step": empty}]))
+
+    assert "student_section" in out
+    assert "get_entity_model" in out
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_rejects_an_add_section_that_picks_no_fields(fake_dc):
+    """`add_section` carries a whole SectionDef in an untyped dict, so it is
+    the other door into the same bug — an empty section added to an existing
+    step renders exactly as empty as one created with the draft."""
+    out, deps = _run_patch(_patch_args(ops=[{
+        "op": "add_section", "step_id": "student_details",
+        "section": {"section_id": "family_section", "entity_model": "family",
+                    "fields": [], "mode": "create", "repeat": None},
+    }]))
+
+    assert "family_section" in out
+    assert "get_entity_model" in out
+    assert "family" in out
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_rejects_a_malformed_add_section(fake_dc):
+    """`AddSection.section` is `dict[str, Any]` — a section missing
+    entity_model/mode must bounce to the model, not to the admin's Apply."""
+    out, deps = _run_patch(_patch_args(ops=[{
+        "op": "add_section", "step_id": "student_details",
+        "section": {"section_id": "half_built"},
+    }]))
+
+    assert "rejected" in out.lower()
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_accepts_an_add_section_that_picks_fields(fake_dc):
+    out, deps = _run_patch(_patch_args(ops=[{
+        "op": "add_section", "step_id": "student_details",
+        "section": {"section_id": "family_section", "entity_model": "family",
+                    "fields": [{"name": "family_name", "required": True}],
+                    "mode": "create", "repeat": None},
+    }]))
+
+    assert "card is ready" in out.lower()
+    assert len(deps.pending_proposals) == 1
+
+
 def test_propose_patch_does_not_reject_ops_it_cannot_semantically_check(fake_dc):
     """Structural validation only. `update_step.patch` is a free-form subset —
     whether `stage_9` exists is the save PUT's question (and the editor's own
@@ -650,7 +867,7 @@ def test_propose_patch_does_not_reject_ops_it_cannot_semantically_check(fake_dc)
 # --- registration ---------------------------------------------------------
 
 
-def test_register_read_tools_offers_all_four_tools_to_the_model(fake_dc):
+def test_register_read_tools_offers_every_read_tool_to_the_model(fake_dc):
     """Asserted through `AgentInfo` — what the MODEL is actually offered on
     the wire — rather than by reaching into the agent's private toolset.
     Each tool must also carry a description (its docstring), or the model has
@@ -665,8 +882,13 @@ def test_register_read_tools_offers_all_four_tools_to_the_model(fake_dc):
     register_read_tools(agent)
     agent.run_sync("go", deps=_deps())
 
-    assert {"list_workflows", "get_workflow", "list_templates", "get_template"} <= set(seen)
+    assert {"list_workflows", "get_workflow", "list_templates", "get_template",
+            "list_entity_models", "get_entity_model"} <= set(seen)
     assert all(seen[n] for n in seen), seen
+    # The docstrings are the only place the model learns WHEN to read a model:
+    # before it authors a section, not after the fields come back empty.
+    assert "section" in (seen["list_entity_models"] or "").lower()
+    assert "section" in (seen["get_entity_model"] or "").lower()
 
 
 def test_register_proposal_tools_offers_propose_create_draft_with_a_description(fake_dc):
