@@ -14,7 +14,7 @@ An admin builds and edits ApexFlow workflows through a chat assistant that is vi
 1. **Option C direct, single plan.** No A→C release phasing. Internal build order still lands the create path before the edit path, because it exercises the full pipe (drawer → agent → tools → proposal card → write endpoint) with low model risk.
 2. **Minimize time-to-draft.** Chat on the list/templates pages exists to pick a starting point, not to build. The agent asks at most 1–2 shaping questions, proposes a create-draft card, and on confirm navigates to the editor. All refinement happens there, against a real draft, visible live in the real stage editor.
 3. **No pre-draft outline renderer.** The proposal card summarizes in text; the live visualization is the editor. No read-only shadow renderer (rejected Option B component — drift risk against the stage editor).
-4. **AI has no special write powers** (platform spec §9). Every write is a user-confirmed card: create-draft card → one new create endpoint; patch card → existing `draftStore` mutation + autosave `PUT`. The model itself never writes.
+4. **AI has no special write powers** (platform spec §9). Every write is a user-confirmed card: create-draft card → one new create endpoint; patch card → existing `draftStore` mutation, persisted by the operator's explicit Save `PUT`. The model itself never writes.
 5. **Template-first.** The create tool takes a template as its base whenever one fits; from-scratch is supported but not optimized (stage-editor decision table).
 6. **UI parity is literal.** Drawer geometry (380px, transform slide, content reflow), bubble styles, chip styles, and the SSE event protocol `{type: token|tool|proposal|done|error}` match AdminDash exactly.
 
@@ -24,7 +24,7 @@ An admin builds and edits ApexFlow workflows through a chat assistant that is vi
 
 Mirror of `admindash/backend/app/chat/` — same module layout, same libraries:
 
-- **`agent.py`** — pydantic-ai `Agent`, `deps_type=ChatDeps`, injectable model for tests (`FunctionModel`). New dependency: `pydantic-ai>=0.0.30` in `apexflow/pyproject.toml`. Settings (env prefix `APEXFLOW_`): `chat_model` (default `anthropic:claude-haiku-4-5-20251001`), `chat_max_tokens`, `chat_history_turns`, `chat_session_message_cap` — same defaults as AdminDash. `ANTHROPIC_API_KEY` from env, as provisioned for the suite.
+- **`agent.py`** — pydantic-ai `Agent`, `deps_type=ChatDeps`, injectable model for tests (`FunctionModel`). New dependency: `pydantic-ai>=2.0` in `apexflow/pyproject.toml` (raised from the `>=0.0.30` floor inherited from admindash — `app/chat/` uses 2.x-only APIs, so the old floor advertised a range that could not import). Settings (env prefix `APEXFLOW_`): `chat_model` (default `anthropic:claude-haiku-4-5-20251001`), `chat_max_tokens`, `chat_history_turns`, `chat_session_message_cap` — same defaults as AdminDash. `ANTHROPIC_API_KEY` from env, as provisioned for the suite.
 - **`stream.py`** — SSE framing, byte-for-byte the AdminDash protocol so a shared client can be factored out later (three-strikes rule; not extracted now).
 - **`tools.py`** — see Tool surface below.
 - **`deps.py`** — `ChatDeps { tenant_id, token, apexflow context }` where context is supplied per request by the client: `{ page: 'list' | 'templates' | 'editor', entity_id?: str }`. For `editor`, the backend loads the bundle server-side (machine, steps, models, current validation errors) rather than trusting a client-supplied definition.
@@ -47,7 +47,11 @@ Mirror of `admindash/backend/app/chat/` — same module layout, same libraries:
 `add_stage`, `rename_stage`, `remove_stage`, `add_step(stage_id, step)`, `update_step(step_id, patch)`, `remove_step`, `add_section(step_id, section)`, `update_section`, `remove_section`, `add_move(group)`, `update_move(key, patch)`, `remove_move`, `set_show_if(step_id, condition)`, `set_channel_access`.
 Ops are validated structurally server-side (shape only); semantic validation happens where it already lives — the save `PUT` returns `{errors, health}` after apply.
 
-**Repair loop:** after a patch is applied, the client's next chat request includes the fresh validation errors in `context`; the system prompt instructs the agent to acknowledge and offer a follow-up patch when its change introduced errors. No agent-side auto-apply, ever.
+**Repair loop:** *(amended after implementation — this paragraph originally described an autosave-driven loop the editor cannot deliver.)* `draftStore` has **no autosave**: Apply mutates the in-memory draft and stops, and the `PUT` that validates and persists happens when the **operator presses Save**. The loop is therefore operator-paced, and one step longer than first written:
+
+apply → *operator saves* → the save `PUT` returns `{errors, health}` onto the editor's validation rail → the next chat turn's context, which the backend loads **server-side from the saved row**, reflects that saved state.
+
+The consequences that matter: a patch the operator applies but never saves is invisible to the next turn (the server re-reads the row, not the screen), so the agent may propose against a draft that looks stale to the user; and the confirmation copy must promise only "applied to the editor", never that anything was validated or persisted (`assistant.patchAppliedMsg`). The system prompt still instructs the agent to acknowledge and offer a follow-up patch when its change introduced errors. No agent-side auto-apply, ever.
 
 ### New endpoint: create draft from definition
 
@@ -62,7 +66,7 @@ Ops are validated structurally server-side (shape only); semantic validation hap
 - **Quick-action chips:** same editable-chips mechanism (IndexedDB via `idb`, cap 10). Defaults are context-independent v1: e.g. "Start a registration workflow", "Add a document upload step to this draft", "Explain this draft's validation errors", "What's still open across workflows?". (Context-*aware* chip swapping is an enhancement, not v1.)
 - **Proposal cards (in-bubble):**
   - `CreateDraftCard` — name, base template, summary bullets; **Create draft** → new endpoint → navigate to `/definitions/{entity_id}`; **Adjust…** focuses the input. After navigation the transcript continues; a synthetic assistant message confirms creation.
-  - `PatchCard` — summary bullets + op count; **Apply** → ops applied to `draftStore` via the existing stage-model helpers → debounced autosave `PUT` → validation rail updates; **Dismiss**. Apply is disabled when `store.readOnly` (non-draft) — the agent is also told the row is read-only and should propose `new_draft` instead.
+  - `PatchCard` — summary bullets + op count (plus one always-correct line naming a `set_channel_access` change, which is invisible in the stage editor and may be missing from the model's summary); **Apply** → ops applied to `draftStore` → *the operator's explicit Save* `PUT`s → validation rail updates; **Dismiss**. Apply is disabled when `store.readOnly` (non-draft) — the agent is also told the row is read-only and should propose `new_draft` instead.
   - Ghost-preview of pending patches in the canvas (dashed stage/step highlights, as mocked) is an **enhancement**, not v1. V1 behavior: Apply mutates immediately; the editor's existing save/cancel affordances are the undo.
 
 ### Error handling
@@ -80,7 +84,7 @@ Staff-only (`require_staff_tenant`), tenant-scoped throughout; the user's bearer
 
 - **Backend:** mirror `test_chat_{endpoint,tools,stream}.py` with `FunctionModel`; tool tests assert proposal payloads parse against `schema.py`; create-endpoint tests (happy path, invalid machine 422, tenant mismatch); patch-op structural validation tests.
 - **Frontend:** patch-apply unit tests reusing the `stageOps`/`stage/write` test fixtures — every `PatchOp` round-trips through `readStageModel`/`writeMachine` (extends `roundTrip.test.ts`); card render/act tests; SSE client parser test.
-- **Loop test (the load-bearing one):** scripted agent proposes a patch that introduces a validation error → apply → `PUT` returns the error → next-turn context contains it. Verified by mutation per project convention (break the op appliers, prove tests bite).
+- **Loop test (the load-bearing one):** scripted agent proposes a patch that introduces a validation error → apply → **operator saves** → the save `PUT` returns the error → the next turn's server-loaded context, read from the saved row, contains it. Note the save is a step in the test, not an implicit consequence of apply: a version of this test that waits for an autosave would hang, and one that asserts on the row straight after apply would read the pre-patch state. Verified by mutation per project convention (break the op appliers, prove tests bite).
 
 ## Out of scope
 
@@ -90,3 +94,33 @@ Staff-only (`require_staff_tenant`), tenant-scoped throughout; the user's bearer
 - Extracting a shared `@neoapex/chat-ui` package (wait for a third consumer or real divergence pain).
 - Ops analytics / instance-mutation tools (cancel etc.) — the assistant answers questions about instances read-only; actions stay in AdminDash/ApexFlow UI.
 - Any change to AdminDash's assistant.
+
+## Follow-ups
+
+Raised by the final review of the shipped implementation; none block the release.
+
+- **Optional bridge `save()` to tighten the repair loop.** `EditorBridge` could expose a
+  `save()` so `PatchCard` persists immediately after Apply and surfaces the `PUT`'s
+  `{errors, health}` on the card itself — restoring the single-step loop the Repair-loop
+  paragraph originally assumed, and removing the "applied but never saved, so the next turn
+  reads a stale row" hazard. **Needs its own decision, not just implementation:** the
+  editor's Cancel/Discard is currently the undo for an unwanted patch, and a card that saves
+  on Apply takes that away. Either keep Apply local and make the save explicit (today's
+  behaviour), or add save-on-apply *and* an accompanying undo — not the former silently
+  becoming the latter.
+- **AdminDash's twin uncloseable-drawer defect.** `admindash/frontend/src/pages/HomePage.css:349-401`
+  has the same stacking as the pre-fix apexflow drawer — `.home-chat-toggle` at
+  `--z-dropdown` (200) under `.home-chat-drawer` at `--z-drawer` (500), no close control in
+  its `ChatPanel` header, no Escape handler — so its assistant drawer cannot be closed
+  either. **Not a straight port of the apexflow fix:** the fix there parks the open toggle in
+  the nav strip because that band is free of page controls in ApexFlow, and AdminDash's
+  header-actions layout differs, so the parking position has to be re-verified rather than
+  copied. (ApexFlow's CSS carries a comment saying the divergence is deliberate; do not
+  "restore parity" by reverting it.)
+- **From-scratch prompt tuning.** A from-scratch build can land a `health: broken` draft: the
+  model omits `send_email`'s required `template` param even though `primitives_text()` renders
+  `send_email(template:string)` into the system prompt, and it invents entity models the
+  tenant has not set up. The errors are surfaced correctly on the create response, so this is
+  output quality rather than a correctness bug — worth a prompt pass (state that effect params
+  are mandatory, and that section `entity_model`s must come from `list_models`) before
+  from-scratch is promoted over the template path.

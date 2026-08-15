@@ -87,8 +87,8 @@ function renderProposalCard(
       );
     case 'patch':
       // No tenantId: the patch never leaves the browser — it edits the draft
-      // the editor already has open, and the tenant-scoped write is the
-      // autosave PUT the store makes afterwards. `originEntityId` is what
+      // the editor already has open, and the tenant-scoped write is the PUT
+      // the operator's own Save makes afterwards. `originEntityId` is what
       // pins it to the RIGHT draft (see `Msg.proposalOrigin`).
       return (
         <PatchCard

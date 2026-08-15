@@ -478,11 +478,18 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.patchTitle': 'Proposed changes',
     'assistant.patchOpCount': '{n} edit(s) to this workflow',
     'assistant.patchNoOps': 'No changes to apply',
-    // Deliberately says the rail is UPDATED, not that the draft is valid:
-    // Apply only edits the in-memory draft, and the autosave PUT that follows
-    // is what validates it.
+    // Named explicitly on the card because a channel change is invisible in
+    // the stage editor and the model's own summary may not mention it.
+    'assistant.patchChannelAccess': 'Sets channel access: {value}',
+    // Claims ONLY what Apply actually did: it edits the in-memory draft and
+    // nothing else. There is no autosave (see draftStore's `markDirty`), so
+    // the PUT that validates and persists happens when the operator presses
+    // Save — until then the rail still describes the last SAVED row. This
+    // string is fed back to the model as history, so an overclaim here does
+    // not just mislead the operator, it teaches the assistant that its edits
+    // already landed.
     'assistant.patchAppliedMsg':
-      'Applied — the editor and validation rail are updated. Anything else?',
+      'Applied to the editor — save the draft to validate and persist it. Anything else?',
 
     // Common
     'common.loading': 'Loading...',
@@ -949,7 +956,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.patchTitle': '建议的修改',
     'assistant.patchOpCount': '对此工作流的 {n} 处修改',
     'assistant.patchNoOps': '没有可应用的修改',
-    'assistant.patchAppliedMsg': '已应用 — 编辑器与校验栏已更新。还需要修改吗？',
+    'assistant.patchChannelAccess': '设置渠道权限：{value}',
+    'assistant.patchAppliedMsg': '已应用到编辑器 — 保存草稿后才会校验并生效。还需要修改吗？',
 
     // Common
     'common.loading': '加载中...',

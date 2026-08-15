@@ -23,15 +23,20 @@
 //    means nothing was applied, so a failed Apply leaves the draft exactly as
 //    it was and the card stays actionable (the proposal is not persisted —
 //    retiring the buttons on failure would lose the authored edits with them).
-// 3. SUCCESS IS NOT VALIDITY. Apply mutates the in-memory draft; the store's
-//    debounced PUT is what validates, and its errors land on the editor's
-//    validation rail. `assistant.patchAppliedMsg` therefore says the rail is
-//    updated and claims nothing about the patch being correct — a card that
-//    said "valid" would be wrong roughly whenever it mattered.
+// 3. SUCCESS IS NOT VALIDITY, AND SUCCESS IS NOT PERSISTENCE. Apply mutates
+//    the in-memory draft and stops there. `draftStore` has no autosave (see
+//    its `markDirty`), so the OPERATOR'S EXPLICIT SAVE is what PUTs, validates,
+//    and refreshes the rail; until then the rail still describes the last saved
+//    row. `assistant.patchAppliedMsg` therefore promises only "applied to the
+//    editor" and points at Save — it claims neither validity nor persistence,
+//    both of which would be wrong roughly whenever it mattered. That string is
+//    also replayed to the model as history, so an overclaim would teach the
+//    assistant its edits had already landed.
 import { useState } from 'react';
 import { matchPath, useLocation } from 'react-router-dom';
 import type { Proposal } from '../../api/chat.ts';
 import { resolveEditorTarget, type BridgeRefusal } from '../../chat/editorBridge.ts';
+import type { ChannelAccess, SetChannelAccessOp } from '../../chat/patchOps.ts';
 import { useTranslation } from '../../hooks/useTranslation.ts';
 
 /**
@@ -49,6 +54,17 @@ const REFUSAL_NOTE: Record<BridgeRefusal, string | null> = {
   other_draft: 'assistant.otherDraft',
   not_ready: null,
   read_only: 'assistant.readOnly',
+};
+
+/**
+ * Channel-access values to the labels the DESIGNER already uses for them
+ * (`EditorPage`'s select, `DefinitionsPage`'s column). Reused rather than
+ * given assistant-local copies so the card cannot drift into calling `family`
+ * something the editor two panes over does not.
+ */
+const CHANNEL_LABEL: Record<ChannelAccess, string> = {
+  staff_only: 'definitions.channel.staffOnly',
+  family: 'definitions.channel.family',
 };
 
 export function PatchCard({
@@ -84,10 +100,14 @@ export function PatchCard({
   const note = refusal ? REFUSAL_NOTE[refusal] : null;
   // An empty patch is legal on the wire (`validate_ops` accepts `ops: []`) and
   // shows up when the model narrates a change it never encoded. Apply is
-  // DISABLED rather than a no-op success: succeeding would append "the editor
-  // and validation rail are updated", which would be a straight lie about a
-  // draft nothing touched.
+  // DISABLED rather than a no-op success: succeeding would append "applied to
+  // the editor", which would be a straight lie about a draft nothing touched.
   const empty = proposal.ops.length === 0;
+  // One literal `op` value, matched directly — see the comment at the render
+  // site for why this stays a filter and never grows into an op-label map.
+  const channelOps = proposal.ops.filter(
+    (op): op is SetChannelAccessOp => op.op === 'set_channel_access',
+  );
 
   const apply = () => {
     // Re-read rather than trusting the render-time `bridge`: between paint and
@@ -124,6 +144,26 @@ export function PatchCard({
           ? t('assistant.patchNoOps')
           : t('assistant.patchOpCount').replace('{n}', String(proposal.ops.length))}
       </p>
+      {/* A channel change is the one op whose consequence is invisible in the
+          stage editor — it decides whether families can reach this workflow at
+          all — and the model's prose `summary` is free to omit it. So it gets
+          one always-correct line of its own, derived from the ops rather than
+          from anything the model wrote.
+
+          This is a NARROW FILTER FOR ONE OP, deliberately not the first entry
+          in a per-op label map. Decision 1 above stands: a `switch` over
+          `PatchOp` that looked exhaustive would silently drop an op from a
+          newer backend. Filtering for one known literal cannot — an op it does
+          not match simply stays counted by `patchOpCount`, which is exactly
+          the fallback everything else still relies on. */}
+      {channelOps.map((op, i) => (
+        <p className="chat-card__meta" key={i}>
+          {t('assistant.patchChannelAccess').replace(
+            '{value}',
+            t(CHANNEL_LABEL[op.value]),
+          )}
+        </p>
+      ))}
       {error && (
         <p className="chat-card__error">
           {t('assistant.applyFailed')}: {error}

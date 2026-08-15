@@ -13,6 +13,16 @@ Releases are triggered by GitHub Releases with module-prefixed tags:
 - `apexflow-v0.1.0` → deploys `apexflow-api` (backend only — no frontend deploy yet, parked this wave)
 - `familyhub-v0.1.0` → deploys `familyhub-api` (backend only — no frontend deploy yet, parked this wave)
 
+**One-time prerequisites before a module's first release of a new capability** — the deploy
+will go green without these, and the feature will simply be dead on arrival:
+
+- [ ] **apexflow-api needs the `ANTHROPIC_API_KEY` Fly secret before the first chat-enabled
+      release** (`flyctl secrets set --app apexflow-api ANTHROPIC_API_KEY=...`, see
+      [`provisioning.md`](provisioning.md) Step 5). It is **unprefixed** — `APEXFLOW_ANTHROPIC_API_KEY`
+      is silently ignored. Without it the app boots and every other route works, so health
+      checks pass and the deploy reports success; only the assistant fails, streaming an SSE
+      `error` + `done` on every message.
+
 To cut a release:
 
 ```bash
