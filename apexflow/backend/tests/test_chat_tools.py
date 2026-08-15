@@ -21,12 +21,14 @@ Two deliberate divergences from the admindash source:
 """
 import json
 
+from fastapi import HTTPException
 from pydantic_ai import Agent, ModelMessage, ModelResponse, TextPart, ToolCallPart, models
 from pydantic_ai.messages import ToolReturnPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.chat.deps import ChatDeps
 from app.chat.tools import register_read_tools
+from app.workflows import definitions as defs
 
 models.ALLOW_MODEL_REQUESTS = False
 
@@ -268,6 +270,43 @@ def test_get_workflow_on_an_unknown_entity_id_returns_a_not_found_string(fake_dc
     out = _run("get_workflow", {"entity_id": "no-such-row"})
 
     assert "not found" in out.lower()
+
+
+def test_get_workflow_reports_a_datacore_outage_as_could_not_load_not_not_found(
+        fake_dc, monkeypatch):
+    """A 503 from DataCore must NOT be reported as "not found".
+
+    `require_definition_row` raises HTTPException for far more than an absent
+    row (`dc_query` re-raises DataCore's own status — outages, auth
+    rejections). Calling those "no such workflow" would steer the model into
+    propose_create_draft for a workflow that already exists, turning a
+    transient outage into a duplicate draft."""
+    def _boom(*a, **kw):
+        raise HTTPException(503, "DataCore query failed: upstream unavailable")
+
+    monkeypatch.setattr(defs, "require_definition_row", _boom)
+
+    out = _run("get_workflow", {"entity_id": "wd-exists"})
+
+    assert "not found" not in out.lower()
+    assert "could not load" in out.lower()
+    assert "503" in out and "upstream unavailable" in out
+
+
+def test_get_workflow_reports_a_non_http_failure_as_could_not_load(fake_dc, monkeypatch):
+    """Same guarantee for the non-HTTPException path (e.g. `dc._validate_id`'s
+    ValueError on a malformed id, or any client-side failure): a string, still
+    never "not found", and still never raised through the stream."""
+    def _boom(*a, **kw):
+        raise RuntimeError("connection reset")
+
+    monkeypatch.setattr(defs, "require_definition_row", _boom)
+
+    out = _run("get_workflow", {"entity_id": "wd-exists"})
+
+    assert "not found" not in out.lower()
+    assert "could not load" in out.lower()
+    assert "connection reset" in out
 
 
 # --- list_templates / get_template ----------------------------------------

@@ -25,6 +25,7 @@ calls it unconditionally, so it must exist.
 """
 import json
 
+from fastapi import HTTPException
 from pydantic_ai import Agent, RunContext
 
 from app.chat.deps import ChatDeps
@@ -59,13 +60,24 @@ def register_read_tools(agent: Agent) -> None:
         try:
             row = defs.require_definition_row(ctx.deps.tenant_id, entity_id,
                                               ctx.deps.token)
-        # `require_definition_row` raises HTTPException(404) for an absent row
-        # — routine here, since the model addresses rows by an entity_id it
-        # read from `list_workflows` (or guessed). Caught broadly so a
-        # DataCore-side failure is reported rather than killing the stream.
+        # ONLY a 404 may be reported as "not found". `require_definition_row`
+        # also surfaces DataCore outages and auth rejections as HTTPExceptions
+        # with other status codes (`dc_query` re-raises DataCore's own status),
+        # and `dc._validate_id` raises ValueError on a malformed id. Reporting
+        # any of those as "no such workflow" would push the model toward
+        # propose_create_draft for a workflow that already exists — a
+        # transient outage would silently become a duplicate draft. Every
+        # branch still returns a string; nothing raises through the stream.
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return (f"Workflow {entity_id} was not found in this tenant. "
+                        f"Call list_workflows for the valid ids.")
+            return (f"Could not load workflow {entity_id}: {exc.detail} "
+                    f"(status {exc.status_code}). The workflow may well exist — "
+                    f"do not treat this as missing.")
         except Exception as exc:  # noqa: BLE001
-            return (f"No workflow row with entity_id={entity_id} was found "
-                    f"({exc}). Call list_workflows for the valid ids.")
+            return (f"Could not load workflow {entity_id}: {exc}. The workflow "
+                    f"may well exist — do not treat this as missing.")
         try:
             machine, steps = defs.parse_machine_steps(row)
         except Exception as exc:  # noqa: BLE001 — surface to the model
