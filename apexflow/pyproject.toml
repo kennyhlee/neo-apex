@@ -9,8 +9,13 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "httpx>=0.28",
-    # Chat workflow builder (Plan 4). Same constraint admindash pins for its
-    # own chat assistant, so both services resolve the same pydantic-ai line.
+    # Chat workflow builder (Plan 4). Same CONSTRAINT admindash pins for its
+    # own chat assistant — but not the same resolved version: the two services
+    # have independent lockfiles resolved on different dates (admindash pins
+    # 2.18.0, this lock resolved 2.30.0). Sharing the floor keeps the two
+    # chat implementations portable between services; it does not keep them
+    # on one version, so an import that works in admindash still has to be
+    # verified here.
     "pydantic-ai>=0.0.30",
 ]
 

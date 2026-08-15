@@ -144,6 +144,53 @@ def test_chat_endpoint_reports_model_failure_as_error_then_done(client, monkeypa
     assert "model exploded" in events[-2]["message"]
 
 
+def test_chat_endpoint_reports_agent_construction_failure_as_error_then_done(
+    client, monkeypatch
+):
+    """Agent construction happens INSIDE the stream, not before it.
+
+    `build_chat_agent()` resolves the `"anthropic:..."` model string eagerly,
+    so an unset ANTHROPIC_API_KEY raises `UserError` at construction. If that
+    ran before `StreamingResponse` the client would get a bare 500 with zero
+    `data:` frames — violating the plan's global constraint that the stream is
+    ALWAYS terminated by `done`. The UI's reader clears its pending state only
+    on `done`, so that 500 leaves the composer stuck.
+    """
+    def _explode():
+        raise RuntimeError("Set the `ANTHROPIC_API_KEY` environment variable")
+
+    monkeypatch.setattr(chat_api, "build_chat_agent", _explode)
+    resp = client.post(
+        CHAT_URL,
+        json={"message": "hi", "history": [], "message_count": 0,
+              "context": {"page": "list"}},
+    )
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers["content-type"]
+    events = _events(resp.text)
+    assert [e["type"] for e in events] == ["error", "done"]
+    assert "ANTHROPIC_API_KEY" in events[0]["message"]
+
+
+def test_chat_endpoint_reports_history_failure_as_error_then_done(client, monkeypatch):
+    """Same guarantee for the other pre-run step inside the wrapper."""
+    monkeypatch.setattr(chat_api, "build_chat_agent", _text_only_agent)
+
+    def _bad_history(turns, limit):
+        raise ValueError("history is malformed")
+
+    monkeypatch.setattr(chat_api, "to_message_history", _bad_history)
+    resp = client.post(
+        CHAT_URL,
+        json={"message": "hi", "history": [{"role": "user", "content": "x"}],
+              "message_count": 0, "context": {"page": "list"}},
+    )
+    assert resp.status_code == 200
+    events = _events(resp.text)
+    assert [e["type"] for e in events] == ["error", "done"]
+    assert "history is malformed" in events[0]["message"]
+
+
 def test_chat_endpoint_rejects_over_cap(client, monkeypatch):
     monkeypatch.setattr(chat_api, "build_chat_agent", _text_only_agent)
     resp = client.post(
