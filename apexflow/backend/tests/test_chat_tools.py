@@ -593,11 +593,15 @@ def test_propose_create_draft_rejects_a_non_list_sections_without_raising(fake_d
 
 
 def test_propose_create_draft_rejects_a_section_that_picks_no_fields(fake_dc):
-    """The reported bug. A section with `fields: []` PARSES — `FieldPick` is a
-    list, and an empty list is a valid list — so every existing guard passes it
-    through, the draft is created, and the form renders with nothing in it. The
-    admin cannot tell from the card that the step is empty, so the refusal has
-    to happen here, naming the tool that supplies the missing field names."""
+    """A section with `fields: []` PARSES — `FieldPick` is a list, and an empty
+    list is a valid list — so every schema guard passes it through, the draft
+    is created, and the form renders with nothing in it.
+
+    This tenant has NO entity models seeded, which is exactly when enrichment
+    stands down (`_load_model_fields` returns nothing to fill from), so this is
+    the net underneath it: nothing to auto-fill with, therefore refuse and name
+    the tool that supplies field names. The enrichment path — a tenant that DOES
+    have models — is covered in the "section enrichment" block below."""
     empty_step = _valid_steps()[0]
     empty_step["config"]["sections"][0]["fields"] = []
 
@@ -611,7 +615,8 @@ def test_propose_create_draft_rejects_a_section_that_picks_no_fields(fake_dc):
 
 def test_propose_create_draft_rejects_the_empty_section_among_good_ones(fake_dc):
     """One bad section is enough — a draft with three good steps and one empty
-    form is still a workflow with an empty form in it."""
+    form is still a workflow with an empty form in it. (No models seeded, so
+    enrichment stands down and the net is what answers.)"""
     good = _valid_steps()[0]
     empty = json.loads(json.dumps(good))
     empty["step_id"] = "family_details"
@@ -655,13 +660,14 @@ def test_propose_create_draft_accepts_both_channel_values(fake_dc):
 # what stops it queueing a patch against a draft that is not open.
 
 
-def _run_patch(args: dict, page: str = "editor",
-               read_only: bool = False) -> tuple[str, ChatDeps]:
+def _run_patch(args: dict, page: str = "editor", read_only: bool = False,
+               entity_id: str | None = None) -> tuple[str, ChatDeps]:
     agent = Agent(FunctionModel(_responder_for("propose_patch", args)),
                   deps_type=ChatDeps)
     register_proposal_tools(agent)
     deps = _deps(page)
     deps.editor_read_only = read_only
+    deps.entity_id = entity_id
     return agent.run_sync("go", deps=deps).output, deps
 
 
@@ -800,7 +806,8 @@ def test_propose_patch_accepts_a_well_formed_add_step(fake_dc):
 
 def test_propose_patch_rejects_an_add_step_whose_section_picks_no_fields(fake_dc):
     """The same empty-form bug, arriving through the editor instead of the
-    list page."""
+    list page — again with no models seeded, so the net answers rather than
+    enrichment."""
     empty = _valid_steps()[0]
     empty["config"]["sections"][0]["fields"] = []
 
@@ -814,7 +821,8 @@ def test_propose_patch_rejects_an_add_step_whose_section_picks_no_fields(fake_dc
 def test_propose_patch_rejects_an_add_section_that_picks_no_fields(fake_dc):
     """`add_section` carries a whole SectionDef in an untyped dict, so it is
     the other door into the same bug — an empty section added to an existing
-    step renders exactly as empty as one created with the draft."""
+    step renders exactly as empty as one created with the draft. No models
+    seeded, so this is the net; the enriched path is tested below."""
     out, deps = _run_patch(_patch_args(ops=[{
         "op": "add_section", "step_id": "student_details",
         "section": {"section_id": "family_section", "entity_model": "family",
@@ -862,6 +870,303 @@ def test_propose_patch_does_not_reject_ops_it_cannot_semantically_check(fake_dc)
 
     assert "card is ready" in out.lower()
     assert deps.pending_proposals
+
+
+# --- section enrichment ---------------------------------------------------
+#
+# The follow-up to the empty-fields gate. Refusing a bad section is only the
+# LAST resort: the tenant's models are already readable from inside the tool,
+# so a section whose entity_model is a near-miss ("students", "family_info")
+# is rewritten to the real model, invented field names are dropped, and a
+# section left with nothing is filled from the model's own fields. Refusal
+# survives for the one case enrichment cannot answer — a model name that
+# resembles nothing this tenant has.
+#
+# Every assertion here is on the QUEUED proposal, not on the tool's return
+# string: the card and the created draft are built from the queue, so an
+# enrichment that only shows up in the text the model reads would be a no-op
+# for the admin.
+
+
+def _section_of(proposal: dict, step_index: int = 0, section_index: int = 0) -> dict:
+    return proposal["steps"][step_index]["config"]["sections"][section_index]
+
+
+def _steps_with_section(**section_over) -> list[dict]:
+    steps = _valid_steps()
+    steps[0]["config"]["sections"][0].update(section_over)
+    return steps
+
+
+def test_propose_create_draft_resolves_a_plural_model_name(fake_dc):
+    """"students" is not a model — "student" is. The model's near-miss is
+    rewritten rather than refused, and the substitution is stated in the
+    summary the admin reads on the card."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    out, deps = _run_proposal(_draft_args(
+        steps=_steps_with_section(entity_model="students")))
+
+    assert "card is ready" in out.lower()
+    section = _section_of(deps.pending_proposals[0])
+    assert section["entity_model"] == "student"
+    assert any("students" in b and "student" in b
+               for b in deps.pending_proposals[0]["summary"])
+
+
+def test_propose_create_draft_resolves_an_info_suffixed_model_name(fake_dc):
+    """"family_info"/"families" are the shapes the live failure produced —
+    both must land on `family`."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    fake_dc.set_model(TENANT, "family", _family_model())
+
+    for authored in ("family_info", "families", "Family Info"):
+        _out, deps = _run_proposal(_draft_args(steps=_steps_with_section(
+            entity_model=authored,
+            fields=[{"name": "family_name", "required": True}])))
+
+        assert _section_of(deps.pending_proposals[0])["entity_model"] == "family", authored
+
+
+def test_propose_create_draft_drops_invented_fields_and_keeps_the_real_ones(fake_dc):
+    """A field name the model invented is not renderable — the editor's field
+    picker only ever offers the model's own fields — so it is dropped rather
+    than carried into the draft."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    _out, deps = _run_proposal(_draft_args(steps=_steps_with_section(fields=[
+        {"name": "first_name", "required": True},
+        {"name": "favourite_colour", "required": False},
+    ])))
+
+    names = [f["name"] for f in _section_of(deps.pending_proposals[0])["fields"]]
+    assert "favourite_colour" not in names
+    assert "first_name" in names
+    assert any("favourite_colour" in b for b in deps.pending_proposals[0]["summary"])
+
+
+def test_propose_create_draft_fills_default_fields_when_fields_is_empty(fake_dc):
+    """The reported bug, now handled by enrichment rather than refusal: an
+    empty `fields` list is filled from the model's own fields, with the
+    required flags the MODEL declares."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    out, deps = _run_proposal(_draft_args(steps=_steps_with_section(fields=[])))
+
+    assert "card is ready" in out.lower()
+    picks = {f["name"]: f["required"] for f in _section_of(deps.pending_proposals[0])["fields"]}
+    assert picks == {"first_name": True, "last_name": True}
+    # `student_id` is engine-supplied (`_is_link_or_id_field`) and must never
+    # be auto-picked — validate_definition treats it as un-writable.
+    assert "student_id" not in picks
+    assert any("default fields" in b for b in deps.pending_proposals[0]["summary"])
+
+
+def test_propose_create_draft_fills_default_fields_when_every_pick_is_invented(fake_dc):
+    """Same fill when nothing the model named survives the intersection."""
+    fake_dc.set_model(TENANT, "family", _family_model())
+
+    _out, deps = _run_proposal(_draft_args(steps=_steps_with_section(
+        entity_model="family",
+        fields=[{"name": "parent_email", "required": True}])))
+
+    picks = {f["name"]: f["required"] for f in _section_of(deps.pending_proposals[0])["fields"]}
+    assert picks == {"family_name": True, "home_city": False}
+
+
+def test_propose_create_draft_adds_the_model_required_fields_a_partial_pick_missed(fake_dc):
+    """A section that picks one real field but skips a model-required one
+    would fail `_coverage_errors` at publish. The editor force-includes those
+    on open (`syncModelRequiredFields`); enrichment does the same here so the
+    created draft validates."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    _out, deps = _run_proposal(_draft_args(steps=_steps_with_section(
+        fields=[{"name": "first_name", "required": False}])))
+
+    picks = {f["name"]: f["required"] for f in _section_of(deps.pending_proposals[0])["fields"]}
+    assert picks == {"first_name": True, "last_name": True}
+
+
+def test_propose_create_draft_refuses_a_model_that_resembles_nothing(fake_dc):
+    """Refusal survives for exactly one case: a name enrichment cannot map.
+    The text must name the models that DO exist, or the model has nothing to
+    retry with."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    fake_dc.set_model(TENANT, "family", _family_model())
+
+    out, deps = _run_proposal(_draft_args(
+        steps=_steps_with_section(entity_model="baseball_coach")))
+
+    assert "baseball_coach" in out
+    assert "student" in out and "family" in out
+    assert deps.pending_proposals == []
+
+
+def test_propose_create_draft_leaves_a_correct_section_untouched(fake_dc):
+    """Enrichment must be invisible on the ordinary path — same fields, no
+    summary noise."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    _out, deps = _run_proposal(_draft_args(summary=["Two states"]))
+
+    p = deps.pending_proposals[0]
+    assert _section_of(p)["fields"] == [
+        {"name": "first_name", "required": True},
+        {"name": "last_name", "required": True},
+    ]
+    assert p["summary"] == ["Two states"]
+
+
+def test_conditional_section_auto_fill_omits_model_required_fields(fake_dc):
+    """A section on a step with `show_if` may only include model-OPTIONAL
+    fields (`_coverage_errors`'s conditional branch). Auto-filling a required
+    one would hand the admin a card that fails validation on Apply."""
+    fake_dc.set_model(TENANT, "family", _family_model())
+    steps = _steps_with_section(entity_model="family", fields=[])
+    steps[0]["show_if"] = {"all": [{"source": "context.x", "op": "eq", "value": "y"}]}
+
+    _out, deps = _run_proposal(_draft_args(steps=steps))
+
+    picks = {f["name"]: f["required"] for f in _section_of(deps.pending_proposals[0])["fields"]}
+    assert picks == {"home_city": False}
+
+
+def test_enrichment_is_skipped_when_the_tenant_models_cannot_be_read(fake_dc,
+                                                                    monkeypatch):
+    """A DataCore outage must not become a refusal. With no readable model
+    list, enrichment cannot tell a near-miss from a real tenant model, so it
+    stands aside entirely — and the pre-existing empty-fields gate is what
+    still catches the blank form."""
+    def _boom(*a, **kw):
+        raise HTTPException(503, "DataCore query failed: upstream unavailable")
+
+    monkeypatch.setattr(dc, "list_model_types", _boom)
+
+    out, deps = _run_proposal(_draft_args(
+        steps=_steps_with_section(entity_model="students")))
+
+    assert "card is ready" in out.lower()
+    assert _section_of(deps.pending_proposals[0])["entity_model"] == "students"
+
+    out, deps = _run_proposal(_draft_args(steps=_steps_with_section(fields=[])))
+    assert "student_section" in out
+    assert deps.pending_proposals == []
+
+
+# --- section enrichment through propose_patch ------------------------------
+
+
+def test_propose_patch_enriches_an_add_step_section(fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    step = _steps_with_section(entity_model="students", fields=[])[0]
+
+    out, deps = _run_patch(_patch_args(ops=[{"op": "add_step", "step": step}]))
+
+    assert "card is ready" in out.lower()
+    section = deps.pending_proposals[0]["ops"][0]["step"]["config"]["sections"][0]
+    assert section["entity_model"] == "student"
+    assert {f["name"] for f in section["fields"]} == {"first_name", "last_name"}
+
+
+def test_propose_patch_enriches_an_add_section(fake_dc):
+    """The `add_section` door — the one the assistant uses to extend a step
+    that already exists."""
+    fake_dc.set_model(TENANT, "family", _family_model())
+
+    out, deps = _run_patch(_patch_args(ops=[{
+        "op": "add_section", "step_id": "student_details",
+        "section": {"section_id": "family_section", "entity_model": "families",
+                    "fields": [], "mode": "create", "repeat": None},
+    }]))
+
+    assert "card is ready" in out.lower()
+    section = deps.pending_proposals[0]["ops"][0]["section"]
+    assert section["entity_model"] == "family"
+    assert {f["name"] for f in section["fields"]} == {"family_name", "home_city"}
+
+
+def test_propose_patch_refuses_an_unresolvable_model_in_an_add_section(fake_dc):
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    out, deps = _run_patch(_patch_args(ops=[{
+        "op": "add_section", "step_id": "student_details",
+        "section": {"section_id": "coach_section", "entity_model": "baseball_coach",
+                    "fields": [{"name": "whistle", "required": True}],
+                    "mode": "create", "repeat": None},
+    }]))
+
+    assert "baseball_coach" in out
+    assert "student" in out
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_enriches_an_update_section_patch(fake_dc):
+    """`update_section` was NEVER inspected by the 9d9ac58 gate — a patch
+    setting `entity_model` to a name that does not exist, or `fields` to an
+    empty list, went straight to a card. Regression test for that leak."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    out, deps = _run_patch(_patch_args(ops=[{
+        "op": "update_section", "step_id": "student_details",
+        "section_id": "student_section",
+        "patch": {"entity_model": "student_info", "fields": []},
+    }]))
+
+    assert "card is ready" in out.lower()
+    patch = deps.pending_proposals[0]["ops"][0]["patch"]
+    assert patch["entity_model"] == "student"
+    assert {f["name"] for f in patch["fields"]} == {"first_name", "last_name"}
+
+
+def test_propose_patch_update_section_without_a_model_reads_the_open_draft(fake_dc):
+    """A patch that only touches `fields` still has a model — the one the
+    section is already bound to in the OPEN draft. Enrichment reads it rather
+    than giving up, so `fields: []` is filled instead of shipped."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-open")
+
+    _out, deps = _run_patch(_patch_args(ops=[{
+        "op": "update_section", "step_id": "student_details",
+        "section_id": "student_section", "patch": {"fields": []},
+    }]), entity_id=eid)
+
+    patch = deps.pending_proposals[0]["ops"][0]["patch"]
+    assert {f["name"] for f in patch["fields"]} == {"first_name", "last_name"}
+
+
+def test_propose_patch_enriches_sections_inside_an_update_step_patch(fake_dc):
+    """`update_step.patch` is a free-form subset of StepDef — `config.sections`
+    reaches it whole, which is the third door into the same empty form and
+    was equally ungated."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    out, deps = _run_patch(_patch_args(ops=[{
+        "op": "update_step", "step_id": "student_details",
+        "patch": {"config": {"sections": [
+            {"section_id": "student_section", "entity_model": "students",
+             "fields": [], "mode": "create", "repeat": None}]}},
+    }]))
+
+    assert "card is ready" in out.lower()
+    section = deps.pending_proposals[0]["ops"][0]["patch"]["config"]["sections"][0]
+    assert section["entity_model"] == "student"
+    assert {f["name"] for f in section["fields"]} == {"first_name", "last_name"}
+
+
+def test_propose_patch_enrichment_notes_reach_the_card_summary(fake_dc):
+    """The admin has to be able to see that the assistant substituted a model
+    — the summary is the only place the card shows it."""
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+
+    _out, deps = _run_patch(_patch_args(
+        ops=[{"op": "add_step",
+              "step": _steps_with_section(entity_model="students", fields=[])[0]}],
+        summary=["Added a step"]))
+
+    summary = deps.pending_proposals[0]["summary"]
+    assert summary[0] == "Added a step"
+    assert any("student" in b for b in summary[1:])
 
 
 # --- registration ---------------------------------------------------------

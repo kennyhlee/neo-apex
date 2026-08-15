@@ -26,6 +26,9 @@ docstring; property 1 applies there too, property 2 does not (a proposal
 reads nothing).
 """
 import json
+import re
+from dataclasses import dataclass
+from typing import Callable
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -37,7 +40,13 @@ from app.chat.patch_ops import validate_ops
 from app.templates.catalog import template_catalog
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
-from app.workflows.schema import ENGINE_OWNED_FIELDS, MachineDef, SectionDef, StepDef
+from app.workflows.schema import (
+    ENGINE_OWNED_FIELDS,
+    FieldPick,
+    MachineDef,
+    SectionDef,
+    StepDef,
+)
 from app.workflows.validate import (
     _is_link_or_id_field,
     _model_fields,
@@ -224,35 +233,438 @@ def register_read_tools(agent: Agent) -> None:
         return f"No template named {template_id}. Call list_templates."
 
 
-def _step_sections(steps: list[StepDef]) -> list[SectionDef]:
-    """Every declared section across `form` steps, parsed.
+# --- form-section enrichment -------------------------------------------------
+#
+# WHY THIS IS ENRICHMENT AND NOT A GATE. The first pass at this problem
+# (commit 9d9ac58) added the two model-reading tools and REFUSED a section
+# whose `fields` was empty. It did not hold: a refusal only helps if the
+# model's next attempt is better, and the two shapes that actually reach a
+# card are ones a refusal never sees —
+#
+#   1. a section bound to a model the tenant does not have (`students`,
+#      `student_info`, `family_info`) with plausible INVENTED field names. It
+#      has fields, so the empty-fields gate passes it; `validate_definition`
+#      has nothing to say about it either (its rules are about the fields a
+#      section names against a model that exists), and the editor's field
+#      picker resolves the model to nothing and renders the section with no
+#      fields at all — the observed "empty form".
+#   2. the same thing arriving through `update_section` / `update_step`,
+#      which the gate never inspected.
+#
+# The tenant's models are readable from right here (the same helpers the read
+# tools use), so the honest fix is to RESOLVE rather than complain: map the
+# near-miss to the real model, intersect the picks with that model's real
+# fields, and fill from the model when nothing survives. Refusal is kept for
+# the single case this cannot answer — a model name that resembles nothing
+# the tenant has — because guessing there would bind a form to the wrong
+# entity, which is worse than asking.
+#
+# Enrichment runs on the PARSED copy that gets queued, so the card, the
+# create/save request the admin's click sends, and the resulting draft all
+# carry the enriched sections. An enrichment visible only in the string the
+# model reads would be a no-op for the admin.
 
-    The same walk `defs.referenced_entity_models` does (and the same
-    `SectionDef.model_validate`), so on steps that function has already
-    accepted this cannot raise — which is why the callers below run it
-    outside their parse-guard try.
+# Noise words a model appends to an entity name when it is describing a form
+# rather than naming a type ("student_info", "family details"). Stripped from
+# the TAIL only, so a genuine model called `session_data` is still matched
+# exactly before any stripping happens.
+_MODEL_NAME_NOISE = frozenset({
+    "info", "information", "details", "detail", "data", "model", "section",
+    "fields", "form", "record",
+})
+
+
+def _normalize_model_name(name: str) -> str:
+    """Case/spacing/punctuation-insensitive form: `"Family Info"` ->
+    `"family_info"`. Matching happens on this, never on the raw string."""
+    return re.sub(r"[^a-z0-9]+", "_", (name or "").strip().lower()).strip("_")
+
+
+def _number_forms(token: str) -> set[str]:
+    """`{token}` plus its singular/plural counterparts — enough for the
+    English shapes an LLM produces for entity names (`students`, `families`,
+    `addresses`). Not a stemmer: over-generating here is harmless because
+    every candidate is checked against the tenant's REAL model names, and a
+    form that matches nothing is simply never used."""
+    forms = {token, token + "s"}
+    if token.endswith("ies") and len(token) > 3:
+        forms.add(token[:-3] + "y")
+    if token.endswith("es") and len(token) > 2:
+        forms.add(token[:-2])
+    if token.endswith("s") and not token.endswith("ss") and len(token) > 1:
+        forms.add(token[:-1])
+    return {f for f in forms if f}
+
+
+def _name_variants(name: str) -> set[str]:
+    """Every normalized spelling of `name` worth matching a model against."""
+    base = _normalize_model_name(name)
+    if not base:
+        return set()
+    stems = {base}
+    parts = base.split("_")
+    while len(parts) > 1 and parts[-1] in _MODEL_NAME_NOISE:
+        parts = parts[:-1]
+        stems.add("_".join(parts))
+    variants: set[str] = set()
+    for stem in stems:
+        variants |= _number_forms(stem)
+        segments = stem.split("_")
+        if len(segments) > 1:
+            # `student_information` -> student; `emergency_contact` -> contact.
+            variants |= _number_forms(segments[0])
+            variants |= _number_forms(segments[-1])
+    return variants
+
+
+def _resolve_entity_model(authored: str, available: list[str]) -> str | None:
+    """The tenant model `authored` means, or None if it resembles none.
+
+    Four passes, narrowest first, so an exact name can never lose to a fuzzy
+    one. Ties inside a pass are broken by LONGEST normalized model name then
+    alphabetically — the longest match is the most specific
+    (`registration_application` over `registration`), and the alphabetical
+    tiebreak keeps the result deterministic rather than dict-order dependent.
     """
-    return [SectionDef.model_validate(raw)
-            for step in steps if step.type == "form"
-            for raw in step.config.get("sections", []) or []]
+    if authored in available:
+        return authored
+    by_norm: dict[str, str] = {}
+    for model in available:
+        by_norm.setdefault(_normalize_model_name(model), model)
+    authored_norm = _normalize_model_name(authored)
+    if authored_norm in by_norm:
+        return by_norm[authored_norm]
+
+    def _best(candidates: list[str]) -> str | None:
+        if not candidates:
+            return None
+        return by_norm[sorted(candidates, key=lambda n: (-len(n), n))[0]]
+
+    authored_variants = _name_variants(authored)
+    # A spelling of the authored name IS a model name.
+    hit = _best([n for n in by_norm if n in authored_variants])
+    if hit is not None:
+        return hit
+    # A spelling of a model name and a spelling of the authored name agree.
+    hit = _best([n for n in by_norm if _name_variants(n) & authored_variants])
+    if hit is not None:
+        return hit
+    # Containment, either direction (`student_emergency` -> student).
+    return _best([n for n in by_norm
+                  if n and (n in authored_norm or authored_norm in n)])
+
+
+def _pickable_model_fields(fields: dict[str, dict], conditional: bool) -> dict[str, dict]:
+    """The subset of a model's fields a section may legally pick, in
+    declaration order (base fields then custom — `_model_fields`' own order).
+
+    Mirrors the editor's `fieldPicker.ts::pickableFields`, which mirrors
+    validate.py: engine-owned fields are rejected outright
+    (`_engine_owned_field_errors`), `{model}_id`-shaped fields are
+    engine-supplied (`_is_link_or_id_field`), and a CONDITIONAL section may
+    only include model-optional fields (`_coverage_errors`' conditional
+    branch), where "optional" means not required or required-with-a-default.
+
+    NO CAP, deliberately: the unconditional coverage rule requires every
+    model-required field to be included+required by some unconditional
+    section, so a truncated auto-fill would produce a draft that fails
+    validation — and this is exactly the menu the editor's own picker offers,
+    so the admin sees no more here than they would there.
+    """
+    out: dict[str, dict] = {}
+    for name, fdef in fields.items():
+        if name in ENGINE_OWNED_FIELDS or _is_link_or_id_field(name):
+            continue
+        if conditional and fdef.get("required") and "default" not in fdef:
+            continue
+        out[name] = fdef
+    return out
+
+
+def _enrich_fields(section: SectionDef, model_fields: dict[str, dict],
+                   conditional: bool) -> list[str]:
+    """Reconcile `section.fields` against its model. Mutates the section;
+    returns one summary bullet per change made (empty when nothing changed).
+
+    Three moves, in order: drop picks the model does not have (they render as
+    nothing), fill from the model when nothing survives, and force-include
+    the model-required fields a partial pick missed — the last being exactly
+    what the editor does to a section on open (`syncModelRequiredFields`), so
+    a proposal lands in the same shape a hand-edit would.
+    """
+    label = f"Section '{section.section_id}' ({section.entity_model})"
+    pickable = _pickable_model_fields(model_fields, conditional)
+    notes: list[str] = []
+
+    kept: list[FieldPick] = []
+    seen: set[str] = set()
+    dropped: list[str] = []
+    for pick in section.fields:
+        if pick.name in pickable:
+            if pick.name not in seen:
+                seen.add(pick.name)
+                kept.append(pick)
+        else:
+            dropped.append(pick.name)
+    if dropped:
+        notes.append(f"{label}: dropped field(s) the model does not have — "
+                     + ", ".join(dropped) + ".")
+
+    if not kept:
+        kept = [FieldPick(name=name, required=bool(fdef.get("required")))
+                for name, fdef in pickable.items()]
+        seen = {pick.name for pick in kept}
+        if kept:
+            notes.append(f"{label}: default fields applied — "
+                         + ", ".join(pick.name for pick in kept) + ".")
+    else:
+        added = [name for name, fdef in pickable.items()
+                 if fdef.get("required") and "default" not in fdef and name not in seen]
+        for name in added:
+            kept.append(FieldPick(name=name, required=True))
+        if added:
+            notes.append(f"{label}: added model-required field(s) — "
+                         + ", ".join(added) + ".")
+
+    # A model-required field picked as optional does not satisfy the coverage
+    # rule ("included+required by any unconditional section"), so the model's
+    # own flag wins over the authored one. Never on a conditional section —
+    # `pickable` has already excluded that class there.
+    for pick in kept:
+        fdef = pickable[pick.name]
+        if fdef.get("required") and "default" not in fdef:
+            pick.required = True
+
+    section.fields = kept
+    return notes
+
+
+@dataclass
+class _SectionSlot:
+    """A parsed section plus the way to write the enriched copy back into the
+    dict that will be QUEUED. The write-back is a callback because the four
+    doors a section arrives through (a create step, `add_step`,
+    `add_section`, `update_step.patch.config.sections`) each nest it
+    somewhere different."""
+
+    section: SectionDef
+    conditional: bool
+    write: Callable[[SectionDef], None]
+
+
+def _list_slot(raw_list: list, index: int, conditional: bool) -> _SectionSlot:
+    def write(section: SectionDef) -> None:
+        raw_list[index] = section.model_dump(by_alias=True)
+
+    return _SectionSlot(SectionDef.model_validate(raw_list[index]), conditional, write)
+
+
+def _key_slot(container: dict, key: str, conditional: bool) -> _SectionSlot:
+    """`add_section`'s door: the section sits under one key of the op dict
+    that gets queued, so the write-back replaces that key."""
+    def write(section: SectionDef) -> None:
+        container[key] = section.model_dump(by_alias=True)
+
+    return _SectionSlot(SectionDef.model_validate(container[key]), conditional, write)
+
+
+def _step_section_slots(steps: list[StepDef]) -> list[_SectionSlot]:
+    """Every declared section across `form` steps.
+
+    The same walk `defs.referenced_entity_models` does, with the same
+    `SectionDef.model_validate`, so it raises on exactly the payloads that
+    function raises on — which is why callers run it INSIDE their parse-guard
+    try. `step.config["sections"]` is mutated in place by the write-backs, so
+    a later `step.model_dump(by_alias=True)` emits the enriched sections.
+    """
+    slots: list[_SectionSlot] = []
+    for step in steps:
+        if step.type != "form":
+            continue
+        raw_list = step.config.get("sections") or []
+        for index in range(len(raw_list)):
+            slots.append(_list_slot(raw_list, index, step.show_if is not None))
+    return slots
+
+
+def _patch_section_slots(op: dict) -> list[_SectionSlot]:
+    """Sections carried whole inside an `update_step` patch.
+
+    `UpdateStep.patch` is a free-form subset of StepDef, so `config.sections`
+    reaches it as a complete section list — the third door into the same
+    empty form, and the one the 9d9ac58 gate never looked at. `show_if` is
+    read from the patch when it sets one; a patch that leaves it alone is
+    treated as unconditional, which is the permissive direction (a
+    conditional section is the strictly narrower field menu, and getting it
+    wrong here can only mean auto-filling a field the admin can remove).
+    """
+    patch = op.get("patch")
+    if not isinstance(patch, dict):
+        return []
+    config = patch.get("config")
+    if not isinstance(config, dict):
+        return []
+    raw_list = config.get("sections") or []
+    conditional = patch.get("show_if") is not None
+    return [_list_slot(raw_list, index, conditional) for index in range(len(raw_list))]
+
+
+def _load_model_fields(ctx: RunContext[ChatDeps]) -> dict[str, dict[str, dict]] | None:
+    """`{model name: {field name: field def}}` for every model this tenant
+    has, or None when that cannot be established.
+
+    None is not "no models" — it is "do not enrich". An unreadable model list
+    would make every tenant-specific model (`camp_session`) look like a name
+    the tenant does not have, and enrichment would then REFUSE a perfectly
+    good section over a DataCore blip. So the enumeration failing stands the
+    whole pass down and leaves the payload exactly as authored; the
+    empty-fields net below is what still runs.
+
+    Models the tenant never set up come back from `fetch_models` as None and
+    are filtered out here: a model with no fields cannot resolve a section
+    and must not appear in the "available models" list a refusal offers.
+    """
+    try:
+        types = set(dc.list_model_types(ctx.deps.tenant_id, ctx.deps.token))
+    except Exception:  # noqa: BLE001 — see docstring: stand down, never refuse
+        return None
+    types |= set(STANDARD_BUNDLE_MODELS)
+    try:
+        models = defs.fetch_models(ctx.deps.tenant_id, types, ctx.deps.token)
+    except Exception:  # noqa: BLE001
+        return None
+    fields = {name: _model_fields(model) for name, model in models.items()}
+    return {name: f for name, f in fields.items() if f}
+
+
+def _unresolvable(section_id: str, authored: str, available: list[str]) -> str:
+    """The one refusal enrichment still issues. It names the models that DO
+    exist, because a refusal the model cannot act on just produces the same
+    proposal again."""
+    return (f"Proposal rejected — section '{section_id}' binds to entity model "
+            f"'{authored}', which is not one of this tenant's entity models and "
+            f"does not resemble any of them. This tenant has: "
+            f"{', '.join(available)}. Pick one of those (call get_entity_model "
+            f"for its fields) and propose again.")
+
+
+def _open_draft_section_models(ctx: RunContext[ChatDeps]) -> dict[str, str]:
+    """`{section_id: entity_model}` for the draft open in the editor.
+
+    An `update_section` patch that only touches `fields` still has a model —
+    the one the section is already bound to — and without it that patch could
+    not be enriched at all. Read through the same helpers `context.py` uses,
+    and best-effort: a failed read means "enrich what you can", never a
+    refusal.
+    """
+    if not ctx.deps.entity_id:
+        return {}
+    try:
+        row = defs.require_definition_row(ctx.deps.tenant_id, ctx.deps.entity_id,
+                                          ctx.deps.token)
+        _machine, steps = defs.parse_machine_steps(row)
+        return {slot.section.section_id: slot.section.entity_model
+                for slot in _step_section_slots(steps)}
+    except Exception:  # noqa: BLE001 — best-effort, see docstring
+        return {}
+
+
+def _enrich_section_patch(op: dict, index: dict[str, dict[str, dict]],
+                          available: list[str], current: dict[str, str],
+                          notes: list[str]) -> str | None:
+    """`update_section` — a partial patch, so it is enriched key by key
+    rather than through a whole SectionDef. Returns a refusal or None.
+
+    Setting `entity_model` without `fields` deliberately rewrites `fields`
+    too: the old picks belong to the old model, exactly the reasoning behind
+    the editor's own `setEntityModel` resetting them.
+    """
+    patch = op.get("patch")
+    if not isinstance(patch, dict):
+        return None
+    section_id = str(op.get("section_id") or "")
+    authored = patch.get("entity_model")
+    names_model = isinstance(authored, str) and bool(authored)
+
+    if names_model:
+        resolved = _resolve_entity_model(authored, available)
+        if resolved is None:
+            return _unresolvable(section_id, authored, available)
+        if resolved != authored:
+            notes.append(f"Section '{section_id}': entity model '{authored}' is not "
+                         f"one of this tenant's models — bound to '{resolved}'.")
+        patch["entity_model"] = resolved
+    else:
+        existing = current.get(section_id)
+        resolved = _resolve_entity_model(existing, available) if existing else None
+
+    if resolved is None or ("fields" not in patch and not names_model):
+        return None
+    try:
+        picks = [FieldPick.model_validate(f) for f in (patch.get("fields") or [])]
+    except (ValidationError, ValueError, TypeError) as exc:
+        return (f"Proposal rejected — update_section '{section_id}' has a malformed "
+                f"`fields` list: {exc}. Each entry is "
+                "{\"name\": ..., \"required\": ...}.")
+    probe = SectionDef(section_id=section_id, entity_model=resolved,
+                       fields=picks, mode="create")
+    notes.extend(_enrich_fields(probe, index[resolved], conditional=False))
+    patch["fields"] = [pick.model_dump(by_alias=True) for pick in probe.fields]
+    return None
+
+
+def _enrich_sections(ctx: RunContext[ChatDeps], slots: list[_SectionSlot],
+                     section_patch_ops: list[dict],
+                     notes: list[str]) -> str | None:
+    """Resolve every proposed section's model and fields against the tenant's
+    real models. Returns a refusal string, or None when the payload is now
+    good (enriched in place, ready to queue)."""
+    if not slots and not section_patch_ops:
+        return None
+    index = _load_model_fields(ctx)
+    if not index:
+        return None  # unreadable or genuinely modelless — see _load_model_fields
+    available = sorted(index)
+
+    for slot in slots:
+        section = slot.section
+        resolved = _resolve_entity_model(section.entity_model, available)
+        if resolved is None:
+            return _unresolvable(section.section_id, section.entity_model, available)
+        if resolved != section.entity_model:
+            notes.append(f"Section '{section.section_id}': entity model "
+                         f"'{section.entity_model}' is not one of this tenant's "
+                         f"models — bound to '{resolved}'.")
+            section.entity_model = resolved
+        notes.extend(_enrich_fields(section, index[resolved], slot.conditional))
+        slot.write(section)
+
+    if section_patch_ops:
+        # Read the open draft only when a patch needs it — one op naming its
+        # own entity_model needs no lookup at all.
+        current = ({} if all(o.get("patch", {}).get("entity_model")
+                             for o in section_patch_ops)
+                   else _open_draft_section_models(ctx))
+        for op in section_patch_ops:
+            refusal = _enrich_section_patch(op, index, available, current, notes)
+            if refusal is not None:
+                return refusal
+    return None
 
 
 def _empty_section_rejection(sections: list[SectionDef]) -> str | None:
-    """Refusal text for the first section that picks NO fields, else None.
+    """Refusal text for the first section that STILL picks no fields, else
+    None. The net under enrichment, not the primary defence any more.
 
     `fields: []` parses — an empty list is a valid `list[FieldPick]` — and it
     passes publish-time validation too, since every rule there is about the
     fields a section DOES name. So nothing downstream stops it, and the
-    workflow the admin confirms contains a form step that renders blank. This
-    was not hypothetical: an assistant with no way to read the tenant's entity
-    models (before `list_entity_models`/`get_entity_model` existed) emitted
-    exactly this, and the empty form only showed up when someone opened the
-    step.
+    workflow the admin confirms contains a form step that renders blank.
 
-    Refusing at the proposal is the only place it can be caught before the
-    admin is the one holding it, and the text names the section, the model to
-    ask about, and the tool that answers — enough for the model to fix it in
-    one turn instead of re-proposing the same shape.
+    Two cases reach here now: enrichment stood down (the tenant's model list
+    could not be read — see `_load_model_fields`), or the resolved model has
+    no pickable fields at all, in which case there is nothing to fill from
+    and asking is the only honest move.
     """
     for section in sections:
         if not section.fields:
@@ -262,6 +674,15 @@ def _empty_section_rejection(sections: list[SectionDef]) -> str | None:
                     f"names into the section's `fields` list "
                     f"([{{\"name\": ..., \"required\": ...}}]), then propose again.")
     return None
+
+
+def _with_notes(message: str, notes: list[str]) -> str:
+    """The card carries the enrichment bullets in its summary; the model needs
+    them too, or it will describe the workflow it authored rather than the one
+    the admin is about to confirm."""
+    if not notes:
+        return message
+    return message + "\nAdjusted before queueing:\n" + "\n".join(f"- {n}" for n in notes)
 
 
 def register_proposal_tools(agent: Agent) -> None:
@@ -315,10 +736,19 @@ def register_proposal_tools(agent: Agent) -> None:
             m = MachineDef.model_validate(machine)
             s = [StepDef.model_validate(x) for x in steps]
             defs.referenced_entity_models(s)
+            slots = _step_section_slots(s)
         except (ValidationError, ValueError, TypeError) as exc:
             return (f"Proposal rejected — the definition does not parse: {exc}. "
                     "Fix the payload and call propose_create_draft again.")
-        rejection = _empty_section_rejection(_step_sections(s))
+        # Best-effort enrichment on EVERY step's sections, before anything is
+        # queued — see the "form-section enrichment" block above. It mutates
+        # the parsed steps in place, so the by-alias dumps below carry the
+        # resolved models and fields into the card and the created draft.
+        notes: list[str] = []
+        refusal = _enrich_sections(ctx, slots, [], notes)
+        if refusal is not None:
+            return refusal
+        rejection = _empty_section_rejection([slot.section for slot in slots])
         if rejection is not None:
             return rejection
         if channel_access not in ("staff_only", "family"):
@@ -330,10 +760,12 @@ def register_proposal_tools(agent: Agent) -> None:
             "machine": m.model_dump(by_alias=True),
             "steps": [x.model_dump(by_alias=True) for x in s],
             "channel_access": channel_access,
-            "summary": summary or [],
+            "summary": (summary or []) + notes,
         })
-        return ("Create-draft card is ready for the admin to confirm. Tell them "
-                "to review and click Create draft — do not claim it exists yet.")
+        return _with_notes(
+            "Create-draft card is ready for the admin to confirm. Tell them "
+            "to review and click Create draft — do not claim it exists yet.",
+            notes)
 
     @agent.tool
     def propose_patch(ctx: RunContext[ChatDeps], ops: list[dict],
@@ -394,22 +826,40 @@ def register_proposal_tools(agent: Agent) -> None:
         # reaching a card fails at Apply exactly as a half-built step would.
         try:
             validated = validate_ops(ops)
-            added = [StepDef.model_validate(o["step"]) for o in validated
+            # `o["step"]` is `validate_ops`' by-alias dump, NOT the dict the
+            # StepDef parsed from, so the parsed step is re-dumped over it
+            # after enrichment (below) — mutating the StepDef alone would
+            # leave the queued op carrying the un-enriched sections.
+            added = [(o, StepDef.model_validate(o["step"])) for o in validated
                      if o["op"] == "add_step"]
-            defs.referenced_entity_models(added)
-            sections = _step_sections(added) + [
-                SectionDef.model_validate(o["section"]) for o in validated
-                if o["op"] == "add_section"]
+            defs.referenced_entity_models([step for _o, step in added])
+            slots = _step_section_slots([step for _o, step in added])
+            for o in validated:
+                if o["op"] == "add_section":
+                    slots.append(_key_slot(o, "section", False))
+                elif o["op"] == "update_step":
+                    slots.extend(_patch_section_slots(o))
+            section_patch_ops = [o for o in validated if o["op"] == "update_section"]
         except (ValidationError, ValueError, TypeError) as exc:
             return (f"Proposal rejected — invalid ops: {exc}. Fix the ops and "
                     "call propose_patch again.")
-        # Same empty-form gate propose_create_draft applies, on both doors:
-        # a step whose section picks nothing, and a section added to a step
-        # that picks nothing, render identically blank.
-        rejection = _empty_section_rejection(sections)
+        # Enrichment on all FOUR doors a section reaches a draft through:
+        # `add_step`'s own sections, `add_section`, `update_step`'s
+        # `config.sections`, and `update_section`'s partial patch. The last
+        # two were never inspected before, and they are how the assistant
+        # edits a form it has already proposed.
+        notes: list[str] = []
+        refusal = _enrich_sections(ctx, slots, section_patch_ops, notes)
+        if refusal is not None:
+            return refusal
+        for o, step in added:
+            o["step"] = step.model_dump(by_alias=True)
+        # The net under enrichment, on the doors that carry a whole section.
+        rejection = _empty_section_rejection([slot.section for slot in slots])
         if rejection is not None:
             return rejection
         ctx.deps.pending_proposals.append(
-            {"action": "patch", "ops": validated, "summary": summary})
-        return ("Patch card is ready for the admin to review and Apply. Do not "
-                "claim the change is applied yet.")
+            {"action": "patch", "ops": validated, "summary": summary + notes})
+        return _with_notes(
+            "Patch card is ready for the admin to review and Apply. Do not "
+            "claim the change is applied yet.", notes)
