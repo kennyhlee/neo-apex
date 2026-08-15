@@ -14,6 +14,7 @@ import { useAuth } from '../../hooks/useAuth.ts';
 import { useTranslation } from '../../hooks/useTranslation.ts';
 import { QuickActions } from './QuickActions.tsx';
 import { CreateDraftCard } from './CreateDraftCard.tsx';
+import { PatchCard } from './PatchCard.tsx';
 import { Markdown } from './Markdown.tsx';
 import './ChatPanel.css';
 
@@ -47,9 +48,9 @@ function loadHistory(): Msg[] {
 }
 
 /**
- * Renders the card for one proposal. Task 11 fills in the remaining one: the
- * patch (adjust/apply) card. A proposal with no card contributes no UI — which
- * is also why proposals are never persisted.
+ * Renders the card for one proposal. A proposal with no card would contribute
+ * no UI — which is also why proposals are never persisted; both shapes are
+ * one-shot offers to write, and a restored transcript must not re-offer them.
  */
 function renderProposalCard(
   proposal: Proposal,
@@ -68,7 +69,10 @@ function renderProposalCard(
         />
       );
     case 'patch':
-      return null; // Task 11 fills this in
+      // No tenantId: the patch never leaves the browser — it edits the draft
+      // the editor already has open, and the tenant-scoped write is the
+      // autosave PUT the store makes afterwards.
+      return <PatchCard key={key} proposal={proposal} onDone={appendSystem} />;
   }
 }
 

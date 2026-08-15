@@ -470,6 +470,14 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.createFailed': 'Create failed',
     'assistant.applyFailed': 'Could not apply',
     'assistant.readOnly': 'This version is read-only — open a new draft first',
+    'assistant.patchTitle': 'Proposed changes',
+    'assistant.patchOpCount': '{n} edit(s) to this workflow',
+    'assistant.patchNoOps': 'No changes to apply',
+    // Deliberately says the rail is UPDATED, not that the draft is valid:
+    // Apply only edits the in-memory draft, and the autosave PUT that follows
+    // is what validates it.
+    'assistant.patchAppliedMsg':
+      'Applied — the editor and validation rail are updated. Anything else?',
 
     // Common
     'common.loading': 'Loading...',
@@ -932,6 +940,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.createFailed': '创建失败',
     'assistant.applyFailed': '无法应用',
     'assistant.readOnly': '此版本为只读 — 请先创建新草稿',
+    'assistant.patchTitle': '建议的修改',
+    'assistant.patchOpCount': '对此工作流的 {n} 处修改',
+    'assistant.patchNoOps': '没有可应用的修改',
+    'assistant.patchAppliedMsg': '已应用 — 编辑器与校验栏已更新。还需要修改吗？',
 
     // Common
     'common.loading': '加载中...',

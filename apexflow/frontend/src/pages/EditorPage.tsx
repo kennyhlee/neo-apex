@@ -15,6 +15,8 @@ import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
 import { lifecycleAction } from '../api/designer.ts';
+import { applyPatch } from '../chat/applyPatch.ts';
+import { registerEditorBridge, unregisterEditorBridge } from '../chat/editorBridge.ts';
 import type { ChannelAccess } from '../types/designer.ts';
 import './EditorPage.css';
 
@@ -62,6 +64,67 @@ export default function EditorPage() {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [store.dirty]);
+
+  /* The assistant drawer is mounted outside the routed tree (App.tsx), so a
+     patch proposal has no React path to this page's draft store. Publish a
+     handle to it instead — `src/chat/editorBridge.ts` explains the registry.
+
+     RE-REGISTERING ON EVERY CHANGE is the point of the dep list, not a
+     nicety: `apply` closes over `store.machine`/`store.steps`, so a handle
+     registered once at mount would patch the draft as it looked when the
+     editor opened and throw away every edit made since. `readOnly` is in
+     there for the same reason — a row published in another tab must stop
+     accepting patches without a reload.
+
+     Registration is gated on `definition` (not just `entityId`) so the
+     assistant can never write into the empty pre-load machine. */
+  const {
+    definition: bridgeDefinition,
+    readOnly: bridgeReadOnly,
+    machine: bridgeMachine,
+    steps: bridgeSteps,
+    setMachine,
+    setSteps,
+    setChannelAccess,
+  } = store;
+  useEffect(() => {
+    if (!entityId || !bridgeDefinition) return;
+    registerEditorBridge({
+      entityId,
+      readOnly: bridgeReadOnly,
+      apply: (ops) => {
+        try {
+          const next = applyPatch(bridgeMachine, bridgeSteps, ops);
+          setMachine(next.machine);
+          setSteps(next.steps);
+          // Absent (not `staff_only`) when no `set_channel_access` op ran —
+          // `PatchApplyResult.channelAccess`'s own contract. Writing it
+          // unconditionally would reset the field on every unrelated patch.
+          if (next.channelAccess) setChannelAccess(next.channelAccess);
+          return null;
+        } catch (e) {
+          // `applyPatch` is pure, so a throw means NOTHING was applied and
+          // the three setters above never ran. The message names the
+          // offending id and is shown verbatim on the card.
+          return e instanceof Error ? e.message : String(e);
+        }
+      },
+    });
+    return () => unregisterEditorBridge(entityId);
+  }, [
+    entityId,
+    bridgeDefinition,
+    bridgeReadOnly,
+    bridgeMachine,
+    bridgeSteps,
+    // Stable `useCallback`s from the store — destructured (rather than read as
+    // `store.setMachine` inside the effect) so exhaustive-deps can see each
+    // value individually instead of demanding the whole `store` object, which
+    // is a new identity on every render and would re-register on every one.
+    setMachine,
+    setSteps,
+    setChannelAccess,
+  ]);
 
   if (store.loading) {
     return <p className="page-placeholder">{t('common.loading')}</p>;

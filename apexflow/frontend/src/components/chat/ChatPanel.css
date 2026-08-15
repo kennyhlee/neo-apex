@@ -152,10 +152,27 @@
   word-break: break-word;
 }
 
-.chat-card__created {
+/* The terminal "this offer has been taken" line — one rule, one look, whether
+   the card created a draft or applied a patch. */
+.chat-card__created,
+.chat-card__applied {
   margin: var(--space-2) 0 0;
   color: var(--success);
   font-weight: var(--weight-semibold);
+}
+
+/* The patch card's op count / empty-patch line — secondary to the summary
+   bullets it sits under, since the bullets are what the operator reviews. */
+.chat-card__meta {
+  margin: var(--space-2) 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+/* Why Apply is disabled (read-only row, no editor, different draft). */
+.chat-card__note {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
 }
 
 .chat-card__actions {
