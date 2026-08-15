@@ -250,6 +250,39 @@ def save_definition_route(tenant_id: str, entity_id: str, body: SaveDefinitionRe
     )
 
 
+class CreateDefinitionRequest(BaseModel):
+    """A brand-new workflow's authored content. Same field contract as
+    `SaveDefinitionRequest` — `machine`/`steps` are the PARSED shapes, never
+    the JSON-encoded strings the row stores — plus the `name` and
+    `channel_access` a create has to choose. Everything else about a v1 draft
+    (`definition_id`, `version`, `status`, `lineage_status`) is the server's to
+    decide, so it isn't accepted here."""
+
+    name: str
+    machine: dict[str, Any]
+    steps: list[dict[str, Any]] = []
+    channel_access: str = "staff_only"
+
+
+@router.post("/{tenant_id}/definitions", status_code=201)
+def create_definition_route(tenant_id: str, body: CreateDefinitionRequest,
+                            user: dict = Depends(require_staff_tenant)):
+    """Create a version-1 draft and return its validation in the same response.
+
+    The write half of this module's otherwise-read surface, and the counterpart
+    to `save_definition_route`'s PUT: the designer's blank/template creation
+    and the chat assistant's create-draft proposal both land here, so the
+    lineage invariants and the JSON encoding live server-side in one place
+    instead of being re-derived by each client against the schema-less generic
+    entities proxy. 422 `{"parse_error": ...}` and the errors/health payload
+    come straight from `defs.create_definition` — see its docstring.
+    """
+    return defs.create_definition(
+        tenant_id, body.name, body.machine, body.steps, body.channel_access,
+        user.get("_token"),
+    )
+
+
 @router.post("/{tenant_id}/definitions/{entity_id}/validate")
 def validate_definition_route(tenant_id: str, entity_id: str,
                               user: dict = Depends(require_staff_tenant)):

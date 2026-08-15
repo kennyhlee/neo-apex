@@ -18,6 +18,8 @@ which is constant across a lineage's draft/published/superseded rows while
 `entity_id` and `version` change per row.
 """
 import json
+import re
+import uuid
 from typing import Any, Callable
 
 from fastapi import HTTPException
@@ -404,6 +406,81 @@ def get_draft_definition(tenant_id: str, lineage_definition_id: str,
     rows = [r for r in rows if str(r.get("definition_id", "")) == str(lineage_definition_id)]
     rows = [r for r in rows if r.get("status") == "draft"]
     return rows[0] if rows else None
+
+
+def _new_definition_id(name: str) -> str:
+    """A fresh LINEAGE id from a human-typed workflow name.
+
+    Slug + short random suffix, mirroring the designer's client-side
+    `slugify`/`uniqueSuffix` pair (frontend/src/pages/DefinitionsPage.tsx)
+    that this function replaces. The suffix is what keeps two workflows a
+    person happened to name the same thing from becoming ONE lineage — every
+    lineage read (`get_published_definition`, `get_draft_definition`,
+    `model_impact`) matches on `definition_id`, so a collision would silently
+    merge them. Collisions are otherwise harmless (DataCore assigns the real
+    `entity_id`; this is a lineage label), so a non-cryptographic suffix is
+    enough.
+
+    A name with no alphanumerics at all slugs to the empty string, which
+    would leave a `definition_id` of just `-abc123`; `"workflow"` is the
+    fallback rather than accepting that.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-") or "workflow"
+    return f"{slug}-{uuid.uuid4().hex[:6]}"
+
+
+def create_definition(tenant_id: str, name: str, machine_raw: Any, steps_raw: Any,
+                      channel_access: str = "staff_only",
+                      token: str | None = None) -> dict:
+    """Create a version-1 draft lineage from a parsed definition object.
+
+    The other end of `save_definition`'s contract, and deliberately the same
+    one: `machine`/`steps` arrive as PARSED shapes and are JSON-encoded here,
+    server-side, in exactly one place. The designer previously created drafts
+    through the GENERIC entities proxy (`app/api/entities.py`), which enforces
+    no schema — it hand-`JSON.stringify`d both fields and picked `version`/
+    `status`/`lineage_status` itself, so the invariants that make a lineage
+    coherent lived in a browser. Any client that got one wrong wrote a row
+    every later read chokes on.
+
+    422 (`{"parse_error": ...}`) if `machine`/`steps` don't validate against
+    schema.py, raised BEFORE the write — same shape and same reasoning as
+    `save_definition`'s, and the reason a corrupt row is not creatable through
+    the product either.
+
+    Validation ERRORS do not refuse the write, for the same reason they don't
+    in `save_definition`: a draft is allowed to be incomplete. They come back
+    alongside the row, and `publish_definition` stays the gate that refuses.
+    """
+    try:
+        machine = MachineDef.model_validate(machine_raw)
+        steps = [StepDef.model_validate(s) for s in (steps_raw or [])]
+    except Exception as exc:
+        raise HTTPException(422, {"parse_error": str(exc)}) from exc
+
+    created = dc.dc_create(tenant_id, "workflow_definition", {
+        "definition_id": _new_definition_id(name),
+        "name": name,
+        "version": 1,
+        "status": "draft",
+        "lineage_status": "active",
+        "channel_access": channel_access,
+        "machine": json.dumps(machine.model_dump(by_alias=True)),
+        "steps": json.dumps([s.model_dump(by_alias=True) for s in steps]),
+    }, token)
+    # Re-fetched for the same reason `new_draft_definition` re-fetches:
+    # `dc_create` echoes DataCore's write-response envelope
+    # (`{entity_id, entity_type, base_data, _version}`), not the flattened row
+    # shape every read in this module returns. Callers must not have to care
+    # which function produced the row they're holding.
+    row = require_definition_row(tenant_id, created["entity_id"], token)
+
+    models = fetch_models(tenant_id, referenced_entity_models(steps), token)
+    return {
+        "row": row,
+        "errors": validate_definition(machine, steps, models),
+        "health": definition_health(machine, steps, models),
+    }
 
 
 def new_draft_definition(tenant_id: str, entity_id: str,
