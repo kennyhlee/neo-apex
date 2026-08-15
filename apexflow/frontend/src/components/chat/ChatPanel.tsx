@@ -101,7 +101,15 @@ function renderProposalCard(
   }
 }
 
-export function ChatPanel() {
+export function ChatPanel({
+  /**
+   * Renders a close control in the header when provided. Optional because the
+   * panel is not inherently a drawer — it is only closeable when something is
+   * wrapping it in one (today, `AssistantDrawer`), and a panel embedded
+   * directly in a page would have nothing to close.
+   */
+  onClose,
+}: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const { t } = useTranslation();
   const location = useLocation();
@@ -212,7 +220,11 @@ export function ChatPanel() {
   return (
     <aside className="chat-panel" aria-label={t('assistant.title')}>
       <div className="chat-panel__header">
-        {t('assistant.title')}
+        {/* The title carries the `margin-right: auto` that right-aligns the
+            controls, rather than the first button carrying `margin-left: auto`
+            — otherwise Clear and × each claim the free space and the two drift
+            apart, and removing Clear (empty transcript) would un-align ×. */}
+        <span className="chat-panel__title">{t('assistant.title')}</span>
         {msgs.length > 0 && (
           <button
             type="button"
@@ -221,6 +233,16 @@ export function ChatPanel() {
             disabled={busy}
           >
             {t('assistant.clear')}
+          </button>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            className="chat-panel__close"
+            onClick={onClose}
+            aria-label={t('assistant.hide')}
+          >
+            <span aria-hidden="true">×</span>
           </button>
         )}
       </div>

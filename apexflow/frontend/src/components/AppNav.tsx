@@ -6,12 +6,15 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
+import { useAssistant } from '../hooks/useAssistant.ts';
+import { ASSISTANT_TOGGLE_ID } from '../contexts/assistantStore.ts';
 import type { Locale } from '../i18n/translations.ts';
 import './AppNav.css';
 
 export default function AppNav() {
   const { t, locale, setLocale } = useTranslation();
   const { user, logout } = useAuth();
+  const { open: assistantOpen, toggle: toggleAssistant } = useAssistant();
   const navigate = useNavigate();
 
   const navItems = [
@@ -70,6 +73,21 @@ export default function AppNav() {
           </ul>
 
           <div className="app-nav-right">
+            {/* The assistant's only open control. `aria-expanded` +
+                `aria-controls` tie it to the drawer, and the `active` class is
+                the same one the nav links use for "you are here" — an open
+                drawer is a state of the app, so it is marked the same way. */}
+            <button
+              type="button"
+              id={ASSISTANT_TOGGLE_ID}
+              className={`app-nav-assistant ${assistantOpen ? 'active' : ''}`}
+              onClick={toggleAssistant}
+              aria-expanded={assistantOpen}
+              aria-controls="assistant-drawer"
+            >
+              {t('assistant.title')}
+            </button>
+
             <label className="sr-only" htmlFor="app-nav-lang">
               {t('nav.language')}
             </label>

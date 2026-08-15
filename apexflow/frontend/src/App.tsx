@@ -5,6 +5,7 @@ import { ToastProvider } from './components/ui/Toast.tsx';
 import AppNav from './components/AppNav.tsx';
 import { RoutedErrorBoundary } from './components/ErrorBoundary.tsx';
 import { AssistantDrawer } from './components/chat/AssistantDrawer.tsx';
+import { AssistantProvider } from './contexts/AssistantContext.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import DefinitionsPage from './pages/DefinitionsPage.tsx';
 import EditorPage from './pages/EditorPage.tsx';
@@ -40,20 +41,24 @@ function AppRoutes() {
           !user ? (
             <Navigate to="/login" replace />
           ) : (
-            <div className="app-shell">
-              <AppNav />
-              <AssistantDrawer />
-              <main className="app-main" id="main-content" tabIndex={-1}>
-                <RoutedErrorBoundary>
-                  <Routes>
-                    <Route path="/" element={<DefinitionsPage />} />
-                    <Route path="/definitions/:entityId" element={<EditorPage />} />
-                    <Route path="/templates" element={<TemplatesPage />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </RoutedErrorBoundary>
-              </main>
-            </div>
+            // Wraps the shell, not the app: AppNav's Assistant button and the
+            // drawer are siblings here, and both need the same open state.
+            <AssistantProvider>
+              <div className="app-shell">
+                <AppNav />
+                <AssistantDrawer />
+                <main className="app-main" id="main-content" tabIndex={-1}>
+                  <RoutedErrorBoundary>
+                    <Routes>
+                      <Route path="/" element={<DefinitionsPage />} />
+                      <Route path="/definitions/:entityId" element={<EditorPage />} />
+                      <Route path="/templates" element={<TemplatesPage />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </RoutedErrorBoundary>
+                </main>
+              </div>
+            </AssistantProvider>
           )
         }
       />

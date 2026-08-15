@@ -1,41 +1,27 @@
 // The slide-in shell around ChatPanel. AdminDash keeps this markup inline in
 // HomePage because the assistant only lives there; in ApexFlow the assistant is
 // available on every authed route, so the shell is its own component mounted
-// once in App.tsx and owning its own open state.
+// once in App.tsx.
 //
-// Default is CLOSED: the editor is dense, and reserving 380px of it before the
-// user asks for the assistant would be a worse first screen than a toggle.
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from '../../hooks/useTranslation.ts';
+// This component owns no open/closed state: it is opened from AppNav's
+// Assistant button and closed from either that button, the × in the panel
+// header, or Escape. The state lives in `AssistantProvider` because the two
+// controls are in different subtrees.
+//
+// There is deliberately NO floating toggle pill. One used to live here, fixed
+// to the top-right of the content column; it read as a stray widget rather than
+// part of the app (AdminDash never visibly shows its equivalent — its drawer
+// defaults open and the pill sits underneath it), and being `position: fixed`
+// it kept colliding with whatever the page put in that band. The controls are
+// now where the user already looks for chrome: the nav, and the panel's own
+// header.
+import { useCallback } from 'react';
+import { useAssistant } from '../../hooks/useAssistant.ts';
 import { ChatPanel } from './ChatPanel.tsx';
 import './AssistantDrawer.css';
 
-// Session-scoped, like the transcript: a new tab starts closed.
-const OPEN_KEY = 'apexflow_assistant_open';
-
 export function AssistantDrawer() {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(() => {
-    try {
-      return sessionStorage.getItem(OPEN_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
-
-  // The class on <body> is what reflows .app-main (see AssistantDrawer.css) —
-  // content makes room for the drawer instead of sitting under it.
-  useEffect(() => {
-    document.body.classList.toggle('assistant-open', open);
-    try {
-      sessionStorage.setItem(OPEN_KEY, open ? '1' : '0');
-    } catch {
-      /* ignore storage quota / disabled storage */
-    }
-    return () => document.body.classList.remove('assistant-open');
-  }, [open]);
-
-  const toggleRef = useRef<HTMLButtonElement>(null);
+  const { open, closeAndRefocus } = useAssistant();
 
   /**
    * Escape closes the drawer when focus is inside it.
@@ -45,40 +31,25 @@ export function AssistantDrawer() {
    * and closing the assistant out from under an edit elsewhere is worse than
    * not offering the shortcut. React's synthetic events bubble, so focus in
    * any descendant — composer, chips, a proposal card's buttons — is covered.
-   *
-   * Focus is returned to the toggle, because the element that had it is inside
-   * the drawer this is about to hide (`visibility: hidden` when
-   * `aria-hidden`), and dropping focus to <body> would strand a keyboard user
-   * at the top of the document.
    */
-  const onKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key !== 'Escape') return;
-    e.stopPropagation();
-    setOpen(false);
-    toggleRef.current?.focus();
-  }, []);
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      closeAndRefocus();
+    },
+    [closeAndRefocus],
+  );
 
   return (
-    <>
-      <button
-        type="button"
-        ref={toggleRef}
-        className="assistant-toggle"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-controls="assistant-drawer"
-      >
-        {open ? t('assistant.hide') : t('assistant.show')}
-      </button>
-      <aside
-        id="assistant-drawer"
-        className={`assistant-drawer ${open ? 'is-open' : ''}`}
-        aria-hidden={!open}
-        onKeyDown={onKeyDown}
-      >
-        <ChatPanel />
-      </aside>
-    </>
+    <aside
+      id="assistant-drawer"
+      className={`assistant-drawer ${open ? 'is-open' : ''}`}
+      aria-hidden={!open}
+      onKeyDown={onKeyDown}
+    >
+      <ChatPanel onClose={closeAndRefocus} />
+    </aside>
   );
 }
 

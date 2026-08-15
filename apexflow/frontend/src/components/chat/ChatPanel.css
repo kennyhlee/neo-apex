@@ -25,8 +25,12 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Pushes every header control to the right edge. See ChatPanel.tsx's comment:
+   this lives on the title, not on the first button, so Clear and × stay
+   together and × stays aligned when Clear is absent. */
+.chat-panel__title { margin-right: auto; }
+
 .chat-panel__clear {
-  margin-left: auto;
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -41,6 +45,29 @@
   color: var(--text-primary);
 }
 .chat-panel__clear:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Same ghost-button conventions as Clear beside it, squared off for a glyph.
+   The 24px box keeps the × a comfortable target without making the
+   header taller than the text line it shares. */
+.chat-panel__close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: calc(var(--space-2) * -1);
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+.chat-panel__close:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
 
 .chat-panel__log {
   flex: 1;

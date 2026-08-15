@@ -79,6 +79,38 @@
   flex: none;
 }
 
+/* Deliberately shaped like `.app-nav-links a` rather than like a primary
+   button: it is a chrome control that reveals a panel, the same category as
+   the nav links beside it, and it reuses their `.active` treatment for the
+   open state. Height matches `.app-nav-lang-select` (32px) so the right-hand
+   cluster keeps one baseline. */
+.app-nav-assistant {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.app-nav-assistant:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
+
+.app-nav-assistant.active {
+  background: var(--accent-tint);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+
 .app-nav-lang-select {
   height: 32px;
   padding: 0 var(--space-2);
