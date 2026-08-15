@@ -9,6 +9,9 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "httpx>=0.28",
+    # Chat workflow builder (Plan 4). Same constraint admindash pins for its
+    # own chat assistant, so both services resolve the same pydantic-ai line.
+    "pydantic-ai>=0.0.30",
 ]
 
 [project.optional-dependencies]

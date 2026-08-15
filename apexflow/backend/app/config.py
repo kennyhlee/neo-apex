@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "NeoApex Workflows <workflows@floatify.com>"
 
+    # Chat assistant (Plan 4 / chat workflow builder). Mirrors admindash's
+    # chat settings; max_tokens is higher because create-draft proposals
+    # carry a full machine+steps JSON in tool arguments.
+    chat_model: str = "anthropic:claude-haiku-4-5-20251001"
+    chat_max_tokens: int = 4096
+    chat_history_turns: int = 8
+    chat_session_message_cap: int = 40
+
     @model_validator(mode="after")
     def parse_and_validate_cors(self):
         raw = self.cors_allowed_origins
