@@ -437,6 +437,38 @@ def test_propose_create_draft_rejects_unparseable_steps(fake_dc):
     assert deps.pending_proposals == []
 
 
+def test_propose_create_draft_rejects_a_malformed_section(fake_dc):
+    """`StepDef.config` is `dict[str, Any]`, so a form step whose section is
+    missing entity_model/fields/mode passes StepDef validation untouched.
+
+    The create endpoint parses sections too (`referenced_entity_models`), so a
+    proposal like this would render a card whose confirm-click fails. Sections
+    are therefore parsed HERE, inside the same try, and the model gets a
+    correctable string instead of the admin getting a broken card."""
+    bad_step = _valid_steps()[0]
+    bad_step["config"]["sections"][0] = {"section_id": "student_section"}
+
+    out, deps = _run_proposal(_draft_args(steps=[bad_step]))
+
+    assert "does not parse" in out
+    assert deps.pending_proposals == []
+
+
+def test_propose_create_draft_rejects_a_non_list_sections_without_raising(fake_dc):
+    """Same guard, non-ValidationError path. `config.sections` is entirely
+    model-controlled and untyped: a scalar there makes
+    `referenced_entity_models` raise TypeError while iterating, not
+    ValidationError. It must STILL come back as a string — an exception here
+    propagates out of `agent.run_stream` and ends the SSE stream in `error`."""
+    bad_step = _valid_steps()[0]
+    bad_step["config"]["sections"] = 5
+
+    out, deps = _run_proposal(_draft_args(steps=[bad_step]))
+
+    assert "does not parse" in out
+    assert deps.pending_proposals == []
+
+
 def test_propose_create_draft_rejects_an_unknown_channel_access(fake_dc):
     """`channel_access` is a two-value enum on the definition row; anything
     else would be rejected downstream, so it is caught here instead."""

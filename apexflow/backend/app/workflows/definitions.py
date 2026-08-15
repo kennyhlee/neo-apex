@@ -455,6 +455,16 @@ def create_definition(tenant_id: str, name: str, machine_raw: Any, steps_raw: An
     try:
         machine = MachineDef.model_validate(machine_raw)
         steps = [StepDef.model_validate(s) for s in (steps_raw or [])]
+        # Sections are parsed HERE — before the write, inside the 422 — and
+        # not left to the `fetch_models` call below. `StepDef.config` is
+        # `dict[str, Any]`, so a section missing entity_model/fields/mode
+        # survives `StepDef.model_validate` and is only ever parsed by
+        # `referenced_entity_models`. With that call sitting after `dc_create`
+        # and outside this try, such a request raised out of the route as a
+        # 500 AND left behind a draft row nothing cleans up — the write had
+        # already happened. "422 raised BEFORE the write" has to hold for the
+        # whole payload, not just `machine`.
+        entity_types = referenced_entity_models(steps)
     except Exception as exc:
         raise HTTPException(422, {"parse_error": str(exc)}) from exc
 
@@ -475,7 +485,7 @@ def create_definition(tenant_id: str, name: str, machine_raw: Any, steps_raw: An
     # which function produced the row they're holding.
     row = require_definition_row(tenant_id, created["entity_id"], token)
 
-    models = fetch_models(tenant_id, referenced_entity_models(steps), token)
+    models = fetch_models(tenant_id, entity_types, token)
     return {
         "row": row,
         "errors": validate_definition(machine, steps, models),

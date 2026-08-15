@@ -133,6 +133,34 @@ def test_create_definition_rejects_unparseable_machine(client, dc_create_calls):
     assert dc_create_calls == []
 
 
+def test_create_definition_rejects_a_malformed_section_before_writing(
+        client, dc_create_calls):
+    """A malformed SECTION must 422 like a malformed machine — and, crucially,
+    must not write first.
+
+    `StepDef.config` is `dict[str, Any]`, so a section missing
+    entity_model/fields/mode sails through `StepDef.model_validate`. The only
+    thing that parses it is `referenced_entity_models`, which ran AFTER
+    `dc_create` and OUTSIDE the try that 422s — so this request used to raise
+    out of the route as a 500 while leaving a draft row behind that nothing
+    ever cleaned up. Parsing sections inside the try, before the write, is
+    what makes the endpoint's "422 raised BEFORE the write" docstring true
+    for every part of the payload rather than just the machine."""
+    resp = client.post(
+        f"/api/workflows/{TENANT}/definitions",
+        json={"name": "Bad section", "machine": SKELETON_MACHINE, "steps": [
+            {"step_id": "student_details", "type": "form", "title": "Student",
+             "required": True, "blocking": True, "available_in": ["draft"],
+             "config": {"sections": [{"section_id": "student_section"}]}},
+        ]},
+    )
+    assert resp.status_code == 422, resp.text
+    assert isinstance(resp.json()["detail"]["parse_error"], str)
+    assert resp.json()["detail"]["parse_error"]
+
+    assert dc_create_calls == []
+
+
 def test_create_definition_requires_matching_tenant(client, dc_create_calls):
     """`require_staff_tenant` rejects a token whose tenant differs from the
     path's before any DataCore call — same 403 the other designer routes give

@@ -157,10 +157,26 @@ def register_proposal_tools(agent: Agent) -> None:
         # The same models the create endpoint parses with, so "it parses here"
         # means "it parses there" — and `model_dump(by_alias=True)` re-emits
         # the wire keys (`from`, not `from_`) the card posts back.
+        #
+        # `referenced_entity_models` is in the try for a reason: `StepDef.config`
+        # is `dict[str, Any]`, so a form step whose section is missing
+        # entity_model/fields/mode validates as a StepDef and would otherwise
+        # reach a card. It is a pure function over the PARSED steps whose only
+        # work is `SectionDef.model_validate` on each declared section — the
+        # same parse `create_definition` does — so calling it here is exactly
+        # the "would this 422 downstream?" question, asked before the admin is
+        # holding the request. It reads nothing.
+        #
+        # The catch is widened past ValidationError for the same reason
+        # `app/api/designer.py` widens `_parse_or_422`'s: `config` is untyped
+        # and entirely model-authored, so `{"sections": 5}` raises TypeError
+        # while iterating rather than ValidationError. Every malformed payload
+        # must come back as text — a raise here ends the SSE stream in `error`.
         try:
             m = MachineDef.model_validate(machine)
             s = [StepDef.model_validate(x) for x in steps]
-        except ValidationError as exc:
+            defs.referenced_entity_models(s)
+        except (ValidationError, ValueError, TypeError) as exc:
             return (f"Proposal rejected — the definition does not parse: {exc}. "
                     "Fix the payload and call propose_create_draft again.")
         if channel_access not in ("staff_only", "family"):
