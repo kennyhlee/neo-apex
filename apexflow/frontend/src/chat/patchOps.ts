@@ -86,15 +86,24 @@ export interface RemoveMoveOp {
 export interface AddStepOp {
   op: 'add_step';
   /**
-   * A full StepDef shape — but NOT normalized. `AddStep.step` is
-   * `dict[str, Any]` server-side and `validate_ops` dumps it back untouched
-   * (`propose_patch` parses a throwaway `StepDef` off it purely to reject
-   * malformed steps), so any key with a backend default may be ABSENT here.
-   * Today that is `config` (`default_factory=dict`) alongside the genuinely
-   * optional `show_if`/`review`. The apply function materializes them; do not
-   * dereference `step.config` without a `?? {}`.
+   * A full StepDef shape — but NOT normalized, which is why this is not
+   * plainly `WorkflowStepDef`. `AddStep.step` is `dict[str, Any]`
+   * server-side and `validate_ops` dumps it back exactly as the model
+   * authored it (`propose_patch` parses a throwaway `StepDef` off it purely
+   * to reject malformed steps, then discards the normalized copy). So any
+   * key carrying a backend default can be ABSENT on the wire — and `config`
+   * is one (`StepDef.config` is `Field(default_factory=dict)`) while
+   * `WorkflowStepDef.config` is required.
+   *
+   * The `config?:` override below encodes that hazard in the type instead of
+   * leaving it to this comment: `op.step.config.sections` is a real crash
+   * that `WorkflowStepDef` would have type-checked. The apply function
+   * materializes the default (`step.config ?? {}`).
+   *
+   * `show_if`/`review` need no override — they are already optional on both
+   * sides.
    */
-  step: WorkflowStepDef;
+  step: Omit<WorkflowStepDef, 'config'> & { config?: Record<string, unknown> };
   /** `null`/absent = append. */
   position?: number | null;
 }
@@ -116,10 +125,17 @@ export interface AddSectionOp {
   op: 'add_section';
   step_id: string;
   /**
-   * A full SectionDef shape — and, like `AddStepOp.step`, an unnormalized one.
-   * `AddSection.section` is `dict[str, Any]` server-side and is not parsed at
-   * all before the card sees it (only `add_step`'s step is), so treat every
-   * key as possibly absent or wrongly typed until the save PUT validates it.
+   * A full SectionDef shape, unnormalized like `AddStepOp.step` — and in fact
+   * weaker: `AddSection.section` is `dict[str, Any]` server-side and is not
+   * parsed at ALL before the card sees it (only `add_step`'s step is), so a
+   * malformed section reaches the card and fails on the save PUT.
+   *
+   * No `config`-style override is needed here even so. The two SectionDef
+   * fields carrying backend defaults — `title` and `description`, both
+   * `= ""` — are already optional on `WorkflowSectionDef`, so the type does
+   * not claim any key the wire can legitimately omit. Everything else
+   * (`section_id`, `entity_model`, `fields`, `mode`) is required on both
+   * sides: absent means malformed, not defaulted.
    */
   section: WorkflowSectionDef;
 }
