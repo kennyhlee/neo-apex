@@ -16,4 +16,10 @@ class ChatDeps:
     page: str  # 'list' | 'templates' | 'editor'
     entity_id: str | None = None
     editor_context: str | None = None  # set by the route when page == 'editor' (Task 6)
+    # True when the row `entity_id` names is not a draft. Derived from the
+    # SAME loaded context block the model is shown (`context_read_only`), so
+    # the prompt's `read_only` and `propose_patch`'s guard can never disagree —
+    # the model being told "read_only: true" and the tool still queueing a
+    # patch is exactly the split this field exists to prevent.
+    editor_read_only: bool = False
     pending_proposals: list[dict] = field(default_factory=list)

@@ -23,6 +23,22 @@ interface Msg {
   role: 'user' | 'assistant';
   content: string;
   proposals?: Proposal[];
+  /**
+   * The `entity_id` that was open when these proposals were made — the draft
+   * the assistant was actually looking at (the backend loads it server-side
+   * from `context.entity_id`).
+   *
+   * Load-bearing, not bookkeeping: this panel NEVER unmounts (the drawer is
+   * mounted outside `<Routes>`), and proposals are held in message state, so
+   * a patch card outlives the route it was born on. Without the origin
+   * recorded here a card authored for draft A would find a perfectly valid
+   * bridge on draft B and apply to it — and the ops that carry no
+   * cross-references (`add_stage`, `add_step`, `set_channel_access`) would
+   * apply CLEANLY, silently editing a workflow nobody was talking about.
+   *
+   * Null off the editor page; `create_draft` proposals ignore it.
+   */
+  proposalOrigin?: string | null;
 }
 
 // Transcript persists across in-app navigation for the current login session.
@@ -57,6 +73,7 @@ function renderProposalCard(
   key: string,
   appendSystem: (content: string) => void,
   tenantId: string,
+  originEntityId: string | null,
 ): ReactNode {
   switch (proposal.action) {
     case 'create_draft':
@@ -71,8 +88,16 @@ function renderProposalCard(
     case 'patch':
       // No tenantId: the patch never leaves the browser — it edits the draft
       // the editor already has open, and the tenant-scoped write is the
-      // autosave PUT the store makes afterwards.
-      return <PatchCard key={key} proposal={proposal} onDone={appendSystem} />;
+      // autosave PUT the store makes afterwards. `originEntityId` is what
+      // pins it to the RIGHT draft (see `Msg.proposalOrigin`).
+      return (
+        <PatchCard
+          key={key}
+          proposal={proposal}
+          originEntityId={originEntityId}
+          onDone={appendSystem}
+        />
+      );
   }
 }
 
@@ -129,6 +154,11 @@ export function ChatPanel() {
     // Which surface the question was asked from. On the editor the backend
     // loads the open draft itself from this entity_id.
     const match = matchPath('/definitions/:entityId', location.pathname);
+    // Captured HERE, at send time, and stamped onto the reply below: it is the
+    // draft the backend loads and therefore the only draft any patch this turn
+    // produces may be applied to. Reading the route again when a card renders
+    // would read wherever the user has navigated to since.
+    const originEntityId = match?.params.entityId ?? null;
     const context: ChatContext = match
       ? { page: 'editor', entity_id: match.params.entityId }
       : location.pathname.startsWith('/templates')
@@ -169,7 +199,11 @@ export function ChatPanel() {
       // panel must not be left stuck on "Stop" with a dead input.
       abortRef.current = null;
       if (proposals.length) {
-        setMsgs((m) => m.map((msg) => (msg.id === replyId ? { ...msg, proposals } : msg)));
+        setMsgs((m) =>
+          m.map((msg) =>
+            msg.id === replyId ? { ...msg, proposals, proposalOrigin: originEntityId } : msg,
+          ),
+        );
       }
       setBusy(false);
     }
@@ -208,7 +242,13 @@ export function ChatPanel() {
               )}
             </div>
             {m.proposals?.map((p, j) =>
-              renderProposalCard(p, `${m.id}-${j}`, appendSystem, user?.tenant_id ?? ''),
+              renderProposalCard(
+                p,
+                `${m.id}-${j}`,
+                appendSystem,
+                user?.tenant_id ?? '',
+                m.proposalOrigin ?? null,
+              ),
             )}
           </div>
         ))}

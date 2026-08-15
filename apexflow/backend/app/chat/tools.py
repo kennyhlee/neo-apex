@@ -198,7 +198,9 @@ def register_proposal_tools(agent: Agent) -> None:
     def propose_patch(ctx: RunContext[ChatDeps], ops: list[dict],
                       summary: list[str]) -> str:
         """Open a patch confirmation card changing the OPEN DRAFT. Only valid
-        in editor context. ops is a list of operations (add_stage, rename_stage,
+        in editor context, and only when the open row is a draft (the editor
+        context's `read_only` must be false). ops is a list of operations
+        (add_stage, rename_stage,
         set_stage_kind, remove_stage, add_move, update_move, remove_move,
         add_step, update_step, remove_step, add_section, update_section,
         remove_section, set_channel_access) using ids from the editor context.
@@ -212,6 +214,21 @@ def register_proposal_tools(agent: Agent) -> None:
         if ctx.deps.page != "editor":
             return ("No draft is open. Patching works only in the editor — for a "
                     "new workflow use propose_create_draft instead.")
+        # The read-only guard, and it is not belt-and-braces either. Only a
+        # draft can be saved (`save_definition` 409s `not_draft`), so a patch
+        # queued against a published or superseded row is an offer that CANNOT
+        # be taken: the card would render, Apply would write into the
+        # editor's in-memory store — whose mutators silently no-op on a
+        # non-draft row — and the admin would be told it worked. Refusing here
+        # keeps that card from ever existing. The editor context already
+        # carries the flag (`read_only`), so this costs no extra read.
+        if ctx.deps.editor_read_only:
+            return ("The open version is read-only — only a draft can be "
+                    "patched. Tell the admin to create a new draft version of "
+                    "this workflow (the New version action on the workflow "
+                    "list) and ask again there; or use propose_create_draft "
+                    "for a brand-new workflow. Do not re-call propose_patch "
+                    "for this version.")
         # Structural validation only (see patch_ops.py): whether these ids
         # exist in the draft is the save PUT's question, asked when the admin
         # applies, exactly as it is for a hand-edit.

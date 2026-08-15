@@ -308,13 +308,13 @@ def test_chat_endpoint_emits_no_proposal_frame_when_the_tool_rejects(
 # row into the prompt — the read is tenant-scoped).
 
 
-def _seed_editor_definition(fake_dc, name="Enrollment"):
+def _seed_editor_definition(fake_dc, name="Enrollment", status="draft"):
     fake_dc.set_model(TENANT, "student", {
         "base_fields": [{"name": "first_name", "type": "str", "required": True}],
         "custom_fields": [],
     })
     return fake_dc.dc_create(TENANT, "workflow_definition", {
-        "definition_id": "wd-editor", "name": name, "version": 1, "status": "draft",
+        "definition_id": "wd-editor", "name": name, "version": 1, "status": status,
         "lineage_status": "active", "channel_access": "staff_only",
         "machine": json.dumps({
             "states": [{"state_id": "draft", "name": "Draft", "kind": "initial"},
@@ -467,6 +467,68 @@ def test_chat_endpoint_emits_a_patch_proposal_frame_from_the_editor(
     types = [e["type"] for e in events]
     assert types.index("proposal") < types.index("done")
     assert types[-1] == "done"
+
+
+def test_chat_endpoint_refuses_a_patch_against_a_read_only_version(
+    client, fake_dc, monkeypatch
+):
+    """The route half of the read-only guard: a published row loads with
+    `read_only: true`, the route stashes that on the deps, and `propose_patch`
+    refuses — so NO proposal frame reaches the browser.
+
+    Without this the card renders on a published row, Apply writes into a
+    draft store whose mutators no-op off-draft, and the admin is told the
+    change was applied. The frontend disables Apply for exactly this case;
+    this stops the offer being made at all.
+    """
+    eid = _seed_editor_definition(fake_dc, status="published")
+    tool_output: list[str] = []
+
+    async def _stream(messages, info):
+        if len(messages) == 1:
+            yield {0: DeltaToolCall(name="propose_patch", json_args=json.dumps({
+                "ops": [{"op": "add_stage", "stage_id": "review", "name": "Review"}],
+                "summary": ["Added a Review stage"],
+            }))}
+        else:
+            from pydantic_ai.messages import ToolReturnPart
+
+            tool_output.extend(
+                str(p.content) for m in messages for p in getattr(m, "parts", [])
+                if isinstance(p, ToolReturnPart)
+            )
+            yield "That version is read-only — create a new draft version first."
+
+    monkeypatch.setattr(
+        chat_api, "build_chat_agent",
+        lambda: build_chat_agent(model=FunctionModel(stream_function=_stream)))
+
+    resp = client.post(
+        CHAT_URL,
+        json={"message": "add a review stage", "history": [], "message_count": 0,
+              "context": {"page": "editor", "entity_id": eid}},
+    )
+
+    assert resp.status_code == 200
+    events = _events(resp.text)
+    assert not [e for e in events if e["type"] == "error"], events
+    assert not [e for e in events if e["type"] == "proposal"], events
+    assert events[-1]["type"] == "done"
+    # The model was told WHY, in terms it can act on.
+    assert any("read-only" in out.lower() for out in tool_output), tool_output
+
+
+def test_context_read_only_reads_the_flag_out_of_the_block():
+    """`context_read_only` is the one place that knows the block's shape, so
+    the prompt's `read_only` and the tool guard cannot disagree."""
+    from app.chat.context import context_read_only
+
+    assert context_read_only(json.dumps({"read_only": True})) is True
+    assert context_read_only(json.dumps({"read_only": False})) is False
+    # Degraded blocks are prose, not JSON — permissive, since they say nothing
+    # about status and the save PUT 409s on a non-draft regardless.
+    assert context_read_only("The open draft (abc) could not be loaded: boom") is False
+    assert context_read_only(json.dumps({"name": "x"})) is False
 
 
 # --- agent construction ---------------------------------------------------

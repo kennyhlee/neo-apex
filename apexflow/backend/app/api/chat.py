@@ -21,7 +21,7 @@ from pydantic import BaseModel
 
 from app.auth import require_staff_tenant
 from app.chat.agent import build_chat_agent, to_message_history
-from app.chat.context import load_editor_context
+from app.chat.context import context_read_only, load_editor_context
 from app.chat.deps import ChatDeps
 # `_sse` is imported rather than re-implemented so this module cannot drift
 # from the wire format `sse_chat` emits: one formatter, one protocol. The
@@ -84,6 +84,10 @@ async def _guarded_sse_chat(
         if deps.page == "editor" and deps.entity_id:
             deps.editor_context = load_editor_context(
                 deps.tenant_id, deps.entity_id, deps.token)
+            # Read back out of the block the model is shown rather than from a
+            # second row read: one load, one source of truth for "is the open
+            # row editable", used by the prompt and by `propose_patch`'s guard.
+            deps.editor_read_only = context_read_only(deps.editor_context)
         agent = build_chat_agent()
         history = to_message_history(turns, settings.chat_history_turns)
     except Exception as exc:  # noqa: BLE001 - surface a clean message to the UI

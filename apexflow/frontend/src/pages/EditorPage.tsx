@@ -15,8 +15,11 @@ import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
 import { lifecycleAction } from '../api/designer.ts';
-import { applyPatch } from '../chat/applyPatch.ts';
-import { registerEditorBridge, unregisterEditorBridge } from '../chat/editorBridge.ts';
+import {
+  createBridgeApply,
+  registerEditorBridge,
+  unregisterEditorBridge,
+} from '../chat/editorBridge.ts';
 import type { ChannelAccess } from '../types/designer.ts';
 import './EditorPage.css';
 
@@ -76,39 +79,44 @@ export default function EditorPage() {
      there for the same reason — a row published in another tab must stop
      accepting patches without a reload.
 
-     Registration is gated on `definition` (not just `entityId`) so the
-     assistant can never write into the empty pre-load machine. */
+     Registration is gated on the loaded definition BEING THE ONE `entityId`
+     names, not merely on there being a definition. Navigating from draft A to
+     draft B re-runs this effect with B's id while the store still holds A's
+     definition, machine, steps and readOnly (it clears none of them until the
+     load resolves) — so a `definition`-only gate publishes a handle labelled B
+     that writes A's machine. Apply in that window edits the old draft, gets
+     overwritten by the incoming load, and reports success; draft -> published
+     also leaves `readOnly: false` registered for a row that cannot be saved.
+     `!loading` covers the same window from the other side (`reload()` keeps
+     the old definition object while it refetches). */
   const {
     definition: bridgeDefinition,
     readOnly: bridgeReadOnly,
     machine: bridgeMachine,
     steps: bridgeSteps,
+    loading: bridgeLoading,
     setMachine,
     setSteps,
     setChannelAccess,
   } = store;
   useEffect(() => {
-    if (!entityId || !bridgeDefinition) return;
+    if (!entityId || bridgeLoading) return;
+    if (!bridgeDefinition || bridgeDefinition.entity_id !== entityId) return;
     registerEditorBridge({
       entityId,
       readOnly: bridgeReadOnly,
-      apply: (ops) => {
-        try {
-          const next = applyPatch(bridgeMachine, bridgeSteps, ops);
-          setMachine(next.machine);
-          setSteps(next.steps);
-          // Absent (not `staff_only`) when no `set_channel_access` op ran —
-          // `PatchApplyResult.channelAccess`'s own contract. Writing it
-          // unconditionally would reset the field on every unrelated patch.
-          if (next.channelAccess) setChannelAccess(next.channelAccess);
-          return null;
-        } catch (e) {
-          // `applyPatch` is pure, so a throw means NOTHING was applied and
-          // the three setters above never ran. The message names the
-          // offending id and is shown verbatim on the card.
-          return e instanceof Error ? e.message : String(e);
-        }
-      },
+      // The apply semantics (read-only refused rather than silently no-oped,
+      // all-or-nothing, channel access only when the patch set it) live in
+      // `createBridgeApply` so they are testable without a component harness.
+      apply: createBridgeApply({
+        machine: bridgeMachine,
+        steps: bridgeSteps,
+        readOnly: bridgeReadOnly,
+        readOnlyMessage: t('assistant.readOnly'),
+        setMachine,
+        setSteps,
+        setChannelAccess,
+      }),
     });
     return () => unregisterEditorBridge(entityId);
   }, [
@@ -117,6 +125,8 @@ export default function EditorPage() {
     bridgeReadOnly,
     bridgeMachine,
     bridgeSteps,
+    bridgeLoading,
+    t,
     // Stable `useCallback`s from the store — destructured (rather than read as
     // `store.setMachine` inside the effect) so exhaustive-deps can see each
     // value individually instead of demanding the whole `store` object, which

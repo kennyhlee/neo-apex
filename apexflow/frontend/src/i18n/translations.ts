@@ -470,6 +470,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.createFailed': 'Create failed',
     'assistant.applyFailed': 'Could not apply',
     'assistant.readOnly': 'This version is read-only — open a new draft first',
+    // Distinct from `readOnly` on purpose: the row is fine, the card is simply
+    // not looking at the workflow it was written for, and the read-only
+    // wording would send the admin to create a draft they do not need.
+    'assistant.otherDraft':
+      'These changes were proposed for a different workflow — open that workflow to apply them',
     'assistant.patchTitle': 'Proposed changes',
     'assistant.patchOpCount': '{n} edit(s) to this workflow',
     'assistant.patchNoOps': 'No changes to apply',
@@ -940,6 +945,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.createFailed': '创建失败',
     'assistant.applyFailed': '无法应用',
     'assistant.readOnly': '此版本为只读 — 请先创建新草稿',
+    'assistant.otherDraft': '这些修改是针对另一个工作流提出的 — 请打开该工作流后再应用',
     'assistant.patchTitle': '建议的修改',
     'assistant.patchOpCount': '对此工作流的 {n} 处修改',
     'assistant.patchNoOps': '没有可应用的修改',

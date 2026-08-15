@@ -491,11 +491,13 @@ def test_propose_create_draft_accepts_both_channel_values(fake_dc):
 # what stops it queueing a patch against a draft that is not open.
 
 
-def _run_patch(args: dict, page: str = "editor") -> tuple[str, ChatDeps]:
+def _run_patch(args: dict, page: str = "editor",
+               read_only: bool = False) -> tuple[str, ChatDeps]:
     agent = Agent(FunctionModel(_responder_for("propose_patch", args)),
                   deps_type=ChatDeps)
     register_proposal_tools(agent)
     deps = _deps(page)
+    deps.editor_read_only = read_only
     return agent.run_sync("go", deps=deps).output, deps
 
 
@@ -547,6 +549,28 @@ def test_propose_patch_refuses_outside_the_editor(fake_dc):
         assert "no draft is open" in out.lower(), page
         assert "propose_create_draft" in out, page
         assert deps.pending_proposals == [], page
+
+
+def test_propose_patch_refuses_a_read_only_version(fake_dc):
+    """Only a draft can be saved, so a patch card for a published or
+    superseded row is an offer that cannot be taken: Apply would write into
+    the editor store, whose mutators silently no-op off-draft, and the admin
+    would be told it worked. The queue must stay empty, and the refusal must
+    point at the recovery (a new draft version) rather than inviting a retry."""
+    out, deps = _run_patch(_patch_args(), read_only=True)
+
+    assert deps.pending_proposals == []
+    assert "read-only" in out.lower()
+    assert "new draft" in out.lower()
+
+
+def test_propose_patch_still_works_when_the_open_row_is_a_draft(fake_dc):
+    """The guard keys off `editor_read_only`, not off being in the editor —
+    the ordinary editor path must be untouched by it."""
+    out, deps = _run_patch(_patch_args(), read_only=False)
+
+    assert "card is ready" in out.lower()
+    assert len(deps.pending_proposals) == 1
 
 
 def test_propose_patch_rejects_an_unknown_op(fake_dc):

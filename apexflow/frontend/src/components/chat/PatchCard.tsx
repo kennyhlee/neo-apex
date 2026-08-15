@@ -1,8 +1,15 @@
 // The review card for a `patch` proposal: the assistant's edits reach the open
 // draft only when the operator presses Apply here.
 //
-// Three decisions worth stating, because none of them are obvious from the
+// Four decisions worth stating, because none of them are obvious from the
 // code alone:
+//
+// 0. THE CARD IS PINNED TO THE DRAFT IT WAS PROPOSED FOR, via
+//    `originEntityId`. This panel never unmounts (the drawer lives outside
+//    `<Routes>`) and proposals are held in message state, so a card outlives
+//    the route it was born on. `resolveEditorTarget` is what refuses to let
+//    it apply anywhere else — see its doc comment for why the obvious check
+//    (bridge id vs route id) is a tautology.
 //
 // 1. WHAT THE CARD SHOWS is the model's own `summary` plus a COUNT of ops —
 //    never a per-op sentence built from a `switch` over `PatchOp`. A second
@@ -24,34 +31,34 @@
 import { useState } from 'react';
 import { matchPath, useLocation } from 'react-router-dom';
 import type { Proposal } from '../../api/chat.ts';
-import { getEditorBridge, type EditorBridge } from '../../chat/editorBridge.ts';
+import { resolveEditorTarget, type BridgeRefusal } from '../../chat/editorBridge.ts';
 import { useTranslation } from '../../hooks/useTranslation.ts';
 
 /**
- * The bridge this card is allowed to write through, or null.
+ * The i18n key for each refusal `resolveEditorTarget` can return.
  *
- * Null for all three refusals — no editor mounted, the open draft is a
- * published/superseded row, or the route has moved to a DIFFERENT draft than
- * the one these ops were authored against. They share one disabled state and
- * one note (`assistant.readOnly`) because the operator's next move is the same
- * in every case: get onto a draft that can take the edit, then ask again.
- *
- * `routeEntityId` is derived from the router the same way `ChatPanel` derives
- * the chat context, so "which draft is open" has exactly one definition on the
- * chat side.
+ * `not_ready` maps to NO note on purpose: the editor is on the right draft and
+ * simply has not published its handle yet (still loading, or mid-switch), so
+ * the state is transient and self-correcting — any explanation would be wrong
+ * a beat later. The other two are conditions the operator has to act on, and
+ * they get different sentences: `other_draft` is not a read-only problem, and
+ * telling someone to open a new draft version when their real problem is that
+ * they navigated away would send them to create a draft they do not need.
  */
-function usableBridge(routeEntityId: string | null): EditorBridge | null {
-  const bridge = getEditorBridge();
-  if (!bridge || bridge.readOnly) return null;
-  if (!routeEntityId || bridge.entityId !== routeEntityId) return null;
-  return bridge;
-}
+const REFUSAL_NOTE: Record<BridgeRefusal, string | null> = {
+  other_draft: 'assistant.otherDraft',
+  not_ready: null,
+  read_only: 'assistant.readOnly',
+};
 
 export function PatchCard({
   proposal,
+  originEntityId,
   onDone,
 }: {
   proposal: Extract<Proposal, { action: 'patch' }>;
+  /** The draft that was open when this patch was proposed — `Msg.proposalOrigin`. */
+  originEntityId: string | null;
   onDone: (msg: string) => void;
 }) {
   const { t } = useTranslation();
@@ -63,15 +70,18 @@ export function PatchCard({
   // render still thought was usable — the registry is not reactive, so the
   // render-time read can be a paint behind (the row was published in another
   // tab, the route moved). NOTHING reads this value: its only job is to force
-  // a re-render, whose own `usableBridge` call then produces the disabled
-  // state and the note. Deriving the refusal from a re-read rather than
+  // a re-render, whose own `resolveEditorTarget` call then produces the
+  // disabled state and the note. Deriving the refusal from a re-read rather than
   // latching a boolean keeps it self-healing — if the bridge comes back, so
   // does the button.
   const [, forceRecheck] = useState(0);
 
+  // Derived from the router the same way `ChatPanel` derives the chat context,
+  // so "which draft is open" has one definition on the chat side.
   const routeEntityId =
     matchPath('/definitions/:entityId', location.pathname)?.params.entityId ?? null;
-  const bridge = usableBridge(routeEntityId);
+  const { bridge, refusal } = resolveEditorTarget(originEntityId, routeEntityId);
+  const note = refusal ? REFUSAL_NOTE[refusal] : null;
   // An empty patch is legal on the wire (`validate_ops` accepts `ops: []`) and
   // shows up when the model narrates a change it never encoded. Apply is
   // DISABLED rather than a no-op success: succeeding would append "the editor
@@ -84,7 +94,7 @@ export function PatchCard({
     // click the draft can have been published or the route changed, and the
     // store's mutators self-guard, so applying through a stale handle would
     // report success having written nothing.
-    const live = usableBridge(routeEntityId);
+    const live = resolveEditorTarget(originEntityId, routeEntityId).bridge;
     if (!live) {
       forceRecheck((n) => n + 1);
       return;
@@ -124,7 +134,7 @@ export function PatchCard({
       ) : (
         !dismissed && (
           <>
-            {!bridge && !empty && <p className="chat-card__note">{t('assistant.readOnly')}</p>}
+            {note && !empty && <p className="chat-card__note">{t(note)}</p>}
             <div className="chat-card__actions">
               <button
                 type="button"

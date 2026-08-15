@@ -86,3 +86,22 @@ def load_editor_context(tenant_id: str, entity_id: str, token: str | None) -> st
                                 for name, model in models.items()},
         "validation_errors": errors,
     })
+
+
+def context_read_only(block: str) -> bool:
+    """Read the `read_only` flag back out of a block `load_editor_context`
+    produced — the one place that knows this block's shape, so the route and
+    `propose_patch` can act on the flag without parsing JSON of their own.
+
+    False for every degraded block, because those are PROSE, not JSON (see the
+    module docstring): "the draft could not be loaded" and "the definition is
+    corrupt" say nothing about status, and refusing to propose on them would
+    turn a transient DataCore blip into an assistant that has quietly lost the
+    ability to suggest edits. The permissive default costs nothing real — the
+    save PUT 409s `not_draft` regardless, and the frontend's own bridge check
+    disables Apply on a read-only row without asking the backend.
+    """
+    try:
+        return bool(json.loads(block).get("read_only"))
+    except (ValueError, TypeError, AttributeError):
+        return False
