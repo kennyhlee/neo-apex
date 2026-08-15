@@ -99,9 +99,15 @@ def test_chat_endpoint_streams_tokens(client, monkeypatch):
     assert "Hello" in text
 
 
-def test_chat_endpoint_streams_history_without_error(client, monkeypatch):
+def test_chat_endpoint_streams_history_without_error(client, fake_dc, monkeypatch):
     """A non-empty history must round-trip through to_message_history into a
-    real run — a malformed history would surface as an `error` event."""
+    real run — a malformed history would surface as an `error` event.
+
+    `fake_dc` because this request claims `page: "editor"`: the route now loads
+    the editor context server-side, and without the fake that read would try a
+    real DataCore connection. `def_1` does not exist in the fake, which is the
+    point — a stale entity_id degrades to prose inside `load_editor_context`
+    and must not put an `error` frame on the wire."""
     monkeypatch.setattr(chat_api, "build_chat_agent", _text_only_agent)
     resp = client.post(
         CHAT_URL,
@@ -292,6 +298,175 @@ def test_chat_endpoint_emits_no_proposal_frame_when_the_tool_rejects(
     assert not [e for e in events if e["type"] == "proposal"], events
     assert not [e for e in events if e["type"] == "error"], events
     assert events[-1]["type"] == "done"
+
+
+# --- editor context -------------------------------------------------------
+#
+# The client sends only `{page, entity_id}`. Everything the model is told about
+# the open draft is loaded SERVER-SIDE from the row, so a client cannot dictate
+# what the assistant believes it is editing (and cannot name another tenant's
+# row into the prompt — the read is tenant-scoped).
+
+
+def _seed_editor_definition(fake_dc, name="Enrollment"):
+    fake_dc.set_model(TENANT, "student", {
+        "base_fields": [{"name": "first_name", "type": "str", "required": True}],
+        "custom_fields": [],
+    })
+    return fake_dc.dc_create(TENANT, "workflow_definition", {
+        "definition_id": "wd-editor", "name": name, "version": 1, "status": "draft",
+        "lineage_status": "active", "channel_access": "staff_only",
+        "machine": json.dumps({
+            "states": [{"state_id": "draft", "name": "Draft", "kind": "initial"},
+                       {"state_id": "enrolled", "name": "Enrolled", "kind": "terminal"}],
+            "transitions": [{"transition_id": "t_submit", "from": "draft",
+                             "to": "enrolled", "action": "submit", "actor": "family",
+                             "guards": [], "effects": []}],
+        }),
+        "steps": json.dumps([{
+            "step_id": "student_details", "type": "form", "title": "Student details",
+            "required": True, "blocking": True, "available_in": ["draft"],
+            "config": {"sections": [{
+                "section_id": "student_section", "entity_model": "student",
+                "fields": [{"name": "first_name", "required": True}],
+                "mode": "create",
+            }]},
+        }]),
+    })["entity_id"]
+
+
+def _capturing_agent(seen: list):
+    async def _stream(messages, info):
+        seen.append(messages)
+        yield "ok"
+
+    return lambda: build_chat_agent(model=FunctionModel(stream_function=_stream))
+
+
+def _system_text(messages) -> str:
+    from pydantic_ai.messages import SystemPromptPart
+
+    return "\n".join(p.content for m in messages for p in getattr(m, "parts", [])
+                     if isinstance(p, SystemPromptPart))
+
+
+def test_chat_endpoint_puts_the_open_drafts_machine_in_the_system_prompt(
+    client, fake_dc, monkeypatch
+):
+    """The editor-context wiring test: `page: "editor"` + an entity_id means
+    the model is handed the draft's machine, steps, model fields and current
+    validation errors BEFORE it answers — that is what makes `propose_patch`'s
+    ids real rather than guessed."""
+    eid = _seed_editor_definition(fake_dc)
+    seen: list = []
+    monkeypatch.setattr(chat_api, "build_chat_agent", _capturing_agent(seen))
+
+    resp = client.post(
+        CHAT_URL,
+        json={"message": "add a review stage", "history": [], "message_count": 0,
+              "context": {"page": "editor", "entity_id": eid}},
+    )
+
+    assert resp.status_code == 200
+    assert not [e for e in _events(resp.text) if e["type"] == "error"], resp.text
+    prompt = _system_text(seen[0])
+    assert "Current editor context" in prompt
+    assert '"name": "Enrollment"' in prompt
+    assert '"read_only": false' in prompt
+    assert "student_details" in prompt          # steps
+    assert "enrolled" in prompt                 # machine states
+    assert '"from": "draft"' in prompt          # alias, not from_
+    assert "first_name" in prompt               # entity_model_fields
+
+
+def test_chat_endpoint_omits_editor_context_off_the_editor_page(
+    client, fake_dc, monkeypatch
+):
+    """`page: "list"` must not load a definition at all — even if the client
+    sends an entity_id alongside it, the assistant is told no draft is open."""
+    eid = _seed_editor_definition(fake_dc)
+    seen: list = []
+    monkeypatch.setattr(chat_api, "build_chat_agent", _capturing_agent(seen))
+
+    client.post(
+        CHAT_URL,
+        json={"message": "hi", "history": [], "message_count": 0,
+              "context": {"page": "list", "entity_id": eid}},
+    )
+
+    prompt = _system_text(seen[0])
+    assert "Current editor context" not in prompt
+    assert "no draft is open" in prompt
+
+
+def test_chat_endpoint_reports_editor_context_failure_as_error_then_done(
+    client, fake_dc, monkeypatch
+):
+    """The context load does I/O, so it happens INSIDE `_guarded_sse_chat`.
+
+    Done in the handler body it would raise before `StreamingResponse` and the
+    client would get a bare 500 with zero `data:` frames — the UI clears its
+    pending state only on `done`, so the composer would hang. Same guarantee as
+    agent construction and history mapping.
+    """
+    eid = _seed_editor_definition(fake_dc)
+
+    def _explode(*a, **kw):
+        raise RuntimeError("editor context exploded")
+
+    monkeypatch.setattr(chat_api, "build_chat_agent", _text_only_agent)
+    monkeypatch.setattr(chat_api, "load_editor_context", _explode)
+
+    resp = client.post(
+        CHAT_URL,
+        json={"message": "hi", "history": [], "message_count": 0,
+              "context": {"page": "editor", "entity_id": eid}},
+    )
+
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers["content-type"]
+    events = _events(resp.text)
+    assert [e["type"] for e in events] == ["error", "done"]
+    assert "editor context exploded" in events[0]["message"]
+
+
+def test_chat_endpoint_emits_a_patch_proposal_frame_from_the_editor(
+    client, fake_dc, monkeypatch
+):
+    """End to end: route -> editor deps -> propose_patch -> queue -> SSE."""
+    eid = _seed_editor_definition(fake_dc)
+
+    async def _stream(messages, info):
+        if len(messages) == 1:
+            yield {0: DeltaToolCall(name="propose_patch", json_args=json.dumps({
+                "ops": [{"op": "add_stage", "stage_id": "review", "name": "Review"}],
+                "summary": ["Added a Review stage"],
+            }))}
+        else:
+            yield "The patch card is ready — review it and apply."
+
+    monkeypatch.setattr(
+        chat_api, "build_chat_agent",
+        lambda: build_chat_agent(model=FunctionModel(stream_function=_stream)))
+
+    resp = client.post(
+        CHAT_URL,
+        json={"message": "add a review stage", "history": [], "message_count": 0,
+              "context": {"page": "editor", "entity_id": eid}},
+    )
+
+    assert resp.status_code == 200
+    events = _events(resp.text)
+    assert not [e for e in events if e["type"] == "error"], events
+    proposals = [e for e in events if e["type"] == "proposal"]
+    assert len(proposals) == 1, events
+    p = proposals[0]["proposal"]
+    assert p["action"] == "patch"
+    assert p["ops"][0] == {"op": "add_stage", "stage_id": "review",
+                           "name": "Review", "kind": "active"}
+    types = [e["type"] for e in events]
+    assert types.index("proposal") < types.index("done")
+    assert types[-1] == "done"
 
 
 # --- agent construction ---------------------------------------------------

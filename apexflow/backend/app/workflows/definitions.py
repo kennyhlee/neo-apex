@@ -267,6 +267,17 @@ def save_definition(tenant_id: str, entity_id: str, machine_raw: Any, steps_raw:
     try:
         machine = MachineDef.model_validate(machine_raw)
         steps = [StepDef.model_validate(s) for s in (steps_raw or [])]
+        # Sections are parsed HERE — before the write, inside the 422 — and not
+        # left to the `fetch_models` call below, for the same reason
+        # `create_definition` parses them before its own write. `StepDef.config`
+        # is `dict[str, Any]`, so a section missing entity_model/fields/mode
+        # survives `StepDef.model_validate` and is only ever parsed by
+        # `referenced_entity_models`. With that call sitting after `dc_update`
+        # and outside this try, such a request PERSISTED the malformed section
+        # to the row and then raised out of the route as a 500 — the write had
+        # already happened, so "422 if machine/steps do not parse" was true of
+        # the machine only. It has to hold for the whole payload.
+        entity_types = referenced_entity_models(steps)
     except Exception as exc:
         raise HTTPException(422, {"parse_error": str(exc)}) from exc
 
@@ -277,7 +288,7 @@ def save_definition(tenant_id: str, entity_id: str, machine_raw: Any, steps_raw:
         base["channel_access"] = channel_access
     updated = dc.dc_update(tenant_id, "workflow_definition", entity_id, base, token)
 
-    models = fetch_models(tenant_id, referenced_entity_models(steps), token)
+    models = fetch_models(tenant_id, entity_types, token)
     return {
         "row": updated,
         "errors": validate_definition(machine, steps, models),

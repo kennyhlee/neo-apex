@@ -31,6 +31,7 @@ from pydantic import ValidationError
 from pydantic_ai import Agent, RunContext
 
 from app.chat.deps import ChatDeps
+from app.chat.patch_ops import validate_ops
 from app.templates.catalog import template_catalog
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
@@ -192,3 +193,51 @@ def register_proposal_tools(agent: Agent) -> None:
         })
         return ("Create-draft card is ready for the admin to confirm. Tell them "
                 "to review and click Create draft — do not claim it exists yet.")
+
+    @agent.tool
+    def propose_patch(ctx: RunContext[ChatDeps], ops: list[dict],
+                      summary: list[str]) -> str:
+        """Open a patch confirmation card changing the OPEN DRAFT. Only valid
+        in editor context. ops is a list of operations (add_stage, rename_stage,
+        set_stage_kind, remove_stage, add_move, update_move, remove_move,
+        add_step, update_step, remove_step, add_section, update_section,
+        remove_section, set_channel_access) using ids from the editor context.
+        summary: short human-readable bullet per meaningful change. Do NOT
+        apply changes yourself — the admin confirms."""
+        # The page guard is not a nicety. Every op addresses the open draft by
+        # id, so off the editor page there is no draft for those ids to mean
+        # anything against — the patch would be built entirely out of guesses.
+        # The refusal names the tool that DOES work there so the model can
+        # recover in one turn instead of retrying the same call.
+        if ctx.deps.page != "editor":
+            return ("No draft is open. Patching works only in the editor — for a "
+                    "new workflow use propose_create_draft instead.")
+        # Structural validation only (see patch_ops.py): whether these ids
+        # exist in the draft is the save PUT's question, asked when the admin
+        # applies, exactly as it is for a hand-edit.
+        #
+        # `add_step` is the one op carrying a whole schema shape, so it is
+        # parsed here against the same `StepDef` the save PUT parses, and its
+        # sections with it — `StepDef.config` is `dict[str, Any]`, so a section
+        # missing entity_model/fields/mode survives `StepDef.model_validate`
+        # and is only ever parsed by `referenced_entity_models`. Without that
+        # second call the malformed step reaches a card whose Apply then 422s,
+        # with the admin holding the broken request.
+        #
+        # The catch is widened past ValidationError for the same reason
+        # propose_create_draft's is: `config` is untyped and model-authored, so
+        # `{"sections": 5}` raises TypeError while iterating rather than
+        # ValidationError. Every malformed payload must come back as text — a
+        # raise here ends the SSE stream in `error`.
+        try:
+            validated = validate_ops(ops)
+            added = [StepDef.model_validate(o["step"]) for o in validated
+                     if o["op"] == "add_step"]
+            defs.referenced_entity_models(added)
+        except (ValidationError, ValueError, TypeError) as exc:
+            return (f"Proposal rejected — invalid ops: {exc}. Fix the ops and "
+                    "call propose_patch again.")
+        ctx.deps.pending_proposals.append(
+            {"action": "patch", "ops": validated, "summary": summary})
+        return ("Patch card is ready for the admin to review and Apply. Do not "
+                "claim the change is applied yet.")

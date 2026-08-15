@@ -484,6 +484,145 @@ def test_propose_create_draft_accepts_both_channel_values(fake_dc):
         assert deps.pending_proposals[0]["channel_access"] == value
 
 
+# --- propose_patch --------------------------------------------------------
+#
+# Same contract as propose_create_draft — queue a dict, return a string, write
+# nothing — with one addition: it is the EDITOR's tool, and the page guard is
+# what stops it queueing a patch against a draft that is not open.
+
+
+def _run_patch(args: dict, page: str = "editor") -> tuple[str, ChatDeps]:
+    agent = Agent(FunctionModel(_responder_for("propose_patch", args)),
+                  deps_type=ChatDeps)
+    register_proposal_tools(agent)
+    deps = _deps(page)
+    return agent.run_sync("go", deps=deps).output, deps
+
+
+def _patch_args(**over) -> dict:
+    args = {"ops": [{"op": "add_stage", "stage_id": "review", "name": "Review"}],
+            "summary": ["Added a Review stage"]}
+    args.update(over)
+    return args
+
+
+def test_propose_patch_queues_the_exact_wire_contract(fake_dc):
+    out, deps = _run_patch(_patch_args(ops=[
+        {"op": "add_stage", "stage_id": "review", "name": "Review", "kind": "active"},
+        {"op": "add_move", "transition_id": "t_review", "from": "draft",
+         "to": "review", "action": "send_for_review"},
+    ], summary=["Added a Review stage", "Draft -> Review on send_for_review"]))
+
+    assert "card is ready" in out.lower()
+    assert len(deps.pending_proposals) == 1
+    p = deps.pending_proposals[0]
+    # Exactly the keys Task 11's PatchCard reads — no more, no fewer.
+    assert set(p) == {"action", "ops", "summary"}
+    assert p["action"] == "patch"
+    assert p["summary"] == ["Added a Review stage",
+                            "Draft -> Review on send_for_review"]
+    assert [o["op"] for o in p["ops"]] == ["add_stage", "add_move"]
+    # by_alias survives to the browser: `from`, not `from_`.
+    assert p["ops"][1]["from"] == "draft"
+    assert "from_" not in p["ops"][1]
+    # Defaults are materialized here, not left for the card to guess.
+    assert p["ops"][1]["actor"] == "staff"
+    json.dumps(p)  # it rides the SSE wire verbatim
+
+
+def test_propose_patch_writes_nothing(fake_dc):
+    _out, deps = _run_patch(_patch_args())
+
+    assert deps.pending_proposals
+    assert dc.list_entities(TENANT, "workflow_definition", "", "Bearer test-token") == []
+
+
+def test_propose_patch_refuses_outside_the_editor(fake_dc):
+    """The ops address ids in the OPEN DRAFT. On the list or templates page
+    there is no open draft, so every id would be a guess — the refusal names
+    the tool that does work there so the model can recover in one turn."""
+    for page in ("list", "templates"):
+        out, deps = _run_patch(_patch_args(), page=page)
+
+        assert "no draft is open" in out.lower(), page
+        assert "propose_create_draft" in out, page
+        assert deps.pending_proposals == [], page
+
+
+def test_propose_patch_rejects_an_unknown_op(fake_dc):
+    out, deps = _run_patch(_patch_args(ops=[{"op": "delete_everything"}]))
+
+    assert "rejected" in out.lower()
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_rejects_an_op_missing_a_required_field(fake_dc):
+    out, deps = _run_patch(_patch_args(ops=[{"op": "remove_stage"}]))
+
+    assert "rejected" in out.lower()
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_rejects_an_add_step_whose_step_is_not_a_step(fake_dc):
+    """`AddStep.step` is `dict[str, Any]` in the op union — it has to be, since
+    the union cannot import a step's whole shape without the op vocabulary
+    becoming the schema. So the step is parsed against `StepDef` HERE, and a
+    payload that would 422 at the save PUT bounces to the model instead of to
+    the admin's Apply button."""
+    out, deps = _run_patch(_patch_args(ops=[
+        {"op": "add_step", "step": {"step_id": "orphan"}}]))
+
+    assert "rejected" in out.lower()
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_rejects_an_add_step_with_a_malformed_section(fake_dc):
+    """Same hole `propose_create_draft` closes: `StepDef.config` is
+    `dict[str, Any]`, so a section missing entity_model/fields/mode validates
+    as a StepDef and would reach a card whose Apply then fails."""
+    bad = _valid_steps()[0]
+    bad["config"]["sections"][0] = {"section_id": "student_section"}
+
+    out, deps = _run_patch(_patch_args(ops=[{"op": "add_step", "step": bad}]))
+
+    assert "rejected" in out.lower()
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_rejects_a_non_list_sections_without_raising(fake_dc):
+    """Non-ValidationError path: a scalar `config.sections` makes
+    `referenced_entity_models` raise TypeError while iterating. It must STILL
+    come back as a string — a raise here ends the SSE stream in `error`."""
+    bad = _valid_steps()[0]
+    bad["config"]["sections"] = 5
+
+    out, deps = _run_patch(_patch_args(ops=[{"op": "add_step", "step": bad}]))
+
+    assert "rejected" in out.lower()
+    assert deps.pending_proposals == []
+
+
+def test_propose_patch_accepts_a_well_formed_add_step(fake_dc):
+    out, deps = _run_patch(_patch_args(ops=[
+        {"op": "add_step", "step": _valid_steps()[0], "position": 0}]))
+
+    assert "card is ready" in out.lower()
+    assert deps.pending_proposals[0]["ops"][0]["step"]["step_id"] == "student_details"
+
+
+def test_propose_patch_does_not_reject_ops_it_cannot_semantically_check(fake_dc):
+    """Structural validation only. `update_step.patch` is a free-form subset —
+    whether `stage_9` exists is the save PUT's question (and the editor's own
+    hand-edits go through exactly the same gate), so a plausible-but-unknown
+    id must not be pre-refused here."""
+    out, deps = _run_patch(_patch_args(ops=[
+        {"op": "update_step", "step_id": "does_not_exist_yet",
+         "patch": {"title": "New title"}}]))
+
+    assert "card is ready" in out.lower()
+    assert deps.pending_proposals
+
+
 # --- registration ---------------------------------------------------------
 
 
@@ -522,3 +661,26 @@ def test_register_proposal_tools_offers_propose_create_draft_with_a_description(
 
     assert "propose_create_draft" in seen
     assert seen["propose_create_draft"]
+
+
+def test_register_proposal_tools_offers_propose_patch_with_the_op_vocabulary(fake_dc):
+    """The op names live in `propose_patch`'s docstring because that docstring
+    IS the tool schema's description — the model has no other way to learn the
+    vocabulary, and an op it invents is rejected."""
+    seen: dict[str, str | None] = {}
+
+    def responder(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen.update({t.name: t.description for t in info.function_tools})
+        return ModelResponse(parts=[TextPart("done")])
+
+    agent = Agent(FunctionModel(responder), deps_type=ChatDeps)
+    register_proposal_tools(agent)
+    agent.run_sync("go", deps=_deps("editor"))
+
+    assert "propose_patch" in seen
+    description = seen["propose_patch"] or ""
+    for op in ("add_stage", "rename_stage", "set_stage_kind", "remove_stage",
+               "add_move", "update_move", "remove_move", "add_step",
+               "update_step", "remove_step", "add_section", "update_section",
+               "remove_section", "set_channel_access"):
+        assert op in description, op

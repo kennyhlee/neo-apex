@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import require_authenticated_user
 from app.main import app
+from app.workflows import datacore as dc
 from app.workflows.primitives import EFFECTS, GUARDS
 from app.workflows.validate import PARAM_SPECS, validate_definition
 from app.workflows.schema import MachineDef, StepDef
@@ -1003,6 +1004,54 @@ def test_save_definition_rejects_unparseable_machine_before_writing(client, fake
 
     row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
     assert json.loads(row["machine"])["states"][0]["state_id"] == "draft"
+
+
+def test_save_definition_rejects_a_malformed_section_before_writing(
+        client, fake_dc, monkeypatch):
+    """A malformed SECTION must 422 like a malformed machine — and, crucially,
+    must not write first.
+
+    `StepDef.config` is `dict[str, Any]`, so a section missing
+    entity_model/fields/mode sails through `StepDef.model_validate`. The only
+    thing that parses it is `referenced_entity_models`, which ran AFTER
+    `dc_update` and OUTSIDE the try that 422s — so the malformed section was
+    PERSISTED to the row and the request then raised out of the route as a
+    500. The same hole was closed in `create_definition`; this is its twin,
+    and it matters more here because the chat assistant's patch-apply path
+    PUTs through this function.
+    """
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-save-bad-section", status="draft")
+
+    # A flattened read-back cannot answer "was anything written?" on its own
+    # (a rejected write and an accepted one that happened to store the same
+    # bytes look alike), so the call itself is recorded — same reasoning as
+    # tests/test_create_definition.py's `dc_create_calls` fixture.
+    calls: list = []
+    inner = dc.dc_update
+
+    def _recording(*args, **kwargs):
+        calls.append(args)
+        return inner(*args, **kwargs)
+
+    monkeypatch.setattr(dc, "dc_update", _recording)
+
+    resp = client.put(
+        f"/api/workflows/{TENANT}/definitions/{eid}",
+        json={"machine": _valid_machine(), "steps": [
+            {"step_id": "student_details", "type": "form", "title": "Student",
+             "required": True, "blocking": True, "available_in": ["draft"],
+             "config": {"sections": [{"section_id": "student_section"}]}},
+        ]},
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert isinstance(resp.json()["detail"]["parse_error"], str)
+    assert resp.json()["detail"]["parse_error"]  # non-empty
+    # Nothing was written — the row still holds what it held before.
+    assert calls == []
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert json.loads(row["steps"])[0]["config"]["sections"][0]["entity_model"] == "student"
 
 
 def test_save_definition_refuses_a_published_row(client, fake_dc):
