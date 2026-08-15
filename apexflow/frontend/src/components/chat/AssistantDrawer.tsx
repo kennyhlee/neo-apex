@@ -5,7 +5,7 @@
 //
 // Default is CLOSED: the editor is dense, and reserving 380px of it before the
 // user asks for the assistant would be a worse first screen than a toggle.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation.ts';
 import { ChatPanel } from './ChatPanel.tsx';
 import './AssistantDrawer.css';
@@ -35,10 +35,34 @@ export function AssistantDrawer() {
     return () => document.body.classList.remove('assistant-open');
   }, [open]);
 
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * Escape closes the drawer when focus is inside it.
+   *
+   * Bound to the `<aside>` rather than to `document`: a window-level listener
+   * would also fire while the user is typing in some unrelated page control,
+   * and closing the assistant out from under an edit elsewhere is worse than
+   * not offering the shortcut. React's synthetic events bubble, so focus in
+   * any descendant — composer, chips, a proposal card's buttons — is covered.
+   *
+   * Focus is returned to the toggle, because the element that had it is inside
+   * the drawer this is about to hide (`visibility: hidden` when
+   * `aria-hidden`), and dropping focus to <body> would strand a keyboard user
+   * at the top of the document.
+   */
+  const onKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    setOpen(false);
+    toggleRef.current?.focus();
+  }, []);
+
   return (
     <>
       <button
         type="button"
+        ref={toggleRef}
         className="assistant-toggle"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
@@ -50,6 +74,7 @@ export function AssistantDrawer() {
         id="assistant-drawer"
         className={`assistant-drawer ${open ? 'is-open' : ''}`}
         aria-hidden={!open}
+        onKeyDown={onKeyDown}
       >
         <ChatPanel />
       </aside>

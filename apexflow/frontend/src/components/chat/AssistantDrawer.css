@@ -11,10 +11,23 @@
 .app-main { transition: padding-right 0.28s ease; }
 body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--space-4)); }
 
+/* The toggle must outrank the drawer it controls. At --z-dropdown (200) it
+   painted UNDER the open drawer (--z-drawer, 500) and the drawer's own header
+   swallowed the click, so "Hide assistant ›" was unclickable and — with no
+   other close control and Escape unhandled — the drawer could not be closed at
+   all for the rest of the session (the open flag is sessionStorage-backed).
+   Expressed against --z-drawer rather than borrowing --z-popover so the
+   relationship survives a change to the ladder: this sits one above the thing
+   it opens, whatever that is.
+
+   ApexFlow deliberately diverges from AdminDash here. HomePage.css:349-401 has
+   the identical stacking and the identical defect; it is a cross-service
+   follow-up, NOT something to re-copy for parity. */
 .assistant-toggle {
   position: fixed;
   top: calc(var(--nav-h) + var(--space-3));
-  z-index: var(--z-dropdown);
+  z-index: calc(var(--z-drawer) + 1);
+  transition: right 0.28s ease, top 0.28s ease;
   right: max(var(--space-4), calc((100vw - var(--content-max)) / 2 + var(--space-4)));
   background: var(--accent-ink);
   color: var(--on-accent);
@@ -28,6 +41,29 @@ body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--s
   box-shadow: var(--shadow-2);
 }
 .assistant-toggle:hover { background: var(--accent-hover); }
+
+/* Open: ride the drawer's LEFT edge instead of sitting on top of its header,
+   and rise into the nav strip.
+
+   The horizontal shift mirrors the drawer's own right offset (same centred-
+   gutter term) plus the panel width and a small gap, so the button tracks the
+   panel rather than floating over it.
+
+   The vertical shift is not cosmetic. Closed, the toggle lives to the RIGHT of
+   `.page-header-actions` and clears it. Shifted left by the panel width it
+   lands squarely IN that band — measured at 1440px it covered `New workflow`
+   on the list and `Publish` in the editor, and `elementFromPoint` confirmed it
+   was stealing their clicks. Trading an uncloseable drawer for an unclickable
+   Publish button is not a fix. `--nav-h` is the one horizontal strip with no
+   page-owned controls in it (the nav's own items sit far right, beyond the
+   drawer edge), so the open state parks there; --space-3 centres a
+   ~37px button in the 62px bar. Both offsets animate at the drawer's 0.28s. */
+body.assistant-open .assistant-toggle {
+  top: var(--space-3);
+  right: calc(
+    max(0px, (100vw - var(--content-max)) / 2) + var(--assistant-w) + var(--space-2)
+  );
+}
 
 .assistant-drawer {
   position: fixed;
@@ -55,6 +91,22 @@ body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--s
   /* Drawer covers the screen on small viewports; don't reserve desktop width. */
   body.assistant-open .app-main { padding-right: var(--gutter); }
   .assistant-drawer { width: 100%; transform: translateX(100%); }
+  /* Full-width drawer, so there is no left edge to ride: the toggle has to
+     float over the panel. Park it on the LEFT — the right is where
+     `.chat-panel__clear` lives (margin-left: auto in the header), and landing
+     the close control on top of the clear-transcript control is how you get
+     someone to wipe a conversation while trying to shut the drawer. */
+  /* ...and stay BELOW the nav, unlike the desktop open state: parking in the
+     nav strip works there only because the strip is empty at the drawer's left
+     edge. Here `left: var(--space-4)` is exactly where the ApexFlow wordmark
+     (a link to `/`) sits, so rising into the nav would put the close control on
+     top of the home link. Below the nav it overlays the panel's own header,
+     whose left side is the plain "Assistant" title — text, not a control. */
+  body.assistant-open .assistant-toggle {
+    top: calc(var(--nav-h) + var(--space-3));
+    right: auto;
+    left: var(--space-4);
+  }
 }
 
 /* AdminDash also shortens the drawer for its mobile bottom nav
@@ -63,5 +115,6 @@ body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--s
 
 @media (prefers-reduced-motion: reduce) {
   .app-main,
+  .assistant-toggle,
   .assistant-drawer { transition: none; }
 }
