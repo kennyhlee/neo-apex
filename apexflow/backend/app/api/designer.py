@@ -133,25 +133,45 @@ def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant))
     `_parse_or_422`'s docstring, `json.JSONDecodeError`/`TypeError` — widened
     here too, same reasoning) 500ing every other (valid) row out of the list
     too — see `_parse_or_422`'s docstring for the same "corrupt row bricks
-    reads" failure mode this mirrors, one route up."""
+    reads" failure mode this mirrors, one route up.
+
+    READ COUNT (perf, and the property `test_designer_api.py::
+    test_list_definitions_datacore_read_count_is_flat_in_rows` pins): this
+    route makes `1 + O(distinct referenced models) + 1` DataCore reads, NOT
+    O(rows). It used to make O(rows × models-per-row) + O(lineages), because
+    the model fetch and the open-instance count both sat INSIDE the row loop:
+    a tenant with eight workflows at two or three versions each, all built on
+    the same handful of entity models, re-fetched `student` a dozen times and
+    re-scanned the whole `workflow_instance` table once per lineage. Hence the
+    two passes below — parse every row first to learn the UNION of referenced
+    models, fetch that union once, and take every lineage's open count from
+    one grouped read (`defs.open_instance_counts_by_lineage`).
+
+    Sharing ONE models map across rows is behavior-preserving, not merely
+    cheaper: `validate_definition`/`definition_health` only ever reach into
+    `models` via `models.get(section.entity_model)`, so entries a given row
+    does not reference are invisible to it — the same reason `get_bundle`
+    below can hand them a map padded with `STANDARD_BUNDLE_MODELS`.
+    """
     token = user.get("_token")
     rows = dc.list_entities(tenant_id, "workflow_definition", "", token)
 
-    open_instance_counts: dict[str, int] = {}
-    out = []
+    # Pass 1 — pure CPU, no I/O: parse each row and collect the union of every
+    # entity model any row references. A row that fails to parse contributes
+    # no models and carries its error into pass 2; one bad row must neither
+    # deprive the others of their models nor 500 the list (docstring above).
+    parsed: list[tuple[Any, Any, str | None]] = []
+    referenced: set[str] = set()
     for row in rows:
-        lineage_id = row.get("definition_id")
-
-        parse_error: str | None = None
         try:
-            # _health_for_row itself short-circuits superseded rows before
-            # ever calling definition_health — no separate outer check
-            # needed here (code-review follow-up: the outer check
-            # duplicated that same branch instead of just trusting the
-            # helper to make it).
             machine, steps = defs.parse_machine_steps(row)
-            models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
-            health = _health_for_row(row, machine, steps, models)
+            # Inside the try, exactly as before this route was batched:
+            # `referenced_entity_models` parses each declared SECTION, which
+            # `StepDef.model_validate` does not (`config` is dict[str, Any]),
+            # so a malformed section raises HERE and must degrade this one row
+            # to "broken" rather than escape the loop.
+            referenced |= defs.referenced_entity_models(steps)
+            parsed.append((machine, steps, None))
         # Widened past ValidationError (final-review fix wave): a row whose
         # stored `machine`/`steps` string isn't even valid JSON (e.g.
         # machine="not json") makes parse_machine_steps's json.loads raise
@@ -161,12 +181,33 @@ def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant))
         # _parse_or_422's docstring, applied to this route's own inline
         # try/except.
         except (ValidationError, ValueError, TypeError) as exc:
-            health = "broken"
-            parse_error = str(exc)
+            parsed.append((None, None, str(exc)))
 
-        if lineage_id not in open_instance_counts:
-            open_instance_counts[lineage_id] = defs.count_open_instances(
-                tenant_id, lineage_id, token)
+    models = defs.fetch_models(tenant_id, referenced, token)
+    open_instance_counts = defs.open_instance_counts_by_lineage(tenant_id, token)
+
+    out = []
+    for row, (machine, steps, parse_error) in zip(rows, parsed):
+        lineage_id = row.get("definition_id")
+
+        if parse_error is not None:
+            health = "broken"
+        else:
+            try:
+                # _health_for_row itself short-circuits superseded rows before
+                # ever calling definition_health — no separate outer check
+                # needed here (code-review follow-up: the outer check
+                # duplicated that same branch instead of just trusting the
+                # helper to make it).
+                health = _health_for_row(row, machine, steps, models)
+            # Still under a degrade-to-"broken" guard, exactly as when this
+            # call shared one try with the parse above: `definition_health`
+            # re-validates sections and guard conditions off the same
+            # free-text row, so anything it rejects that pass 1 accepted must
+            # brick ONE row's health, never the whole list.
+            except (ValidationError, ValueError, TypeError) as exc:
+                health = "broken"
+                parse_error = str(exc)
 
         entry = {
             "entity_id": row.get("entity_id"),
@@ -177,7 +218,11 @@ def list_definitions(tenant_id: str, user: dict = Depends(require_staff_tenant))
             "lineage_status": row.get("lineage_status"),
             "channel_access": row.get("channel_access"),
             "health": health,
-            "open_instances": open_instance_counts[lineage_id],
+            # The same key expression `open_instance_counts_by_lineage` groups
+            # on (and `list_open_instances` matches on), so the list and the
+            # retire gate agree row for row; a lineage with nothing in flight
+            # is absent from the map, hence the 0 default.
+            "open_instances": open_instance_counts.get(str(row.get("definition_id", "")), 0),
         }
         if parse_error is not None:
             entry["parse_error"] = parse_error

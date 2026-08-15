@@ -377,6 +377,100 @@ def test_list_definitions_empty_tenant_returns_empty_list(client, fake_dc):
     assert resp.json() == {"definitions": []}
 
 
+def _multi_model_steps(*entity_models):
+    """A form step declaring one section per named entity model — lets a
+    seeded row reference several models, and lets several rows SHARE them."""
+    field_by_model = {
+        "student": [{"name": "first_name", "required": True}],
+        "family": [{"name": "family_name", "required": True}],
+        "contact": [{"name": "first_name", "required": True}],
+    }
+    return [{
+        "step_id": "details",
+        "type": "form",
+        "title": "Details",
+        "required": True,
+        "blocking": True,
+        "available_in": ["draft"],
+        "show_if": None,
+        "review": None,
+        "config": {"sections": [
+            {"section_id": f"{m}_section", "entity_model": m,
+             "fields": field_by_model[m], "mode": "create", "repeat": None}
+            for m in entity_models
+        ]},
+    }]
+
+
+def test_list_definitions_datacore_read_count_is_flat_in_rows(client, fake_dc, monkeypatch):
+    """PERF CONTRACT: this route's DataCore reads scale with the number of
+    DISTINCT entity models the tenant's definitions reference, not with the
+    number of definition ROWS or LINEAGES.
+
+    The list page was slow because both expensive reads sat inside the row
+    loop: `fetch_models` re-fetched the SAME `student`/`family` model once per
+    row (a tenant with 4 workflows at 2-3 versions each, all built on the same
+    handful of models, paid a dozen identical model reads), and
+    `count_open_instances` re-scanned the tenant's ENTIRE `workflow_instance`
+    table once per lineage. Both are hoisted out of the loop now — the union
+    of referenced models is fetched once, and one grouped read
+    (`open_instance_counts_by_lineage`) answers every lineage's count.
+
+    Pinned as exact counts rather than a loose bound because the whole point
+    is the SHAPE of the cost: 1 definitions read + 1 read per distinct model
+    + 1 instances read. Reintroducing a per-row fetch fails this test with a
+    number that tracks the row count (mutation-checked).
+    """
+    for m in ("student", "family", "contact"):
+        fake_dc.set_model(TENANT, m, {
+            "base_fields": [{"name": "first_name", "type": "str", "required": True},
+                            {"name": "family_name", "type": "str", "required": True}],
+            "custom_fields": [],
+        })
+
+    # 4 lineages / 9 rows, referencing only 3 DISTINCT models between them.
+    lineages = [
+        ("wd-perf-1", ("student", "family", "contact"), 3),
+        ("wd-perf-2", ("student", "family"), 2),
+        ("wd-perf-3", ("student",), 2),
+        ("wd-perf-4", ("student", "contact"), 2),
+    ]
+    n_rows = 0
+    for lineage_id, models, n_versions in lineages:
+        for version in range(1, n_versions + 1):
+            _seed_definition(fake_dc, definition_id=lineage_id, version=version,
+                             status="published" if version == 1 else "draft",
+                             steps=_multi_model_steps(*models))
+            n_rows += 1
+        _seed_instance(fake_dc, definition_id=lineage_id, closed_at="")
+    assert n_rows == 9
+
+    calls: dict[str, list] = {"list_entities": [], "get_model_definition": []}
+    real_list, real_model = dc.list_entities, dc.get_model_definition
+
+    def counting_list_entities(tenant_id, entity_type, where="", token=None):
+        calls["list_entities"].append(entity_type)
+        return real_list(tenant_id, entity_type, where, token)
+
+    def counting_get_model(tenant_id, entity_type, token=None):
+        calls["get_model_definition"].append(entity_type)
+        return real_model(tenant_id, entity_type, token)
+
+    monkeypatch.setattr(dc, "list_entities", counting_list_entities)
+    monkeypatch.setattr(dc, "get_model_definition", counting_get_model)
+
+    resp = client.get(f"/api/workflows/{TENANT}/definitions")
+    assert resp.status_code == 200
+    assert len(resp.json()["definitions"]) == n_rows
+
+    # One model read per DISTINCT referenced model — not one per row, and no
+    # model read twice.
+    assert sorted(calls["get_model_definition"]) == ["contact", "family", "student"]
+    # One entity read for the definitions, one for the instances. NOT one
+    # instance read per lineage.
+    assert calls["list_entities"] == ["workflow_definition", "workflow_instance"]
+
+
 # --- GET .../definitions/{entity_id}/bundle ---------------------------------
 
 

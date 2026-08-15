@@ -233,6 +233,42 @@ def count_open_instances(tenant_id: str, lineage_definition_id: str,
     return len(list_open_instances(tenant_id, lineage_definition_id, token))
 
 
+def open_instance_counts_by_lineage(tenant_id: str,
+                                    token: str | None = None) -> dict[str, int]:
+    """Open-instance counts for EVERY lineage of this tenant, in ONE read.
+
+    The batched twin of `count_open_instances` above, for callers that need
+    the count of many lineages at once (`api/designer.py::list_definitions`,
+    which renders one row per lineage VERSION). `count_open_instances` scans
+    the tenant's whole `workflow_instance` table and then throws away every
+    row belonging to another lineage, so asking it per lineage re-reads the
+    same table once per lineage — O(lineages) DataCore round-trips for data
+    a single read already contains.
+
+    Same open-ness definition as `list_open_instances` (empty/absent
+    `closed_at`) and the same lineage key expression
+    (`str(row.get("definition_id", ""))`), so a lineage's count here is
+    identical to `count_open_instances`'s for that lineage — the
+    designer list and the retire gate must never disagree about how much
+    work is in flight.
+
+    Grouped in Python rather than with a SQL `GROUP BY definition_id`, for
+    the same reason every other read in this module filters in Python:
+    `definition_id`/`closed_at` are flattened columns a tenant's table only
+    materializes once something has written them, and a predicate (or
+    grouping) naming an unmaterialized column is a DuckDB binder error
+    (400), not an empty result. Lineages with no open instances are simply
+    absent from the returned dict — callers default to 0.
+    """
+    counts: dict[str, int] = {}
+    for row in dc.list_entities(tenant_id, "workflow_instance", "", token):
+        if row.get("closed_at"):
+            continue
+        key = str(row.get("definition_id", ""))
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def save_definition(tenant_id: str, entity_id: str, machine_raw: Any, steps_raw: Any,
                      channel_access: str | None = None, token: str | None = None) -> dict:
     """Write a draft's authored content and return its validation in one call.
