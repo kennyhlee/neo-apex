@@ -340,39 +340,66 @@
 /* =============================================================================
    Home + assistant slide-in drawer.
 
-   Dashboard stays centered (app-main keeps its max-width). The drawer is
-   anchored to the RIGHT EDGE OF THE CENTERED CONTENT, not the viewport edge,
-   and content reserves the drawer width + a small gap — so the two sit flush
-   with only a slight breathing space, no dead centered-gutter.
+   The drawer OVERLAYS the dashboard. It used to inset `.app-main` by its own
+   width, which narrowed the content column and slid every card and action
+   button left each time the assistant opened — opening a chat panel
+   rearranged the page you were trying to read. That rule is gone, and the
+   `assistant-open` body class went with it.
+
+   The drawer is anchored to the RIGHT EDGE OF THE CENTERED CONTENT, not the
+   viewport edge, so on wide screens it sits flush with the dashboard rather
+   than stranded out in the gutter.
    ============================================================================= */
 
-.app-main { transition: padding-right 0.28s ease; }
-body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--space-4)); }
+/* --- the edge handle -------------------------------------------------------
+   The drawer's own affordance, not page chrome: closed it is a thin tab at the
+   VIEWPORT edge (deliberately outside the content column, so it cannot cover a
+   card action); open it rides flush against the drawer's left edge on the same
+   0.28s as the panel, so the two read as one object.
 
-/* REOPEN-ONLY: HomePage renders this while the drawer is CLOSED and not
-   otherwise, so `--z-dropdown` sitting below `--z-drawer` no longer matters —
-   the two are never on screen together. Closing is the × in the panel header.
-   Keep it that way: restoring a persistent toggle here reinstates the defect
-   where the open drawer paints over its own close control. Verified at 1440 /
-   1200 / 1000px that nothing on Home shares this band while closed, so the
-   fixed position steals no page control. */
+   It outranks the drawer it controls. At --z-dropdown (200) under the drawer's
+   --z-drawer (500) the open panel painted over this button and swallowed every
+   click on it — with the drawer defaulting to open, that left no way to close
+   the assistant at all. */
 .home-chat-toggle {
   position: fixed;
-  top: calc(var(--nav-h) + var(--space-3));
-  z-index: var(--z-dropdown);
-  right: max(var(--space-4), calc((100vw - var(--content-max)) / 2 + var(--space-4)));
-  background: var(--accent-ink);
-  color: var(--on-accent);
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  right: 0;
+  z-index: calc(var(--z-drawer) + 1);
+  transition: right 0.28s ease, background 0.16s ease, color 0.16s ease;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 26px;
+  padding: var(--space-4) 0;
+  border: 1px solid var(--border-subtle);
+  border-right: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
   cursor: pointer;
   font: inherit;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  box-shadow: var(--shadow-2);
+  box-shadow: -3px 0 14px rgba(26, 32, 44, 0.10);
 }
-.home-chat-toggle:hover { background: var(--accent-hover); }
+.home-chat-toggle:hover { background: var(--accent-tint); color: var(--accent-ink); }
+.home-chat-toggle__label {
+  writing-mode: vertical-rl;
+  letter-spacing: 0.06em;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+}
+.home-chat-toggle__chevron { font-size: var(--text-md); line-height: 1; transition: transform 0.28s ease; }
+
+/* Open: sit flush against the drawer's left edge — the drawer's own right
+   offset plus its width. */
+.home-chat-toggle.is-open {
+  right: calc(max(0px, (100vw - var(--content-max)) / 2) + var(--assistant-w));
+}
+.home-chat-toggle.is-open .home-chat-toggle__chevron { transform: rotate(180deg); }
 
 .home-chat-drawer {
   position: fixed;
@@ -386,7 +413,9 @@ body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--s
   display: flex;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-3);
+  /* Deeper than a docked panel would need: it floats over the dashboard now,
+     so the edge has to read as "above" rather than "beside". */
+  box-shadow: -16px 0 40px rgba(26, 32, 44, 0.16);
 }
 .home-chat-drawer.is-open { transform: translateX(0); }
 .home-chat-drawer .chat-panel { flex: 1; height: 100%; border: none; border-radius: 0; }
@@ -397,9 +426,11 @@ body.assistant-open .app-main { padding-right: calc(var(--assistant-w) + var(--s
 .home-chat-drawer.is-open[aria-hidden='false'] { visibility: visible; }
 
 @media (max-width: 992px) {
-  /* Drawer covers the screen on small viewports; don't reserve desktop width. */
-  body.assistant-open .app-main { padding-right: var(--gutter); }
+  /* Drawer covers the screen on small viewports. There is no left edge left to
+     ride, so the handle would end up pinned over page content on the far side
+     — hide it while open and let the panel header's "Hide ›" do the closing. */
   .home-chat-drawer { width: 100%; transform: translateX(100%); }
+  .home-chat-toggle.is-open { display: none; }
 }
 
 @media (max-width: 768px) {

@@ -1,19 +1,21 @@
 // Open/closed state for the assistant drawer, shared between the nav button
 // that opens it (AppNav) and the drawer itself (AssistantDrawer).
 //
-// Context rather than a module bus, following authStore/toastStore: the two
-// consumers are siblings under one provider in App.tsx, so there is nothing to
-// coordinate across unmounts, and React state re-renders both automatically —
-// `editorBridge`'s hand-rolled registry exists because a card has to reach an
-// editor that may not be mounted, which is not the case here.
+// Context rather than a module bus, following authStore/toastStore.
+//
+// The drawer and its edge handle both live in `AssistantDrawer`, so this could
+// now be local state — it stays in context because `ChatPanel`'s "Hide ›" needs
+// it too, and because a future caller ("explain these errors" from the
+// validation rail) should be able to open the assistant without threading a
+// prop through the page tree.
 import { createContext } from 'react';
 
 /**
- * The nav button's DOM id. Escape and the drawer's × return focus here, so it
- * has to be stable and known to both sides — hence one exported constant
- * rather than a string repeated in three files.
+ * The edge handle's DOM id. Escape and the header's "Hide ›" return focus here,
+ * so it has to be stable and known to both sides — hence one exported constant
+ * rather than a string repeated across files.
  */
-export const ASSISTANT_TOGGLE_ID = 'assistant-nav-toggle';
+export const ASSISTANT_TOGGLE_ID = 'assistant-handle';
 
 /** Session-scoped, like the transcript: a new tab starts closed. */
 export const ASSISTANT_OPEN_KEY = 'apexflow_assistant_open';

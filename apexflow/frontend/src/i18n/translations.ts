@@ -459,12 +459,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     // `hide` labels the panel header's slide-out control, rendered as
     // "Hide ›" — the chevron is a separate aria-hidden span, so it stays out
     // of the accessible name and out of translation.
-    // `show` currently has NO caller (AppNav's button is labelled
-    // `assistant.title`): it is kept because the pair is the natural
-    // vocabulary here and a future affordance will want it — delete it rather
-    // than inventing a second key if that stops being true. Both locales carry
-    // it either way; the key-parity test fails on a locale that drops one.
-    'assistant.show': 'Show assistant',
+    // There is no `assistant.show`: the edge handle is labelled
+    // `assistant.title` and conveys state through `aria-expanded`, which is
+    // the ARIA pattern for a disclosure — a label that swapped Show/Hide would
+    // fight the visible text instead.
     'assistant.hide': 'Hide',
     'assistant.limitReached': 'Conversation limit reached. Start a new chat.',
     'assistant.createDraft': 'Create draft',
@@ -947,7 +945,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.addQuick': '添加',
     'assistant.removeQuick': '删除',
     'assistant.newQuestion': '新问题',
-    'assistant.show': '显示助手',
     'assistant.hide': '隐藏',
     'assistant.limitReached': '对话已达上限，请开始新对话。',
     'assistant.createDraft': '创建草稿',

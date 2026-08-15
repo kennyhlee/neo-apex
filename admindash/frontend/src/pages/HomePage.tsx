@@ -289,16 +289,10 @@ export default function HomePage({ tenant }: HomePageProps) {
   }, [inquiryUrl, toast, t]);
 
   const [chatOpen, setChatOpen] = useState(true);
-  // Let the shell reclaim the centered gutter so content meets the drawer with
-  // no dead gap while the assistant is open. Scoped to Home via cleanup.
-  useEffect(() => {
-    document.body.classList.toggle('assistant-open', chatOpen);
-    return () => document.body.classList.remove('assistant-open');
-  }, [chatOpen]);
 
-  // The reopen pill only exists while the drawer is closed, so focus has to be
-  // handed to it AFTER the close has rendered it — hence the effect below
-  // rather than a `.focus()` inside `closeChat`.
+  // Focus is handed to the handle AFTER the close has rendered: below 992px the
+  // handle is `display: none` while open, and `.focus()` on a still-hidden
+  // element is a silent no-op.
   const reopenRef = useRef<HTMLButtonElement>(null);
   const wantReopenFocus = useRef(false);
   useEffect(() => {
@@ -334,27 +328,22 @@ export default function HomePage({ tenant }: HomePageProps) {
   );
 
   return (
-    <div className={`home-layout ${chatOpen ? 'chat-open' : ''}`}>
-      {/* SHOW-ONLY, and rendered only while the drawer is closed.
-          It used to be a persistent show/hide toggle, which could not work:
-          it sits at --z-dropdown (200) under the drawer's --z-drawer (500), so
-          once open — and it opens by default — the drawer's own header
-          swallowed every click on it. With no other close control and Escape
-          unhandled, the assistant could not be closed at all. Rendering it
-          only when closed makes that stacking conflict structurally impossible
-          rather than fixing it with a z-index fight that would put a fixed
-          control back over the page. Closing is the × in the panel header. */}
-      {!chatOpen && (
-        <button
-          ref={reopenRef}
-          className="home-chat-toggle"
-          onClick={() => setChatOpen(true)}
-          aria-expanded={false}
-          aria-controls="home-chat-drawer"
-        >
-          {t('assistant.show')}
-        </button>
-      )}
+    <div className="home-layout">
+      {/* The drawer's own edge handle, not page chrome. Closed it is a thin
+          tab at the viewport edge; open it rides flush against the drawer's
+          left edge on the same 0.28s, so the two read as one object. It
+          outranks the drawer — at a lower z-index the open panel painted over
+          its own toggle, which is how this control became unclickable before. */}
+      <button
+        ref={reopenRef}
+        className={`home-chat-toggle ${chatOpen ? 'is-open' : ''}`}
+        onClick={() => setChatOpen((o) => !o)}
+        aria-expanded={chatOpen}
+        aria-controls="home-chat-drawer"
+      >
+        <span className="home-chat-toggle__chevron" aria-hidden="true">&#8249;</span>
+        <span className="home-chat-toggle__label">{t('assistant.title')}</span>
+      </button>
       <aside
         id="home-chat-drawer"
         className={`home-chat-drawer ${chatOpen ? 'is-open' : ''}`}

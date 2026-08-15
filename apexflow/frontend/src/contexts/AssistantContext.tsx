@@ -1,6 +1,6 @@
 // Provider half of assistantStore.ts, split out the same way AuthContext.tsx
 // is split from authStore.ts so this file exports only the component.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ASSISTANT_OPEN_KEY,
   ASSISTANT_TOGGLE_ID,
@@ -9,8 +9,8 @@ import {
 } from './assistantStore.ts';
 
 export function AssistantProvider({ children }: { children: ReactNode }) {
-  // Default CLOSED: the editor is dense, and reserving 380px of it before the
-  // user asks for the assistant would be a worse first screen.
+  // Default CLOSED: the editor is dense, and opening a panel over it before the
+  // user asks for one would be a worse first screen.
   const [open, setOpenState] = useState(() => {
     try {
       return sessionStorage.getItem(ASSISTANT_OPEN_KEY) === '1';
@@ -19,24 +19,31 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  // The class on <body> is what reflows .app-main (see AssistantDrawer.css) —
-  // content makes room for the drawer instead of sitting under it.
   useEffect(() => {
-    document.body.classList.toggle('assistant-open', open);
     try {
       sessionStorage.setItem(ASSISTANT_OPEN_KEY, open ? '1' : '0');
     } catch {
       /* ignore storage quota / disabled storage */
     }
-    return () => document.body.classList.remove('assistant-open');
+  }, [open]);
+
+  // Focus is handed back AFTER the close has rendered, not inside the click
+  // handler: below 992px the handle is `display: none` while open, and
+  // `.focus()` on a still-hidden element is a silent no-op.
+  const wantHandleFocus = useRef(false);
+  useEffect(() => {
+    if (!open && wantHandleFocus.current) {
+      wantHandleFocus.current = false;
+      document.getElementById(ASSISTANT_TOGGLE_ID)?.focus();
+    }
   }, [open]);
 
   const closeAndRefocus = useCallback(() => {
+    // The element that had focus is inside the panel about to be hidden
+    // (`visibility: hidden` when `aria-hidden`), so parking focus on the handle
+    // keeps a keyboard user where the assistant now is.
+    wantHandleFocus.current = true;
     setOpenState(false);
-    // Queried rather than held as a ref: the button lives in AppNav, a sibling
-    // this provider does not render, so there is no ref to thread down without
-    // giving the context a registration step it does not otherwise need.
-    document.getElementById(ASSISTANT_TOGGLE_ID)?.focus();
   }, []);
 
   const api = useMemo<AssistantApi>(
