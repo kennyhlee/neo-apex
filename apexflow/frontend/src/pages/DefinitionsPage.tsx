@@ -60,6 +60,7 @@ import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
 import { collapseLineages, primaryEntityId, type LineageRow } from '../utils/lineage.ts';
+import { errorDetail } from '../utils/apiError.ts';
 import type { RungAction } from '../utils/lifecycleLadder.ts';
 import LineageDrawer from '../components/LineageDrawer.tsx';
 import './DefinitionsPage.css';
@@ -192,13 +193,11 @@ export default function DefinitionsPage() {
     return translated === key ? value : translated;
   }
 
+  // Body unwrapping now lives in `utils/apiError.ts` so the chat cards share one
+  // implementation with this page. Same behaviour, plus non-string `detail`s
+  // (the 422 `{parse_error: ...}`) now reach the toast instead of being dropped.
   function errorMessage(err: unknown, fallbackKey: string): string {
-    if (err instanceof ApiError && typeof err.body === 'string') return err.body;
-    if (err instanceof ApiError && err.body && typeof err.body === 'object' && 'detail' in err.body) {
-      const detail = (err.body as { detail?: unknown }).detail;
-      if (typeof detail === 'string') return detail;
-    }
-    return t(fallbackKey);
+    return errorDetail(err) ?? t(fallbackKey);
   }
 
 

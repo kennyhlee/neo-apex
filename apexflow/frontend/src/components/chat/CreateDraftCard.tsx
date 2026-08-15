@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { createDefinition } from '../../api/designer.ts';
 import type { Proposal } from '../../api/chat.ts';
 import { useTranslation } from '../../hooks/useTranslation.ts';
+import { errorDetail } from '../../utils/apiError.ts';
 
 export function CreateDraftCard({
   proposal,
@@ -43,7 +44,13 @@ export function CreateDraftCard({
     } catch (e) {
       // The card stays actionable on failure — the proposal is not persisted,
       // so losing the buttons would lose the authored draft with them.
-      setError(e instanceof Error ? e.message : String(e));
+      //
+      // The server's own sentence first: the likely failure here is a 422 on a
+      // machine the MODEL authored, and `ApiError.message` is only ever
+      // `HTTP 422` — the parse error the operator needs in order to know what
+      // to ask "Adjust…" for is on `.body`. Falls back to the raw message for
+      // the errors that carry no body at all (a dead backend, a network drop).
+      setError(errorDetail(e) ?? (e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(false);
     }
