@@ -102,8 +102,8 @@ export function ChatPanel({
       <div className="chat-panel__header">
         {/* The title carries the `margin-right: auto` that right-aligns the
             controls, rather than Clear carrying `margin-left: auto` —
-            otherwise Clear and × each claim the free space and drift apart,
-            and × would un-align whenever Clear is absent. */}
+            otherwise Clear and Hide each claim the free space and drift
+            apart, and Hide would un-align whenever Clear is absent. */}
         <span className="chat-panel__title">{t('assistant.title')}</span>
         {msgs.length > 0 && (
           <button
@@ -115,14 +115,14 @@ export function ChatPanel({
             {t('assistant.clear')}
           </button>
         )}
+        {/* "Hide ›" rather than a bare ×: the panel slides out to the right
+            rather than being dismissed, and the chevron says which way it
+            goes. It is aria-hidden so the button's accessible name stays the
+            plain verb instead of "Hide right-pointing angle quotation mark". */}
         {onClose && (
-          <button
-            type="button"
-            className="chat-panel__close"
-            onClick={onClose}
-            aria-label={t('assistant.hide')}
-          >
-            <span aria-hidden="true">×</span>
+          <button type="button" className="chat-panel__close" onClick={onClose}>
+            {t('assistant.hide')}
+            <span aria-hidden="true">›</span>
           </button>
         )}
       </div>

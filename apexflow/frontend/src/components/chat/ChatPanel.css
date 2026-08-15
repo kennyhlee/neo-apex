@@ -26,8 +26,8 @@
 }
 
 /* Pushes every header control to the right edge. See ChatPanel.tsx's comment:
-   this lives on the title, not on the first button, so Clear and × stay
-   together and × stays aligned when Clear is absent. */
+   this lives on the title, not on the first button, so Clear and Hide stay
+   together and Hide stays aligned when Clear is absent. */
 .chat-panel__title { margin-right: auto; }
 
 .chat-panel__clear {
@@ -46,23 +46,24 @@
 }
 .chat-panel__clear:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Same ghost-button conventions as Clear beside it, squared off for a glyph.
-   The 24px box keeps the × a comfortable target without making the
-   header taller than the text line it shares. */
+/* A labelled "Hide ›" control, not a glyph box: same ghost-button conventions
+   as Clear beside it so the two read as one pair of header actions. */
 .chat-panel__close {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin-right: calc(var(--space-2) * -1);
+  display: inline-flex;
+  align-items: center;
+  /* The label and the chevron are separate flex items, so the whitespace
+     between them in JSX is collapsed away — the gap has to come from here. */
+  gap: 0.25em;
   background: none;
   border: none;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font: inherit;
-  font-size: var(--text-lg);
+  font-size: var(--text-sm);
   line-height: 1;
   cursor: pointer;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-xs);
+  white-space: nowrap;
 }
 .chat-panel__close:hover {
   background: var(--surface-sunken);

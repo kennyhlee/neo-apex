@@ -456,17 +456,16 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.addQuick': '+ Add',
     'assistant.removeQuick': 'Remove',
     'assistant.newQuestion': 'New question',
-    // No chevrons: these no longer label a floating pill sliding in from the
-    // edge — that toggle is gone, replaced by AppNav's Assistant button (which
-    // is labelled `assistant.title`) and the drawer header's ×.
-    // `hide` is that ×'s aria-label. `show` currently has NO caller: it is
-    // kept because the pair is the natural vocabulary for this control and a
-    // future affordance (a collapsed-rail label, a command-palette entry) will
-    // want it — delete it rather than inventing a second key if that stops
-    // being true. Both locales carry it either way; the key-parity test fails
-    // on a locale that drops one.
+    // `hide` labels the panel header's slide-out control, rendered as
+    // "Hide ›" — the chevron is a separate aria-hidden span, so it stays out
+    // of the accessible name and out of translation.
+    // `show` currently has NO caller (AppNav's button is labelled
+    // `assistant.title`): it is kept because the pair is the natural
+    // vocabulary here and a future affordance will want it — delete it rather
+    // than inventing a second key if that stops being true. Both locales carry
+    // it either way; the key-parity test fails on a locale that drops one.
     'assistant.show': 'Show assistant',
-    'assistant.hide': 'Hide assistant',
+    'assistant.hide': 'Hide',
     'assistant.limitReached': 'Conversation limit reached. Start a new chat.',
     'assistant.createDraft': 'Create draft',
     'assistant.adjust': 'Adjust…',
@@ -949,7 +948,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.removeQuick': '删除',
     'assistant.newQuestion': '新问题',
     'assistant.show': '显示助手',
-    'assistant.hide': '隐藏助手',
+    'assistant.hide': '隐藏',
     'assistant.limitReached': '对话已达上限，请开始新对话。',
     'assistant.createDraft': '创建草稿',
     'assistant.adjust': '调整',

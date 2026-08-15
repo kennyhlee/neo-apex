@@ -116,9 +116,11 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.stop': 'Stop',
     'assistant.clear': 'Clear',
     // `show` labels the reopen pill (visible only while the drawer is
-    // closed); `hide` is the aria-label on the drawer header's ×.
+    // closed); `hide` labels the panel header's slide-out control, rendered as
+    // "Hide ›" — the chevron is a separate aria-hidden span, so it stays out
+    // of the accessible name and out of translation.
     'assistant.show': 'Assistant',
-    'assistant.hide': 'Hide assistant',
+    'assistant.hide': 'Hide',
     'assistant.quickQuestions': 'Quick questions',
 
     // Sites
@@ -697,7 +699,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.stop': '\u505c\u6b62',
     'assistant.clear': '\u6e05\u7a7a',
     'assistant.show': '\u52a9\u624b',
-    'assistant.hide': '\u9690\u85cf\u52a9\u624b',
+    'assistant.hide': '\u9690\u85cf',
     'assistant.quickQuestions': '\u5feb\u6377\u63d0\u95ee',
 
     // Sites
