@@ -118,6 +118,53 @@
 
 .chat-panel .quick-actions { padding: 0 var(--space-3) var(--space-2); }
 
+/* --- Proposal cards ------------------------------------------------------- */
+/* An accent-bordered card inside the assistant bubble: a proposal is an offer
+   to write to tenant data, so it must read as a distinct object rather than as
+   more assistant prose. */
+.chat-card {
+  align-self: flex-start;
+  max-width: 90%;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.chat-card__title {
+  font-weight: var(--weight-semibold);
+  word-break: break-word;
+}
+
+.chat-card__summary {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  color: var(--text-secondary);
+}
+.chat-card__summary li { margin: var(--space-1) 0; }
+
+.chat-card__error {
+  margin: var(--space-2) 0 0;
+  color: var(--danger);
+  word-break: break-word;
+}
+
+.chat-card__created {
+  margin: var(--space-2) 0 0;
+  color: var(--success);
+  font-weight: var(--weight-semibold);
+}
+
+.chat-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
 /* --- Markdown rendering inside assistant messages ------------------------- */
 .chat-msg__text .markdown { white-space: normal; }
 .chat-msg__text .markdown > :first-child { margin-top: 0; }

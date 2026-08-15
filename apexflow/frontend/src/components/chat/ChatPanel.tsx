@@ -13,6 +13,7 @@ import { streamChat, type ChatContext, type ChatTurn, type Proposal } from '../.
 import { useAuth } from '../../hooks/useAuth.ts';
 import { useTranslation } from '../../hooks/useTranslation.ts';
 import { QuickActions } from './QuickActions.tsx';
+import { CreateDraftCard } from './CreateDraftCard.tsx';
 import { Markdown } from './Markdown.tsx';
 import './ChatPanel.css';
 
@@ -46,20 +47,26 @@ function loadHistory(): Msg[] {
 }
 
 /**
- * Renders the card for one proposal. Tasks 10/11 fill these in: the create-draft
- * card and the patch (adjust/apply) card. Until then a proposal contributes no
- * UI — which is also why proposals are never persisted.
+ * Renders the card for one proposal. Task 11 fills in the remaining one: the
+ * patch (adjust/apply) card. A proposal with no card contributes no UI — which
+ * is also why proposals are never persisted.
  */
 function renderProposalCard(
   proposal: Proposal,
   key: string,
   appendSystem: (content: string) => void,
+  tenantId: string,
 ): ReactNode {
-  void key;
-  void appendSystem;
   switch (proposal.action) {
     case 'create_draft':
-      return null; // Task 10 fills this in
+      return (
+        <CreateDraftCard
+          key={key}
+          proposal={proposal}
+          tenantId={tenantId}
+          onDone={appendSystem}
+        />
+      );
     case 'patch':
       return null; // Task 11 fills this in
   }
@@ -196,7 +203,9 @@ export function ChatPanel() {
                 ''
               )}
             </div>
-            {m.proposals?.map((p, j) => renderProposalCard(p, `${m.id}-${j}`, appendSystem))}
+            {m.proposals?.map((p, j) =>
+              renderProposalCard(p, `${m.id}-${j}`, appendSystem, user?.tenant_id ?? ''),
+            )}
           </div>
         ))}
       </div>

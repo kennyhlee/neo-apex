@@ -464,6 +464,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.apply': 'Apply',
     'assistant.dismiss': 'Dismiss',
     'assistant.applied': 'Applied ✓',
+    'assistant.draftCreated': 'Draft created ✓',
+    'assistant.draftCreatedMsg':
+      'Draft "{name}" created — you\'re in the editor now; I can keep refining it here.',
     'assistant.createFailed': 'Create failed',
     'assistant.applyFailed': 'Could not apply',
     'assistant.readOnly': 'This version is read-only — open a new draft first',
@@ -924,6 +927,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.apply': '应用',
     'assistant.dismiss': '忽略',
     'assistant.applied': '已应用 ✓',
+    'assistant.draftCreated': '草稿已创建 ✓',
+    'assistant.draftCreatedMsg': '草稿“{name}”已创建 — 已打开编辑器，可以继续在这里完善。',
     'assistant.createFailed': '创建失败',
     'assistant.applyFailed': '无法应用',
     'assistant.readOnly': '此版本为只读 — 请先创建新草稿',
