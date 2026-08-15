@@ -1,0 +1,286 @@
+/* Ported from admindash/frontend/src/components/ChatPanel.css. Includes the
+   `.markdown` / `.md-*` rules: components/chat/Markdown.tsx ships no stylesheet
+   of its own, so these ARE its styling — dropping them is a silent regression
+   in every assistant answer that contains a list, a heading or a table. */
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--card-r);
+  overflow: hidden;
+}
+
+.chat-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--ui-fs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Pushes every header control to the right edge. See ChatPanel.tsx's comment:
+   this lives on the title, not on the first button, so Clear and Hide stay
+   together and Hide stays aligned when Clear is absent. */
+.chat-panel__title { margin-right: auto; }
+
+.chat-panel__clear {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-xs);
+}
+.chat-panel__clear:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
+.chat-panel__clear:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* A labelled "Hide ›" control, not a glyph box: same ghost-button conventions
+   as Clear beside it so the two read as one pair of header actions. */
+.chat-panel__close {
+  display: inline-flex;
+  align-items: center;
+  /* The label and the chevron are separate flex items, so the whitespace
+     between them in JSX is collapsed away — the gap has to come from here. */
+  gap: 0.25em;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+}
+.chat-panel__close:hover {
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+}
+
+.chat-panel__log {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chat-panel__empty {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.chat-msg { display: flex; flex-direction: column; }
+
+.chat-msg--user .chat-msg__text {
+  align-self: flex-end;
+  background: var(--accent-ink);
+  color: var(--text-inverse);
+}
+
+.chat-msg--assistant .chat-msg__text {
+  align-self: flex-start;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.chat-msg__text {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  max-width: 90%;
+  white-space: pre-wrap;
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+}
+
+.chat-panel__input {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.chat-panel__input input {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-md);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--control-r);
+}
+
+.chat-panel__input button {
+  background: var(--accent-ink);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--control-r);
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.chat-panel__input button:hover:not(:disabled) { background: var(--accent-hover); }
+.chat-panel__input button:disabled { opacity: 0.5; cursor: default; }
+
+.chat-panel .quick-actions { padding: 0 var(--space-3) var(--space-2); }
+
+/* --- Proposal cards ------------------------------------------------------- */
+/* An accent-bordered card inside the assistant bubble: a proposal is an offer
+   to write to tenant data, so it must read as a distinct object rather than as
+   more assistant prose. */
+.chat-card {
+  align-self: flex-start;
+  max-width: 90%;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.chat-card__title {
+  font-weight: var(--weight-semibold);
+  word-break: break-word;
+}
+
+.chat-card__summary {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  color: var(--text-secondary);
+}
+.chat-card__summary li { margin: var(--space-1) 0; }
+
+.chat-card__error {
+  margin: var(--space-2) 0 0;
+  color: var(--danger);
+  word-break: break-word;
+}
+
+/* The terminal "this offer has been taken" line — one rule, one look, whether
+   the card created a draft or applied a patch. */
+.chat-card__created,
+.chat-card__applied {
+  margin: var(--space-2) 0 0;
+  color: var(--success);
+  font-weight: var(--weight-semibold);
+}
+
+/* The patch card's op count / empty-patch line — secondary to the summary
+   bullets it sits under, since the bullets are what the operator reviews. */
+.chat-card__meta {
+  margin: var(--space-2) 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+/* Why Apply is disabled (read-only row, no editor, different draft). */
+.chat-card__note {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+}
+
+.chat-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* --- Markdown rendering inside assistant messages ------------------------- */
+.chat-msg__text .markdown { white-space: normal; }
+.chat-msg__text .markdown > :first-child { margin-top: 0; }
+.chat-msg__text .markdown > :last-child { margin-bottom: 0; }
+.chat-msg__text .markdown p { margin: 0 0 var(--space-2); }
+.chat-msg__text .markdown ul,
+.chat-msg__text .markdown ol { margin: 0 0 var(--space-2); padding-left: var(--space-5); }
+.chat-msg__text .markdown li { margin: var(--space-1) 0; }
+.chat-msg__text .markdown h3,
+.chat-msg__text .markdown h4,
+.chat-msg__text .markdown h5 {
+  margin: var(--space-1) 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+.chat-msg__text .markdown code {
+  background: var(--bg-tertiary);
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.chat-msg__text .markdown strong { font-weight: var(--weight-semibold); }
+
+/* Tabular data in assistant messages — narrow-friendly (no HTML grid). */
+/* 2-column tables -> key/value list */
+.chat-msg__text .markdown .md-kv { list-style: none; margin: var(--space-2) 0; padding: 0; }
+.chat-msg__text .markdown .md-kv li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.chat-msg__text .markdown .md-kv li:last-child { border-bottom: none; }
+.chat-msg__text .markdown .md-kv .md-k { color: var(--text-secondary); }
+.chat-msg__text .markdown .md-kv .md-v {
+  font-weight: var(--weight-semibold);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 3+ column tables -> one card per row */
+.chat-msg__text .markdown .md-cards {
+  margin: var(--space-2) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.chat-msg__text .markdown .md-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  padding: var(--space-2);
+}
+.chat-msg__text .markdown .md-card-row { display: flex; gap: var(--space-2); padding: var(--space-1) 0; }
+.chat-msg__text .markdown .md-card .md-k {
+  color: var(--text-tertiary);
+  flex: 0 0 40%;
+  min-width: 0;
+}
+.chat-msg__text .markdown .md-card .md-v {
+  color: var(--text-primary);
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .chat-msg__text { max-width: 100%; }
+  .chat-panel__input input,
+  .chat-panel__input button { min-height: var(--tap-min); }
+}

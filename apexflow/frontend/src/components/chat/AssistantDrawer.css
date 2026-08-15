@@ -1,0 +1,118 @@
+/* =============================================================================
+   Assistant slide-in drawer.
+
+   The drawer OVERLAYS the page. It used to inset `.app-main` by its own width
+   (`body.assistant-open .app-main { padding-right: … }`), which narrowed the
+   content column 1360 -> 984px at 1440 and slid the page-header actions 376px
+   left every time the assistant opened. That rule is gone; nothing in the page
+   moves now, and the `assistant-open` body class went with it.
+
+   The drawer is anchored to the VIEWPORT edge. It was briefly anchored to the
+   right edge of the centered content column (`--content-max`), a holdover from
+   the pushing version: on a display wider than 1400px that left the open panel
+   floating (100vw - 1400px)/2 inboard of the edge, reading as "somewhere in the
+   middle of the screen". An overlay belongs to the window, not to the column.
+   ============================================================================= */
+
+.assistant-drawer {
+  position: fixed;
+  top: var(--nav-h);
+  z-index: var(--z-drawer);
+  right: 0;
+  width: var(--assistant-w);
+  height: calc(100vh - var(--nav-h));
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+  display: flex;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  /* Deeper than a docked panel would need: it floats over content now, so the
+     edge has to read as "above" rather than "beside". */
+  box-shadow: -16px 0 40px rgba(26, 32, 44, 0.16);
+}
+.assistant-drawer.is-open { transform: translateX(0); }
+.assistant-drawer .chat-panel { flex: 1; height: 100%; border: none; border-radius: 0; }
+
+/* Keep the closed drawer out of the tab order rather than only hiding it
+   from assistive tech. */
+.assistant-drawer[aria-hidden='true'] { visibility: hidden; }
+.assistant-drawer.is-open[aria-hidden='false'] { visibility: visible; }
+
+/* --- the edge handle -------------------------------------------------------
+   The drawer's own affordance, not page chrome: closed it is a thin tab at the
+   VIEWPORT edge (deliberately outside the content column, so it cannot cover a
+   table's last column or a row action); open it rides flush against the
+   drawer's left edge, travelling on the same 0.28s as the panel so the two
+   read as one object.
+
+   It outranks the drawer it controls — at a lower z-index the open panel
+   paints over its own handle, which is exactly how the previous toggle became
+   unclickable. */
+.assistant-handle {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 0;
+  z-index: calc(var(--z-drawer) + 1);
+  transition: right 0.28s ease, background 0.16s ease, color 0.16s ease;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 26px;
+  padding: var(--space-4) 0;
+  border: 1px solid var(--border-subtle);
+  border-right: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  box-shadow: -3px 0 14px rgba(26, 32, 44, 0.10);
+}
+.assistant-handle:hover {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+.assistant-handle__label {
+  writing-mode: vertical-rl;
+  letter-spacing: 0.06em;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+}
+.assistant-handle__chevron {
+  font-size: var(--text-md);
+  line-height: 1;
+  transition: transform 0.28s ease;
+}
+
+/* Open: sit flush against the drawer's left edge. The drawer is pinned to the
+   viewport edge, so that edge is exactly its own width inboard — no content-
+   column term. `.is-open` comes from React on the handle itself rather than
+   from a `body:has(...)` selector: the state is already in hand, so the styling
+   does not need to go looking for it. */
+.assistant-handle.is-open {
+  right: var(--assistant-w);
+}
+.assistant-handle.is-open .assistant-handle__chevron { transform: rotate(180deg); }
+
+@media (max-width: 992px) {
+  /* Drawer covers the screen on small viewports. There is no left edge left to
+     ride, so the handle would end up pinned to the far side of the display on
+     top of page content — hide it while open and let the panel header's
+     "Hide ›" do the closing. */
+  .assistant-drawer { width: 100%; transform: translateX(100%); }
+  .assistant-handle.is-open { display: none; }
+}
+
+/* AdminDash also shortens the drawer for its mobile bottom nav
+   (`--bottom-nav-h`). ApexFlow's AppNav has no bottom bar, so the full
+   `100vh - --nav-h` height is correct at every width. */
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-handle,
+  .assistant-handle__chevron,
+  .assistant-drawer { transition: none; }
+}

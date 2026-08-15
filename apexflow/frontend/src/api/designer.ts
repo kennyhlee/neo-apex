@@ -137,6 +137,31 @@ export async function saveDefinition(
   return parseOrThrow(resp);
 }
 
+/**
+ * POST /api/workflows/{tenant_id}/definitions — server-side draft creation.
+ *
+ * Replaces the generic-entities create the blank-workflow and template paths
+ * used to do: `machine`/`steps` go up PARSED and the backend does the
+ * JSON-encoding plus the `definition_id`/`version`/`status` seeding, so the
+ * lineage invariants live in one place instead of being re-derived by each
+ * caller against the schema-less entities proxy. Same
+ * `{row, errors, health}` envelope as `saveDefinition` — a brand-new draft is
+ * allowed to be invalid, so validation errors ride the 201 rather than
+ * failing it. 422 `{detail: {parse_error: ...}}` when machine/steps do not
+ * parse, surfaced as `ApiError` with the parsed body on `.body`.
+ */
+export async function createDefinition(
+  tenantId: string,
+  body: { name: string; machine: unknown; steps: unknown[]; channel_access?: string },
+): Promise<{ row: Record<string, unknown> & { entity_id: string }; errors: string[]; health: DefinitionHealth }> {
+  const resp = await fetch(`${API_BASE}/api/workflows/${tenantId}/definitions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  return parseOrThrow(resp);
+}
+
 export async function validateDefinition(
   tenantId: string,
   entityId: string,

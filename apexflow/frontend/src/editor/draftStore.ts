@@ -1,9 +1,17 @@
 // Single source of truth for the loaded draft (Task 7 brief's binding rule).
-// Owns the parsed `machine`/`steps` objects, a debounced autosave that
+// Owns the parsed `machine`/`steps` objects, an EXPLICIT save that
 // JSON.stringifies them and PUTs through `updateEntity` — ONLY while
-// `status === "draft"` (hard guard: never autosave a published/superseded
-// row) — dirty/saving/saved indicator state, and a debounced `validate()`
-// call holding `{errors, health}` for the right rail.
+// `status === "draft"` (hard guard: never write a published/superseded
+// row) — dirty/saving/saved indicator state, and the `{errors, health}` that
+// PUT returns for the right rail.
+//
+// There is NO autosave and no save timer: `markDirty` flags the draft and
+// mirrors it to localStorage (a synchronous browser write, never a request),
+// and the PUT happens when something explicitly asks for it — the Save
+// button, `flush()` before publish, or unmount-with-dirty. Consequences worth
+// carrying: the validation rail describes the last SAVED row, not what is on
+// screen, and anything that edits through this store (including the chat
+// assistant's `applyPatch` bridge) has changed nothing durable until a save.
 //
 // Binding notes:
 // - `getBundle` already returns `definition.machine`/`.steps` PARSED

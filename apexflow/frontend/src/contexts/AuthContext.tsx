@@ -64,6 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem(TOKEN_KEY);
+    // Chat transcript and drawer state are scoped to the login session
+    // (see components/chat/ChatPanel.tsx and AssistantDrawer.tsx).
+    sessionStorage.removeItem('apexflow_chat_history');
+    sessionStorage.removeItem('apexflow_assistant_open');
   }, []);
 
   return (

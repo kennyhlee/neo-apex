@@ -9,6 +9,16 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "httpx>=0.28",
+    # Chat workflow builder (Plan 4). The floor is >=2.0, NOT admindash's
+    # inherited >=0.0.30: app/chat/ uses 2.x-only APIs (Agent(..., tools=...)
+    # with RunContext-typed deps, agent.run_stream's event/tool-call parts,
+    # and the "anthropic:<model>" provider-prefixed model string), none of
+    # which a 0.0.x resolution provides. The old floor was satisfiable by a
+    # release that cannot import this package, so it documented a
+    # compatibility this code never had. The lock already resolves 2.30.0, so
+    # raising the floor changes nothing about what installs — it just stops
+    # advertising a version range that would fail at import.
+    "pydantic-ai>=2.0",
 ]
 
 [project.optional-dependencies]

@@ -6,13 +6,13 @@
 // - listTemplates() reads GET /api/workflows/{tenant_id}/templates — a
 //   platform-wide catalog (currently a single entry, "enrollment"), not
 //   tenant data.
-// - "Use template" mints a NEW definition_id (DefinitionsPage.tsx's
-//   slugify/uniqueSuffix precedent from Task 5 — duplicated here rather than
-//   shared, matching that file's own choice not to export them) and writes a
-//   version-1 DRAFT workflow_definition row via createEntity. machine/steps
-//   are JSON.stringify'd at write time (map §3/§8: DataCore stores them as
-//   JSON-encoded strings on the wire, not nested objects — same boundary
-//   DefinitionsPage.tsx's submitNewWorkflow already draws).
+// - "Use template" POSTs the catalog entry's definition to
+//   `api/designer.ts`'s `createDefinition`, which mints the definition_id,
+//   seeds version 1 / status draft, and JSON-encodes machine/steps
+//   server-side. machine/steps therefore go up PARSED here — the
+//   JSON.stringify boundary (map §3/§8: DataCore stores them as JSON-encoded
+//   strings on the wire) now lives in the backend, in the one place that also
+//   owns the lineage invariants.
 // - Template updates never propagate (spec §3): the copy made here is
 //   complete at instantiate time — the new draft row has no live link back
 //   to the template it was seeded from.
@@ -21,29 +21,11 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useToast } from '../hooks/useToast.ts';
-import { listTemplates } from '../api/designer.ts';
-import { createEntity } from '../api/client.ts';
+import { createDefinition, listTemplates } from '../api/designer.ts';
 import type { TemplateCatalogEntry } from '../types/designer.ts';
 import { Button } from '../components/ui/Button.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
 import './TemplatesPage.css';
-
-/** Ported from DefinitionsPage.tsx's own (unexported) helper of the same
- * name — kept local rather than shared, matching that file's precedent. */
-function slugify(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-+|-+$)/g, '');
-  return slug || 'workflow';
-}
-
-/** Short, non-cryptographic uniqueness suffix — see DefinitionsPage.tsx's
- * identical helper doc comment for why collisions here are harmless. */
-function uniqueSuffix(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
 
 export default function TemplatesPage() {
   const { t } = useTranslation();
@@ -128,20 +110,15 @@ export default function TemplatesPage() {
     setCreating(true);
     try {
       const { definition } = activeTemplate;
-      const definitionId = `${slugify(trimmed)}-${uniqueSuffix()}`;
-      const result = await createEntity(tenantId, 'workflow_definition', {
-        definition_id: definitionId,
+      const result = await createDefinition(tenantId, {
         name: trimmed,
-        version: 1,
-        status: 'draft',
-        lineage_status: 'active',
+        machine: definition.machine,
+        steps: definition.steps,
         channel_access: definition.channel_access,
-        machine: JSON.stringify(definition.machine),
-        steps: JSON.stringify(definition.steps),
       });
       toast({ message: t('templates.useToast').replace('{name}', trimmed), tone: 'success' });
       setActiveTemplate(null);
-      navigate(`/definitions/${result.entity_id}`);
+      navigate(`/definitions/${result.row.entity_id}`);
     } catch {
       toast({ message: t('templates.useError'), tone: 'danger' });
     } finally {

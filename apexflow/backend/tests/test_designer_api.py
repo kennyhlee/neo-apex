@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import require_authenticated_user
 from app.main import app
+from app.workflows import datacore as dc
 from app.workflows.primitives import EFFECTS, GUARDS
 from app.workflows.validate import PARAM_SPECS, validate_definition
 from app.workflows.schema import MachineDef, StepDef
@@ -374,6 +375,100 @@ def test_list_definitions_empty_tenant_returns_empty_list(client, fake_dc):
     resp = client.get(f"/api/workflows/{TENANT}/definitions")
     assert resp.status_code == 200
     assert resp.json() == {"definitions": []}
+
+
+def _multi_model_steps(*entity_models):
+    """A form step declaring one section per named entity model — lets a
+    seeded row reference several models, and lets several rows SHARE them."""
+    field_by_model = {
+        "student": [{"name": "first_name", "required": True}],
+        "family": [{"name": "family_name", "required": True}],
+        "contact": [{"name": "first_name", "required": True}],
+    }
+    return [{
+        "step_id": "details",
+        "type": "form",
+        "title": "Details",
+        "required": True,
+        "blocking": True,
+        "available_in": ["draft"],
+        "show_if": None,
+        "review": None,
+        "config": {"sections": [
+            {"section_id": f"{m}_section", "entity_model": m,
+             "fields": field_by_model[m], "mode": "create", "repeat": None}
+            for m in entity_models
+        ]},
+    }]
+
+
+def test_list_definitions_datacore_read_count_is_flat_in_rows(client, fake_dc, monkeypatch):
+    """PERF CONTRACT: this route's DataCore reads scale with the number of
+    DISTINCT entity models the tenant's definitions reference, not with the
+    number of definition ROWS or LINEAGES.
+
+    The list page was slow because both expensive reads sat inside the row
+    loop: `fetch_models` re-fetched the SAME `student`/`family` model once per
+    row (a tenant with 4 workflows at 2-3 versions each, all built on the same
+    handful of models, paid a dozen identical model reads), and
+    `count_open_instances` re-scanned the tenant's ENTIRE `workflow_instance`
+    table once per lineage. Both are hoisted out of the loop now — the union
+    of referenced models is fetched once, and one grouped read
+    (`open_instance_counts_by_lineage`) answers every lineage's count.
+
+    Pinned as exact counts rather than a loose bound because the whole point
+    is the SHAPE of the cost: 1 definitions read + 1 read per distinct model
+    + 1 instances read. Reintroducing a per-row fetch fails this test with a
+    number that tracks the row count (mutation-checked).
+    """
+    for m in ("student", "family", "contact"):
+        fake_dc.set_model(TENANT, m, {
+            "base_fields": [{"name": "first_name", "type": "str", "required": True},
+                            {"name": "family_name", "type": "str", "required": True}],
+            "custom_fields": [],
+        })
+
+    # 4 lineages / 9 rows, referencing only 3 DISTINCT models between them.
+    lineages = [
+        ("wd-perf-1", ("student", "family", "contact"), 3),
+        ("wd-perf-2", ("student", "family"), 2),
+        ("wd-perf-3", ("student",), 2),
+        ("wd-perf-4", ("student", "contact"), 2),
+    ]
+    n_rows = 0
+    for lineage_id, models, n_versions in lineages:
+        for version in range(1, n_versions + 1):
+            _seed_definition(fake_dc, definition_id=lineage_id, version=version,
+                             status="published" if version == 1 else "draft",
+                             steps=_multi_model_steps(*models))
+            n_rows += 1
+        _seed_instance(fake_dc, definition_id=lineage_id, closed_at="")
+    assert n_rows == 9
+
+    calls: dict[str, list] = {"list_entities": [], "get_model_definition": []}
+    real_list, real_model = dc.list_entities, dc.get_model_definition
+
+    def counting_list_entities(tenant_id, entity_type, where="", token=None):
+        calls["list_entities"].append(entity_type)
+        return real_list(tenant_id, entity_type, where, token)
+
+    def counting_get_model(tenant_id, entity_type, token=None):
+        calls["get_model_definition"].append(entity_type)
+        return real_model(tenant_id, entity_type, token)
+
+    monkeypatch.setattr(dc, "list_entities", counting_list_entities)
+    monkeypatch.setattr(dc, "get_model_definition", counting_get_model)
+
+    resp = client.get(f"/api/workflows/{TENANT}/definitions")
+    assert resp.status_code == 200
+    assert len(resp.json()["definitions"]) == n_rows
+
+    # One model read per DISTINCT referenced model — not one per row, and no
+    # model read twice.
+    assert sorted(calls["get_model_definition"]) == ["contact", "family", "student"]
+    # One entity read for the definitions, one for the instances. NOT one
+    # instance read per lineage.
+    assert calls["list_entities"] == ["workflow_definition", "workflow_instance"]
 
 
 # --- GET .../definitions/{entity_id}/bundle ---------------------------------
@@ -1003,6 +1098,54 @@ def test_save_definition_rejects_unparseable_machine_before_writing(client, fake
 
     row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
     assert json.loads(row["machine"])["states"][0]["state_id"] == "draft"
+
+
+def test_save_definition_rejects_a_malformed_section_before_writing(
+        client, fake_dc, monkeypatch):
+    """A malformed SECTION must 422 like a malformed machine — and, crucially,
+    must not write first.
+
+    `StepDef.config` is `dict[str, Any]`, so a section missing
+    entity_model/fields/mode sails through `StepDef.model_validate`. The only
+    thing that parses it is `referenced_entity_models`, which ran AFTER
+    `dc_update` and OUTSIDE the try that 422s — so the malformed section was
+    PERSISTED to the row and the request then raised out of the route as a
+    500. The same hole was closed in `create_definition`; this is its twin,
+    and it matters more here because the chat assistant's patch-apply path
+    PUTs through this function.
+    """
+    fake_dc.set_model(TENANT, "student", _valid_models()["student"])
+    eid = _seed_definition(fake_dc, definition_id="wd-save-bad-section", status="draft")
+
+    # A flattened read-back cannot answer "was anything written?" on its own
+    # (a rejected write and an accepted one that happened to store the same
+    # bytes look alike), so the call itself is recorded — same reasoning as
+    # tests/test_create_definition.py's `dc_create_calls` fixture.
+    calls: list = []
+    inner = dc.dc_update
+
+    def _recording(*args, **kwargs):
+        calls.append(args)
+        return inner(*args, **kwargs)
+
+    monkeypatch.setattr(dc, "dc_update", _recording)
+
+    resp = client.put(
+        f"/api/workflows/{TENANT}/definitions/{eid}",
+        json={"machine": _valid_machine(), "steps": [
+            {"step_id": "student_details", "type": "form", "title": "Student",
+             "required": True, "blocking": True, "available_in": ["draft"],
+             "config": {"sections": [{"section_id": "student_section"}]}},
+        ]},
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert isinstance(resp.json()["detail"]["parse_error"], str)
+    assert resp.json()["detail"]["parse_error"]  # non-empty
+    # Nothing was written — the row still holds what it held before.
+    assert calls == []
+    row = fake_dc.get_entity(TENANT, "workflow_definition", eid)
+    assert json.loads(row["steps"])[0]["config"]["sections"][0]["entity_model"] == "student"
 
 
 def test_save_definition_refuses_a_published_row(client, fake_dc):

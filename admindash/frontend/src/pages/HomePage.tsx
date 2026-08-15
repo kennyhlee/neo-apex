@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useToast } from '../hooks/useToast.ts';
@@ -289,24 +289,68 @@ export default function HomePage({ tenant }: HomePageProps) {
   }, [inquiryUrl, toast, t]);
 
   const [chatOpen, setChatOpen] = useState(true);
-  // Let the shell reclaim the centered gutter so content meets the drawer with
-  // no dead gap while the assistant is open. Scoped to Home via cleanup.
+
+  // Focus is handed to the handle AFTER the close has rendered: below 992px the
+  // handle is `display: none` while open, and `.focus()` on a still-hidden
+  // element is a silent no-op.
+  const reopenRef = useRef<HTMLButtonElement>(null);
+  const wantReopenFocus = useRef(false);
   useEffect(() => {
-    document.body.classList.toggle('assistant-open', chatOpen);
-    return () => document.body.classList.remove('assistant-open');
+    if (!chatOpen && wantReopenFocus.current) {
+      wantReopenFocus.current = false;
+      reopenRef.current?.focus();
+    }
   }, [chatOpen]);
 
+  const closeChat = useCallback(() => {
+    // The element that had focus is inside the panel about to be hidden
+    // (`visibility: hidden` when `aria-hidden`), so parking focus on the
+    // reopen control keeps a keyboard user where the assistant now is.
+    wantReopenFocus.current = true;
+    setChatOpen(false);
+  }, []);
+
+  /**
+   * Escape closes the drawer when focus is inside it. Bound to the `<aside>`
+   * rather than to `document`: a window-level listener would also fire while
+   * the user is typing in some unrelated control on Home, and closing the
+   * assistant out from under an edit elsewhere is worse than not offering the
+   * shortcut. React's synthetic events bubble, so focus in any descendant is
+   * covered.
+   */
+  const onDrawerKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      closeChat();
+    },
+    [closeChat],
+  );
+
   return (
-    <div className={`home-layout ${chatOpen ? 'chat-open' : ''}`}>
+    <div className="home-layout">
+      {/* The drawer's own edge handle, not page chrome. Closed it is a thin
+          tab at the viewport edge; open it rides flush against the drawer's
+          left edge on the same 0.28s, so the two read as one object. It
+          outranks the drawer — at a lower z-index the open panel painted over
+          its own toggle, which is how this control became unclickable before. */}
       <button
-        className="home-chat-toggle"
+        ref={reopenRef}
+        className={`home-chat-toggle ${chatOpen ? 'is-open' : ''}`}
         onClick={() => setChatOpen((o) => !o)}
         aria-expanded={chatOpen}
+        aria-controls="home-chat-drawer"
       >
-        {chatOpen ? 'Hide assistant ›' : '‹ Assistant'}
+        <span className="home-chat-toggle__chevron" aria-hidden="true">&#8249;</span>
+        <span className="home-chat-toggle__label">{t('assistant.title')}</span>
       </button>
-      <aside className={`home-chat-drawer ${chatOpen ? 'is-open' : ''}`} aria-hidden={!chatOpen}>
-        <ChatPanel />
+      <aside
+        id="home-chat-drawer"
+        className={`home-chat-drawer ${chatOpen ? 'is-open' : ''}`}
+        aria-hidden={!chatOpen}
+        onKeyDown={onDrawerKeyDown}
+      >
+        <ChatPanel onClose={closeChat} />
       </aside>
 
       <div className="home-page">

@@ -15,6 +15,11 @@ import StatusBadge from '../components/StatusBadge.tsx';
 import { Button } from '../components/ui/Button.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
 import { lifecycleAction } from '../api/designer.ts';
+import {
+  createBridgeApply,
+  registerEditorBridge,
+  unregisterEditorBridge,
+} from '../chat/editorBridge.ts';
 import type { ChannelAccess } from '../types/designer.ts';
 import './EditorPage.css';
 
@@ -62,6 +67,74 @@ export default function EditorPage() {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [store.dirty]);
+
+  /* The assistant drawer is mounted outside the routed tree (App.tsx), so a
+     patch proposal has no React path to this page's draft store. Publish a
+     handle to it instead — `src/chat/editorBridge.ts` explains the registry.
+
+     RE-REGISTERING ON EVERY CHANGE is the point of the dep list, not a
+     nicety: `apply` closes over `store.machine`/`store.steps`, so a handle
+     registered once at mount would patch the draft as it looked when the
+     editor opened and throw away every edit made since. `readOnly` is in
+     there for the same reason — a row published in another tab must stop
+     accepting patches without a reload.
+
+     Registration is gated on the loaded definition BEING THE ONE `entityId`
+     names, not merely on there being a definition. Navigating from draft A to
+     draft B re-runs this effect with B's id while the store still holds A's
+     definition, machine, steps and readOnly (it clears none of them until the
+     load resolves) — so a `definition`-only gate publishes a handle labelled B
+     that writes A's machine. Apply in that window edits the old draft, gets
+     overwritten by the incoming load, and reports success; draft -> published
+     also leaves `readOnly: false` registered for a row that cannot be saved.
+     `!loading` covers the same window from the other side (`reload()` keeps
+     the old definition object while it refetches). */
+  const {
+    definition: bridgeDefinition,
+    readOnly: bridgeReadOnly,
+    machine: bridgeMachine,
+    steps: bridgeSteps,
+    loading: bridgeLoading,
+    setMachine,
+    setSteps,
+    setChannelAccess,
+  } = store;
+  useEffect(() => {
+    if (!entityId || bridgeLoading) return;
+    if (!bridgeDefinition || bridgeDefinition.entity_id !== entityId) return;
+    registerEditorBridge({
+      entityId,
+      readOnly: bridgeReadOnly,
+      // The apply semantics (read-only refused rather than silently no-oped,
+      // all-or-nothing, channel access only when the patch set it) live in
+      // `createBridgeApply` so they are testable without a component harness.
+      apply: createBridgeApply({
+        machine: bridgeMachine,
+        steps: bridgeSteps,
+        readOnly: bridgeReadOnly,
+        readOnlyMessage: t('assistant.readOnly'),
+        setMachine,
+        setSteps,
+        setChannelAccess,
+      }),
+    });
+    return () => unregisterEditorBridge(entityId);
+  }, [
+    entityId,
+    bridgeDefinition,
+    bridgeReadOnly,
+    bridgeMachine,
+    bridgeSteps,
+    bridgeLoading,
+    t,
+    // Stable `useCallback`s from the store — destructured (rather than read as
+    // `store.setMachine` inside the effect) so exhaustive-deps can see each
+    // value individually instead of demanding the whole `store` object, which
+    // is a new identity on every render and would re-register on every one.
+    setMachine,
+    setSteps,
+    setChannelAccess,
+  ]);
 
   if (store.loading) {
     return <p className="page-placeholder">{t('common.loading')}</p>;

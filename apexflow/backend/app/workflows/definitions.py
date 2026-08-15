@@ -18,6 +18,8 @@ which is constant across a lineage's draft/published/superseded rows while
 `entity_id` and `version` change per row.
 """
 import json
+import re
+import uuid
 from typing import Any, Callable
 
 from fastapi import HTTPException
@@ -231,6 +233,42 @@ def count_open_instances(tenant_id: str, lineage_definition_id: str,
     return len(list_open_instances(tenant_id, lineage_definition_id, token))
 
 
+def open_instance_counts_by_lineage(tenant_id: str,
+                                    token: str | None = None) -> dict[str, int]:
+    """Open-instance counts for EVERY lineage of this tenant, in ONE read.
+
+    The batched twin of `count_open_instances` above, for callers that need
+    the count of many lineages at once (`api/designer.py::list_definitions`,
+    which renders one row per lineage VERSION). `count_open_instances` scans
+    the tenant's whole `workflow_instance` table and then throws away every
+    row belonging to another lineage, so asking it per lineage re-reads the
+    same table once per lineage — O(lineages) DataCore round-trips for data
+    a single read already contains.
+
+    Same open-ness definition as `list_open_instances` (empty/absent
+    `closed_at`) and the same lineage key expression
+    (`str(row.get("definition_id", ""))`), so a lineage's count here is
+    identical to `count_open_instances`'s for that lineage — the
+    designer list and the retire gate must never disagree about how much
+    work is in flight.
+
+    Grouped in Python rather than with a SQL `GROUP BY definition_id`, for
+    the same reason every other read in this module filters in Python:
+    `definition_id`/`closed_at` are flattened columns a tenant's table only
+    materializes once something has written them, and a predicate (or
+    grouping) naming an unmaterialized column is a DuckDB binder error
+    (400), not an empty result. Lineages with no open instances are simply
+    absent from the returned dict — callers default to 0.
+    """
+    counts: dict[str, int] = {}
+    for row in dc.list_entities(tenant_id, "workflow_instance", "", token):
+        if row.get("closed_at"):
+            continue
+        key = str(row.get("definition_id", ""))
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def save_definition(tenant_id: str, entity_id: str, machine_raw: Any, steps_raw: Any,
                      channel_access: str | None = None, token: str | None = None) -> dict:
     """Write a draft's authored content and return its validation in one call.
@@ -265,6 +303,17 @@ def save_definition(tenant_id: str, entity_id: str, machine_raw: Any, steps_raw:
     try:
         machine = MachineDef.model_validate(machine_raw)
         steps = [StepDef.model_validate(s) for s in (steps_raw or [])]
+        # Sections are parsed HERE — before the write, inside the 422 — and not
+        # left to the `fetch_models` call below, for the same reason
+        # `create_definition` parses them before its own write. `StepDef.config`
+        # is `dict[str, Any]`, so a section missing entity_model/fields/mode
+        # survives `StepDef.model_validate` and is only ever parsed by
+        # `referenced_entity_models`. With that call sitting after `dc_update`
+        # and outside this try, such a request PERSISTED the malformed section
+        # to the row and then raised out of the route as a 500 — the write had
+        # already happened, so "422 if machine/steps do not parse" was true of
+        # the machine only. It has to hold for the whole payload.
+        entity_types = referenced_entity_models(steps)
     except Exception as exc:
         raise HTTPException(422, {"parse_error": str(exc)}) from exc
 
@@ -275,7 +324,7 @@ def save_definition(tenant_id: str, entity_id: str, machine_raw: Any, steps_raw:
         base["channel_access"] = channel_access
     updated = dc.dc_update(tenant_id, "workflow_definition", entity_id, base, token)
 
-    models = fetch_models(tenant_id, referenced_entity_models(steps), token)
+    models = fetch_models(tenant_id, entity_types, token)
     return {
         "row": updated,
         "errors": validate_definition(machine, steps, models),
@@ -404,6 +453,91 @@ def get_draft_definition(tenant_id: str, lineage_definition_id: str,
     rows = [r for r in rows if str(r.get("definition_id", "")) == str(lineage_definition_id)]
     rows = [r for r in rows if r.get("status") == "draft"]
     return rows[0] if rows else None
+
+
+def _new_definition_id(name: str) -> str:
+    """A fresh LINEAGE id from a human-typed workflow name.
+
+    Slug + short random suffix, mirroring the designer's client-side
+    `slugify`/`uniqueSuffix` pair (frontend/src/pages/DefinitionsPage.tsx)
+    that this function replaces. The suffix is what keeps two workflows a
+    person happened to name the same thing from becoming ONE lineage — every
+    lineage read (`get_published_definition`, `get_draft_definition`,
+    `model_impact`) matches on `definition_id`, so a collision would silently
+    merge them. Collisions are otherwise harmless (DataCore assigns the real
+    `entity_id`; this is a lineage label), so a non-cryptographic suffix is
+    enough.
+
+    A name with no alphanumerics at all slugs to the empty string, which
+    would leave a `definition_id` of just `-abc123`; `"workflow"` is the
+    fallback rather than accepting that.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-") or "workflow"
+    return f"{slug}-{uuid.uuid4().hex[:6]}"
+
+
+def create_definition(tenant_id: str, name: str, machine_raw: Any, steps_raw: Any,
+                      channel_access: str = "staff_only",
+                      token: str | None = None) -> dict:
+    """Create a version-1 draft lineage from a parsed definition object.
+
+    The other end of `save_definition`'s contract, and deliberately the same
+    one: `machine`/`steps` arrive as PARSED shapes and are JSON-encoded here,
+    server-side, in exactly one place. The designer previously created drafts
+    through the GENERIC entities proxy (`app/api/entities.py`), which enforces
+    no schema — it hand-`JSON.stringify`d both fields and picked `version`/
+    `status`/`lineage_status` itself, so the invariants that make a lineage
+    coherent lived in a browser. Any client that got one wrong wrote a row
+    every later read chokes on.
+
+    422 (`{"parse_error": ...}`) if `machine`/`steps` don't validate against
+    schema.py, raised BEFORE the write — same shape and same reasoning as
+    `save_definition`'s, and the reason a corrupt row is not creatable through
+    the product either.
+
+    Validation ERRORS do not refuse the write, for the same reason they don't
+    in `save_definition`: a draft is allowed to be incomplete. They come back
+    alongside the row, and `publish_definition` stays the gate that refuses.
+    """
+    try:
+        machine = MachineDef.model_validate(machine_raw)
+        steps = [StepDef.model_validate(s) for s in (steps_raw or [])]
+        # Sections are parsed HERE — before the write, inside the 422 — and
+        # not left to the `fetch_models` call below. `StepDef.config` is
+        # `dict[str, Any]`, so a section missing entity_model/fields/mode
+        # survives `StepDef.model_validate` and is only ever parsed by
+        # `referenced_entity_models`. With that call sitting after `dc_create`
+        # and outside this try, such a request raised out of the route as a
+        # 500 AND left behind a draft row nothing cleans up — the write had
+        # already happened. "422 raised BEFORE the write" has to hold for the
+        # whole payload, not just `machine`.
+        entity_types = referenced_entity_models(steps)
+    except Exception as exc:
+        raise HTTPException(422, {"parse_error": str(exc)}) from exc
+
+    created = dc.dc_create(tenant_id, "workflow_definition", {
+        "definition_id": _new_definition_id(name),
+        "name": name,
+        "version": 1,
+        "status": "draft",
+        "lineage_status": "active",
+        "channel_access": channel_access,
+        "machine": json.dumps(machine.model_dump(by_alias=True)),
+        "steps": json.dumps([s.model_dump(by_alias=True) for s in steps]),
+    }, token)
+    # Re-fetched for the same reason `new_draft_definition` re-fetches:
+    # `dc_create` echoes DataCore's write-response envelope
+    # (`{entity_id, entity_type, base_data, _version}`), not the flattened row
+    # shape every read in this module returns. Callers must not have to care
+    # which function produced the row they're holding.
+    row = require_definition_row(tenant_id, created["entity_id"], token)
+
+    models = fetch_models(tenant_id, entity_types, token)
+    return {
+        "row": row,
+        "errors": validate_definition(machine, steps, models),
+        "health": definition_health(machine, steps, models),
+    }
 
 
 def new_draft_definition(tenant_id: str, entity_id: str,

@@ -300,6 +300,11 @@ class FakeDataCore:
     def get_model_definition(self, tenant_id, entity_type, token=None):
         return self.models.get((tenant_id, entity_type))
 
+    def list_model_types(self, tenant_id, token=None):
+        """Stands in for the real `models`-table projection — tenant-scoped
+        and sorted, matching `datacore.list_model_types`'s contract."""
+        return sorted(et for (t, et) in self.models if t == tenant_id)
+
     # ── test conveniences ─────────────────────────────────────────────────
     def find(self, entity_type, **fields):
         return [r for r in self.rows if r["entity_type"] == entity_type
@@ -310,6 +315,6 @@ def install_fake_datacore(monkeypatch, fdc: FakeDataCore):
     from app.workflows import datacore as dc
 
     for name in ("dc_create", "dc_update", "dc_archive", "next_id", "list_entities",
-                 "get_entity", "get_model_definition"):
+                 "get_entity", "get_model_definition", "list_model_types"):
         monkeypatch.setattr(dc, name, getattr(fdc, name))
     monkeypatch.setattr(dc, "dc_query", fdc._no_raw_query)

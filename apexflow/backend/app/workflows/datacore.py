@@ -245,6 +245,33 @@ def get_entity(tenant_id: str, entity_type: str, entity_id: str,
     return max(rows, key=_row_version)
 
 
+def list_model_types(tenant_id: str, token: str | None = None) -> list[str]:
+    """Every entity type this tenant has a model definition for.
+
+    The enumerating twin of `get_model_definition` below — same `models`
+    table, same `_status = 'active'` filter, one column instead of the whole
+    row. It exists because a caller authoring against the models (the chat
+    assistant, which builds sections from nothing) needs the MENU, and
+    `get_model_definition` can only answer about a type you already know to
+    ask for; the designer's picker sidesteps that with a hardcoded standard
+    set (`api/designer.py::STANDARD_BUNDLE_MODELS`) plus whatever the open
+    definition already references, which by construction can never surface a
+    tenant's own model.
+
+    De-duplicated in Python rather than with SQL `DISTINCT`: a bare
+    projection is the narrowest thing to ask of the query engine, and the
+    models table carries few rows per tenant.
+
+    Raises whatever `dc_query` raises (an outage is not an empty tenant) —
+    callers that must not fail over it catch, exactly as `get_workflow`
+    does.
+    """
+    _validate_id(tenant_id, "tenant_id")
+    rows = dc_query(tenant_id, "SELECT entity_type FROM data WHERE _status = 'active'",
+                    token, table="models")
+    return sorted({r.get("entity_type") for r in rows if r.get("entity_type")})
+
+
 def get_model_definition(tenant_id: str, entity_type: str,
                          token: str | None = None) -> dict | None:
     """One entity type's model definition from the tenant's `models` table.

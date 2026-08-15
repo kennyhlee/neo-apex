@@ -441,6 +441,62 @@ export const translations: Record<Locale, Record<string, string>> = {
     'templates.missingModelsDialog':
       'This template collects data into {models}, which this tenant does not have yet. You can still create the workflow and author it now, but it cannot be published until those models exist. An administrator can add them in LaunchPad under Tenant Settings → Sync default entities.',
 
+    // Assistant (chat drawer). The proposal-card keys (createDraft…readOnly)
+    // are used by the cards Tasks 10/11 add.
+    'assistant.title': 'Assistant',
+    'assistant.empty': 'Ask me to build or change a workflow.',
+    'assistant.placeholder': 'Ask about workflows…',
+    'assistant.inputLabel': 'Message',
+    'assistant.send': 'Send',
+    'assistant.stop': 'Stop',
+    'assistant.clear': 'Clear',
+    'assistant.quickQuestions': 'Quick questions',
+    'assistant.edit': 'Edit',
+    'assistant.done': 'Done',
+    'assistant.addQuick': '+ Add',
+    'assistant.removeQuick': 'Remove',
+    'assistant.newQuestion': 'New question',
+    // `hide` labels the panel header's slide-out control, rendered as
+    // "Hide ›" — the chevron is a separate aria-hidden span, so it stays out
+    // of the accessible name and out of translation.
+    // There is no `assistant.show`: the edge handle is labelled
+    // `assistant.title` and conveys state through `aria-expanded`, which is
+    // the ARIA pattern for a disclosure — a label that swapped Show/Hide would
+    // fight the visible text instead.
+    'assistant.hide': 'Hide',
+    'assistant.limitReached': 'Conversation limit reached. Start a new chat.',
+    'assistant.createDraft': 'Create draft',
+    'assistant.adjust': 'Adjust…',
+    'assistant.apply': 'Apply',
+    'assistant.dismiss': 'Dismiss',
+    'assistant.applied': 'Applied ✓',
+    'assistant.draftCreated': 'Draft created ✓',
+    'assistant.draftCreatedMsg':
+      'Draft "{name}" created — you\'re in the editor now; I can keep refining it here.',
+    'assistant.createFailed': 'Create failed',
+    'assistant.applyFailed': 'Could not apply',
+    'assistant.readOnly': 'This version is read-only — open a new draft first',
+    // Distinct from `readOnly` on purpose: the row is fine, the card is simply
+    // not looking at the workflow it was written for, and the read-only
+    // wording would send the admin to create a draft they do not need.
+    'assistant.otherDraft':
+      'These changes were proposed for a different workflow — open that workflow to apply them',
+    'assistant.patchTitle': 'Proposed changes',
+    'assistant.patchOpCount': '{n} edit(s) to this workflow',
+    'assistant.patchNoOps': 'No changes to apply',
+    // Named explicitly on the card because a channel change is invisible in
+    // the stage editor and the model's own summary may not mention it.
+    'assistant.patchChannelAccess': 'Sets channel access: {value}',
+    // Claims ONLY what Apply actually did: it edits the in-memory draft and
+    // nothing else. There is no autosave (see draftStore's `markDirty`), so
+    // the PUT that validates and persists happens when the operator presses
+    // Save — until then the rail still describes the last SAVED row. This
+    // string is fed back to the model as history, so an overclaim here does
+    // not just mislead the operator, it teaches the assistant that its edits
+    // already landed.
+    'assistant.patchAppliedMsg':
+      'Applied to the editor — save the draft to validate and persist it. Anything else?',
+
     // Common
     'common.loading': 'Loading...',
     'common.save': 'Save',
@@ -874,6 +930,39 @@ export const translations: Record<Locale, Record<string, string>> = {
     'templates.missingModelsCard': '需要 {models}——此租户尚未配置。',
     'templates.missingModelsDialog':
       '此模板会将数据写入 {models}，但此租户尚未配置。您仍可以创建并编辑该工作流，但在配置完成前无法发布。管理员可在 LaunchPad 的「租户设置 → 同步默认实体」中添加。',
+
+    // Assistant (chat drawer)
+    'assistant.title': '助手',
+    'assistant.empty': '问我如何创建或修改工作流。',
+    'assistant.placeholder': '询问工作流…',
+    'assistant.inputLabel': '消息',
+    'assistant.send': '发送',
+    'assistant.stop': '停止',
+    'assistant.clear': '清除',
+    'assistant.quickQuestions': '快捷问题',
+    'assistant.edit': '编辑',
+    'assistant.done': '完成',
+    'assistant.addQuick': '添加',
+    'assistant.removeQuick': '删除',
+    'assistant.newQuestion': '新问题',
+    'assistant.hide': '隐藏',
+    'assistant.limitReached': '对话已达上限，请开始新对话。',
+    'assistant.createDraft': '创建草稿',
+    'assistant.adjust': '调整',
+    'assistant.apply': '应用',
+    'assistant.dismiss': '忽略',
+    'assistant.applied': '已应用 ✓',
+    'assistant.draftCreated': '草稿已创建 ✓',
+    'assistant.draftCreatedMsg': '草稿“{name}”已创建 — 已打开编辑器，可以继续在这里完善。',
+    'assistant.createFailed': '创建失败',
+    'assistant.applyFailed': '无法应用',
+    'assistant.readOnly': '此版本为只读 — 请先创建新草稿',
+    'assistant.otherDraft': '这些修改是针对另一个工作流提出的 — 请打开该工作流后再应用',
+    'assistant.patchTitle': '建议的修改',
+    'assistant.patchOpCount': '对此工作流的 {n} 处修改',
+    'assistant.patchNoOps': '没有可应用的修改',
+    'assistant.patchChannelAccess': '设置渠道权限：{value}',
+    'assistant.patchAppliedMsg': '已应用到编辑器 — 保存草稿后才会校验并生效。还需要修改吗？',
 
     // Common
     'common.loading': '加载中...',
