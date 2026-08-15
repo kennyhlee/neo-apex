@@ -126,6 +126,23 @@ flyctl secrets set --app admindash-api \
   ADMINDASH_PAPERMITE_BACKEND_URL="http://papermite-api.flycast:5710"
 ```
 
+**apexflow-api**
+
+```bash
+flyctl secrets set --app apexflow-api \
+  APEXFLOW_ENVIRONMENT=production \
+  APEXFLOW_CORS_ALLOWED_ORIGINS="https://apexflow.floatify.com" \
+  APEXFLOW_DATACORE_URL="http://datacore.flycast:5800" \
+  APEXFLOW_LINK_SECRET="$(openssl rand -base64 36)" \
+  APEXFLOW_INTERNAL_KEY="$(openssl rand -base64 36)" \
+  APEXFLOW_FAMILYHUB_BASE_URL="https://familyhub.floatify.com" \
+  ANTHROPIC_API_KEY="<your-anthropic-key>"
+```
+
+> **`ANTHROPIC_API_KEY` is required by the chat workflow builder** (`POST /api/workflows/{tenant_id}/chat`). Note it is **unprefixed** — `pydantic-ai` reads it from the environment directly, so `APEXFLOW_ANTHROPIC_API_KEY` is silently ignored. Without it the app still boots and every other route works; only the chat stream degrades, emitting an SSE `error` + `done` pair instead of an answer. Everything else above is read with the `APEXFLOW_` prefix (`app/config.py`'s `env_prefix`), so an unprefixed `ENVIRONMENT` or `CORS_ALLOWED_ORIGINS` is ignored rather than a fallback.
+>
+> `APEXFLOW_INTERNAL_KEY` must equal familyhub-api's `FAMILYHUB_APEXFLOW_INTERNAL_KEY` exactly — nothing cross-checks the two match except this runbook. Never set `TRUST_ALL_IPS=1` here; production boot refuses it.
+
 ## Step 6: Do a first manual deploy of each Fly.io app
 
 This verifies the `fly.toml` files are valid and the Dockerfiles build on Fly's remote builders.

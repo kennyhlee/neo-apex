@@ -1,7 +1,7 @@
 # ApexFlow chat workflow builder — design
 
 **Date:** 2026-08-14
-**Status:** Approved direction (Option C — suite assistant), spec pending user review
+**Status:** Implemented (Option C — suite assistant); see `docs/superpowers/plans/2026-08-14-apexflow-chat-workflow-builder.md`
 **Predecessors:** `2026-08-05-apexflow-workflow-platform-design.md` (§9 AI authoring, Plan 4), `2026-08-10-stage-centric-workflow-editor-design.md`, AdminDash chat assistant (`admindash/backend/app/chat/`, `admindash/frontend/src/components/ChatPanel.tsx`)
 **Mockups:** claude.ai/code/artifact/a881ac64-c207-409a-9d14-a70c738783f4 (Option C, refined per discussion)
 

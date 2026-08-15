@@ -24,6 +24,10 @@
 #     the magic-link facade points parents at; familyhub-frontend is not
 #     deployed this wave — set the placeholder now, correct it once it is)
 #   - APEXFLOW_RESEND_API_KEY=<optional; outbound workflow email>
+#   - ANTHROPIC_API_KEY=<required by the chat workflow builder>. NOTE: this one
+#     is UNPREFIXED — pydantic-ai reads it straight from the environment, so
+#     APEXFLOW_ANTHROPIC_API_KEY is silently ignored. Missing it does not stop
+#     boot; only /chat degrades, streaming SSE error+done instead of an answer.
 # NEVER set TRUST_ALL_IPS=1 here — production boot refuses it
 # (config.py's validate_production_secrets), and it would also disable the
 # Cloudflare IP allowlist above and collapse rate-limit keying.
