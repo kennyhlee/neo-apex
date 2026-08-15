@@ -6,27 +6,40 @@
 // person is on `.body`, and dropping it is what makes a 422 read as a bare
 // "Create failed: HTTP 422".
 //
-// One behaviour is deliberately WIDER than the original: a `detail` that is not
-// a string is flattened rather than discarded. FastAPI puts a dict there for
-// the create/save routes (`{"parse_error": "..."}` — api/designer.py:105) and a
-// list there for request-validation failures, and those are precisely the
-// bodies whose text the operator needs. A body with NO `detail` still yields
-// null, so the publish 409 (`{errors: [...]}`, rendered in its own dialog) and
-// the archive 409 (`{open_instances: N}`, rendered as its own sentence) keep
-// falling through to their callers' fallback copy exactly as before.
+// The hard part is that this API's error bodies are of two KINDS, and only one
+// of them is prose. Every shape below was read off the live routes:
+//
+//   prose, show it:
+//     422 {"detail": {"parse_error": "2 validation errors for MachineDef\n…"}}
+//     422 {"detail": [{"type": "missing", "loc": [...], "msg": "Field required", …}]}
+//     404 {"detail": "workflow_definition not found"}
+//
+//   machine codes, NEVER show them:
+//     409 {"detail": {"reason": "not_draft",      "status": "published"}}
+//     409 {"detail": {"reason": "not_deprecated", "lineage_status": "active"}}
+//     409 {"detail": {"reason": "draft_exists",   "entity_id": "…"}}
+//     409 {"detail": {"errors": ["transition 'submit' effect …"]}}
+//
+// So the object branch reads only the keys known to carry a sentence, and
+// returns null for anything else. Joining a dict's values instead would put
+// "not_draft; published" in front of a user, in both locales, where the caller
+// had translated copy ready — which is exactly the regression this shape once
+// shipped. `errors` is excluded deliberately even though its strings are
+// prose: it is the publish 409, whose call site renders the list itself.
+//
+// Returning null is not a failure mode — it is the contract. Callers pair it
+// with their own translated fallback, so "no sentence from the server" lands on
+// real copy rather than on a leaked wire value.
 import { ApiError } from '../api/designer.ts';
 
 /**
- * Depth-first join of every string in a JSON value; null when it holds none.
- *
- * The one special case is a FastAPI request-validation entry — `{type, loc,
- * msg, input}` — where a blind join reads "dict_type; body; machine; Input
- * should be a valid dictionary; {not json" and only the `msg` is the sentence.
- * Both shapes below were read off the live route, not assumed:
- *   422 `{"detail": [{"type": "missing", "loc": ["body","name"],
- *                     "msg": "Field required", "input": {...}}]}`
- *   422 `{"detail": {"parse_error": "2 validation errors for MachineDef\n…"}}`
+ * Body keys whose value is a human sentence rather than a code.
+ * `parse_error`: the create/save 422 (app/workflows/definitions.py:282,480).
+ * `msg`: one FastAPI request-validation entry.
  */
+const PROSE_KEYS = ['parse_error', 'msg'] as const;
+
+/** The sentence inside a JSON value, or null when it holds only codes. */
 function flatten(value: unknown): string | null {
   if (typeof value === 'string') return value.trim() || null;
   if (Array.isArray(value)) {
@@ -34,19 +47,21 @@ function flatten(value: unknown): string | null {
     return parts.length ? parts.join('; ') : null;
   }
   if (value && typeof value === 'object') {
-    const msg = (value as { msg?: unknown }).msg;
-    if (typeof msg === 'string' && msg.trim()) return msg.trim();
-    const parts = Object.values(value)
-      .map(flatten)
-      .filter((p): p is string => p !== null);
-    return parts.length ? parts.join('; ') : null;
+    const record = value as Record<string, unknown>;
+    for (const key of PROSE_KEYS) {
+      if (key in record) {
+        const text = flatten(record[key]);
+        if (text !== null) return text;
+      }
+    }
+    return null;
   }
   return null;
 }
 
 /**
  * The server's own words for this failure, or null when it did not send any
- * (a network error, a non-JSON body, a body of pure numbers). Callers pair it
+ * (a network error, a non-JSON body, a body of machine codes). Callers pair it
  * with their own translated fallback: `errorDetail(err) ?? t('someKey')`.
  */
 export function errorDetail(err: unknown): string | null {
