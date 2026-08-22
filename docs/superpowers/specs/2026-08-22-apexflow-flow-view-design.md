@@ -480,6 +480,32 @@ makes, and for the same reason: it would push the model toward offering to
 CREATE a workflow that already exists. Repeat calls in one turn queue one
 card.
 
+### Getting to it from a standing start
+
+Two default quick-action chips ask for the card: `Show me the flow of this
+workflow` and `Draw the flow of one of my workflows` — the two paths
+`show_flow` supports, since its `entity_id` defaults to the open draft.
+
+Their **wording is load-bearing**. `SYSTEM_PROMPT` routes "see, show, draw,
+visualise or explain the shape of" to `show_flow`; a chip phrased around any
+other verb returns prose instead of a card. `quickActions.test.ts` pins that
+coupling, with the verb list copied from the prompt and a comment saying
+where it came from.
+
+Two, not four. An earlier pass added "Who does what…" and "Where can this
+end up?" as well, which read fine in isolation and were wrong in place: chips
+sit between the transcript and the input, so each one costs transcript
+height, and the card already answers both questions. The chip area is now
+also capped (`max-height`, then it scrolls) — at 380px every chip is its own
+row, and a full set of ten squeezed the transcript to nothing. That was
+reachable through the chip editor long before these defaults grew.
+
+**Known gap, not fixed here:** the default chips are English string
+literals while the surrounding chrome is bilingual, so a zh-CN admin sees
+English chips. Pre-existing. Fixing it means the defaults become i18n keys
+and `loadQuickActions` has to distinguish "nothing stored" from "stored", so
+it is a change to the persistence contract rather than a string edit.
+
 ## A CSS bug class, and the guard for it
 
 `FlowCard.css` first shipped referencing `--border-default`, which does not
