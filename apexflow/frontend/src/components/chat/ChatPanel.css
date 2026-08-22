@@ -234,6 +234,37 @@
 }
 .chat-msg__text .markdown strong { font-weight: var(--weight-semibold); }
 
+/* Fenced blocks. The drawer is ~380px and monospace art needs whatever width
+   it needs, so this scrolls sideways rather than reflowing — reflowed
+   monospace is precisely what "unreadable" looked like.
+   The bubble is already bounded (`.chat-msg__text` is capped at max-width:
+   90% of a full-width row), so a wide <pre> fills that cap and scrolls inside
+   it rather than pushing the panel wider. */
+.chat-msg__text .markdown .md-pre {
+  margin: var(--space-2) 0;
+  padding: var(--space-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm, 6px);
+  overflow-x: auto;
+  max-width: 100%;
+}
+.chat-msg__text .markdown .md-pre code {
+  /* The inline-code rule above would otherwise paint a second background and
+     re-pad every fenced block. */
+  display: block;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+  white-space: pre;
+  /* Box-drawing characters only line up when every cell is the same width;
+     ligatures and contextual alternates break that. */
+  font-variant-ligatures: none;
+  tab-size: 2;
+}
+
 /* Tabular data in assistant messages — narrow-friendly (no HTML grid). */
 /* 2-column tables -> key/value list */
 .chat-msg__text .markdown .md-kv { list-style: none; margin: var(--space-2) 0; padding: 0; }

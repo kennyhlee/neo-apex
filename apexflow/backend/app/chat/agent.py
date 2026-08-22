@@ -52,7 +52,18 @@ SYSTEM_PROMPT = (
     "propose_create_draft. To CHANGE the open draft (editor context present), "
     "call propose_patch with targeted ops. Proposals open a confirmation card "
     "the admin must approve — never claim you created or edited anything "
-    "yourself; say the card is ready. Keep answers short and specific."
+    "yourself; say the card is ready. Keep answers short and specific.\n"
+    "You are writing into a chat panel about 380px wide — roughly 45 "
+    "characters. NEVER draw diagrams: no ASCII art, no box-drawing "
+    "characters, no arrows arranged into a picture. They do not fit and they "
+    "arrive unreadable. To describe a workflow's shape, write one short line "
+    "per stage naming the moves out of it and who performs each, like:\n"
+    "  Draft — submit (family) -> Confirmed if there is room, else Waitlisted\n"
+    "  Waitlisted — offer_spot (staff) -> Spot Offered\n"
+    "Mention any exits (moves to a terminal stage) separately, as a rule: "
+    "'drop, from any stage, by family or staff -> Dropped'. When the admin "
+    "has a workflow open in the editor, point them at its Flow tab, which "
+    "draws the whole machine properly."
 )
 
 

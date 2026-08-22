@@ -56,11 +56,21 @@ In scope:
 - Stage nodes as buttons that switch to the Stages tab and reveal that stage.
 - A DOM anchor on `StageCard` for that reveal to target.
 
+Also in scope — **added after the first pass**. The Flow tab does not touch
+the chat panel, so shipping it alone left the reported symptom exactly as it
+was. Deferring the renderer fix was the wrong call:
+
+- `Markdown.tsx` gains fenced-code support, via a pure `splitFences`
+  tokenizer that lifts fences out BEFORE the blank-line split.
+- `SYSTEM_PROMPT` tells the model not to draw diagrams at all, and what to
+  write instead.
+- Both are mirrored into admindash, which ships a byte-identical
+  `Markdown.tsx` and had the same bug.
+
 Out of scope (deliberately, and named so they are not silently assumed):
 
 - The chat flow card and the `editorBridge` hop that opens the tab from chat.
 - The `create_draft` inline flow preview.
-- The `Markdown.tsx` fence fix and the `SYSTEM_PROMPT` change.
 - Editing from the diagram. The Flow view is read-only; the Stages tab is
   where authoring happens, which is exactly why nodes navigate there.
 
@@ -377,6 +387,46 @@ mutations were run; all are killed. Two findings worth keeping:
 - The rendered output was also inspected in a browser against both templates.
   Two real defects came out of that which no unit test would have caught —
   the label placement corrections above.
+
+## Fixing the chat panel itself
+
+The Flow tab gives the assistant somewhere better to point, but it does not
+make a message containing a fenced diagram render correctly, and the model
+will keep emitting them until told not to. Both halves are needed.
+
+**Renderer.** `splitFences` (`components/chat/markdownFences.ts`, pure)
+tokenizes a message into fenced and non-fenced segments, and `Markdown`
+renders fenced ones as a horizontally scrolling `<pre>`. Order is the whole
+fix: fences come out first, and only the non-fenced text is split on blank
+lines.
+
+Three details that are not obvious:
+
+- **An unterminated fence is code, not prose.** Replies stream token by
+  token, so for most of a reply's life the closing fence has not arrived. A
+  prose fallback would render the drawing mangled on every frame and then
+  snap into place at the end.
+- **A fence closes only on the same character, at least as long.** So a
+  ``` inside a `~~~` block is content, not a terminator.
+- **`font-variant-ligatures: none`** on the `<pre>`. Box-drawing characters
+  line up only when every cell is one width; ligatures and contextual
+  alternates break that.
+
+The `<pre>` scrolls sideways rather than reflowing, because reflowed
+monospace is exactly what "unreadable" looked like. The bubble is already
+bounded at 90% of a full-width row, so it scrolls inside rather than pushing
+the panel wider.
+
+**Prompt.** `SYSTEM_PROMPT` now states the panel's real width (~45
+characters), forbids ASCII art and box drawing outright, and gives the
+replacement format: one short line per stage naming its moves and who
+performs each, with exits stated separately as a rule. It also points the
+admin at the Flow tab when a workflow is open.
+
+**admindash carries a byte-identical `Markdown.tsx`.** The fix, the CSS and
+the tokenizer tests are mirrored there; leaving one copy broken would also
+leave the two divergent. Its `vitest.config.ts` had the same `.ts`-only
+include and is fixed too.
 
 ## Risks
 
