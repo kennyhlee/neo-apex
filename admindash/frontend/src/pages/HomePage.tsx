@@ -13,6 +13,7 @@ import type { Lead } from '../types/models.ts';
 import CalendarChip from '../components/CalendarChip.tsx';
 import ProgramDetailModal from '../components/ProgramDetailModal.tsx';
 import { ChatPanel } from '../components/ChatPanel';
+import { AssistantResizeGrip } from '../components/AssistantResizeGrip.tsx';
 import { timeToMinutes } from '../components/calendarTime.ts';
 import {
   getDateFields,
@@ -350,6 +351,7 @@ export default function HomePage({ tenant }: HomePageProps) {
         aria-hidden={!chatOpen}
         onKeyDown={onDrawerKeyDown}
       >
+        <AssistantResizeGrip />
         <ChatPanel onClose={closeChat} />
       </aside>
 

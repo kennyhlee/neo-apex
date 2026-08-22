@@ -478,6 +478,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     // the ARIA pattern for a disclosure — a label that swapped Show/Hide would
     // fight the visible text instead.
     'assistant.hide': 'Hide',
+    'assistant.resize': 'Drag to resize the assistant panel',
     'assistant.limitReached': 'Conversation limit reached. Start a new chat.',
     'assistant.createDraft': 'Create draft',
     'assistant.adjust': 'Adjust…',
@@ -982,6 +983,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.removeQuick': '删除',
     'assistant.newQuestion': '新问题',
     'assistant.hide': '隐藏',
+    'assistant.resize': '拖动以调整助手面板宽度',
     'assistant.limitReached': '对话已达上限，请开始新对话。',
     'assistant.createDraft': '创建草稿',
     'assistant.adjust': '调整',
