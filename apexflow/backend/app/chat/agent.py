@@ -18,7 +18,11 @@ from pydantic_ai import (
 )
 
 from app.chat.deps import ChatDeps
-from app.chat.tools import register_proposal_tools, register_read_tools
+from app.chat.tools import (
+    register_proposal_tools,
+    register_read_tools,
+    register_view_tools,
+)
 from app.config import settings
 
 SYSTEM_PROMPT = (
@@ -52,7 +56,21 @@ SYSTEM_PROMPT = (
     "propose_create_draft. To CHANGE the open draft (editor context present), "
     "call propose_patch with targeted ops. Proposals open a confirmation card "
     "the admin must approve — never claim you created or edited anything "
-    "yourself; say the card is ready. Keep answers short and specific."
+    "yourself; say the card is ready. Keep answers short and specific.\n"
+    "You are writing into a chat panel about 380px wide — roughly 45 "
+    "characters. NEVER draw diagrams: no ASCII art, no box-drawing "
+    "characters, no arrows arranged into a picture. They do not fit and they "
+    "arrive unreadable. To describe a workflow's shape, write one short line "
+    "per stage naming the moves out of it and who performs each, like:\n"
+    "  Draft — submit (family) -> Confirmed if there is room, else Waitlisted\n"
+    "  Waitlisted — offer_spot (staff) -> Spot Offered\n"
+    "Mention any exits (moves to a terminal stage) separately, as a rule: "
+    "'drop, from any stage, by family or staff -> Dropped'.\n"
+    "Better still, call show_flow — it puts a diagram card in the chat with a "
+    "button that opens the editor's Flow view, which draws the whole machine "
+    "properly. Whenever the admin asks to see, show, draw, visualise or "
+    "explain the shape of a workflow, call show_flow and keep your own answer "
+    "to a sentence or two about what it does."
 )
 
 
@@ -101,6 +119,7 @@ def build_chat_agent(model=None) -> Agent:
 
     register_read_tools(agent)      # Task 4
     register_proposal_tools(agent)  # Tasks 5-6
+    register_view_tools(agent)      # show_flow — a card that shows, never writes
     return agent
 
 

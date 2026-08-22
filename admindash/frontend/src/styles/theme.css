@@ -158,11 +158,27 @@
   --dur-base:  180ms;
 
   /* --- Layering: one ladder, used by everything ---------------------------- */
-  --z-sticky:   100;
-  --z-dropdown: 200;
-  --z-overlay:  400;
-  --z-modal:    500;
-  --z-drawer:   500;
+  /* Ordered by what must cover what. Two of these moved, for a reason worth
+     recording:
+
+     --z-drawer WAS 500, the same value as --z-modal, so a dialog opened over
+     the assistant tied with it and the winner was decided by DOM order. It is
+     an overlay over PAGE CONTENT, so it belongs above content menus and below
+     dialogs.
+
+     --z-nav is new. The nav is `position: sticky` WITH a z-index, which makes
+     it a stacking context — so its account menu could never paint above the
+     drawer no matter what --z-dropdown said, because the menu's z-index is
+     resolved INSIDE the nav's context and capped by it. Raising --z-dropdown
+     would have done nothing at all. The nav is persistent chrome and outranks
+     the drawer (and the drawer's edge handle, which sits at --z-drawer + 1);
+     a dialog still outranks the nav. */
+  --z-sticky:   100;  /* sticky headers inside the page */
+  --z-dropdown: 200;  /* menus belonging to page content */
+  --z-drawer:   300;  /* assistant drawer; its edge handle is +1 */
+  --z-nav:      400;  /* app chrome and its menus, above the drawer */
+  --z-overlay:  480;  /* scrim under a dialog */
+  --z-modal:    500;  /* dialogs, above the nav */
   --z-popover:  600;
   --z-toast:    900;
   --overlay-bg: rgba(26, 32, 44, 0.42);

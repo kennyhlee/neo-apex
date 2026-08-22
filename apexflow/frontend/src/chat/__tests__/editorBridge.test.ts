@@ -25,6 +25,7 @@ const bridge = (entityId: string, overrides: Partial<EditorBridge> = {}): Editor
   entityId,
   readOnly: false,
   apply: () => null,
+  read: () => ({ machine: { states: [], transitions: [] }, steps: [] }),
   ...overrides,
 });
 

@@ -1,0 +1,120 @@
+/* The assistant's flow card. Sized for the 380px drawer: one column, no
+   horizontal scroll, nothing drawn with characters. */
+
+.flow-card {
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  overflow: hidden;
+  margin-top: var(--space-2);
+}
+
+.flow-card__head {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.flow-card__name {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.flow-card__meta {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary, var(--text-secondary));
+}
+
+.flow-card__body { padding: var(--space-2) var(--space-3); }
+
+.flow-card__muted {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.flow-card__chain { list-style: none; margin: 0; padding: 0; }
+
+/* Stage chip. The left stripe carries the role, matching the Flow view's
+   node stripe so the two read as the same vocabulary. */
+.flow-card__stage {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  border: 1px solid var(--border-primary);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-primary);
+  padding: var(--space-1) var(--space-2);
+}
+.flow-card__stage--initial { border-left-color: var(--info); }
+.flow-card__stage--active  { border-left-color: var(--neutral); }
+.flow-card__stage--finish  { border-left-color: var(--success); }
+
+.flow-card__stage-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.flow-card__stage-kind {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary, var(--text-secondary));
+  white-space: nowrap;
+}
+
+/* The move between two stages, on the connector. The border-left is the
+   connector — it is why this sits in the gap rather than beside it. */
+.flow-card__move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin-left: var(--space-3);
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  border-left: 1px solid var(--border-primary);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.flow-card__who {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+}
+.flow-card__who--family    { background: var(--accent-tint); color: var(--accent-ink, var(--accent)); }
+.flow-card__who--staff,
+.flow-card__who--both      { background: var(--neutral-tint); color: var(--neutral); }
+.flow-card__who--automatic { background: var(--info-tint); color: var(--info); }
+
+.flow-card__guard { color: var(--attn); }
+
+.flow-card__aside,
+.flow-card__exit {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.flow-card__exit {
+  border-left: 2px dashed var(--away, var(--line-strong));
+  padding-left: var(--space-2);
+}
+
+.flow-card__foot {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-secondary, transparent);
+}

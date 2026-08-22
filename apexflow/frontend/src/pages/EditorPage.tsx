@@ -2,13 +2,16 @@
 // the ordered step list (`StepEditor`), a tab strip for Task 8's machine
 // editor and Task 9's live preview pane, plus a right rail of validation
 // errors. Route: `/definitions/:entityId`.
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useToast } from '../hooks/useToast.ts';
 import { useDraftStore } from '../editor/draftStore.ts';
 import StageEditor from '../editor/StageEditor.tsx';
+import FlowView from '../editor/flow/FlowView.tsx';
+import { revealStage } from '../editor/flow/revealStage.ts';
+import { readStageModel } from '../editor/stage/read.ts';
 import PreviewPane from '../editor/PreviewPane.tsx';
 import PublishDialog from '../editor/PublishDialog.tsx';
 import StatusBadge from '../components/StatusBadge.tsx';
@@ -23,7 +26,26 @@ import {
 import type { ChannelAccess } from '../types/designer.ts';
 import './EditorPage.css';
 
-type EditorTab = 'stages' | 'preview';
+type EditorTab = 'stages' | 'flow' | 'preview';
+
+const EDITOR_TABS: EditorTab[] = ['stages', 'flow', 'preview'];
+const DEFAULT_TAB: EditorTab = 'stages';
+
+/** The open tab lives in `?view=`, not in component state.
+ *
+ * That is what lets the assistant's flow card — rendered in a drawer mounted
+ * OUTSIDE the router — open the Flow tab: it just navigates. Deriving the tab
+ * from the URL rather than syncing state to it also means there is no effect
+ * to write, no param to strip afterwards, and no window in which the two
+ * disagree. Reloading or sharing the link keeps the tab, which is a plain
+ * improvement over the state version.
+ *
+ * An unknown or absent value is the default tab, so a hand-edited URL cannot
+ * render a blank pane.
+ */
+function tabFromParam(value: string | null): EditorTab {
+  return EDITOR_TABS.includes(value as EditorTab) ? (value as EditorTab) : DEFAULT_TAB;
+}
 
 export default function EditorPage() {
   const { t } = useTranslation();
@@ -31,9 +53,35 @@ export default function EditorPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { entityId } = useParams<{ entityId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tenantId = user?.tenant_id ?? '';
   const store = useDraftStore(tenantId, entityId);
-  const [tab, setTab] = useState<EditorTab>('stages');
+  const tab = tabFromParam(searchParams.get('view'));
+  // `replace` so flipping between tabs does not fill the back button with
+  // steps inside one page.
+  const setTab = useCallback(
+    (next: EditorTab) => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next === DEFAULT_TAB) params.delete('view');
+          else params.set('view', next);
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  // A stage the reader picked in the Flow tab. It cannot be revealed at click
+  // time: the Stages tab is unmounted at that moment, so the card does not
+  // exist yet. Parked here until the tab switch renders it.
+  //
+  // A ref, not state: this is a one-shot instruction to the DOM, and nothing
+  // renders differently because of it. Holding it in state would mean
+  // clearing it from inside an effect, which is the cascading-render pattern
+  // `react-hooks/set-state-in-effect` exists to stop.
+  const pendingStageRef = useRef<string | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
   const [showDiscard, setShowDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -57,6 +105,21 @@ export default function EditorPage() {
       setPublishBusy(false);
     }
   }
+
+  /* Second half of the Flow -> Stages jump. Keyed on `tab` because the click
+     that parks a stage id ALSO switches the tab, so this runs exactly once
+     per jump, after the Stages tab has mounted and the card exists.
+
+     The request is cleared whether or not the card was found: a stage that
+     is missing at this point has been deleted, and retrying on some later
+     render would scroll the page out from under whatever the author had
+     started doing instead. */
+  useEffect(() => {
+    const stageId = pendingStageRef.current;
+    if (!stageId || tab !== 'stages') return;
+    pendingStageRef.current = null;
+    revealStage(stageId);
+  }, [tab]);
 
   /* Unsaved edits now live only in this browser, so closing the tab is a real
      way to lose them. The localStorage mirror means they are recoverable, but
@@ -108,6 +171,10 @@ export default function EditorPage() {
       // The apply semantics (read-only refused rather than silently no-oped,
       // all-or-nothing, channel access only when the patch set it) live in
       // `createBridgeApply` so they are testable without a component harness.
+      // Closes over this effect's machine/steps, and the effect re-runs on
+      // every change to either — so the flow card always draws the draft as
+      // it stands, unsaved edits included.
+      read: () => ({ machine: bridgeMachine, steps: bridgeSteps }),
       apply: createBridgeApply({
         machine: bridgeMachine,
         steps: bridgeSteps,
@@ -446,6 +513,15 @@ export default function EditorPage() {
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'flow'}
+          className={`editor-tab${tab === 'flow' ? ' editor-tab-active' : ''}`}
+          onClick={() => setTab('flow')}
+        >
+          {t('editor.tabs.flow')}
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'preview'}
           className={`editor-tab${tab === 'preview' ? ' editor-tab-active' : ''}`}
           onClick={() => setTab('preview')}
@@ -466,6 +542,19 @@ export default function EditorPage() {
               readOnly={store.readOnly}
               onMachineChange={store.setMachine}
               onStepsChange={store.setSteps}
+            />
+          )}
+          {tab === 'flow' && (
+            <FlowView
+              // Read from the SAME in-memory machine the Stages tab edits, so
+              // the drawing reflects unsaved work rather than the last saved
+              // row. Recomputed per render like StageEditor's own read —
+              // `readStageModel` is pure and cheap next to a re-render.
+              model={readStageModel(store.machine, store.steps)}
+              onSelectStage={(stageId) => {
+                pendingStageRef.current = stageId;
+                setTab('stages');
+              }}
             />
           )}
           {tab === 'preview' && (

@@ -29,12 +29,19 @@ export interface ChatContext {
 }
 
 /**
- * The two proposal shapes `app/chat/tools.py` queues on
- * `ChatDeps.pending_proposals` and `sse_chat` emits verbatim.
+ * The shapes `app/chat/tools.py` queues on `ChatDeps.pending_proposals` and
+ * `sse_chat` emits verbatim.
  *
  * `machine`/`steps` are `unknown` on purpose: they are the model's authored
  * definition, and the create card parses them where it uses them rather than
  * this transport asserting a shape it never checks.
+ *
+ * `show_flow` is NOT an offer to write — it asks for a diagram card. It rides
+ * this union because `pending_proposals` is the only list `sse_chat` drains,
+ * and `stream.py` is a verbatim port shared with admindash, so a new SSE
+ * frame type would fork the wire protocol for both services. "Proposal" is
+ * the transport's name here, not the meaning; `renderProposalCard` is where
+ * the distinction is drawn.
  */
 export type Proposal =
   | {
@@ -46,7 +53,8 @@ export type Proposal =
       channel_access: string;
       summary: string[];
     }
-  | { action: 'patch'; ops: PatchOp[]; summary: string[] };
+  | { action: 'patch'; ops: PatchOp[]; summary: string[] }
+  | { action: 'show_flow'; entity_id: string; name: string };
 
 export type ChatEvent =
   | { type: 'token'; text: string }

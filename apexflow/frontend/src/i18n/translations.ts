@@ -191,6 +191,20 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     'editor.tabs.preview': 'Preview',
 
+    // Flow view (read-only diagram of the machine)
+    'editor.tabs.flow': 'Flow',
+    'editor.flow.diagramLabel': 'Diagram of this workflow',
+    'editor.flow.openStage': 'Open {name} in Stages',
+    'editor.flow.steps': '{n} step(s)',
+    'editor.flow.noSteps': 'no steps',
+    'editor.flow.finish': 'Finishes here',
+    'editor.flow.conditional': 'only sometimes',
+    'editor.flow.exitFrom': 'from {stages}',
+    'editor.flow.legend.family': 'A family acts',
+    'editor.flow.legend.staff': 'Staff act',
+    'editor.flow.legend.automatic': 'Automatic',
+    'editor.flow.legend.exit': 'Exit rule',
+
     // Stage editor
     'editor.tabs.stages': 'Stages',
     'editor.stages.heading': 'Stages',
@@ -464,6 +478,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     // the ARIA pattern for a disclosure — a label that swapped Show/Hide would
     // fight the visible text instead.
     'assistant.hide': 'Hide',
+    'assistant.resize': 'Drag to resize the assistant panel',
     'assistant.limitReached': 'Conversation limit reached. Start a new chat.',
     'assistant.createDraft': 'Create draft',
     'assistant.adjust': 'Adjust…',
@@ -476,6 +491,14 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.createFailed': 'Create failed',
     'assistant.applyFailed': 'Could not apply',
     'assistant.readOnly': 'This version is read-only — open a new draft first',
+
+    // Flow card — the assistant's answer to "show me the flow". Deliberately
+    // has no diagram of its own: the drawer is 380px.
+    'assistant.flowCard.counts': '{stages} stages · {moves} moves · {exits} exit rules',
+    'assistant.flowCard.detour': 'Detour: {stages}',
+    'assistant.flowCard.exit': '{action} — from {stages} — ends at {target}',
+    'assistant.flowCard.open': 'Open flow view',
+    'assistant.flowCard.loadError': "Couldn't load this workflow. Open it to see why.",
     // Distinct from `readOnly` on purpose: the row is fine, the card is simply
     // not looking at the workflow it was written for, and the read-only
     // wording would send the admin to create a draft they do not need.
@@ -690,6 +713,20 @@ export const translations: Record<Locale, Record<string, string>> = {
     'editor.save.error': '保存失败。您的更改仍然保留，请重试。',
 
     'editor.tabs.preview': '预览',
+
+    // Flow view (read-only diagram of the machine)
+    'editor.tabs.flow': '流程图',
+    'editor.flow.diagramLabel': '此工作流的流程图',
+    'editor.flow.openStage': '在“阶段”中打开{name}',
+    'editor.flow.steps': '{n} 个步骤',
+    'editor.flow.noSteps': '无步骤',
+    'editor.flow.finish': '在此结束',
+    'editor.flow.conditional': '仅在特定条件下',
+    'editor.flow.exitFrom': '来自{stages}',
+    'editor.flow.legend.family': '家长执行',
+    'editor.flow.legend.staff': '教职员工执行',
+    'editor.flow.legend.automatic': '自动',
+    'editor.flow.legend.exit': '退出规则',
 
     // Stage editor
     'editor.tabs.stages': '阶段',
@@ -946,6 +983,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.removeQuick': '删除',
     'assistant.newQuestion': '新问题',
     'assistant.hide': '隐藏',
+    'assistant.resize': '拖动以调整助手面板宽度',
     'assistant.limitReached': '对话已达上限，请开始新对话。',
     'assistant.createDraft': '创建草稿',
     'assistant.adjust': '调整',
@@ -957,6 +995,13 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.createFailed': '创建失败',
     'assistant.applyFailed': '无法应用',
     'assistant.readOnly': '此版本为只读 — 请先创建新草稿',
+
+    // Flow card
+    'assistant.flowCard.counts': '{stages} 个阶段 · {moves} 个流转 · {exits} 条退出规则',
+    'assistant.flowCard.detour': '分支：{stages}',
+    'assistant.flowCard.exit': '{action} — 来自 {stages} — 结束于 {target}',
+    'assistant.flowCard.open': '打开流程图',
+    'assistant.flowCard.loadError': '无法加载此工作流。请打开它查看原因。',
     'assistant.otherDraft': '这些修改是针对另一个工作流提出的 — 请打开该工作流后再应用',
     'assistant.patchTitle': '建议的修改',
     'assistant.patchOpCount': '对此工作流的 {n} 处修改',

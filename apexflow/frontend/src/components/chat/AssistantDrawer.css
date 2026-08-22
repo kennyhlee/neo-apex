@@ -98,6 +98,59 @@
 }
 .assistant-handle.is-open .assistant-handle__chevron { transform: rotate(180deg); }
 
+
+/* --- the resize grip ------------------------------------------------------
+   The drawer's left edge, made draggable. Positioned INSIDE the drawer (which
+   is `position: fixed`, hence a containing block) so it travels with the panel
+   as it slides rather than needing its own transition.
+
+   Wider than it looks: 4px of visible hairline inside a 10px hit area, because
+   a 4px target is a fight to grab. `touch-action: none` is what stops a touch
+   drag from being stolen by the page's own scrolling before pointermove ever
+   fires. */
+.assistant-resize {
+  position: absolute;
+  left: -5px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+/* The hairline sits in the middle of the hit area, and only shows when it is
+   being aimed at — an always-on divider competes with the drawer's own border. */
+.assistant-resize::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.assistant-resize:hover::before,
+.assistant-resize:focus-visible::before { opacity: 1; }
+.assistant-resize:focus-visible { outline: none; }
+
+/* While dragging: kill the drawer's slide transition so the edge tracks the
+   pointer instead of easing after it, and stop the drag selecting text across
+   the page underneath. */
+body.assistant-resizing { user-select: none; cursor: col-resize; }
+body.assistant-resizing .assistant-drawer,
+body.assistant-resizing .assistant-handle,
+body.assistant-resizing .home-chat-drawer,
+body.assistant-resizing .home-chat-toggle { transition: none; }
+
+/* Full-width drawer below this breakpoint: no left edge to drag. */
+@media (max-width: 992px) {
+  .assistant-resize { display: none; }
+}
+
 @media (max-width: 992px) {
   /* Drawer covers the screen on small viewports. There is no left edge left to
      ride, so the handle would end up pinned to the far side of the display on

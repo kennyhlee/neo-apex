@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { splitFences } from './markdownFences.ts';
 
 /**
  * Minimal, safe Markdown renderer for chat messages. Produces React nodes
@@ -10,6 +11,10 @@ import type { ReactNode } from 'react';
  * Tables are NOT rendered as an HTML grid (too cramped in the narrow chat
  * drawer): a 2-column table becomes a key/value list, and a 3+-column table
  * becomes one small card per row (fields stacked as label: value).
+ *
+ * Fenced blocks render verbatim in a horizontally scrolling <pre>. They are
+ * lifted out by `splitFences` BEFORE the blank-line split — see that module
+ * for why the order is load-bearing.
  */
 
 const INLINE = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
@@ -147,6 +152,29 @@ function renderBlock(block: string, key: number): ReactNode {
 }
 
 export function Markdown({ text }: { text: string }) {
-  const blocks = text.split(/\n{2,}/).filter((b) => b.trim() !== '');
-  return <div className="markdown">{blocks.map((b, i) => renderBlock(b, i))}</div>;
+  // Fences come out FIRST. Splitting the whole message on blank lines and
+  // then looking for structure — which is what this did — destroys any
+  // fenced block containing a blank line before it can be recognised, and
+  // there is no putting it back together afterwards.
+  const segments = splitFences(text);
+  let key = 0;
+  return (
+    <div className="markdown">
+      {segments.flatMap((segment): ReactNode[] =>
+        segment.code
+          ? [
+              // A <pre> in a 380px drawer scrolls sideways rather than
+              // reflowing. That is the point: reflowing monospace art is
+              // what "unreadable" looked like.
+              <pre className="md-pre" key={key++}>
+                <code>{segment.body}</code>
+              </pre>,
+            ]
+          : segment.body
+              .split(/\n{2,}/)
+              .filter((b) => b.trim() !== '')
+              .map((b) => renderBlock(b, key++)),
+      )}
+    </div>
+  );
 }

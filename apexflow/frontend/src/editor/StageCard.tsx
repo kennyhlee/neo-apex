@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import StepEditor from './StepEditor.tsx';
 import { addStepToStage } from './stagePlacement.ts';
+import { STAGE_FOCUS_ATTR, stageCardId } from './flow/revealStage.ts';
 import type { StepsUpdater } from './draftStore.ts';
 import type { MoveGroup, Stage } from './stage/types.ts';
 import type { EntityModelsMap, StateDef, WorkflowStepDef } from '../types/designer.ts';
@@ -72,12 +73,21 @@ export default function StageCard({
   const candidates = steps.filter((s) => !s.available_in.includes(stage.stage_id));
 
   return (
-    <li className="stage-card">
+    // The anchor the Flow tab scrolls to when a stage in the diagram is
+    // activated (see EditorPage's reveal effect). `stage_id` is an authored
+    // string, so the lookup there uses `getElementById` — which takes the id
+    // literally — rather than a `#id` selector, which would throw on an id
+    // containing a space or a quote.
+    <li className="stage-card" id={stageCardId(stage.stage_id)}>
       <header className="stage-card-header">
         <label className="stage-card-name-label">
           <span className="sr-only">{t('editor.stage.rename')}</span>
           <input
             type="text"
+            // Also the reveal target: the first control in the card, so a
+            // keyboard user arriving from the Flow tab lands on the stage
+            // they asked for rather than at the top of the list.
+            {...{ [STAGE_FOCUS_ATTR]: '' }}
             className="stage-card-name-input"
             value={stage.name}
             placeholder={stage.stage_id}

@@ -24,7 +24,18 @@
   font-weight: var(--weight-semibold);
 }
 
-.quick-actions__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* Bounded, because this sits between the transcript and the input and would
+   otherwise take whatever height it likes. At the drawer's ~380px each chip
+   is its own row, so a full set (MAX_QUICK_ACTIONS is 10) is tall enough to
+   squeeze the transcript to nothing — reachable through the chip editor
+   since well before these defaults grew. Roughly four rows, then it scrolls. */
+.quick-actions__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-height: 8.5rem;
+  overflow-y: auto;
+}
 
 .quick-actions__chip {
   background: var(--accent-muted);

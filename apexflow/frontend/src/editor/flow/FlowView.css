@@ -1,0 +1,179 @@
+/* Flow tab. Every colour comes from the theme tokens so this reads as part of
+   the same editor as the Stages tab, not as a chart bolted onto it. */
+
+.flow-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.flow-empty {
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+}
+
+/* The drawing is sized in its own coordinates; when the pane is narrower than
+   that, THIS scrolls rather than the page. */
+.flow-canvas-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.flow-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---- who: the one encoding repeated across edges, arrowheads and legend --- */
+.flow-who-family    { --flow-stroke: var(--accent); }
+.flow-who-staff     { --flow-stroke: var(--ink-3); }
+.flow-who-both      { --flow-stroke: var(--ink-3); }
+.flow-who-automatic { --flow-stroke: var(--info); }
+
+.flow-edge {
+  fill: none;
+  stroke: var(--flow-stroke);
+  stroke-width: 1.5;
+}
+
+/* A move that lands at or above where it started. Dashed as well as routed
+   outside the columns, so it reads as a return even in greyscale. */
+.flow-edge-back {
+  stroke-dasharray: 5 4;
+}
+
+.flow-arrowhead {
+  fill: var(--flow-stroke);
+  stroke: none;
+}
+
+/* ---- nodes ---------------------------------------------------------------- */
+.flow-node-box {
+  fill: var(--surface);
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.flow-node-box.flow-kind-initial { stroke: var(--info); }
+.flow-node-box.flow-kind-finish  { stroke: var(--success); }
+
+.flow-node-stripe { fill: var(--neutral); }
+.flow-node-stripe.flow-kind-initial { fill: var(--info); }
+.flow-node-stripe.flow-kind-finish  { fill: var(--success); }
+.flow-node-stripe.flow-kind-terminal { fill: var(--away); }
+
+.flow-node-name {
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  fill: var(--ink);
+}
+
+.flow-node-meta {
+  font-size: 10.5px;
+  fill: var(--ink-faint);
+}
+
+.flow-node {
+  cursor: pointer;
+}
+
+.flow-node:hover .flow-node-box {
+  stroke: var(--accent);
+  fill: var(--accent-tint);
+}
+
+/* The focus ring is drawn on the box rather than the group: a <g> has no box
+   of its own, so a UA outline on it lands in unpredictable places. */
+.flow-node:focus { outline: none; }
+.flow-node:focus-visible .flow-node-box {
+  stroke: var(--accent);
+  stroke-width: 2;
+  /* SVG has no outline-offset, so the ring is the border itself, thickened,
+     plus a halo that reads on both the surface and the tint. */
+  filter: drop-shadow(0 0 0 2px var(--accent-ring));
+}
+
+/* ---- move labels, stacked in the row gap beneath their source ------------- */
+/* The halo is not decoration. Labels sit in the row gap, and a backward move
+   travelling the outside lane can still cross one; painting a surface-coloured
+   stroke UNDER the glyphs breaks the line around the text instead of letting
+   it strike through. `paint-order` is what makes the stroke render first. */
+.flow-label {
+  font-size: 11px;
+  fill: var(--ink-2);
+  paint-order: stroke fill;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.flow-label-dot { fill: var(--flow-stroke); font-size: 9px; }
+.flow-label-target { fill: var(--ink-faint); }
+.flow-label-guard {
+  fill: var(--attn);
+  font-size: 10px;
+}
+
+/* ---- exits: a list of rules, matching how ExitsPanel models them ---------- */
+.flow-exits {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-3);
+}
+
+.flow-exits h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-2);
+  margin: 0 0 var(--space-2);
+}
+
+.flow-exits ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.flow-exits li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  border: 1px dashed var(--away);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--away-tint);
+  padding: var(--space-2) var(--space-3);
+}
+
+.flow-exit-target { font-weight: var(--weight-semibold); color: var(--ink); }
+.flow-exit-action { color: var(--ink-2); }
+.flow-exit-from,
+.flow-exit-who { color: var(--ink-faint); font-size: var(--text-xs); }
+
+/* ---- legend --------------------------------------------------------------- */
+.flow-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+}
+
+.flow-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.flow-legend-line {
+  width: 20px;
+  border-top: 2px solid var(--flow-stroke);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .flow-node-box { transition: fill 120ms ease, stroke 120ms ease; }
+}

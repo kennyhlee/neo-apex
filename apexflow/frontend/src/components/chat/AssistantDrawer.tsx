@@ -18,6 +18,7 @@ import { useAssistant } from '../../hooks/useAssistant.ts';
 import { ASSISTANT_TOGGLE_ID } from '../../contexts/assistantStore.ts';
 import { useTranslation } from '../../hooks/useTranslation.ts';
 import { ChatPanel } from './ChatPanel.tsx';
+import { AssistantResizeGrip } from './AssistantResizeGrip.tsx';
 import './AssistantDrawer.css';
 
 export function AssistantDrawer() {
@@ -66,6 +67,7 @@ export function AssistantDrawer() {
         aria-hidden={!open}
         onKeyDown={onKeyDown}
       >
+        <AssistantResizeGrip />
         <ChatPanel onClose={closeAndRefocus} />
       </aside>
     </>

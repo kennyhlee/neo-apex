@@ -5,7 +5,9 @@
 .app-nav {
   position: sticky;
   top: 0;
-  z-index: var(--z-sticky);
+  /* --z-nav, not --z-sticky: this element is a stacking context, so it caps
+     its own dropdown. See the scale in theme.css. */
+  z-index: var(--z-nav);
   height: var(--nav-h);
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-primary);

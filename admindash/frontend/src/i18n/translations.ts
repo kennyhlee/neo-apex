@@ -121,6 +121,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     // labelled `assistant.title` and conveys state through `aria-expanded`,
     // so it needs no string of its own.
     'assistant.hide': 'Hide',
+    'assistant.resize': 'Drag to resize the assistant panel',
     'assistant.quickQuestions': 'Quick questions',
 
     // Sites
@@ -699,6 +700,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.stop': '\u505c\u6b62',
     'assistant.clear': '\u6e05\u7a7a',
     'assistant.hide': '\u9690\u85cf',
+    'assistant.resize': '\u62d6\u52a8\u4ee5\u8c03\u6574\u52a9\u624b\u9762\u677f\u5bbd\u5ea6',
     'assistant.quickQuestions': '\u5feb\u6377\u63d0\u95ee',
 
     // Sites
