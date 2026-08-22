@@ -169,7 +169,7 @@
 .editor-back-link {
   display: inline-block;
   margin-bottom: var(--space-2);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--accent-ink);
 }
 
@@ -185,5 +185,5 @@
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
   background: var(--accent-tint);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }

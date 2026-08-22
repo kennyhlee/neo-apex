@@ -863,3 +863,70 @@ def register_proposal_tools(agent: Agent) -> None:
         return _with_notes(
             "Patch card is ready for the admin to review and Apply. Do not "
             "claim the change is applied yet.", notes)
+
+
+def register_view_tools(agent: Agent) -> None:
+    """Tools that SHOW the admin something. Nothing here writes, and nothing
+    here offers to write.
+
+    The card travels on `ChatDeps.pending_proposals` because that list is the
+    only thing `sse_chat` drains, and `stream.py` is a VERBATIM port shared
+    with admindash — adding an SSE frame type here would fork the wire
+    protocol for both services over a card only one of them has. "Proposal"
+    is therefore the transport's name, not this card's meaning; the frontend
+    draws the distinction in `renderProposalCard`, which routes `show_flow`
+    to a read-only card with no Apply.
+    """
+
+    @agent.tool
+    def show_flow(ctx: RunContext[ChatDeps], entity_id: str | None = None) -> str:
+        """Show the admin a diagram card for a workflow, with a button that
+        opens the editor's Flow view. Call this INSTEAD of describing a
+        workflow's shape at length, and never draw the flow yourself.
+        Defaults to the workflow open in the editor; pass an entity_id from
+        list_workflows to show a different one."""
+        target = entity_id or ctx.deps.entity_id
+        if not target:
+            return ("No workflow is open, so there is nothing to show. Ask which "
+                    "workflow they mean, or call list_workflows and pass its "
+                    "entity_id.")
+        try:
+            row = defs.require_definition_row(ctx.deps.tenant_id, target,
+                                              ctx.deps.token)
+        # Same split as `get_workflow`: only a 404 is "not found". Reporting a
+        # DataCore outage as missing would push the model toward offering to
+        # CREATE a workflow that already exists.
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return (f"Workflow {target} was not found in this tenant. "
+                        f"Call list_workflows for the valid ids.")
+            return (f"Could not load workflow {target}: {exc.detail} "
+                    f"(status {exc.status_code}). The workflow may well exist — "
+                    f"do not treat this as missing.")
+        except Exception as exc:  # noqa: BLE001 — surface to the model, never raise
+            return (f"Could not load workflow {target}: {exc}. The workflow may "
+                    f"well exist — do not treat this as missing.")
+
+        # A row whose stored definition does not parse would render as an
+        # empty diagram that explains nothing. Refuse it here, where the
+        # reason can still be said out loud.
+        try:
+            defs.parse_machine_steps(row)
+        except Exception as exc:  # noqa: BLE001
+            return (f"This row's stored definition does not parse, so it cannot "
+                    f"be drawn: {exc}")
+
+        resolved = row.get("entity_id")
+        # The model narrating a flow tends to call this more than once in a
+        # turn; the admin should not get the same card twice.
+        already = any(p.get("action") == "show_flow" and p.get("entity_id") == resolved
+                      for p in ctx.deps.pending_proposals)
+        if not already:
+            ctx.deps.pending_proposals.append({
+                "action": "show_flow",
+                "entity_id": resolved,
+                "name": row.get("name"),
+            })
+        return (f"A flow card for {row.get('name')} is ready — the admin can open "
+                f"the full diagram from it. Say what the workflow does in a "
+                f"sentence or two; do not draw it.")

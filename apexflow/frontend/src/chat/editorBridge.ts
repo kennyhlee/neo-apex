@@ -49,6 +49,15 @@ export interface EditorBridge {
   /** Applies ops to the live draft. Returns null on success, or a
    *  human-readable error (PatchApplyError message) — all-or-nothing. */
   apply: (ops: PatchOp[]) => string | null;
+  /** The draft as it stands RIGHT NOW, unsaved edits included.
+   *
+   *  The flow card draws from this rather than refetching the row, so the
+   *  card and the Flow tab cannot disagree about what the workflow currently
+   *  looks like — a card showing the saved shape beside an editor showing an
+   *  edited one is a card that lies. Safe for the same reason `apply` is: the
+   *  handle is REPLACED on every machine/steps change (rule 1 above), so this
+   *  closure never returns a stale draft. */
+  read: () => { machine: MachineDef; steps: WorkflowStepDef[] };
 }
 
 let current: EditorBridge | null = null;

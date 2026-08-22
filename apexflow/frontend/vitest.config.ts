@@ -17,6 +17,13 @@ export default defineConfig({
     // pure and does not deserve the cost of a DOM. Files that need one opt in
     // per-file with `// @vitest-environment jsdom`.
     environment: 'node',
+    // Required by styles/__tests__/tokens.test.ts, which imports stylesheets
+    // with `?raw` to audit their custom properties. With the default
+    // `css: false`, vitest short-circuits anything matching `.css` and the
+    // import yields an EMPTY STRING — so the audit ran over nothing and
+    // passed while testing nothing. That test carries a not-vacuous check
+    // for exactly this reason; it is what caught it.
+    css: true,
     // `.tsx` is included deliberately. It was absent, which meant a component
     // test file was silently NEVER COLLECTED — the suite stayed green while
     // testing nothing, which is the worst failure mode a test config has.

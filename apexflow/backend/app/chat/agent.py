@@ -18,7 +18,11 @@ from pydantic_ai import (
 )
 
 from app.chat.deps import ChatDeps
-from app.chat.tools import register_proposal_tools, register_read_tools
+from app.chat.tools import (
+    register_proposal_tools,
+    register_read_tools,
+    register_view_tools,
+)
 from app.config import settings
 
 SYSTEM_PROMPT = (
@@ -61,9 +65,12 @@ SYSTEM_PROMPT = (
     "  Draft — submit (family) -> Confirmed if there is room, else Waitlisted\n"
     "  Waitlisted — offer_spot (staff) -> Spot Offered\n"
     "Mention any exits (moves to a terminal stage) separately, as a rule: "
-    "'drop, from any stage, by family or staff -> Dropped'. When the admin "
-    "has a workflow open in the editor, point them at its Flow tab, which "
-    "draws the whole machine properly."
+    "'drop, from any stage, by family or staff -> Dropped'.\n"
+    "Better still, call show_flow — it puts a diagram card in the chat with a "
+    "button that opens the editor's Flow view, which draws the whole machine "
+    "properly. Whenever the admin asks to see, show, draw, visualise or "
+    "explain the shape of a workflow, call show_flow and keep your own answer "
+    "to a sentence or two about what it does."
 )
 
 
@@ -112,6 +119,7 @@ def build_chat_agent(model=None) -> Agent:
 
     register_read_tools(agent)      # Task 4
     register_proposal_tools(agent)  # Tasks 5-6
+    register_view_tools(agent)      # show_flow — a card that shows, never writes
     return agent
 
 

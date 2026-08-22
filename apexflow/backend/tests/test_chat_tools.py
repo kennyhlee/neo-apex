@@ -27,7 +27,11 @@ from pydantic_ai.messages import ToolReturnPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.chat.deps import ChatDeps
-from app.chat.tools import register_proposal_tools, register_read_tools
+from app.chat.tools import (
+    register_proposal_tools,
+    register_read_tools,
+    register_view_tools,
+)
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
 
@@ -1235,3 +1239,79 @@ def test_register_proposal_tools_offers_propose_patch_with_the_op_vocabulary(fak
                "update_step", "remove_step", "add_section", "update_section",
                "remove_section", "set_channel_access"):
         assert op in description, op
+
+
+# --- show_flow (view tool) -------------------------------------------------
+# `show_flow` writes nothing; it queues a CARD. It rides
+# `pending_proposals` because that is the only list `sse_chat` drains and
+# `stream.py` is a verbatim port shared with admindash — so these tests
+# assert the queued dict as a wire contract, exactly as the proposal tests do.
+
+
+def _run_view(args: dict, page: str = "list",
+              entity_id: str | None = None) -> tuple[str, ChatDeps]:
+    agent = Agent(FunctionModel(_responder_for("show_flow", args)),
+                  deps_type=ChatDeps)
+    register_view_tools(agent)
+    deps = _deps(page)
+    deps.entity_id = entity_id
+    return agent.run_sync("go", deps=deps).output, deps
+
+
+def test_show_flow_queues_a_card_for_the_named_workflow(fake_dc):
+    eid = _seed_definition(fake_dc, definition_id="wd-show", name="Program Signup")
+    out, deps = _run_view({"entity_id": eid})
+    assert "Program Signup" in out
+    assert deps.pending_proposals == [
+        {"action": "show_flow", "entity_id": eid, "name": "Program Signup"}
+    ]
+
+
+def test_show_flow_defaults_to_the_workflow_open_in_the_editor(fake_dc):
+    eid = _seed_definition(fake_dc, definition_id="wd-open", name="Enrollment")
+    _, deps = _run_view({}, page="editor", entity_id=eid)
+    assert [p["entity_id"] for p in deps.pending_proposals] == [eid]
+
+
+def test_show_flow_asks_which_workflow_when_none_is_open(fake_dc):
+    out, deps = _run_view({})
+    assert "list_workflows" in out
+    assert deps.pending_proposals == []
+
+
+def test_show_flow_reports_a_missing_workflow_without_queueing(fake_dc):
+    out, deps = _run_view({"entity_id": "wd-nope"})
+    assert "not found" in out.lower()
+    assert deps.pending_proposals == []
+
+
+def test_show_flow_refuses_a_row_whose_definition_does_not_parse(fake_dc):
+    # A card for this row would draw an empty diagram and explain nothing.
+    eid = _seed_corrupt_definition(fake_dc)
+    out, deps = _run_view({"entity_id": eid})
+    assert "does not parse" in out
+    assert deps.pending_proposals == []
+
+
+def test_show_flow_does_not_report_an_outage_as_missing(fake_dc, monkeypatch):
+    # Reporting a DataCore outage as "not found" would push the model toward
+    # offering to CREATE a workflow that already exists.
+    def boom(*a, **k):
+        raise HTTPException(status_code=503, detail="datacore unreachable")
+
+    monkeypatch.setattr(defs, "require_definition_row", boom)
+    out, deps = _run_view({"entity_id": "wd-any"})
+    assert "not found" not in out.lower()
+    assert "may well exist" in out
+    assert deps.pending_proposals == []
+
+
+def test_show_flow_queues_one_card_per_workflow_however_often_it_is_called(fake_dc):
+    eid = _seed_definition(fake_dc, definition_id="wd-dup", name="Signup")
+    agent = Agent(FunctionModel(_responder_for("show_flow", {"entity_id": eid})),
+                  deps_type=ChatDeps)
+    register_view_tools(agent)
+    deps = _deps("list")
+    agent.run_sync("go", deps=deps)
+    agent.run_sync("again", deps=deps)
+    assert len(deps.pending_proposals) == 1

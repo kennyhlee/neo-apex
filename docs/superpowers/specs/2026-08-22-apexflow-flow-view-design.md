@@ -67,9 +67,10 @@ was. Deferring the renderer fix was the wrong call:
 - Both are mirrored into admindash, which ships a byte-identical
   `Markdown.tsx` and had the same bug.
 
+And the **chat flow card**, added third — see its own section below.
+
 Out of scope (deliberately, and named so they are not silently assumed):
 
-- The chat flow card and the `editorBridge` hop that opens the tab from chat.
 - The `create_draft` inline flow preview.
 - Editing from the diagram. The Flow view is read-only; the Stages tab is
   where authoring happens, which is exactly why nodes navigate there.
@@ -427,6 +428,82 @@ admin at the Flow tab when a workflow is open.
 the tokenizer tests are mirrored there; leaving one copy broken would also
 leave the two divergent. Its `vitest.config.ts` had the same `.ts`-only
 include and is fixed too.
+
+## The chat flow card
+
+Asked to show a workflow, the assistant now calls `show_flow` and the drawer
+renders a card: the spine, the actor on each move, the exit rules, and a
+button into the Flow tab. It draws nothing with characters — that is the
+point.
+
+**Transport.** The card rides `ChatDeps.pending_proposals` and arrives as a
+`proposal` SSE frame with `action: "show_flow"`. It is not an offer to write,
+and the naming is a compromise made deliberately: `stream.py` is a VERBATIM
+port shared with admindash whose own header calls a change to the frame set
+"a protocol fork, not a local change". Adding a `flow` frame type would fork
+the wire protocol for both services over a card only one of them has. So
+"proposal" is the transport's name, not the meaning, and
+`renderProposalCard` is where the distinction is drawn — `show_flow` routes
+to a read-only card with no Apply and no origin pin, because nothing it does
+can touch a draft.
+
+**Where the machine comes from**, in order:
+
+1. the open draft, via a new `EditorBridge.read()` — unsaved edits included;
+2. otherwise `getBundle`.
+
+Step 1 is the reason `read()` exists. The assistant is most often asked about
+the workflow the admin is editing, and that draft usually differs from the
+saved row; a card showing the saved shape beside an editor showing edited
+work is a card that lies. `read()` is safe for the same reason `apply` is —
+the handle is replaced on every machine/steps change, so the closure cannot
+go stale. It is read during render, exactly as `PatchCard` reads the bridge.
+
+**How the button opens the tab.** The editor's open tab now lives in
+`?view=`, derived from the URL rather than held in state. The card just
+navigates. This replaced a first attempt that kept the tab in state and
+synced it from a one-shot param in an effect — which tripped
+`react-hooks/set-state-in-effect`, and was worse anyway: deriving from the
+URL means no effect, no param to strip, no window where the two disagree, and
+the tab survives a reload or a shared link.
+
+**What the card shows** is decided by `summariseFlow` (pure): the spine, the
+move between each consecutive pair, the rail collapsed to one "Detour:" line,
+and every exit rule. Both of signup's drop rules are listed rather than
+merged, for the same reason the Flow tab lists them separately.
+
+`show_flow` refuses, without queueing a card, when: no workflow is open and
+none was named; the row 404s; or the row's stored definition does not parse
+(the card would draw an empty diagram and explain nothing). A DataCore
+outage is never reported as "not found" — the same split `get_workflow`
+makes, and for the same reason: it would push the model toward offering to
+CREATE a workflow that already exists. Repeat calls in one turn queue one
+card.
+
+## A CSS bug class, and the guard for it
+
+`FlowCard.css` first shipped referencing `--border-default`, which does not
+exist — theme.css's compatibility block defines `--border-primary`. An
+undefined custom property with no fallback resolves to nothing, so
+`border: 1px solid var(--border-default)` silently draws **no border**.
+Nothing fails, nothing warns; the only symptom is a component that looks
+slightly wrong in a screenshot.
+
+`styles/__tests__/tokens.test.ts` now audits every `var(--x)` in every
+stylesheet under `src/` against the two token layers. It found two
+pre-existing instances beyond the one that prompted it:
+
+- `EditorPage.css` used `var(--font-size-sm)` with no fallback — the
+  declaration was being dropped entirely.
+- `editor.css` used `--color-border` / `--color-surface` /
+  `--color-text-muted` / `--color-warning-text` in ~28 places, each with a
+  hardcoded fallback. Those rendered, but with off-theme literals instead of
+  following the theme.
+
+Both are fixed; the fallbacks made the intended mapping unambiguous. The
+audit checks references that HAVE a fallback too: a fallback is a deliberate
+default, not a licence to name a token that does not exist, and
+`var(--typo, var(--also-typo))` is the shape that hides this best.
 
 ## Risks
 

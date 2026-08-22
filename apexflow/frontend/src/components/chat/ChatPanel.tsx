@@ -15,6 +15,7 @@ import { useTranslation } from '../../hooks/useTranslation.ts';
 import { QuickActions } from './QuickActions.tsx';
 import { CreateDraftCard } from './CreateDraftCard.tsx';
 import { PatchCard } from './PatchCard.tsx';
+import { FlowCard } from './FlowCard.tsx';
 import { Markdown } from './Markdown.tsx';
 import './ChatPanel.css';
 
@@ -85,6 +86,12 @@ function renderProposalCard(
           onDone={appendSystem}
         />
       );
+    case 'show_flow':
+      // Not an offer to write, despite arriving on the proposal channel (see
+      // `Proposal` in api/chat.ts). It reads the workflow and renders it, so
+      // it needs no origin pin and has no Apply — nothing it does can touch
+      // the wrong draft, or any draft.
+      return <FlowCard key={key} entityId={proposal.entity_id} name={proposal.name} tenantId={tenantId} />;
     case 'patch':
       // No tenantId: the patch never leaves the browser — it edits the draft
       // the editor already has open, and the tenant-scoped write is the PUT

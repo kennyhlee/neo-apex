@@ -490,6 +490,14 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.createFailed': 'Create failed',
     'assistant.applyFailed': 'Could not apply',
     'assistant.readOnly': 'This version is read-only — open a new draft first',
+
+    // Flow card — the assistant's answer to "show me the flow". Deliberately
+    // has no diagram of its own: the drawer is 380px.
+    'assistant.flowCard.counts': '{stages} stages · {moves} moves · {exits} exit rules',
+    'assistant.flowCard.detour': 'Detour: {stages}',
+    'assistant.flowCard.exit': '{action} — from {stages} — ends at {target}',
+    'assistant.flowCard.open': 'Open flow view',
+    'assistant.flowCard.loadError': "Couldn't load this workflow. Open it to see why.",
     // Distinct from `readOnly` on purpose: the row is fine, the card is simply
     // not looking at the workflow it was written for, and the read-only
     // wording would send the admin to create a draft they do not need.
@@ -985,6 +993,13 @@ export const translations: Record<Locale, Record<string, string>> = {
     'assistant.createFailed': '创建失败',
     'assistant.applyFailed': '无法应用',
     'assistant.readOnly': '此版本为只读 — 请先创建新草稿',
+
+    // Flow card
+    'assistant.flowCard.counts': '{stages} 个阶段 · {moves} 个流转 · {exits} 条退出规则',
+    'assistant.flowCard.detour': '分支：{stages}',
+    'assistant.flowCard.exit': '{action} — 来自 {stages} — 结束于 {target}',
+    'assistant.flowCard.open': '打开流程图',
+    'assistant.flowCard.loadError': '无法加载此工作流。请打开它查看原因。',
     'assistant.otherDraft': '这些修改是针对另一个工作流提出的 — 请打开该工作流后再应用',
     'assistant.patchTitle': '建议的修改',
     'assistant.patchOpCount': '对此工作流的 {n} 处修改',

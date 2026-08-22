@@ -2,8 +2,8 @@
 // the ordered step list (`StepEditor`), a tab strip for Task 8's machine
 // editor and Task 9's live preview pane, plus a right rail of validation
 // errors. Route: `/definitions/:entityId`.
-import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useToast } from '../hooks/useToast.ts';
@@ -28,15 +28,51 @@ import './EditorPage.css';
 
 type EditorTab = 'stages' | 'flow' | 'preview';
 
+const EDITOR_TABS: EditorTab[] = ['stages', 'flow', 'preview'];
+const DEFAULT_TAB: EditorTab = 'stages';
+
+/** The open tab lives in `?view=`, not in component state.
+ *
+ * That is what lets the assistant's flow card — rendered in a drawer mounted
+ * OUTSIDE the router — open the Flow tab: it just navigates. Deriving the tab
+ * from the URL rather than syncing state to it also means there is no effect
+ * to write, no param to strip afterwards, and no window in which the two
+ * disagree. Reloading or sharing the link keeps the tab, which is a plain
+ * improvement over the state version.
+ *
+ * An unknown or absent value is the default tab, so a hand-edited URL cannot
+ * render a blank pane.
+ */
+function tabFromParam(value: string | null): EditorTab {
+  return EDITOR_TABS.includes(value as EditorTab) ? (value as EditorTab) : DEFAULT_TAB;
+}
+
 export default function EditorPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { entityId } = useParams<{ entityId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tenantId = user?.tenant_id ?? '';
   const store = useDraftStore(tenantId, entityId);
-  const [tab, setTab] = useState<EditorTab>('stages');
+  const tab = tabFromParam(searchParams.get('view'));
+  // `replace` so flipping between tabs does not fill the back button with
+  // steps inside one page.
+  const setTab = useCallback(
+    (next: EditorTab) => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next === DEFAULT_TAB) params.delete('view');
+          else params.set('view', next);
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   // A stage the reader picked in the Flow tab. It cannot be revealed at click
   // time: the Stages tab is unmounted at that moment, so the card does not
   // exist yet. Parked here until the tab switch renders it.
@@ -135,6 +171,10 @@ export default function EditorPage() {
       // The apply semantics (read-only refused rather than silently no-oped,
       // all-or-nothing, channel access only when the patch set it) live in
       // `createBridgeApply` so they are testable without a component harness.
+      // Closes over this effect's machine/steps, and the effect re-runs on
+      // every change to either — so the flow card always draws the draft as
+      // it stands, unsaved edits included.
+      read: () => ({ machine: bridgeMachine, steps: bridgeSteps }),
       apply: createBridgeApply({
         machine: bridgeMachine,
         steps: bridgeSteps,

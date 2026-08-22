@@ -967,10 +967,10 @@
   margin-top: var(--space-3, 0.75rem);
 }
 .stage-card {
-  border: 1px solid var(--color-border, #d7d7dc);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md, 8px);
   padding: var(--space-4, 1rem);
-  background: var(--color-surface, #fff);
+  background: var(--surface);
 }
 .stage-card-header {
   display: flex;
@@ -985,19 +985,19 @@
 }
 .stage-card-kind {
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
   padding: 0.125rem 0.25rem;
-  border: 1px solid var(--color-border, #d7d7dc);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm, 4px);
   background: transparent;
 }
 .stage-card-remove-warn {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .stage-empty {
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .stage-exit-cards {
   list-style: none;
@@ -1012,13 +1012,13 @@
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-3, 0.75rem);
-  border: 1px solid var(--color-border, #d7d7dc);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md, 8px);
   padding: var(--space-3, 0.75rem);
 }
 .stage-exit-expansion {
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .stage-card-name-input {
   font-weight: 600;
@@ -1030,8 +1030,8 @@
 }
 .stage-card-name-input:hover:not(:disabled),
 .stage-card-name-input:focus {
-  border-color: var(--color-border, #d7d7dc);
-  background: var(--color-surface, #fff);
+  border-color: var(--line);
+  background: var(--surface);
 }
 .stage-card-steps h4,
 .stage-card-moves h4 {
@@ -1039,7 +1039,7 @@
   font-size: 0.8125rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .stage-card-moves > .btn {
   margin-top: var(--space-2, 0.5rem);
@@ -1050,13 +1050,13 @@
 .step-editor-reorder-hint {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .step-card-also-in {
   margin: 0.25rem 0 0;
   padding: 0 0 0 2rem;
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .stage-card-add-existing {
   display: block;
@@ -1065,10 +1065,10 @@
 .stage-card-add-existing-select {
   width: 100%;
   padding: 0.375rem 0.5rem;
-  border: 1px dashed var(--color-border, #d7d7dc);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-sm, 4px);
   background: transparent;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .move-rows {
   list-style: none;
@@ -1079,10 +1079,10 @@
   gap: var(--space-3, 0.75rem);
 }
 .move-row {
-  border: 1px solid var(--color-border, #d7d7dc);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md, 8px);
   padding: var(--space-3, 0.75rem);
-  background: var(--color-surface, #fff);
+  background: var(--surface);
 }
 .move-row-sentence {
   display: flex;
@@ -1093,9 +1093,9 @@
 .move-row-who,
 .move-row-target {
   padding: 0.25rem 0.375rem;
-  border: 1px solid var(--color-border, #d7d7dc);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm, 4px);
-  background: var(--color-surface, #fff);
+  background: var(--surface);
 }
 .move-row-action {
   font-weight: 600;
@@ -1107,10 +1107,10 @@
 }
 .move-row-action:hover:not(:disabled),
 .move-row-action:focus {
-  border-color: var(--color-border, #d7d7dc);
+  border-color: var(--line);
 }
 .move-row-target-label {
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .move-row-clause {
   margin: var(--space-2, 0.5rem) 0 0;
@@ -1118,14 +1118,14 @@
 }
 .move-row-clause-label {
   font-weight: 600;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 /* Same treatment as `.step-card-also-in` — it says the same kind of thing
    about a row that belongs to more than one stage. */
 .move-row-also-from {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .move-row-actions {
   display: flex;
@@ -1135,7 +1135,7 @@
 .move-row-advanced {
   margin-top: var(--space-3, 0.75rem);
   padding-top: var(--space-3, 0.75rem);
-  border-top: 1px dashed var(--color-border, #d7d7dc);
+  border-top: 1px dashed var(--line);
   display: flex;
   flex-direction: column;
   gap: var(--space-3, 0.75rem);
@@ -1158,7 +1158,7 @@
   font-size: 0.8125rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
 .stage-exit-scope-rule {
   width: 100%;
@@ -1172,10 +1172,10 @@
   font-size: 0.875rem;
 }
 .stage-exit-uncovered {
-  color: var(--color-warning-text, #8a5a00);
+  color: var(--attn);
 }
 .stage-exit-needs-terminal {
   margin: var(--space-2, 0.5rem) 0 0;
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b6b76);
+  color: var(--text-tertiary);
 }
