@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { requestLink } from '../api/facade.ts';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import './RequestLinkPage.css';
+import VersionBadge from '../components/VersionBadge.tsx';
 
 /**
  * Request-link must reveal nothing about whether an email matched an
@@ -48,7 +49,7 @@ export default function RequestLinkPage() {
 
   if (sent) {
     return (
-      <div className="request-link-page">
+      <div className="request-link-page version-badge-host">
         <h1>{t('requestLink.title')}</h1>
         <p className="request-link-sent" role="status">
           {t('requestLink.sent')}
@@ -58,7 +59,7 @@ export default function RequestLinkPage() {
   }
 
   return (
-    <div className="request-link-page">
+    <div className="request-link-page version-badge-host">
       <h1>{t('requestLink.title')}</h1>
       <p className="request-link-body">{t('requestLink.body')}</p>
       <form className="request-link-form" onSubmit={(e) => void onSubmit(e)} noValidate>
@@ -94,6 +95,7 @@ export default function RequestLinkPage() {
           {t('requestLink.send')}
         </button>
       </form>
+      <VersionBadge />
     </div>
   );
 }
