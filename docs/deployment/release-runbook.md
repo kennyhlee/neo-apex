@@ -13,6 +13,8 @@ Releases are triggered by GitHub Releases with module-prefixed tags:
 - `apexflow-v0.1.0` → deploys `apexflow-api` (backend only — no frontend deploy yet, parked this wave)
 - `familyhub-v0.1.0` → deploys `familyhub-api` (backend only — no frontend deploy yet, parked this wave)
 
+**Ordering when a release includes both `apexflow-v*` and `launchpad-v*`:** release `apexflow-v*` first. LaunchPad's sync-defaults calls apexflow's `model-preflight`, so LaunchPad must not reach production before the apexflow endpoint it depends on.
+
 **One-time prerequisites before a module's first release of a new capability** — the deploy
 will go green without these, and the feature will simply be dead on arrival:
 

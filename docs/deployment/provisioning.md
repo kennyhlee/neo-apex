@@ -98,8 +98,11 @@ flyctl secrets set --app launchpad-api \
   ENVIRONMENT=production \
   CORS_ALLOWED_ORIGINS="https://launchpad.floatify.com" \
   LAUNCHPAD_DATACORE_AUTH_URL="http://datacore.flycast:5800/auth" \
-  LAUNCHPAD_DATACORE_API_URL="http://datacore.flycast:5800/api"
+  LAUNCHPAD_DATACORE_API_URL="http://datacore.flycast:5800/api" \
+  LAUNCHPAD_APEXFLOW_BACKEND_URL="http://apexflow-api.flycast:5910"
 ```
+
+> **Why `LAUNCHPAD_APEXFLOW_BACKEND_URL`?** The model sync-defaults endpoint calls apexflow's `model-preflight` to find published workflows that a base-model change would make stale, and refuses the sync without `force` if any would be affected.
 
 **papermite-api**
 

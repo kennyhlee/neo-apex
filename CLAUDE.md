@@ -128,3 +128,4 @@ NeoApex deploys to Fly.io (Python backends) and Cloudflare Workers with Static A
 - Always use the `superpowers:subagent-driven-development` skill when executing implementation plans with independent tasks.
 - Prefer the `/floatify` skill for development workflow: use OpenSpec to write and review specs, then execute with superpowers skills.
 - `VOYAGE_API_KEY` and other API keys are in `~/.zshrc`. Run `source ~/.zshrc` if env vars appear missing.
+- **Base-model evolution** (`launchpad/backend/app/data/base_model.json`): new base fields ship `required: false` or carry a `default`. A required field with no default re-versions every live workflow on that model: `definition_health` turns `stale`, and `create_instance` refuses new instances until an admin publishes a version that collects it. LaunchPad's sync-defaults reports affected workflows and refuses without `force`.
