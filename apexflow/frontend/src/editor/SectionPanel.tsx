@@ -5,6 +5,7 @@
 import { useEffect } from 'react';
 import { humanizeSectionId } from '@neoapex/workflow-forms';
 import { useTranslation } from '../hooks/useTranslation.ts';
+import { FIELD_ANCHOR_ATTR, SECTION_ANCHOR_ATTR } from './errorTarget.ts';
 import {
   dropForbiddenConditionalFields,
   isModelRequiredNoDefault,
@@ -114,7 +115,7 @@ export default function SectionPanel({
   }
 
   return (
-    <div className="section-panel">
+    <div className="section-panel" {...{ [SECTION_ANCHOR_ATTR]: section.section_id }}>
       <div className="section-panel-header">
         <span className="section-panel-id">{section.section_id}</span>
         <button type="button" className="btn btn-ghost btn-sm" onClick={onRemove} disabled={readOnly}>
@@ -311,7 +312,11 @@ function FieldPickerTable({
           // ordinary optional field here on either path.
           const locked = !conditional && isModelRequiredNoDefault(field);
           return (
-            <tr key={field.name} className={locked ? 'section-field-locked' : undefined}>
+            <tr
+              key={field.name}
+              className={locked ? 'section-field-locked' : undefined}
+              {...{ [FIELD_ANCHOR_ATTR]: field.name }}
+            >
               <td>
                 <input
                   type="checkbox"

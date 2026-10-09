@@ -884,3 +884,59 @@ def definition_health(
         return "stale"
 
     return "current"
+
+
+def fit_steps_to_models(steps: list[dict[str, Any]], models: dict[str, Any]) -> list[dict[str, Any]]:
+    """A template's raw steps, with every form section's field picks fitted to
+    the tenant's CURRENT models the way the editor fits them on open.
+
+    Server twin of the designer's `syncModelRequiredFields` (unconditional
+    sections: every pickable model-required field with no default is
+    included and `required: true`) and `dropForbiddenConditionalFields`
+    (conditional sections: such fields are dropped) — same predicate
+    (`fieldPicker.ts`'s `isModelRequiredNoDefault` over `isPickableField`),
+    so a draft made from the result is exactly what the editor would show,
+    and opening it changes nothing.
+
+    Without this, a template that picks a field optional which the tenant's
+    model has since made required becomes a draft that fails coverage at
+    creation; the editor then corrects it in-browser only, so the rail
+    reports an error against a screen that already looks fixed until some
+    later save persists the correction.
+
+    Sections on a model the tenant lacks (`None`) pass through untouched —
+    `missing_models` reports those. Returns new dicts; `steps` is not
+    mutated.
+    """
+    out: list[dict[str, Any]] = []
+    for step in steps:
+        config = step.get("config") or {}
+        sections = config.get("sections")
+        if step.get("type") != "form" or not sections:
+            out.append(step)
+            continue
+        conditional = step.get("show_if") is not None
+        fitted = []
+        for section in sections:
+            fields = _model_fields(models.get(section.get("entity_model")))
+            if not fields:
+                fitted.append(section)
+                continue
+            forced = [
+                name for name, fdef in fields.items()
+                if fdef.get("required") and "default" not in fdef
+                and name not in ENGINE_OWNED_FIELDS and not _is_link_or_id_field(name)
+            ]
+            picks = [dict(p) for p in section.get("fields", [])]
+            if conditional:
+                picks = [p for p in picks if p["name"] not in forced]
+            else:
+                by_name = {p["name"]: p for p in picks}
+                for name in forced:
+                    if name in by_name:
+                        by_name[name]["required"] = True
+                    else:
+                        picks.append({"name": name, "required": True})
+            fitted.append({**section, "fields": picks})
+        out.append({**step, "config": {**config, "sections": fitted}})
+    return out

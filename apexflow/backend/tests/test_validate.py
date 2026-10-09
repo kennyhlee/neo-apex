@@ -805,3 +805,63 @@ def test_items_in_status_accepts_every_real_template_value():
     """The enrollment template's actual guard params must still pass."""
     for value in ("rejected", ["submitted", "verified"], ["verified", "waived"]):
         assert _guard_params_items_in_status({"status": value}) == []
+
+
+# --- fit_steps_to_models (template gallery fitting) -------------------------
+
+
+def _fit_model(**required):
+    """Model whose fields are `name=required_flag`; `default` only via the
+    special value "default" (required + declared default)."""
+    fields = []
+    for name, flag in required.items():
+        f = {"name": name, "type": "str", "required": flag is not False}
+        if flag == "default":
+            f["default"] = "x"
+        fields.append(f)
+    return {"base_fields": fields, "custom_fields": []}
+
+
+def _form_step(fields, show_if=None, model="student"):
+    return {
+        "step_id": "s", "type": "form", "show_if": show_if,
+        "config": {"sections": [{"section_id": "sec", "entity_model": model, "mode": "create",
+                                 "fields": fields, "repeat": None}]},
+    }
+
+
+def _fit_picks(steps):
+    return steps[0]["config"]["sections"][0]["fields"]
+
+
+def test_fit_tightens_and_appends_on_unconditional_sections():
+    from app.workflows.validate import fit_steps_to_models
+
+    steps = [_form_step([{"name": "first_name", "required": False}])]
+    models = {"student": _fit_model(first_name=True, grade=True, nickname=False,
+                                    status="default", family_id=True, state=True)}
+
+    assert _fit_picks(fit_steps_to_models(steps, models)) == [
+        {"name": "first_name", "required": True},
+        {"name": "grade", "required": True},
+    ]
+    # Input untouched.
+    assert _fit_picks(steps) == [{"name": "first_name", "required": False}]
+
+
+def test_fit_drops_model_required_picks_from_conditional_sections():
+    from app.workflows.validate import fit_steps_to_models
+
+    show_if = {"all": [{"source": "context.x", "op": "truthy"}]}
+    steps = [_form_step([{"name": "first_name", "required": False},
+                         {"name": "nickname", "required": False}], show_if=show_if)]
+    models = {"student": _fit_model(first_name=True, nickname=False)}
+
+    assert _fit_picks(fit_steps_to_models(steps, models)) == [{"name": "nickname", "required": False}]
+
+
+def test_fit_leaves_sections_on_missing_models_alone():
+    from app.workflows.validate import fit_steps_to_models
+
+    steps = [_form_step([{"name": "first_name", "required": False}])]
+    assert fit_steps_to_models(steps, {"student": None}) == steps

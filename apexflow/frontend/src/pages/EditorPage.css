@@ -158,6 +158,27 @@
   border-radius: var(--radius-xs);
   padding: var(--space-2) var(--space-3);
 }
+/* An error that names something on the page is a button that goes there
+   (editor/errorTarget.ts); it keeps the plain entry's look and only adds the
+   affordance. The li is then just a container — the button carries the fill. */
+.editor-rail-errors li:has(> .editor-rail-error-link) { padding: 0; }
+.editor-rail-error-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: inherit;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+.editor-rail-error-link:hover { text-decoration: underline; }
+.editor-rail-error-link:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 1px;
+}
 
 @media (max-width: 900px) {
   .editor-layout { grid-template-columns: 1fr; }

@@ -44,7 +44,7 @@ from app.workflows import datacore as dc
 from app.workflows import definitions as defs
 from app.workflows.primitives import EFFECTS, GUARDS
 from app.workflows.schema import MachineDef, SectionDef, StepDef
-from app.workflows.validate import PARAM_SPECS, definition_health, validate_definition
+from app.workflows.validate import PARAM_SPECS, definition_health, fit_steps_to_models, validate_definition
 
 router = APIRouter(prefix="/api/workflows")
 
@@ -490,6 +490,11 @@ def templates_route(tenant_id: str, user: dict = Depends(require_staff_tenant)):
         models = defs.fetch_models(tenant_id, defs.referenced_entity_models(steps), token)
         entries.append({
             **entry,
+            # Fitted to THIS tenant's models (validate.py's
+            # `fit_steps_to_models`), so a draft created from the entry is
+            # valid against them from the start rather than only after the
+            # editor's in-browser correction is next saved.
+            "definition": {**entry["definition"], "steps": fit_steps_to_models(entry["definition"]["steps"], models)},
             "missing_models": sorted(et for et, model in models.items() if model is None),
             "missing_fields": _missing_fields(steps, models),
         })

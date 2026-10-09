@@ -1179,3 +1179,19 @@
   font-size: 0.8125rem;
   color: var(--text-tertiary);
 }
+
+/* Where a validation-rail click lands (errorTarget.ts): a short pulse so the
+   eye finds the row the page just scrolled to. Outline, not border, so the
+   layout does not shift underneath it. */
+.error-target-flash {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+  animation: error-target-flash 2s ease-out;
+}
+@keyframes error-target-flash {
+  0%, 60% { background-color: var(--danger-tint); }
+  100% { background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .error-target-flash { animation: none; }
+}
