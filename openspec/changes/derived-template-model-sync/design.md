@@ -39,6 +39,8 @@ For each entity type in `base_model.json`:
 - absent from the tenant: written as today, reported under `added_entities`;
 - present: `merge_model_definition(base_fields, existing_base + existing_custom)`; written only if the merged definition differs from the stored one (normalized the way DataCore's PUT compares), reported under `changed[entity_type] = {added_fields: [...], demoted_fields: [...]}`.
 
+A base field the tenant already has, as base or custom, keeps the tenant's stored declaration (it is overlaid onto `base_fields` before the merge); `base_model.json` supplies only fields the tenant lacks. Reason: the sync's contract is non-destructive, and Papermite edits base fields (`options`, `required`, `default`, `multiple`), so letting the base declaration win would silently revert tenant edits.
+
 Entity types the tenant has but the base model does not are left alone. One PUT carries every changed type (DataCore's PUT is a per-type upsert under one `change_id`, which is also what makes the write atomic from the tenant's point of view).
 
 Response shape replaces `{"added": [...]}` — LaunchPad's own settings page is the only consumer and is updated in the same change:

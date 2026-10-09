@@ -919,7 +919,9 @@ def test_missing_fields_always_present_and_sorted(client, fake_dc):
         for et in _referenced_models_of(entry["template_id"]):
             fake_dc.set_model(TENANT, et, _model())
 
-    for entry in client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]:
+    templates = client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]
+    assert any(entry["missing_fields"] for entry in templates)
+    for entry in templates:
         mf = entry["missing_fields"]
         assert isinstance(mf, dict)
         assert list(mf) == sorted(mf)
@@ -1323,6 +1325,30 @@ def test_preflight_unparseable_row_reports_broken(client, fake_dc):
     [row] = resp.json()["definitions"]
     assert row["health_before"] == "broken"
     assert row["health_after"] == "broken"
+
+
+def test_preflight_excludes_inactive_lineages(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", {"base_fields": [_FIRST_NAME], "custom_fields": []})
+    _seed_definition(fake_dc, definition_id="wd-pf-active", status="published",
+                     steps=_first_name_only_steps())
+    _seed_definition(fake_dc, definition_id="wd-pf-deprecated", status="published",
+                     lineage_status="deprecated", steps=_first_name_only_steps())
+
+    resp = _preflight(client, {})
+    assert resp.status_code == 200
+    assert [r["definition_id"] for r in resp.json()["definitions"]] == ["wd-pf-active"]
+
+
+def test_preflight_rejects_non_staff_role(client):
+    staff = app.dependency_overrides[require_authenticated_user]
+    app.dependency_overrides[require_authenticated_user] = lambda: {
+        "user_id": "p1", "tenant_id": TENANT, "role": "parent", "_token": "Bearer test-token",
+    }
+    try:
+        resp = _preflight(client, {})
+    finally:
+        app.dependency_overrides[require_authenticated_user] = staff
+    assert resp.status_code == 403
 
 
 def test_preflight_wrong_tenant_403(client):

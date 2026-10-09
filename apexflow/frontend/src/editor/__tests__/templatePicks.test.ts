@@ -61,6 +61,14 @@ describe('stripMissingPicks', () => {
     expected[0].config.sections[0].fields = [{ name: 'first_name', required: true }];
     expect(out).toEqual(expected);
   });
+
+  it('keeps a section whose every pick is missing, with fields: []', () => {
+    const out = stripMissingPicks(STEPS, { family: ['allergies'] });
+    const expected = JSON.parse(JSON.stringify(STEPS));
+    expected[0].config.sections[1].fields = [];
+    expect(out).toEqual(expected);
+    expect((out[0].config.sections as unknown[]).length).toBe(2);
+  });
 });
 
 describe('countMissing / describeMissing', () => {

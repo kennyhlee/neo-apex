@@ -1,5 +1,6 @@
 """Tenant profile and onboarding status endpoints."""
 import json
+import logging
 from pathlib import Path
 
 import httpx
@@ -9,6 +10,8 @@ from pydantic import BaseModel
 from app.api.auth import get_current_user, require_role
 from app.config import settings
 from app.model_merge import merge_model_definition
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -212,12 +215,14 @@ def sync_default_model(tenant_id: str, body: SyncDefaultsRequest | None = None,
                        authorization: str = Header(...)):
     """Field-level, non-destructive sync of base_model.json into the tenant's
     models. Missing entity types are added whole. Existing types get the
-    current base fields merged in (model_merge.merge_model_definition: base
-    fields win, custom fields preserved, carried-forward required-no-default
-    fields demoted). Only types whose merged definition differs are written,
-    in one PUT. Before writing, apexflow's model-preflight is asked whether
-    any published workflow would become stale/broken; see design D3/D4 and
-    the base-model rule in the root CLAUDE.md.
+    base fields they lack merged in (model_merge.merge_model_definition);
+    a base field the tenant already has, as base or custom, keeps the
+    tenant's own stored declaration, custom fields are preserved, and
+    carried-forward required-no-default fields are demoted. Only types whose
+    merged definition differs are written, in one PUT. Before writing,
+    apexflow's model-preflight is asked whether any published workflow would
+    become stale/broken; see design D3/D4 and the base-model rule in the root
+    CLAUDE.md.
     """
     if user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
@@ -248,7 +253,9 @@ def sync_default_model(tenant_id: str, body: SyncDefaultsRequest | None = None,
         cur = existing[et]
         cur_base = cur.get("base_fields", []) or []
         cur_custom = cur.get("custom_fields", []) or []
-        merged = merge_model_definition(base_def.get("base_fields", []), cur_base + cur_custom)
+        stored_by_name = {f["name"]: f for f in cur_base + cur_custom if f.get("name")}
+        effective_base = [stored_by_name.get(f["name"], f) for f in base_def.get("base_fields", [])]
+        merged = merge_model_definition(effective_base, cur_base + cur_custom)
         if (_normalize_fields(merged["base_fields"]) == _normalize_fields(cur_base)
                 and _normalize_fields(merged["custom_fields"]) == _normalize_fields(cur_custom)):
             continue
@@ -272,12 +279,14 @@ def sync_default_model(tenant_id: str, body: SyncDefaultsRequest | None = None,
             timeout=30.0,
         )
         pf_ok = pf.status_code == 200
-    except httpx.HTTPError:
+        pf_body = pf.json() if pf_ok else None
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("sync-defaults: model-preflight unavailable for tenant %s: %s", tenant_id, exc)
         pf_ok = False
     if pf_ok:
         rank = {"current": 0, "stale": 1, "broken": 2}
         report["workflows_at_risk"] = [
-            d for d in pf.json().get("definitions", [])
+            d for d in pf_body.get("definitions", [])
             if rank.get(d.get("health_after"), 2) > rank.get(d.get("health_before"), 2)
         ]
         if report["workflows_at_risk"] and not force:

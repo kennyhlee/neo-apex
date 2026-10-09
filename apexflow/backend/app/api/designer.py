@@ -364,10 +364,14 @@ def model_preflight_route(tenant_id: str, body: ModelPreflightRequest,
     Same batched read pattern as `list_definitions`: parse every row, fetch
     the union of referenced models once. A row that does not parse reports
     "broken" for both, as the list route does.
+
+    Only rows whose lineage is `active` are evaluated: engine.create_instance
+    already refuses non-active lineages, so they cannot be harmed by a model
+    change and must not trigger a refusal.
     """
     token = user.get("_token")
     rows = [r for r in dc.list_entities(tenant_id, "workflow_definition", "", token)
-            if r.get("status") == "published"]
+            if r.get("status") == "published" and r.get("lineage_status") == "active"]
 
     parsed: list[tuple[Any, Any, bool]] = []
     referenced: set[str] = set()

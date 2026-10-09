@@ -20,11 +20,15 @@ LaunchPad SHALL provide `merge_model_definition(base_fields, existing) -> {"base
 - **THEN** it defines no `merge_model_definition` and its `merge_model_definition` attribute is the LaunchPad function
 
 ### Requirement: Sync adds missing base fields to existing entity types
-`POST /api/tenants/{tenant_id}/model/sync-defaults` SHALL, for every entity type in `base_model.json` that the tenant already has, merge the base fields into the tenant's stored definition with `merge_model_definition` and write the merged definition back only when it differs from the stored one. Entity types the tenant lacks SHALL be added as before. Entity types the tenant has that the base model does not declare SHALL be left untouched. All written types SHALL go in one PUT to DataCore.
+`POST /api/tenants/{tenant_id}/model/sync-defaults` SHALL, for every entity type in `base_model.json` that the tenant already has, merge the base fields into the tenant's stored definition with `merge_model_definition` and write the merged definition back only when it differs from the stored one. Entity types the tenant lacks SHALL be added as before. Entity types the tenant has that the base model does not declare SHALL be left untouched. All written types SHALL go in one PUT to DataCore. A base field the tenant already has, as base or custom, SHALL keep the tenant's stored declaration; the base model supplies only fields the tenant lacks.
 
 #### Scenario: Tenant model predates eight application fields
 - **WHEN** the tenant's `registration_application` lacks `requested_start_date`, `schedule_days`, `pickup_method`, `handbook_acknowledged`, `liability_waiver_signed`, `tuition_agreement_signed`, `signature_name`, `signature_date` and has one Papermite custom field `packet_notes`
 - **THEN** one PUT is sent whose `registration_application.base_fields` equals the base model's and whose `custom_fields` still contains `packet_notes`
+
+#### Scenario: Tenant-edited base field is kept
+- **WHEN** the tenant's `student.grade_level` carries custom `options` that differ from the base model's, and the sync writes `student` because another base field is missing
+- **THEN** the written `student` definition keeps the tenant's `grade_level` options
 
 #### Scenario: Nothing to do
 - **WHEN** every entity type is present and every one already equals its merged definition

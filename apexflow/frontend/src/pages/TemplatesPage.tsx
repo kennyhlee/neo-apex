@@ -209,12 +209,14 @@ export default function TemplatesPage() {
               loading={creating}
               loadingText={t('templates.useCreating')}
             >
-              {activeTemplate && countMissing(activeTemplate.missing_fields) > 0
-                ? t('templates.useCreateWithout').replace(
-                    '{n}',
-                    String(countMissing(activeTemplate.missing_fields)),
-                  )
-                : t('templates.useCreate')}
+              {activeTemplate && countMissing(activeTemplate.missing_fields) === 1
+                ? t('templates.useCreateWithoutOne')
+                : activeTemplate && countMissing(activeTemplate.missing_fields) > 1
+                  ? t('templates.useCreateWithout').replace(
+                      '{n}',
+                      String(countMissing(activeTemplate.missing_fields)),
+                    )
+                  : t('templates.useCreate')}
             </Button>
           </>
         }

@@ -266,6 +266,28 @@ def test_sync_502_when_preflight_unavailable(client, monkeypatch):
     assert rec.puts == []
 
 
+def test_sync_502_when_preflight_body_not_json(client, monkeypatch):
+    rows, _ = _lagging_registration_rows()
+    rec = fake_httpx(monkeypatch, rows=rows, preflight=NO_RISK)
+    real_post = tenants.httpx.post
+
+    class NotJson(FakeResponse):
+        def json(self):
+            raise ValueError("Expecting value")
+
+    def post(url, json=None, **kwargs):
+        if "model-preflight" in url:
+            return NotJson(status_code=200)
+        return real_post(url, json=json, **kwargs)
+
+    monkeypatch.setattr(tenants.httpx, "post", post)
+
+    resp = client.post(SYNC, headers=AUTH)
+    assert resp.status_code == 502
+    assert resp.json()["detail"]["reason"] == "preflight_unavailable"
+    assert rec.puts == []
+
+
 def test_sync_force_through_preflight_failure(client, monkeypatch):
     rows, _ = _lagging_registration_rows()
     rec = fake_httpx(monkeypatch, rows=rows, preflight_error=True)
@@ -307,3 +329,57 @@ def test_sync_adds_missing_entity_type_whole(client, monkeypatch):
     assert len(rec.puts) == 1
     assert rec.puts[0]["model_definition"] == {"lead": _base_model()["lead"]}
     assert rec.puts[0]["source_filename"] == "base_model.json"
+
+
+def _without(fields, name):
+    return [f for f in fields if f["name"] != name]
+
+
+def test_sync_keeps_tenant_declaration_of_existing_base_field(client, monkeypatch):
+    base = _base_model()["student"]["base_fields"]
+    dropped = "photo_media_release"
+    stored = [
+        {**f, "options": ["K", "1", "2"]} if f["name"] == "grade_level" else f
+        for f in _without(base, dropped)
+    ]
+    rows = [r for r in _complete_rows() if r["entity_type"] != "student"]
+    rows.append(_stored("student", stored))
+    rec = fake_httpx(monkeypatch, rows=rows, preflight=NO_RISK)
+
+    resp = client.post(SYNC, headers=AUTH)
+    assert resp.status_code == 200
+    sent = {f["name"]: f for f in rec.puts[0]["model_definition"]["student"]["base_fields"]}
+    assert sent["grade_level"]["options"] == ["K", "1", "2"]
+    assert dropped in sent
+    assert resp.json()["changed"]["student"]["added_fields"] == [dropped]
+
+
+def test_sync_noop_when_only_declarations_differ(client, monkeypatch):
+    rows = [r for r in _complete_rows() if r["entity_type"] != "registration_application"]
+    base = _base_model()["registration_application"]["base_fields"]
+    rows.append(_stored("registration_application", [
+        {**f, "multiple": False} if f["name"] == "schedule_days" else f for f in base
+    ]))
+    rec = fake_httpx(monkeypatch, rows=rows, preflight=NO_RISK)
+
+    resp = client.post(SYNC, headers=AUTH)
+    assert resp.status_code == 200
+    assert rec.puts == []
+    assert rec.preflights == []
+    assert resp.json() == {"added_entities": [], "changed": {}, "workflows_at_risk": []}
+
+
+def test_sync_promotes_custom_field_matching_new_base_field(client, monkeypatch):
+    base = _base_model()["registration_application"]["base_fields"]
+    tenant_sig = {"name": "signature_date", "type": "date", "required": True}
+    rows = [r for r in _complete_rows() if r["entity_type"] != "registration_application"]
+    rows.append(_stored(
+        "registration_application", _without(base, "signature_date"), [tenant_sig]))
+    rec = fake_httpx(monkeypatch, rows=rows, preflight=NO_RISK)
+
+    resp = client.post(SYNC, headers=AUTH)
+    assert resp.status_code == 200
+    sent = rec.puts[0]["model_definition"]["registration_application"]
+    assert {f["name"]: f for f in sent["base_fields"]}["signature_date"] == tenant_sig
+    assert "signature_date" not in [f["name"] for f in sent["custom_fields"]]
+    assert resp.json()["changed"]["registration_application"]["added_fields"] == []

@@ -46,7 +46,7 @@ When the active template has any missing fields, the apply dialog's confirm butt
 - **THEN** the request body's steps are deep-equal to the catalog entry's steps
 
 ### Requirement: Model preflight evaluates published definitions against proposed models
-`POST /api/workflows/{tenant_id}/model-preflight` with body `{"models": {entity_type: definition}}` SHALL return `{"definitions": [...]}` with one entry per **published** `workflow_definition` row: `{definition_id, name, version, health_before, health_after}`. `health_before` SHALL be `definition_health` against the tenant's stored models; `health_after` against the stored models with the body's entries overlaid. Stored models SHALL be fetched once for the union of referenced entity types. A row whose machine or steps fail to parse SHALL report `"broken"` for both. The route SHALL require staff or admin with a matching tenant, and SHALL write nothing.
+`POST /api/workflows/{tenant_id}/model-preflight` with body `{"models": {entity_type: definition}}` SHALL return `{"definitions": [...]}` with one entry per **published** `workflow_definition` row whose lineage is active (`lineage_status == "active"`): `{definition_id, name, version, health_before, health_after}`. `health_before` SHALL be `definition_health` against the tenant's stored models; `health_after` against the stored models with the body's entries overlaid. Stored models SHALL be fetched once for the union of referenced entity types. A row whose machine or steps fail to parse SHALL report `"broken"` for both. The route SHALL require staff or admin with a matching tenant, and SHALL write nothing.
 
 #### Scenario: New required field makes a workflow stale
 - **WHEN** the body's `student` adds a `required: true` field with no default that no published section picks
@@ -59,6 +59,10 @@ When the active template has any missing fields, the apply dialog's confirm butt
 #### Scenario: Drafts are excluded
 - **WHEN** the tenant has one draft and one published definition
 - **THEN** only the published one appears
+
+#### Scenario: Inactive lineages are excluded
+- **WHEN** the tenant has one published definition on an active lineage and one published definition whose lineage is `deprecated`
+- **THEN** only the active one appears, since `engine.create_instance` already refuses non-active lineages
 
 #### Scenario: Wrong tenant
 - **WHEN** the token's tenant does not match the path

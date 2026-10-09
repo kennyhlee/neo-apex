@@ -167,6 +167,14 @@ export default function TenantSettingsPage({ user }: Props) {
                 </p>
               ))}
               {syncReport.preflight === "unavailable" && <p style={{ margin: "0 0 4px" }}>Workflow impact could not be checked.</p>}
+              {syncReport.workflows_at_risk.length > 0 && (
+                <>
+                  <p style={{ margin: "0 0 4px" }}>Published workflows now at risk:</p>
+                  {syncReport.workflows_at_risk.map(w => (
+                    <p key={w.definition_id} style={{ margin: "0 0 4px" }}>{w.name} v{w.version}: {w.health_before} → {w.health_after}</p>
+                  ))}
+                </>
+              )}
             </div>
           )}
           {(syncRefused || syncPreflightFailed) && (
