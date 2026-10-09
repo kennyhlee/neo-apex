@@ -49,11 +49,13 @@ but --dry-run):
 NOT run against the real dev LanceDB by Task 9 (task-9-brief.md's own Step 3
 note: "do NOT run the reseed script against the real dev LanceDB in this
 task ... the coordinator runs it in Task 13's gate"). This file's pure
-helpers (`discover_dev_tenants`, `merge_model_definition`) are unit-tested
-in apexflow/backend/tests/test_reseed_script.py; the archive/PUT/seed I/O
+helper (`discover_dev_tenants`) is unit-tested in
+apexflow/backend/tests/test_reseed_script.py (`merge_model_definition` lives in
+LaunchPad: launchpad/backend/app/model_merge.py); the archive/PUT/seed I/O
 below is exercised only by that later live run.
 """
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -63,6 +65,7 @@ import httpx
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LANCEDB_DIR = REPO_ROOT / "datacore" / "data" / "lancedb"
 BASE_MODEL_PATH = REPO_ROOT / "launchpad" / "backend" / "app" / "data" / "base_model.json"
+LAUNCHPAD_MODEL_MERGE = REPO_ROOT / "launchpad" / "backend" / "app" / "model_merge.py"
 APEXFLOW_BACKEND = REPO_ROOT / "apexflow" / "backend"
 
 # So `from app.templates.enrollment import seed_enrollment_template` resolves
@@ -70,6 +73,19 @@ APEXFLOW_BACKEND = REPO_ROOT / "apexflow" / "backend"
 # apexflow-backend's own deps (fastapi/httpx/pydantic) aren't on the running
 # interpreter's path, since that import is deferred (see seed_template()).
 sys.path.insert(0, str(APEXFLOW_BACKEND))
+
+
+def _load_merge_model_definition():
+    """LaunchPad owns the merge rule (launchpad/backend/app/model_merge.py).
+    Loaded by file path: LaunchPad's package is also named `app`, which
+    would collide with apexflow's `app` already on sys.path."""
+    spec = importlib.util.spec_from_file_location("launchpad_model_merge", LAUNCHPAD_MODEL_MERGE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.merge_model_definition
+
+
+merge_model_definition = _load_merge_model_definition()
 
 # Entity types this reseed wipes (spec §10): registration-era rows the
 # apexflow entities replace, plus apexflow's own workflow rows (so re-running
@@ -112,46 +128,6 @@ def discover_dev_tenants() -> list[str]:
         p.name[: -len(suffix)] for p in LANCEDB_DIR.iterdir()
         if p.name.endswith(suffix)
     )
-
-
-def merge_model_definition(base_fields: list[dict], existing: list[dict]) -> dict:
-    """`base_fields` (always win) + whatever of `existing` isn't itself a
-    base field, deduped by name, first-write-wins.
-
-    The exact merge rule scripts/reset_registration_dev_data.py established
-    for spec §4 rule 1 (Papermite finalize's "merge, never replace"),
-    generalized here to every entity type in base_model.json rather than
-    just the two registration ones. Pure function: no I/O, does not mutate
-    either input.
-
-    A carried-forward field that is `required: True` with no `default` is
-    demoted to optional. Discovered live (Task 13 gate, tenant "acme"):
-    registration_application's PRIOR schema generation had `config_version`
-    and `channel_started` as required base fields (options ["parent",
-    "admin"]); apexflow's current base_model.json dropped them from
-    registration_application (that concept now lives on workflow_instance,
-    options ["family", "staff"]) so they fall into `existing` here as
-    ordinary carried-forward fields. No template section can ever satisfy a
-    field the current base schema no longer declares, so keeping
-    `required: True` makes app.workflows.validate.validate_definition's
-    unconditional-coverage check fail on every publish, permanently, for any
-    tenant that ever had the old schema. A field with a `default` is left
-    alone -- validate_definition's coverage check already exempts those
-    (`"default" in fdef`) regardless of `required`, so it self-satisfies and
-    isn't the hazard this guards against.
-    """
-    base_names = {f["name"] for f in base_fields}
-    custom: list[dict] = []
-    seen: set[str] = set()
-    for f in existing:
-        name = f.get("name")
-        if not name or name in base_names or name in seen:
-            continue
-        if f.get("required") and "default" not in f:
-            f = {**f, "required": False}
-        custom.append(f)
-        seen.add(name)
-    return {"base_fields": base_fields, "custom_fields": custom}
 
 
 # --- I/O: DataCore HTTP (not exercised by this task's own test run) --------

@@ -1,6 +1,6 @@
 # apexflow/backend/tests/test_reseed_script.py
 """Unit tests for scripts/apexflow-reseed-dev.py's PURE helpers only
-(`discover_dev_tenants`, `merge_model_definition`) — task-9-brief.md Step 3:
+(`discover_dev_tenants`; `merge_model_definition` now lives in LaunchPad) — task-9-brief.md Step 3:
 "unit-test its pure helpers if practical." The script's I/O (archive/models
 PUT/seed-template calls against a live DataCore) is explicitly NOT run by
 this task; see the script's own module docstring.
@@ -82,3 +82,14 @@ def test_seeded_template_ids_match_the_shipped_catalog():
     from app.templates.catalog import template_catalog
 
     assert list(reseed.SEEDED_TEMPLATE_IDS) == [t["template_id"] for t in template_catalog()]
+
+
+def test_merge_rule_is_launchpads():
+    path = SCRIPT_PATH.parents[1] / "launchpad" / "backend" / "app" / "model_merge.py"
+    spec = importlib.util.spec_from_file_location("lp_model_merge_check", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert (
+        reseed.merge_model_definition.__code__.co_filename
+        == mod.merge_model_definition.__code__.co_filename
+    )
