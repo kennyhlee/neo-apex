@@ -347,6 +347,58 @@ def validate_definition_route(tenant_id: str, entity_id: str,
     return {"errors": errors, "health": health}
 
 
+class ModelPreflightRequest(BaseModel):
+    models: dict[str, dict[str, Any]]
+
+
+@router.post("/{tenant_id}/model-preflight")
+def model_preflight_route(tenant_id: str, body: ModelPreflightRequest,
+                          user: dict = Depends(require_staff_tenant)):
+    """Read-only: `definition_health` of every PUBLISHED definition against
+    the tenant's stored models (`health_before`) and against the stored
+    models overlaid with `body.models` (`health_after`). LaunchPad's
+    field-level model sync calls this before writing, so a sync that would
+    make a live workflow stale or broken is refused rather than silently
+    stalling new instances (engine.create_instance 409s on either).
+
+    Same batched read pattern as `list_definitions`: parse every row, fetch
+    the union of referenced models once. A row that does not parse reports
+    "broken" for both, as the list route does.
+    """
+    token = user.get("_token")
+    rows = [r for r in dc.list_entities(tenant_id, "workflow_definition", "", token)
+            if r.get("status") == "published"]
+
+    parsed: list[tuple[Any, Any, bool]] = []
+    referenced: set[str] = set()
+    for row in rows:
+        try:
+            machine, steps = defs.parse_machine_steps(row)
+            referenced |= defs.referenced_entity_models(steps)
+            parsed.append((machine, steps, True))
+        except (ValidationError, ValueError, TypeError):
+            parsed.append((None, None, False))
+
+    stored = defs.fetch_models(tenant_id, referenced, token)
+    proposed = {**stored, **body.models}
+
+    out = []
+    for row, (machine, steps, ok) in zip(rows, parsed):
+        if ok:
+            before = definition_health(machine, steps, stored)
+            after = definition_health(machine, steps, proposed)
+        else:
+            before = after = "broken"
+        out.append({
+            "definition_id": row.get("definition_id"),
+            "name": row.get("name"),
+            "version": defs._as_int(row.get("version")),
+            "health_before": before,
+            "health_after": after,
+        })
+    return {"definitions": out}
+
+
 def _param_dict(name: str) -> list[dict[str, Any]]:
     out = []
     for spec in PARAM_SPECS.get(name, []):

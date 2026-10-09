@@ -1158,3 +1158,100 @@ def test_save_definition_refuses_a_published_row(client, fake_dc):
     )
     assert resp.status_code == 409
     assert resp.json()["detail"]["reason"] == "not_draft"
+
+
+# --- model-preflight ---------------------------------------------------------
+
+_FIRST_NAME = {"name": "first_name", "type": "str", "required": True}
+
+
+def _first_name_only_steps():
+    steps = _valid_steps()
+    steps[0]["config"]["sections"][0]["fields"] = [{"name": "first_name", "required": True}]
+    return steps
+
+
+def _preflight(client, models):
+    return client.post(f"/api/workflows/{TENANT}/model-preflight", json={"models": models})
+
+
+def test_preflight_required_no_default_field_makes_published_stale(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", {"base_fields": [_FIRST_NAME], "custom_fields": []})
+    _seed_definition(fake_dc, definition_id="wd-pf-1", status="published",
+                     steps=_first_name_only_steps())
+
+    resp = _preflight(client, {"student": {
+        "base_fields": [_FIRST_NAME,
+                        {"name": "allergy_plan", "type": "str", "required": True}],
+        "custom_fields": [],
+    }})
+    assert resp.status_code == 200
+    [row] = resp.json()["definitions"]
+    assert row["definition_id"] == "wd-pf-1"
+    assert row["health_before"] == "current"
+    assert row["health_after"] == "stale"
+
+
+def test_preflight_optional_additions_keep_health(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", {"base_fields": [_FIRST_NAME], "custom_fields": []})
+    _seed_definition(fake_dc, definition_id="wd-pf-2", status="published",
+                     steps=_first_name_only_steps())
+
+    resp = _preflight(client, {"student": {
+        "base_fields": [_FIRST_NAME,
+                        {"name": "nickname", "type": "str", "required": False}],
+        "custom_fields": [],
+    }})
+    assert resp.status_code == 200
+    [row] = resp.json()["definitions"]
+    assert row["health_before"] == row["health_after"] == "current"
+
+
+def test_preflight_excludes_drafts(client, fake_dc):
+    fake_dc.set_model(TENANT, "student", {"base_fields": [_FIRST_NAME], "custom_fields": []})
+    _seed_definition(fake_dc, definition_id="wd-pf-draft", status="draft",
+                     steps=_first_name_only_steps())
+    _seed_definition(fake_dc, definition_id="wd-pf-live", status="published",
+                     steps=_first_name_only_steps())
+
+    resp = _preflight(client, {})
+    assert resp.status_code == 200
+    assert [r["definition_id"] for r in resp.json()["definitions"]] == ["wd-pf-live"]
+
+
+def test_preflight_unparseable_row_reports_broken(client, fake_dc):
+    _seed_definition_with_raw_machine(fake_dc, definition_id="wd-pf-bad",
+                                      raw_machine="not json", status="published")
+
+    resp = _preflight(client, {})
+    assert resp.status_code == 200
+    [row] = resp.json()["definitions"]
+    assert row["health_before"] == "broken"
+    assert row["health_after"] == "broken"
+
+
+def test_preflight_wrong_tenant_403(client):
+    resp = client.post("/api/workflows/othertenant/model-preflight", json={"models": {}})
+    assert resp.status_code == 403
+
+
+def test_preflight_models_fetch_is_batched(client, fake_dc, monkeypatch):
+    fake_dc.set_model(TENANT, "student", {"base_fields": [_FIRST_NAME], "custom_fields": []})
+    _seed_definition(fake_dc, definition_id="wd-pf-a", status="published",
+                     steps=_first_name_only_steps())
+    _seed_definition(fake_dc, definition_id="wd-pf-b", status="published",
+                     steps=_first_name_only_steps())
+
+    fetched: list[str] = []
+    real_model = dc.get_model_definition
+
+    def counting_get_model(tenant_id, entity_type, token=None):
+        fetched.append(entity_type)
+        return real_model(tenant_id, entity_type, token)
+
+    monkeypatch.setattr(dc, "get_model_definition", counting_get_model)
+
+    resp = _preflight(client, {})
+    assert resp.status_code == 200
+    assert len(resp.json()["definitions"]) == 2
+    assert fetched == ["student"]
