@@ -3,11 +3,12 @@ import json
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from app.api.auth import get_current_user, require_role
 from app.config import settings
+from app.model_merge import merge_model_definition
 
 router = APIRouter()
 
@@ -197,44 +198,103 @@ def use_default_model(tenant_id: str, user=Depends(require_role("admin"))):
     return base_model
 
 
+class SyncDefaultsRequest(BaseModel):
+    force: bool = False
+
+
+def _normalize_fields(fields: list[dict]) -> list[dict]:
+    return sorted(fields, key=lambda f: f["name"])
+
+
 @router.post("/tenants/{tenant_id}/model/sync-defaults")
-def sync_default_model(tenant_id: str, user=Depends(require_role("admin"))):
-    """Non-destructively add any base_model entities missing from the tenant's
-    current model. Existing entities (and their customizations) are untouched."""
+def sync_default_model(tenant_id: str, body: SyncDefaultsRequest | None = None,
+                       user=Depends(require_role("admin")),
+                       authorization: str = Header(...)):
+    """Field-level, non-destructive sync of base_model.json into the tenant's
+    models. Missing entity types are added whole. Existing types get the
+    current base fields merged in (model_merge.merge_model_definition: base
+    fields win, custom fields preserved, carried-forward required-no-default
+    fields demoted). Only types whose merged definition differs are written,
+    in one PUT. Before writing, apexflow's model-preflight is asked whether
+    any published workflow would become stale/broken; see design D3/D4 and
+    the base-model rule in the root CLAUDE.md.
+    """
     if user["tenant_id"] != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
+    force = bool(body and body.force)
     base_model = json.loads(BASE_MODEL_PATH.read_text())
 
-    resp = httpx.post(
-        _datacore_url("/query"),
-        json={
-            "tenant_id": tenant_id,
-            "table": "models",
-            "sql": "SELECT entity_type FROM data WHERE _status = 'active'",
-        },
-    )
+    resp = httpx.post(_datacore_url("/query"), json={
+        "tenant_id": tenant_id, "table": "models",
+        "sql": "SELECT entity_type, model_definition FROM data WHERE _status = 'active'",
+    })
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Failed to fetch model")
-    existing = {r["entity_type"] for r in resp.json().get("data", [])}
+    existing: dict[str, dict] = {}
+    for r in resp.json().get("data", []):
+        md = r.get("model_definition")
+        if isinstance(md, str):
+            md = json.loads(md)
+        existing[r["entity_type"]] = md or {}
 
-    missing = {et: definition for et, definition in base_model.items()
-               if et not in existing}
-    if not missing:
-        return {"added": []}
+    to_write: dict[str, dict] = {}
+    added_entities: list[str] = []
+    changed: dict[str, dict] = {}
+    for et, base_def in base_model.items():
+        if et not in existing:
+            to_write[et] = base_def
+            added_entities.append(et)
+            continue
+        cur = existing[et]
+        cur_base = cur.get("base_fields", []) or []
+        cur_custom = cur.get("custom_fields", []) or []
+        merged = merge_model_definition(base_def.get("base_fields", []), cur_base + cur_custom)
+        if (_normalize_fields(merged["base_fields"]) == _normalize_fields(cur_base)
+                and _normalize_fields(merged["custom_fields"]) == _normalize_fields(cur_custom)):
+            continue
+        before_names = {f["name"] for f in cur_base + cur_custom}
+        added_fields = sorted(f["name"] for f in merged["base_fields"] if f["name"] not in before_names)
+        required_before = {f["name"] for f in cur_base + cur_custom if f.get("required")}
+        demoted = sorted(f["name"] for f in merged["custom_fields"]
+                         if f["name"] in required_before and not f.get("required"))
+        to_write[et] = merged
+        changed[et] = {"added_fields": added_fields, "demoted_fields": demoted}
 
-    put_resp = httpx.put(
-        _datacore_url(f"/models/{tenant_id}"),
-        json={
-            "model_definition": missing,
-            "source_filename": "base_model.json",
-            "created_by": user["name"],
-        },
-        timeout=30.0,
-    )
+    report = {"added_entities": sorted(added_entities), "changed": changed, "workflows_at_risk": []}
+    if not to_write:
+        return report
+
+    try:
+        pf = httpx.post(
+            f"{settings.apexflow_backend_url}/api/workflows/{tenant_id}/model-preflight",
+            json={"models": to_write},
+            headers={"Authorization": authorization},
+            timeout=30.0,
+        )
+        pf_ok = pf.status_code == 200
+    except httpx.HTTPError:
+        pf_ok = False
+    if pf_ok:
+        rank = {"current": 0, "stale": 1, "broken": 2}
+        report["workflows_at_risk"] = [
+            d for d in pf.json().get("definitions", [])
+            if rank.get(d.get("health_after"), 2) > rank.get(d.get("health_before"), 2)
+        ]
+        if report["workflows_at_risk"] and not force:
+            raise HTTPException(status_code=409, detail={"reason": "workflows_at_risk", **report})
+    else:
+        if not force:
+            raise HTTPException(status_code=502, detail="Could not evaluate workflow impact; retry or force")
+        report["preflight"] = "unavailable"
+
+    put_resp = httpx.put(_datacore_url(f"/models/{tenant_id}"), json={
+        "model_definition": to_write,
+        "source_filename": "base_model.json",
+        "created_by": user["name"],
+    }, timeout=30.0)
     if put_resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Failed to sync model")
-
-    return {"added": sorted(missing.keys())}
+    return report
 
 
 @router.get("/tenants/{tenant_id}/onboarding-status")
