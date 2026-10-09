@@ -832,6 +832,101 @@ def test_templates_route_still_serves_the_whole_catalog(client, fake_dc):
         assert got["definition"]["machine"] == want["definition"]["machine"]
 
 
+def _picks_of(template_id):
+    """{entity model: set of picked field names} for a shipped template,
+    read off its sections so no field list is hardcoded here."""
+    from app.templates.catalog import template_catalog
+    from app.workflows.schema import SectionDef
+
+    entry = _entry_by_id(template_catalog(), template_id)
+    out = {}
+    for step in entry["definition"]["steps"]:
+        if step["type"] != "form":
+            continue
+        for raw in step["config"].get("sections", []) or []:
+            section = SectionDef.model_validate(raw)
+            out.setdefault(section.entity_model, set()).update(p.name for p in section.fields)
+    return out
+
+
+def _seed_complete(fake_dc, template_id, *, drop=(), custom=(), skip_models=()):
+    """Seed every model the template references with all its picks, minus
+    `drop` on registration_application (optionally re-added as custom)."""
+    for et, names in _picks_of(template_id).items():
+        if et in skip_models:
+            continue
+        base = sorted(names - set(drop)) if et == "registration_application" else sorted(names)
+        model = _model(*base)
+        if et == "registration_application":
+            model["custom_fields"] = [{"name": n, "type": "str", "required": False} for n in custom]
+        fake_dc.set_model(TENANT, et, model)
+
+
+def _missing_fields_of(client, template_id):
+    templates = client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]
+    return _entry_by_id(templates, template_id)["missing_fields"]
+
+
+def test_missing_fields_reports_exact_lagging_fields(client, fake_dc):
+    _seed_complete(fake_dc, "enrollment", drop=("handbook_acknowledged", "signature_date"))
+
+    assert _missing_fields_of(client, "enrollment") == {
+        "registration_application": ["handbook_acknowledged", "signature_date"]
+    }
+
+
+def test_missing_fields_custom_field_satisfies_pick(client, fake_dc):
+    _seed_complete(
+        fake_dc, "enrollment",
+        drop=("handbook_acknowledged", "signature_date"), custom=("signature_date",),
+    )
+
+    assert _missing_fields_of(client, "enrollment") == {
+        "registration_application": ["handbook_acknowledged"]
+    }
+
+
+def test_missing_fields_excludes_missing_models(client, fake_dc):
+    _seed_complete(fake_dc, "enrollment", skip_models=("contact",))
+    templates = client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]
+    entry = _entry_by_id(templates, "enrollment")
+
+    assert "contact" in entry["missing_models"]
+    assert "contact" not in entry["missing_fields"]
+
+
+def test_missing_fields_empty_when_complete(client, fake_dc):
+    from app.templates.catalog import template_catalog
+
+    # Templates share model names, so seed each model with the UNION of
+    # every template's picks rather than letting one template overwrite another.
+    union = {}
+    for entry in template_catalog():
+        for et, names in _picks_of(entry["template_id"]).items():
+            union.setdefault(et, set()).update(names)
+    for et, names in union.items():
+        fake_dc.set_model(TENANT, et, _model(*sorted(names)))
+
+    for entry in client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]:
+        assert entry["missing_fields"] == {}
+
+
+def test_missing_fields_always_present_and_sorted(client, fake_dc):
+    # A model with no fields at all lags on every pick, for every template.
+    from app.templates.catalog import template_catalog
+
+    for entry in template_catalog():
+        for et in _referenced_models_of(entry["template_id"]):
+            fake_dc.set_model(TENANT, et, _model())
+
+    for entry in client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]:
+        mf = entry["missing_fields"]
+        assert isinstance(mf, dict)
+        assert list(mf) == sorted(mf)
+        for names in mf.values():
+            assert names == sorted(names)
+
+
 # --- cross-tenant 403 on every designer route -------------------------------
 
 

@@ -43,7 +43,7 @@ from app.templates.catalog import template_catalog
 from app.workflows import datacore as dc
 from app.workflows import definitions as defs
 from app.workflows.primitives import EFFECTS, GUARDS
-from app.workflows.schema import MachineDef, StepDef
+from app.workflows.schema import MachineDef, SectionDef, StepDef
 from app.workflows.validate import PARAM_SPECS, definition_health, validate_definition
 
 router = APIRouter(prefix="/api/workflows")
@@ -425,6 +425,27 @@ def primitives_catalog(tenant_id: str, user: dict = Depends(require_staff_tenant
     }
 
 
+def _missing_fields(steps: list[StepDef], models: dict[str, Any]) -> dict[str, list[str]]:
+    """Template section picks absent from the tenant's CURRENT model of that
+    type (base or custom). Models the tenant lacks entirely are reported by
+    `missing_models`, not here. Derived from the picks themselves, so it
+    cannot drift from the template (same reasoning as `missing_models`)."""
+    out: dict[str, set[str]] = {}
+    for step in steps:
+        if step.type != "form":
+            continue
+        for raw in step.config.get("sections", []) or []:
+            section = SectionDef.model_validate(raw)
+            model = models.get(section.entity_model)
+            if model is None:
+                continue
+            have = {f["name"] for f in (model.get("base_fields") or []) + (model.get("custom_fields") or [])}
+            missing = {pick.name for pick in section.fields if pick.name not in have}
+            if missing:
+                out.setdefault(section.entity_model, set()).update(missing)
+    return {et: sorted(names) for et, names in sorted(out.items())}
+
+
 @router.get("/{tenant_id}/templates")
 def templates_route(tenant_id: str, user: dict = Depends(require_staff_tenant)):
     """Shipped workflow template catalog for the designer's template gallery
@@ -466,6 +487,7 @@ def templates_route(tenant_id: str, user: dict = Depends(require_staff_tenant)):
         entries.append({
             **entry,
             "missing_models": sorted(et for et, model in models.items() if model is None),
+            "missing_fields": _missing_fields(steps, models),
         })
 
     return {"templates": entries}
