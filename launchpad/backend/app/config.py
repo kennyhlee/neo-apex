@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     datacore_auth_url: str = _svc_url("datacore") + "/auth"
     datacore_api_url: str = _svc_url("datacore") + "/api"
     papermite_frontend_url: str = _svc_url("papermite-frontend")
+    apexflow_backend_url: str = _svc_url("apexflow-backend")
     port: int = _services.get("launchpad-backend", {}).get("port", 6010)
     cors_origins: list[str] = _cors_origins()
     model_config = {"env_prefix": "LAUNCHPAD_"}
