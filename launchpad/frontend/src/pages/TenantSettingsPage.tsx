@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { User, EntityModelDefinition } from "../types/models";
-import { getTenantModel, getTenantProfile, updateTenantProfile, getTenantModelInfo, getTenantModelEntities, getExchangeCode, syncDefaultModel } from "../api/client";
+import { getTenantModel, getTenantProfile, updateTenantProfile, getTenantModelInfo, getTenantModelEntities, getExchangeCode, syncDefaultModel, type SyncReport } from "../api/client";
 import { PAPERMITE_FRONTEND_URL } from "../config";
 import DynamicEntityForm from "../components/DynamicEntityForm";
 
@@ -21,7 +21,10 @@ export default function TenantSettingsPage({ user }: Props) {
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
+  const [syncRefused, setSyncRefused] = useState<SyncReport | null>(null);
+  const [syncPreflightFailed, setSyncPreflightFailed] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const isAdmin = user.role === "admin";
 
   useEffect(() => {
@@ -41,19 +44,27 @@ export default function TenantSettingsPage({ user }: Props) {
     window.location.href = `${PAPERMITE_FRONTEND_URL}/?tenant_id=${user.tenant_id}&code=${encodeURIComponent(code)}&return_url=${encodeURIComponent(returnUrl)}`;
   };
 
-  const handleSyncDefaults = async () => {
+  const handleSyncDefaults = async (force = false) => {
     setSyncing(true);
-    setSyncMessage(null);
+    setSyncReport(null);
+    setSyncRefused(null);
+    setSyncPreflightFailed(false);
+    setSyncError(null);
     try {
-      const { added } = await syncDefaultModel(user.tenant_id);
+      const result = await syncDefaultModel(user.tenant_id, force);
+      if (!result.ok) {
+        if ("refused" in result) setSyncRefused(result.refused);
+        else setSyncPreflightFailed(true);
+        return;
+      }
       const info = await getTenantModelInfo(user.tenant_id);
       if (info) {
         setModelInfo({ version: info.version, change_id: info.change_id, created_at: info.created_at, updated_at: info.updated_at });
       }
       setModelDefinition(await getTenantModelEntities(user.tenant_id));
-      setSyncMessage(added.length ? `Added: ${added.join(", ")}` : "Model already up to date.");
+      setSyncReport(result.report);
     } catch {
-      setSyncMessage("Failed to sync default entities.");
+      setSyncError("Failed to sync default entities.");
     } finally {
       setSyncing(false);
     }
@@ -136,13 +147,47 @@ export default function TenantSettingsPage({ user }: Props) {
           )}
           {isAdmin && (
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button onClick={handleSyncDefaults} disabled={syncing} style={{ ...btnSecondary, opacity: syncing ? 0.6 : 1, cursor: syncing ? "default" : "pointer" }}>
+              <button onClick={() => handleSyncDefaults()} disabled={syncing} style={{ ...btnSecondary, opacity: syncing ? 0.6 : 1, cursor: syncing ? "default" : "pointer" }}>
                 {syncing ? "Syncing…" : "Sync default entities"}
               </button>
               <button onClick={handleEditModel} style={btnPrimary}>Edit Model</button>
             </div>
           )}
-          {syncMessage && <p style={{ color: "var(--text-secondary)", marginTop: 12, fontSize: 14 }}>{syncMessage}</p>}
+          {syncError && <p style={{ color: "var(--text-secondary)", marginTop: 12, fontSize: 14 }}>{syncError}</p>}
+          {syncReport && (
+            <div style={{ color: "var(--text-secondary)", marginTop: 12, fontSize: 14 }}>
+              {syncReport.added_entities.length === 0 && Object.keys(syncReport.changed).length === 0 && <p style={{ margin: 0 }}>Model already up to date.</p>}
+              {syncReport.added_entities.length > 0 && <p style={{ margin: "0 0 4px" }}>Added: {syncReport.added_entities.join(", ")}</p>}
+              {Object.entries(syncReport.changed).map(([entityType, c]) => (
+                <p key={entityType} style={{ margin: "0 0 4px" }}>
+                  {entityType}: {[
+                    c.added_fields.length ? `added ${c.added_fields.join(", ")}` : "",
+                    c.demoted_fields.length ? `demoted ${c.demoted_fields.join(", ")}` : "",
+                  ].filter(Boolean).join("; ")}
+                </p>
+              ))}
+              {syncReport.preflight === "unavailable" && <p style={{ margin: "0 0 4px" }}>Workflow impact could not be checked.</p>}
+            </div>
+          )}
+          {(syncRefused || syncPreflightFailed) && (
+            <div style={{ color: "var(--text-secondary)", marginTop: 12, fontSize: 14 }}>
+              {syncRefused ? (
+                <>
+                  <p style={{ margin: "0 0 4px" }}>Sync refused: it would degrade published workflows.</p>
+                  {syncRefused.workflows_at_risk.map(w => (
+                    <p key={w.definition_id} style={{ margin: "0 0 4px" }}>{w.name} v{w.version}: {w.health_before} → {w.health_after}</p>
+                  ))}
+                </>
+              ) : (
+                <p style={{ margin: "0 0 4px" }}>Could not check workflow impact. Retry, or sync anyway.</p>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <button onClick={() => handleSyncDefaults(true)} disabled={syncing} style={{ ...btnSecondary, opacity: syncing ? 0.6 : 1, cursor: syncing ? "default" : "pointer" }}>
+                  Sync anyway
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

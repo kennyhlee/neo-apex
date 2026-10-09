@@ -166,12 +166,30 @@ export async function useDefaultModel(tenantId: string): Promise<Record<string, 
   return res.json();
 }
 
-export async function syncDefaultModel(tenantId: string): Promise<{ added: string[] }> {
+export interface SyncReport {
+  added_entities: string[];
+  changed: Record<string, { added_fields: string[]; demoted_fields: string[] }>;
+  workflows_at_risk: { definition_id: string; name: string; version: number; health_before: string; health_after: string }[];
+  preflight?: "unavailable";
+}
+export type SyncResult =
+  | { ok: true; report: SyncReport }
+  | { ok: false; refused: SyncReport }
+  | { ok: false; preflightFailed: true };
+
+export async function syncDefaultModel(tenantId: string, force = false): Promise<SyncResult> {
   const res = await authFetch(`${BASE_URL}/tenants/${tenantId}/model/sync-defaults`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ force }),
   });
+  if (res.status === 409) {
+    const body = await res.json();
+    return { ok: false, refused: body.detail ?? body };
+  }
+  if (res.status === 502 && !force) return { ok: false, preflightFailed: true };
   if (!res.ok) throw new Error("Failed to sync default entities");
-  return res.json();
+  return { ok: true, report: await res.json() };
 }
 
 export async function getTenantModelEntities(tenantId: string): Promise<Record<string, { base_fields: { name: string }[]; custom_fields: { name: string }[] }>> {
