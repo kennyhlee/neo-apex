@@ -929,6 +929,66 @@ def test_missing_fields_always_present_and_sorted(client, fake_dc):
             assert names == sorted(names)
 
 
+def _application_picks(definition):
+    """{field name: required} for the enrollment template's
+    registration_application section, as served."""
+    for step in definition["steps"]:
+        for section in (step.get("config") or {}).get("sections", []) or []:
+            if section["entity_model"] == "registration_application":
+                return {p["name"]: p["required"] for p in section["fields"]}
+    raise AssertionError("no registration_application section")
+
+
+def _seed_required(fake_dc, entity_type, name, *, custom=False):
+    """Mark `name` model-required (no default) on an already-seeded model,
+    adding it as a custom field when `custom`."""
+    model = fake_dc.models[(TENANT, entity_type)]
+    if custom:
+        model["custom_fields"].append({"name": name, "type": "str", "required": True})
+        return
+    for f in model["base_fields"]:
+        if f["name"] == name:
+            f["required"] = True
+            return
+    raise AssertionError(f"{entity_type} has no base field {name!r}")
+
+
+def test_templates_tighten_picks_the_tenant_model_requires(client, fake_dc):
+    """Prod repro (Acme, 'Enrollment 2'): the tenant's model marks
+    `school_year` required, the template picks it optional, so the freshly
+    created draft failed coverage — and the editor only papered over it
+    in-browser until the next save. The served definition must already
+    honor the tenant's model, so the draft is valid from the moment it is
+    created."""
+    _seed_complete(fake_dc, "enrollment")
+    _seed_required(fake_dc, "registration_application", "school_year")
+
+    templates = client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]
+    definition = _entry_by_id(templates, "enrollment")["definition"]
+    assert _application_picks(definition)["school_year"] is True
+
+    created = client.post(f"/api/workflows/{TENANT}/definitions", json={
+        "name": "Enrollment 2",
+        "machine": definition["machine"],
+        "steps": definition["steps"],
+        "channel_access": definition["channel_access"],
+    })
+    assert created.status_code == 201, created.text
+    assert not [e for e in created.json()["errors"] if "school_year" in e]
+
+
+def test_templates_append_model_required_field_the_template_never_picks(client, fake_dc):
+    """A tenant-added required custom field the template knows nothing about
+    is appended to the unconditional section — exactly what the editor's
+    `syncModelRequiredFields` would do on open, so opening never dirties."""
+    _seed_complete(fake_dc, "enrollment")
+    _seed_required(fake_dc, "registration_application", "allergy_plan", custom=True)
+
+    templates = client.get(f"/api/workflows/{TENANT}/templates").json()["templates"]
+    picks = _application_picks(_entry_by_id(templates, "enrollment")["definition"])
+    assert picks["allergy_plan"] is True
+
+
 # --- cross-tenant 403 on every designer route -------------------------------
 
 

@@ -11,6 +11,7 @@ import { useDraftStore } from '../editor/draftStore.ts';
 import StageEditor from '../editor/StageEditor.tsx';
 import FlowView from '../editor/flow/FlowView.tsx';
 import { revealStage } from '../editor/flow/revealStage.ts';
+import { errorTarget, revealErrorTarget, type ErrorTarget } from '../editor/errorTarget.ts';
 import { readStageModel } from '../editor/stage/read.ts';
 import PreviewPane from '../editor/PreviewPane.tsx';
 import PublishDialog from '../editor/PublishDialog.tsx';
@@ -82,6 +83,9 @@ export default function EditorPage() {
   // clearing it from inside an effect, which is the cascading-render pattern
   // `react-hooks/set-state-in-effect` exists to stop.
   const pendingStageRef = useRef<string | null>(null);
+  // Same one-shot shape for a validation-rail click made from another tab:
+  // the Stages tab is not mounted yet, so its target waits here.
+  const pendingErrorRef = useRef<ErrorTarget | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
   const [showDiscard, setShowDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -120,6 +124,25 @@ export default function EditorPage() {
     pendingStageRef.current = null;
     revealStage(stageId);
   }, [tab]);
+
+  useEffect(() => {
+    const target = pendingErrorRef.current;
+    if (!target || tab !== 'stages') return;
+    pendingErrorRef.current = null;
+    void revealErrorTarget(target);
+  }, [tab]);
+
+  /** Validation rail -> the field/section/step/stage the error names. */
+  function goToError(target: ErrorTarget) {
+    if (tab === 'stages') {
+      void revealErrorTarget(target);
+      return;
+    }
+    pendingErrorRef.current = target;
+    setTab('stages');
+  }
+
+  const stateIds = store.machine.states.map((s) => s.state_id);
 
   /* Unsaved edits now live only in this browser, so closing the tab is a real
      way to lose them. The localStorage mirror means they are recoverable, but
@@ -569,9 +592,23 @@ export default function EditorPage() {
             <p className="editor-rail-empty">{t('editor.rail.noIssues')}</p>
           ) : (
             <ul className="editor-rail-errors">
-              {store.validation.errors.map((err, i) => (
-                <li key={i}>{err}</li>
-              ))}
+              {store.validation.errors.map((err, i) => {
+                // Resolved against what is on screen, not the saved row the
+                // message came from, so a click never targets something the
+                // author has since removed.
+                const target = errorTarget(err, store.steps, stateIds);
+                return (
+                  <li key={i}>
+                    {target ? (
+                      <button type="button" className="editor-rail-error-link" onClick={() => goToError(target)}>
+                        {err}
+                      </button>
+                    ) : (
+                      err
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </aside>

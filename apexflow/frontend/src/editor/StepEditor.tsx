@@ -3,6 +3,7 @@
 // existing precedent (DataTable/DefinitionsPage have no drag-and-drop
 // anywhere in this codebase).
 import { useMemo, useState } from 'react';
+import { STEP_ANCHOR_ATTR } from './errorTarget.ts';
 import { useTranslation } from '../hooks/useTranslation.ts';
 import { useToast } from '../hooks/useToast.ts';
 import SectionPanel from './SectionPanel.tsx';
@@ -243,7 +244,7 @@ export default function StepEditor({
           const isCollapsed = collapsed.has(step.step_id);
           const stepErrors = errorsForStep(errors, step.step_id);
           return (
-            <li key={step.step_id} className="step-card">
+            <li key={step.step_id} className="step-card" {...{ [STEP_ANCHOR_ATTR]: step.step_id }}>
               <div className="step-card-header">
                 <button
                   type="button"
