@@ -284,7 +284,7 @@ def sync_default_model(tenant_id: str, body: SyncDefaultsRequest | None = None,
             raise HTTPException(status_code=409, detail={"reason": "workflows_at_risk", **report})
     else:
         if not force:
-            raise HTTPException(status_code=502, detail="Could not evaluate workflow impact; retry or force")
+            raise HTTPException(status_code=502, detail={"reason": "preflight_unavailable", **report})
         report["preflight"] = "unavailable"
 
     put_resp = httpx.put(_datacore_url(f"/models/{tenant_id}"), json={

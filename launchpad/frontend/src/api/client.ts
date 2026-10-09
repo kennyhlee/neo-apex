@@ -187,7 +187,10 @@ export async function syncDefaultModel(tenantId: string, force = false): Promise
     const body = await res.json();
     return { ok: false, refused: body.detail ?? body };
   }
-  if (res.status === 502 && !force) return { ok: false, preflightFailed: true };
+  if (res.status === 502) {
+    const body = await res.json().catch(() => null);
+    if (body?.detail?.reason === "preflight_unavailable") return { ok: false, preflightFailed: true };
+  }
   if (!res.ok) throw new Error("Failed to sync default entities");
   return { ok: true, report: await res.json() };
 }

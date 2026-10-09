@@ -262,6 +262,7 @@ def test_sync_502_when_preflight_unavailable(client, monkeypatch):
 
     resp = client.post(SYNC, headers=AUTH)
     assert resp.status_code == 502
+    assert resp.json()["detail"]["reason"] == "preflight_unavailable"
     assert rec.puts == []
 
 
