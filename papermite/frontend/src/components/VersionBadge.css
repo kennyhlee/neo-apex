@@ -1,0 +1,46 @@
+.version-badge-host {
+  position: relative;
+}
+
+.version-badge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  font: 600 10px/16px var(--font-sans, system-ui, sans-serif);
+  text-align: center;
+  cursor: default;
+  user-select: none;
+  opacity: 0.7;
+}
+
+.version-badge:hover,
+.version-badge:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+.version-badge::after {
+  content: attr(data-label);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  padding: 3px 8px;
+  border-radius: var(--radius-md);
+  background: var(--text-primary, #222);
+  color: var(--bg-card, #fff);
+  font: 500 11px/1.4 var(--font-sans, system-ui, sans-serif);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.version-badge:hover::after,
+.version-badge:focus-visible::after {
+  opacity: 1;
+}

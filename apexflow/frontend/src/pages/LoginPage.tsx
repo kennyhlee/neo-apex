@@ -5,6 +5,7 @@ import { useTranslation } from '../hooks/useTranslation.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import type { Locale } from '../i18n/translations.ts';
 import './LoginPage.css';
+import VersionBadge from '../components/VersionBadge.tsx';
 
 export default function LoginPage() {
   const { t, locale, setLocale } = useTranslation();
@@ -31,7 +32,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      <div className="login-card">
+      <div className="login-card version-badge-host">
         <div className="login-card-body">
           <div className="login-logo">
             <img src="/favicon.svg" alt="ApexFlow" />
@@ -82,6 +83,7 @@ export default function LoginPage() {
             <option value="zh-CN">中文</option>
           </select>
         </div>
+        <VersionBadge />
       </div>
     </div>
   );

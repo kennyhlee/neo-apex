@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { TestUser } from "../types/models";
 import { PAPERMITE_API_URL } from "../config";
 import "./LoginPage.css";
+import VersionBadge from "../components/VersionBadge";
 
 interface Props {
   onLogin: (token: string, user: TestUser) => void;
@@ -54,7 +55,7 @@ export default function LoginPage({ onLogin }: Props) {
       <div className="login__glow login__glow--1" />
       <div className="login__glow login__glow--2" />
 
-      <div className="login__card">
+      <div className="login__card version-badge-host">
         <div className="login__header">
           <h1 className="login__brand">Papermite</h1>
           <p className="login__subtitle">Data Ingestion Gateway</p>
@@ -146,6 +147,7 @@ export default function LoginPage({ onLogin }: Props) {
           </svg>
           <span>by <a href="https://www.floatify.com/" target="_blank" rel="noopener noreferrer">floatify</a></span>
         </div>
+        <VersionBadge />
       </div>
     </div>
   );

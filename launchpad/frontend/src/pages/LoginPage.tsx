@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { User } from "../types/models";
 import { login } from "../api/client";
 import "./LoginPage.css";
+import VersionBadge from "../components/VersionBadge";
 
 interface Props {
   onLogin: (token: string, user: User) => void;
@@ -31,7 +32,7 @@ export default function LoginPage({ onLogin, onSwitchToSignup }: Props) {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <div className="auth-card version-badge-host">
         <div className="auth-header">
           <h1 className="auth-brand">Launchpad</h1>
           <p className="auth-subtitle">Sign in to your account</p>
@@ -80,6 +81,7 @@ export default function LoginPage({ onLogin, onSwitchToSignup }: Props) {
           </svg>
           <span>by <a href="https://www.floatify.com/" target="_blank" rel="noopener noreferrer">floatify</a></span>
         </div>
+        <VersionBadge />
       </div>
     </div>
   );
