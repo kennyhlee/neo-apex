@@ -25,6 +25,7 @@ import { createDefinition, listTemplates } from '../api/designer.ts';
 import type { TemplateCatalogEntry } from '../types/designer.ts';
 import { Button } from '../components/ui/Button.tsx';
 import { Modal } from '../components/ui/Modal.tsx';
+import { countMissing, describeMissing, stripMissingPicks } from '../editor/templatePicks.ts';
 import './TemplatesPage.css';
 
 export default function TemplatesPage() {
@@ -113,7 +114,7 @@ export default function TemplatesPage() {
       const result = await createDefinition(tenantId, {
         name: trimmed,
         machine: definition.machine,
-        steps: definition.steps,
+        steps: stripMissingPicks(definition.steps, activeTemplate.missing_fields),
         channel_access: definition.channel_access,
       });
       toast({ message: t('templates.useToast').replace('{name}', trimmed), tone: 'success' });
@@ -163,12 +164,22 @@ export default function TemplatesPage() {
                   <dd>{tpl.definition.machine.states.length}</dd>
                 </div>
               </dl>
-              {tpl.missing_models.length > 0 && (
+              {(tpl.missing_models.length > 0 || countMissing(tpl.missing_fields) > 0) && (
                 <p className="template-card-warning" role="note">
                   <strong>{t('templates.missingModelsBadge')}</strong>{' '}
-                  {t('templates.missingModelsCard').replace(
-                    '{models}',
-                    tpl.missing_models.join(', '),
+                  {tpl.missing_models.length > 0 &&
+                    t('templates.missingModelsCard').replace(
+                      '{models}',
+                      tpl.missing_models.join(', '),
+                    )}
+                  {countMissing(tpl.missing_fields) > 0 && (
+                    <>
+                      {tpl.missing_models.length > 0 && ' '}
+                      {t('templates.missingFieldsCard').replace(
+                        '{fields}',
+                        describeMissing(tpl.missing_fields),
+                      )}
+                    </>
                   )}
                 </p>
               )}
@@ -198,7 +209,12 @@ export default function TemplatesPage() {
               loading={creating}
               loadingText={t('templates.useCreating')}
             >
-              {t('templates.useCreate')}
+              {activeTemplate && countMissing(activeTemplate.missing_fields) > 0
+                ? t('templates.useCreateWithout').replace(
+                    '{n}',
+                    String(countMissing(activeTemplate.missing_fields)),
+                  )
+                : t('templates.useCreate')}
             </Button>
           </>
         }
@@ -208,6 +224,14 @@ export default function TemplatesPage() {
             {t('templates.missingModelsDialog').replace(
               '{models}',
               activeTemplate.missing_models.join(', '),
+            )}
+          </p>
+        )}
+        {activeTemplate && countMissing(activeTemplate.missing_fields) > 0 && (
+          <p className="templates-dialog-warning" role="note">
+            {t('templates.missingFieldsDialog').replace(
+              '{fields}',
+              describeMissing(activeTemplate.missing_fields),
             )}
           </p>
         )}

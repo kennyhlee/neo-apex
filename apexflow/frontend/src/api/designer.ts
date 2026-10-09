@@ -246,7 +246,8 @@ export function newDraft(tenantId: string, entityId: string): Promise<Definition
  * Fly) from parallel jobs with no ordering, so a new frontend can briefly
  * serve against a backend that predates this field. Absent must degrade to
  * "no warning to show", never to a crashed gallery — same reasoning as
- * `listDefinitions`'s `asNumber` coercion above.
+ * `listDefinitions`'s `asNumber` coercion above. `missing_fields` is
+ * defaulted to `{}` for the same reason.
  */
 export async function listTemplates(tenantId: string): Promise<ListTemplatesResponse> {
   const resp = await fetch(`${API_BASE}/api/workflows/${tenantId}/templates`, {
@@ -257,6 +258,7 @@ export async function listTemplates(tenantId: string): Promise<ListTemplatesResp
     templates: data.templates.map((entry) => ({
       ...entry,
       missing_models: entry.missing_models ?? [],
+      missing_fields: entry.missing_fields ?? {},
     })),
   };
 }

@@ -298,6 +298,10 @@ export interface TemplateCatalogEntry {
    * template can be applied but not published until the models exist —
    * launchpad's "Sync default entities" provisions the shipped ones. */
   missing_models: string[];
+  /** Per entity model the tenant HAS, the picks this template makes that its
+   * model lacks (sorted, `{}` when none). Applying the template anyway is an
+   * explicit admin choice: the lacking picks are stripped from the draft. */
+  missing_fields: Record<string, string[]>;
 }
 
 export interface ListTemplatesResponse {
